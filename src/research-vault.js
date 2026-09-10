@@ -6,6 +6,7 @@ import {
   Field, Input, Textarea, Select, Notice, Segmented, EmptyState, Spinner,
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'
+import { EvidenceVaultPane } from './research-evidence-vault.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
 // StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
@@ -22,6 +23,14 @@ const EPISTEMIC_COLORS = { verified: C.statusVerified, inferred: C.statusInferre
 const VERIFICATION_LABELS = { confirmed: '已证实', pending: '待验证', refuted: '已被推翻', inconclusive: '暂无结论' }
 const VERIFICATION_COLORS = { confirmed: C.statusVerified, pending: C.statusToVerify, refuted: C.statusRefuted, inconclusive: C.muted }
 const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '研究见解' }
+
+// 沉淀层的两个子模块：灵感库回答「想过什么」，证据库回答「依据什么」。
+// 刻意不做成第五个并列分区——ROADMAP §4 的产品定位是「沉淀层升级为研究资产库」，
+// 先把两个子模块收在同一层里，等 4b–4d 落地后再整体更名。
+const VAULT_TABS = [
+  { value: 'assets', label: '灵感资产' },
+  { value: 'evidence', label: '证据库' },
+]
 
 function formatTime(at) {
   try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
@@ -44,6 +53,7 @@ export function ResearchVault({ assetProvider, embedded = false }) {
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [notice, setNotice] = React.useState('')
+  const [tab, setTab] = React.useState('assets')
   const setError = message => setNotice(`⚠️ ${message}`)
 
   const refresh = React.useCallback(() => {
@@ -160,14 +170,19 @@ export function ResearchVault({ assetProvider, embedded = false }) {
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
-      title: '研究灵感库',
-      lead: '沉淀可复用的提示词、研究问题与待验证假设；原始数据与完整查询结果不入库。',
-      actions: [
+      title: tab === 'evidence' ? '研究证据库' : '研究灵感库',
+      lead: tab === 'evidence'
+        ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「未核验」。'
+        : '沉淀可复用的提示词、研究问题与待验证假设；原始数据与完整查询结果不入库。',
+      actions: tab === 'evidence' ? [] : [
         h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
         h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
       ],
     }),
-    backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
+    h('div', { key: 'subnav', style: { marginTop: 14 } }, [
+      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: setTab, ariaLabel: '沉淀层子模块' }),
+    ]),
+    tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的 JSON 备份（增量合并，不覆盖现有资产）'),
       h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
       h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
@@ -175,7 +190,7 @@ export function ResearchVault({ assetProvider, embedded = false }) {
         h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
       ]),
     ]) : null,
-    formOpen ? h(Card, {
+    tab === 'assets' && formOpen ? h(Card, {
       key: 'form',
       style: { marginTop: 16, display: 'grid', gap: 12, border: `1px solid ${C.tealLine}`, background: C.surface },
     }, [
@@ -202,7 +217,7 @@ export function ResearchVault({ assetProvider, embedded = false }) {
     // 二级吸顶带 = 该分区「随时要用的操作」：检索、状态筛选、项目筛选、新建资产。
     // 「新建资产」是最高频的主操作，随页面滚走后每次都要先滚回顶部；导出/恢复是一次性
     // 维护动作，留在封面即可。分层原则见 docs/ARCHITECTURE.md §2.3。
-    h(Toolbar, { key: 'filters', sticky: true }, [
+    tab === 'assets' ? h(Toolbar, { key: 'filters', sticky: true }, [
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
         h('span', { key: 'icon', 'aria-hidden': 'true', style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' } }, h(Icon, { name: 'search', size: 14 })),
         h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、内容、标签、项目……', ariaLabel: '搜索灵感资产', style: { paddingLeft: 32 } }),
@@ -217,15 +232,16 @@ export function ResearchVault({ assetProvider, embedded = false }) {
         style: { width: 'auto' },
       }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
-    ]),
-    loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
-    !loading && !filtered.length ? h(EmptyState, {
+    ]) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane' }) : null,
+    tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
+    tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
       icon: 'bookmark',
       text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
       hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
     }) : null,
-    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+    tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
           h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -273,8 +289,8 @@ export function ResearchVault({ assetProvider, embedded = false }) {
           h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 9, background: C.tealTint, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, item.body),
         ]),
       ]) : null,
-    ]))),
-    notice ? h(Notice, {
+    ]))) : null,
+    tab === 'assets' && notice ? h(Notice, {
       key: 'notice',
       tone: notice.startsWith('⚠️') ? 'warn' : 'info',
       icon: notice.startsWith('⚠️') ? 'shield' : 'check',

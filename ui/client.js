@@ -4098,19 +4098,37 @@ window.__ModuleLoader__.load({
     }
 
 
-    const PREFIX = 'dsh-research-kit.evidence.'
     const MAX_QUERIES = 30
     const MAX_WORKFLOWS = 30
 
-    function read(key) { try { const value = JSON.parse(window.localStorage.getItem(key) || '{}'); return value && typeof value === 'object' ? value : {} } catch { return {} } }
-    function write(key, value) { try { window.localStorage.setItem(key, JSON.stringify(value)) } catch {} }
+    // 证据索引只服务于当前页面中的同一 DSH 会话：不落 localStorage，避免研究来源
+    // 在刷新或重开页面后残留。按 sessionId 共享 state，保证工作台、查询面板和图谱
+    // 各自创建 store 时仍能互相实时通知。
+    // 顶层符号名必须全局唯一：构建器把所有模块拼进同一作用域（strip 掉 import，
+    // 符号靠拼接顺序可见），重名 const 会让整个产物语法错误。故加 evidence 前缀。
+    const evidenceSessions = new Map()
+
+    function keyFor(sessionId) { return String(sessionId || 'unscoped') }
+
+    function stateFor(sessionId) {
+      const key = keyFor(sessionId)
+      if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
+      return evidenceSessions.get(key)
+    }
 
     function createEvidenceStore(sessionId) {
-      const key = `${PREFIX}${String(sessionId || 'unscoped')}`
-      const listeners = new Set()
-      const get = () => ({ queries: Array.isArray(read(key).queries) ? read(key).queries : [], workflows: Array.isArray(read(key).workflows) ? read(key).workflows : [] })
-      const publish = value => { for (const listener of listeners) { try { listener(value) } catch {} } return value }
-      const save = next => { write(key, next); return publish(next) }
+      const state = stateFor(sessionId)
+      const get = () => ({ queries: [...state.queries], workflows: [...state.workflows] })
+      const publish = () => {
+        const value = get()
+        for (const listener of state.listeners) { try { listener(value) } catch {} }
+        return value
+      }
+      const save = next => {
+        state.queries = Array.isArray(next.queries) ? next.queries : []
+        state.workflows = Array.isArray(next.workflows) ? next.workflows : []
+        return publish()
+      }
       return {
         get,
         recordQuery({ databaseId, databaseName, mode = 'direct', sources = [] }) {
@@ -4123,7 +4141,7 @@ window.__ModuleLoader__.load({
           const row = { id, name, resourceIds: [...new Set(resourceIds)], at: Date.now() }
           return save({ ...current, workflows: [row, ...current.workflows.filter(item => item.id !== id)].slice(0, MAX_WORKFLOWS) })
         },
-        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+        subscribe(listener) { state.listeners.add(listener); return () => state.listeners.delete(listener) },
         clear() { return save({ queries: [], workflows: [] }) }
       }
     }
@@ -4882,6 +4900,229 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
+    //
+    // 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
+    // 证据条目必须可追溯——有稳定标识符或原始链接，否则后续无法核验，也就失去了保存意义。
+
+    // 核验状态：保存不等于认可，新条目一律落到 unverified，由用户逐条核验后推进。
+    const EVIDENCE_STATUSES = ['unverified', 'verified', 'disputed', 'stale']
+    const EVIDENCE_STATUS_LABELS = {
+      unverified: '未核验',
+      verified: '已核验',
+      disputed: '存疑',
+      stale: '已失效',
+    }
+    const EVIDENCE_IDENTIFIER_LABELS = {
+      doi: 'DOI',
+      pmid: 'PMID',
+      pmcid: 'PMCID',
+      nct: 'NCT',
+      arxiv: 'arXiv',
+      accession: '数据集编号',
+      url: '链接',
+      none: '未提供',
+    }
+
+    // 文本长度上限：证据库只存元数据与用户主动写下的笔记，不收全文、不收 API 原始响应。
+    const MAX_EVIDENCE_TITLE_CHARS = 300
+    const MAX_EVIDENCE_REASON_CHARS = 500
+    const MAX_EVIDENCE_NOTE_CHARS = 2000
+    const MAX_EVIDENCE_TAGS = 12
+
+    const IDENTIFIER_PATTERNS = [
+      { kind: 'doi', regex: /\b10\.\d{4,9}\/[-._;()/:a-z0-9]+/gi, trim: /[.,;)\]}>]+$/ },
+      { kind: 'pmcid', regex: /\bPMC\d{6,9}\b/gi },
+      { kind: 'nct', regex: /\bNCT\d{8}\b/gi },
+      { kind: 'arxiv', regex: /\barxiv:\s*([\d.]+v\d+)/gi, group: 1 },
+      { kind: 'pmid', regex: /\bpmid:\s*(\d{5,8})\b/gi, group: 1 },
+      { kind: 'pmid', regex: /pubmed\.ncbi\.nlm\.nih\.gov\/(?:(\d{5,8})\/|\w+\?[^#]*?term=(\d{5,8})|(\d{5,8}))/gi, group: 1 },
+    ]
+
+    // 从标题、链接或元数据里认稳定标识符。识别不出来不算失败——条目仍可保存，
+    // 只是 identifierKind 为 none，UI 需要显式提示「缺少可追溯标识符」。
+    function detectIdentifier(...parts) {
+      const text = parts.map(part => String(part || '')).join(' ')
+      if (!text.trim()) return { kind: 'none', value: '' }
+      for (const pattern of IDENTIFIER_PATTERNS) {
+        pattern.regex.lastIndex = 0
+        const match = pattern.regex.exec(text)
+        if (!match) continue
+        const raw = match[pattern.group || 0]
+        if (!raw) continue
+        const value = pattern.trim ? raw.replace(pattern.trim, '') : raw
+        if (value) return { kind: pattern.kind, value: value.trim() }
+      }
+      return { kind: 'none', value: '' }
+    }
+
+    function normalizeTags(value) {
+      const rows = Array.isArray(value) ? value : String(value || '').split(/[,，;；]/)
+      return [...new Set(rows.map(tag => String(tag || '').trim()).filter(Boolean))].slice(0, MAX_EVIDENCE_TAGS)
+    }
+
+    function clampText(value, max) {
+      const text = String(value || '').trim()
+      return text.length > max ? text.slice(0, max) : text
+    }
+
+    // 只接受 http(s) 与协议相对链接。宿主页面里渲染 <a href>，必须挡掉 javascript: 等注入。
+    function safeUrl(value) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+      if (/^(https?:)?\/\//i.test(text)) return text
+      return ''
+    }
+
+    // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
+    // 这类条目存下来也无法核验，只会污染证据库。
+    function normalizeEvidenceEntry(input = {}) {
+      const title = clampText(input.title, MAX_EVIDENCE_TITLE_CHARS)
+      if (!title) throw new Error('证据条目缺少标题，无法保存。')
+      const url = safeUrl(input.url)
+      const detected = detectIdentifier(input.identifier, title, url, input.sourceMeta)
+      const identifier = clampText(input.identifier, 120) || detected.value
+      const identifierKind = input.identifierKind || (identifier ? (detected.value === identifier ? detected.kind : 'accession') : 'none')
+      if (!url && !identifier) throw new Error('证据条目既没有原始链接也没有稳定标识符；无法追溯的来源不入库。')
+      const status = EVIDENCE_STATUSES.includes(input.status) ? input.status : 'unverified'
+      return {
+        id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title,
+        sourceDatabase: clampText(input.sourceDatabase, 120),
+        identifier,
+        identifierKind: EVIDENCE_IDENTIFIER_LABELS[identifierKind] ? identifierKind : 'none',
+        url,
+        savedAt: Number.isFinite(input.savedAt) ? input.savedAt : Date.now(),
+        project: clampText(input.project, 120),
+        tags: normalizeTags(input.tags),
+        reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
+        note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
+        status,
+      }
+    }
+
+    function statusCounts(entries) {
+      const rows = Array.isArray(entries) ? entries : []
+      const counts = { all: rows.length }
+      for (const status of EVIDENCE_STATUSES) counts[status] = rows.filter(item => item.status === status).length
+      return counts
+    }
+
+    // 列表筛选：关键词命中标题/来源/标识符/项目/标签/原因/笔记；filter 为核验状态分组。
+    function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
+      const text = String(query || '').trim().toLowerCase()
+      const rows = Array.isArray(entries) ? entries : []
+      return rows
+        .filter(item => (filter && filter !== 'all' ? item.status === filter : true))
+        .filter(item => {
+          if (!text) return true
+          return `${item.title} ${item.sourceDatabase} ${item.identifier} ${item.project} ${item.reason} ${item.note} ${(item.tags || []).join(' ')}`.toLowerCase().includes(text)
+        })
+        .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+    }
+
+    // ── 去重（4b）──────────────────────────────────────────────────
+    // 判据：**同一项目内**去重，跨项目不去重。项目隔离优先——同一篇文献在两个
+    // 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
+
+    const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
+    const EVIDENCE_BACKUP_VERSION = 1
+
+    // URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
+    // 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
+    function normalizeUrlForDedupe(url) {
+      return String(url || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^[a-z]+:\/\//, '')
+        .replace(/^www\./, '')
+        .replace(/#.*$/, '')
+        .replace(/\/+$/, '')
+    }
+
+    // 返回 '' 表示「无法识别，不参与去重」——这类条目允许重复保存，由用户自己判断。
+    function dedupeKey(entry) {
+      if (!entry) return ''
+      const project = String(entry.project || '').trim().toLowerCase()
+      const identifier = String(entry.identifier || '').trim().toLowerCase()
+      if (identifier) return `${project}::${entry.identifierKind || 'accession'}:${identifier}`
+      const url = normalizeUrlForDedupe(entry.url)
+      if (url) return `${project}::url:${url}`
+      return ''
+    }
+
+    function findDuplicate(entries, candidate) {
+      const key = dedupeKey(candidate)
+      if (!key) return null
+      const rows = Array.isArray(entries) ? entries : []
+      return rows.find(item => item.id !== candidate.id && dedupeKey(item) === key) || null
+    }
+
+    // ── 导出 / 导入（4b）───────────────────────────────────────────
+    // 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
+    // 而不是把旧格式静默解析成残缺条目。
+
+    function serializeEvidenceBackup({ entries = [], project = '' } = {}) {
+      return JSON.stringify({
+        kind: EVIDENCE_BACKUP_KIND,
+        version: EVIDENCE_BACKUP_VERSION,
+        exportedAt: Date.now(),
+        project: String(project || ''),
+        entries: Array.isArray(entries) ? entries : [],
+      }, null, 2)
+    }
+
+    // 解析失败一律抛错：半份备份比没有备份更危险，用户会以为恢复了完整数据。
+    function parseEvidenceBackup(text) {
+      const raw = String(text || '').trim()
+      if (!raw) throw new Error('备份内容为空。')
+      let parsed
+      try { parsed = JSON.parse(raw) } catch { throw new Error('备份不是合法 JSON，请确认复制完整。') }
+      if (parsed?.kind !== EVIDENCE_BACKUP_KIND) throw new Error('这不是研究证据库的备份文件。')
+      if (Number(parsed?.version) > EVIDENCE_BACKUP_VERSION) throw new Error(`备份版本 ${parsed.version} 高于当前支持的 ${EVIDENCE_BACKUP_VERSION}，请升级 Research Kit 后再恢复。`)
+      const rows = Array.isArray(parsed.entries) ? parsed.entries : null
+      if (!rows) throw new Error('备份文件缺少 entries 字段。')
+      return { project: String(parsed.project || ''), entries: rows }
+    }
+
+    // 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。
+    // 刻意不做覆盖——恢复备份应该是补齐，不是回滚，否则会静默抹掉恢复之后的新笔记。
+    function mergeEntries(existing = [], incoming = []) {
+      const rows = Array.isArray(existing) ? [...existing] : []
+      const seen = new Set(rows.map(item => dedupeKey(item)).filter(Boolean))
+      const ids = new Set(rows.map(item => item.id))
+      let added = 0
+      let skipped = 0
+      let invalid = 0
+      for (const raw of Array.isArray(incoming) ? incoming : []) {
+        let entry
+        try { entry = normalizeEvidenceEntry(raw) } catch { invalid++; continue }
+        if (ids.has(entry.id) || (dedupeKey(entry) && seen.has(dedupeKey(entry)))) { skipped++; continue }
+        rows.push(entry)
+        ids.add(entry.id)
+        if (dedupeKey(entry)) seen.add(dedupeKey(entry))
+        added++
+      }
+      return { rows, added, skipped, invalid }
+    }
+
+    // 写入 Prompt 的引用块：保留来源链接与人工核验责任，绝不写成已证实结论。
+    // 4c 才会用到，此处先备好，避免届时在视图里内联拼接导致文案漂移。
+    function formatEvidenceCitations(entries) {
+      const rows = Array.isArray(entries) ? entries : []
+      if (!rows.length) return ''
+      const lines = rows.map((item, index) => {
+        const identity = item.identifier ? `${EVIDENCE_IDENTIFIER_LABELS[item.identifierKind] || '标识符'} ${item.identifier}` : item.sourceDatabase || '来源未提供'
+        const link = item.url ? `\n   ${item.url}` : ''
+        return `${index + 1}. ${item.title}\n   ${identity}${link}`
+      })
+      return [
+        '以下条目来自本地证据库，**尚未经逐条核验**，请打开来源确认后再引用；不得据此直接断言结论：',
+        ...lines,
+      ].join('\n')
+    }
+
+
     // 统一容器「科研工作台」的分区契约（纯数据 + 纯函数，不依赖 React，供容器与测试共用）。
     //
     // 三个并列的 conversation.view 标签合并为一个容器视图后，内部分区按科研闭环排序
@@ -4984,12 +5225,553 @@ window.__ModuleLoader__.load({
 
 
 
+    // 证据库持久化：IndexedDB 最小 schema。
+    //
+    // 为什么不用 localStorage：灵感资产已经占用 localStorage，且证据条目会持续增长，
+    // 无上限扩张的 localStorage 会挤占宿主页面配额。IndexedDB 是 ROADMAP §4 隐私边界里的硬要求。
+    //
+    // 降级策略：宿主沙箱（iframe / 隐私模式 / 插件受限环境）可能不提供 indexedDB，
+    // 也可能 open 被拒。此时一律退化为进程内内存存储，接口保持 Promise 不变——
+    // 视图照常可用，只是刷新后清空，并通过 isDegraded() 显式告知用户，绝不静默伪装成已持久化。
+
+    const DB_NAME = 'dsh-research-kit-evidence'
+    const DB_VERSION = 1
+    const STORE = 'evidence'
+    const PROJECT_KEY = 'dsh-research-kit.evidence.project'
+
+    function indexedDbFactory() {
+      try {
+        return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
+      } catch {
+        return null
+      }
+    }
+
+    function requestToPromise(request) {
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败'))
+      })
+    }
+
+    // 「当前项目」是工作上下文而非证据数据，体积恒定，放 localStorage 更合适：
+    // 视图初始化时可同步读取，不必等 IndexedDB 打开。localStorage 不可用时退回进程内变量。
+    function readStoredProject() {
+      try { return globalThis.localStorage?.getItem(PROJECT_KEY) || '' } catch { return '' }
+    }
+
+    function writeStoredProject(value) {
+      try { globalThis.localStorage?.setItem(PROJECT_KEY, value) } catch { /* 不可用则仅进程内生效 */ }
+    }
+
+    function sortBySavedAt(rows) {
+      return [...rows].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+    }
+
+    function createEvidenceVaultStore() {
+      let dbPromise = null
+      let degraded = false
+      let memory = []
+      let activeProject = null
+
+      const connect = () => {
+        if (degraded) return Promise.resolve(null)
+        if (dbPromise) return dbPromise
+        const factory = indexedDbFactory()
+        if (!factory) { degraded = true; return Promise.resolve(null) }
+        dbPromise = new Promise(resolve => {
+          let request
+          try { request = factory.open(DB_NAME, DB_VERSION) } catch { degraded = true; resolve(null); return }
+          request.onupgradeneeded = () => {
+            const db = request.result
+            if (!db.objectStoreNames.contains(STORE)) {
+              const store = db.createObjectStore(STORE, { keyPath: 'id' })
+              store.createIndex('savedAt', 'savedAt')
+              store.createIndex('project', 'project')
+              store.createIndex('status', 'status')
+            }
+          }
+          request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
+          request.onerror = () => { degraded = true; resolve(null) }
+          request.onblocked = () => { degraded = true; resolve(null) }
+        })
+        return dbPromise
+      }
+
+      // 返回 undefined 表示「没有可用的 IndexedDB」，调用方据此走内存分支。
+      const withStore = async (mode, run) => {
+        const db = await connect()
+        if (!db) return undefined
+        const tx = db.transaction(STORE, mode)
+        const value = await run(tx.objectStore(STORE))
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
+          tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
+        })
+        return value
+      }
+
+      const readAll = async () => {
+        const rows = await withStore('readonly', store => requestToPromise(store.getAll()))
+        return sortBySavedAt(Array.isArray(rows) ? rows : memory)
+      }
+
+      // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
+      const inProject = (rows, project) =>
+        (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
+
+      return {
+        isDegraded: () => degraded,
+
+        // ── 项目上下文 ──────────────────────────────────────────
+        getActiveProject() {
+          if (activeProject === null) activeProject = readStoredProject()
+          return activeProject
+        },
+        setActiveProject(project) {
+          activeProject = String(project || '')
+          writeStoredProject(activeProject)
+          return activeProject
+        },
+
+        async list({ project } = {}) {
+          return inProject(await readAll(), project)
+        },
+
+        // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
+        async listProjects() {
+          const rows = await readAll()
+          return [...new Set(rows.map(item => item.project).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+        },
+
+        // onDuplicate: 'reject'（默认，抛错交给 UI 询问）| 'update'（覆盖已有）| 'new'（强制另存）
+        async save(input, { onDuplicate = 'reject' } = {}) {
+          // 校验先于持久化：非法条目即使在降级模式下也不入库，避免两条路径行为不一致。
+          const entry = normalizeEvidenceEntry(input)
+          const existing = await readAll()
+          const duplicate = findDuplicate(existing, entry)
+          if (duplicate && onDuplicate === 'reject') {
+            const error = new Error(`该来源已在本项目证据库中：「${duplicate.title}」。`)
+            error.code = 'DUPLICATE'
+            error.duplicate = duplicate
+            throw error
+          }
+          // 覆盖时沿用原 id 与首次保存时间：更新笔记不该让条目在列表里跳到最前。
+          const finalEntry = duplicate && onDuplicate === 'update'
+            ? { ...entry, id: duplicate.id, savedAt: duplicate.savedAt }
+            : entry
+          const stored = await withStore('readwrite', async store => {
+            await requestToPromise(store.put(finalEntry))
+            return finalEntry
+          })
+          if (!stored) memory = [finalEntry, ...memory.filter(item => item.id !== finalEntry.id)]
+          return { entry: finalEntry, duplicate: duplicate || null, updated: Boolean(duplicate) && onDuplicate === 'update' }
+        },
+
+        async remove(id) {
+          const touched = await withStore('readwrite', async store => {
+            await requestToPromise(store.delete(String(id)))
+            return true
+          })
+          if (!touched) memory = memory.filter(item => item.id !== String(id))
+          return true
+        },
+
+        // 按项目彻底删除：只删该项目的条目，其余项目不受影响。
+        async removeByProject(project) {
+          const rows = await readAll()
+          const doomed = inProject(rows, project).map(item => item.id)
+          const touched = await withStore('readwrite', async store => {
+            for (const id of doomed) await requestToPromise(store.delete(String(id)))
+            return true
+          })
+          if (!touched) memory = memory.filter(item => !doomed.includes(item.id))
+          return doomed.length
+        },
+
+        async clear() {
+          const touched = await withStore('readwrite', async store => {
+            await requestToPromise(store.clear())
+            return true
+          })
+          if (!touched) memory = []
+          return true
+        },
+
+        // 批量写回（导入用）：一次事务写完，避免逐条 put 之间被中断留下半份数据。
+        async importMany(entries) {
+          const rows = Array.isArray(entries) ? entries : []
+          if (!rows.length) return 0
+          const touched = await withStore('readwrite', async store => {
+            for (const row of rows) await requestToPromise(store.put(row))
+            return true
+          })
+          if (!touched) memory = [...rows, ...memory.filter(item => !rows.some(row => row.id === item.id))]
+          return rows.length
+        },
+      }
+    }
+
+
+
+    // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
+    //
+    // 与灵感库的边界：灵感库回答「想过什么」，证据库回答「依据什么」。
+    // 隐私边界（不可协商，与 ROADMAP §4 一致）：
+    //   - 只入库用户逐条确认的元数据与主动写下的笔记；禁止自动入库；
+    //   - 不保存 API 原始响应、检索词、全文或附件；
+    //   - 保存不等于认可，新条目一律落到「未核验」。
+
+    // 单例 + 订阅：保存入口在查询面板（分区①），列表在本面板（沉淀层），
+    // 两者不在同一棵子树里，靠模块级 store 与监听保持同步。
+    let sharedStore = null
+    const listeners = new Set()
+
+    function evidenceVaultStore() {
+      if (!sharedStore) sharedStore = createEvidenceVaultStore()
+      return sharedStore
+    }
+
+    function subscribeEvidenceVault(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }
+
+    function publishEvidenceVault() {
+      for (const listener of listeners) { try { listener() } catch { /* 单个监听失败不影响其余 */ } }
+    }
+
+    async function saveEvidenceEntry(input, options) {
+      const result = await evidenceVaultStore().save(input, options)
+      publishEvidenceVault()
+      return result
+    }
+
+    // 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
+    // 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
+    function getActiveProject() {
+      return evidenceVaultStore().getActiveProject()
+    }
+
+    function setActiveProject(project) {
+      const next = evidenceVaultStore().setActiveProject(project)
+      publishEvidenceVault()
+      return next
+    }
+
+    function formatTime(at) {
+      try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+    }
+
+    function stamp() {
+      const now = new Date()
+      const pad = value => String(value).padStart(2, '0')
+      return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
+    }
+
+    function downloadJson(text, filename) {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    }
+
+    const STATUS_COLORS = {
+      unverified: C.statusToVerify,
+      verified: C.statusVerified,
+      disputed: C.statusRefuted,
+      stale: C.muted,
+    }
+
+    // 保存确认表单：嵌在查询结果条目下方。必须经过这一步才入库——
+    // 用户要看到并确认将要保存的内容，这是「不静默持久化」的具体落点。
+    function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved }) {
+      const detected = React.useMemo(
+        () => detectIdentifier(source.identifier, source.title, source.url, source.meta),
+        [source.identifier, source.title, source.url, source.meta],
+      )
+      const [form, setForm] = React.useState({
+        title: source.title || '',
+        identifier: detected.value || '',
+        project: getActiveProject(),
+        tags: '',
+        reason: '',
+        note: '',
+      })
+      const [saving, setSaving] = React.useState(false)
+      const [error, setError] = React.useState('')
+      // 重复不是错误而是需要用户裁决的状态：覆盖已有，还是刻意另存一份。
+      const [conflict, setConflict] = React.useState(null)
+      const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
+      const payload = onDuplicate => ({
+        title: form.title,
+        sourceDatabase: databaseName,
+        identifier: form.identifier,
+        identifierKind: form.identifier && form.identifier === detected.value ? detected.kind : 'accession',
+        url: source.url,
+        sourceMeta: source.meta,
+        project: form.project,
+        tags: form.tags,
+        reason: form.reason,
+        note: form.note,
+      })
+      const submit = async (onDuplicate = 'reject') => {
+        setSaving(true); setError('')
+        try {
+          const result = await saveEvidenceEntry(payload(onDuplicate), { onDuplicate })
+          setConflict(null)
+          onSaved?.(result.entry)
+        } catch (failure) {
+          if (failure?.code === 'DUPLICATE') { setConflict(failure.duplicate); setError('') } else setError(String(failure?.message || failure))
+        } finally { setSaving(false) }
+      }
+      return h(Card, { style: { marginTop: 8, padding: 12, border: `1px solid ${C.tealLine}`, background: C.surface, display: 'grid', gap: 10 } }, [
+        h('strong', { key: 't', style: { fontSize: 13 } }, '保存到证据库'),
+        h('p', { key: 'p', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.5 } },
+          '只保存元数据与你写下的笔记；不保存检索词、API 原始响应或全文。保存后默认标记为「未核验」，需要逐条打开来源确认。'),
+        h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 } }, [
+          h(Field, { key: 'title', label: '标题' },
+            h(Input, { value: form.title, onChange: value => update('title', value), ariaLabel: '证据标题' })),
+          h(Field, { key: 'identifier', label: `稳定标识符${detected.value ? `（已识别为 ${EVIDENCE_IDENTIFIER_LABELS[detected.kind]}）` : '（可选）'}` },
+            h(Input, { value: form.identifier, onChange: value => update('identifier', value), placeholder: 'DOI / PMID / NCT / 数据集编号', ariaLabel: '稳定标识符' })),
+          h(Field, { key: 'project', label: '项目（可选，默认当前项目）' },
+            h(Input, { value: form.project, onChange: value => update('project', value), placeholder: '例：肿瘤队列分析', ariaLabel: '项目' })),
+          h(Field, { key: 'tags', label: '标签（逗号分隔）' },
+            h(Input, { value: form.tags, onChange: value => update('tags', value), ariaLabel: '标签' })),
+        ]),
+        h(Field, { key: 'reason', label: '保存原因（可选）' },
+          h(Textarea, { value: form.reason, onChange: value => update('reason', value), rows: 2, placeholder: '这条来源为什么值得留下', ariaLabel: '保存原因' })),
+        h(Field, { key: 'note', label: '笔记（可选）' },
+          h(Textarea, { value: form.note, onChange: value => update('note', value), rows: 2, ariaLabel: '笔记' })),
+        error ? h(Notice, { key: 'error', tone: 'error', icon: 'shield' }, error) : null,
+        conflict ? h(Notice, { key: 'conflict', tone: 'warn', icon: 'shield' },
+          `该来源已在本项目证据库中：「${conflict.title}」（${EVIDENCE_STATUS_LABELS[conflict.status] || conflict.status}）。要覆盖它的笔记与状态，还是另存一份？`) : null,
+        h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+          h(Button, { key: 'save', variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !form.title.trim(), onClick: () => submit('reject') }, saving ? '保存中…' : '确认保存'),
+          conflict ? h(Button, { key: 'update', variant: 'soft', size: 'sm', icon: 'check', disabled: saving, onClick: () => submit('update') }, '覆盖已有条目') : null,
+          conflict ? h(Button, { key: 'force', variant: 'ghost', size: 'sm', disabled: saving, onClick: () => submit('new') }, '仍然另存一份') : null,
+          h(Button, { key: 'cancel', variant: 'ghost', size: 'sm', onClick: onCancel }, '取消'),
+        ]),
+      ])
+    }
+
+    // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
+    function EvidenceVaultPane() {
+      const store = evidenceVaultStore()
+      const [entries, setEntries] = React.useState([])
+      const [projects, setProjects] = React.useState([])
+      const [project, setProject] = React.useState(() => store.getActiveProject())
+      const [loading, setLoading] = React.useState(true)
+      const [query, setQuery] = React.useState('')
+      const [filter, setFilter] = React.useState('all')
+      const [notice, setNotice] = React.useState('')
+      const [newProject, setNewProject] = React.useState('')
+      const [newProjectOpen, setNewProjectOpen] = React.useState(false)
+      const [backup, setBackup] = React.useState('')
+      const [backupOpen, setBackupOpen] = React.useState(false)
+      // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
+      const [confirmClear, setConfirmClear] = React.useState(false)
+
+      const refresh = React.useCallback(() => {
+        Promise.all([store.list({ project: project || undefined }), store.listProjects()])
+          .then(([rows, names]) => {
+            setEntries(rows || [])
+            setProjects(names || [])
+            setLoading(false)
+          })
+          .catch(error => { setNotice(`⚠️ 读取证据库失败：${error?.message || error}`); setLoading(false) })
+      }, [store, project])
+      React.useEffect(() => { refresh() }, [refresh])
+      React.useEffect(() => subscribeEvidenceVault(refresh), [refresh])
+
+      const counts = React.useMemo(() => statusCounts(entries), [entries])
+      const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+      const degraded = store.isDegraded()
+
+      const switchProject = value => {
+        setProject(value)
+        setActiveProject(value)
+        setConfirmClear(false)
+      }
+
+      const createProject = () => {
+        const name = String(newProject || '').trim()
+        if (!name) return
+        switchProject(name)
+        setNewProject('')
+        setNewProjectOpen(false)
+      }
+
+      const exportJson = () => {
+        try {
+          const text = serializeEvidenceBackup({ entries, project })
+          const suffix = project || '全部项目'
+          downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
+          setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      const importJson = async () => {
+        try {
+          const parsed = parseEvidenceBackup(backup)
+          const all = await store.list()
+          const merged = mergeEntries(all, parsed.entries)
+          const fresh = merged.rows.filter(row => !all.some(item => item.id === row.id))
+          if (fresh.length) await store.importMany(fresh)
+          setBackup('')
+          setBackupOpen(false)
+          publishEvidenceVault()
+          const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
+          const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
+          setNotice(`已恢复 ${merged.added} 条证据${tail}${bad}。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      const removeEntry = async item => {
+        try {
+          await store.remove(item.id)
+          publishEvidenceVault()
+          setNotice(`已删除「${item.title}」。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      const changeStatus = async (item, status) => {
+        if (status === item.status) return
+        try {
+          await store.save({ ...item, status }, { onDuplicate: 'update' })
+          publishEvidenceVault()
+          setNotice(`「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
+      const clearScope = async () => {
+        try {
+          let message
+          if (project) {
+            const removed = await store.removeByProject(project)
+            message = `已彻底删除项目「${project}」下的 ${removed} 条证据。`
+          } else {
+            await store.clear()
+            message = '已彻底删除全部项目的证据。'
+          }
+          setConfirmClear(false)
+          publishEvidenceVault()
+          setNotice(message)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      const filterOptions = [
+        { value: 'all', label: `全部 ${counts.all}` },
+        ...EVIDENCE_STATUSES.map(status => ({ value: status, label: `${EVIDENCE_STATUS_LABELS[status]} ${counts[status] || 0}` })),
+      ]
+      const projectOptions = [
+        { value: '', label: '全部项目' },
+        ...projects.map(name => ({ value: name, label: name })),
+        ...(project && !projects.includes(project) ? [{ value: project, label: project }] : []),
+      ]
+
+      return h('div', { key: 'evidence-vault', style: { display: 'grid', gap: 12 } }, [
+        degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
+          '当前环境未提供可用的 IndexedDB，证据暂存在内存中，刷新页面后会丢失。') : null,
+        notice ? h(Notice, { key: 'notice', tone: notice.startsWith('⚠️') ? 'warn' : 'info', icon: notice.startsWith('⚠️') ? 'shield' : 'check' },
+          notice.replace(/^⚠️\s*/, '')) : null,
+
+        // 项目与维护动作：一次性操作，不随滚动吸顶（分层原则见 docs/ARCHITECTURE.md §2.3）。
+        h(Card, { key: 'project-bar', style: { display: 'grid', gap: 10 } }, [
+          h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h('strong', { key: 'label', style: { fontSize: 13 } }, '当前项目'),
+            h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换项目', style: { width: 'auto', minWidth: 140 } }),
+            h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建项目'),
+            h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+            h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length }, '导出备份'),
+            h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
+            confirmClear
+              ? h(Button, { key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash', onClick: clearScope },
+                project ? `确认删除「${project}」全部` : '确认删除全部项目')
+              : h(Button, { key: 'clear', size: 'sm', variant: 'ghost', icon: 'trash', onClick: () => setConfirmClear(true), disabled: !entries.length },
+                project ? '清空本项目' : '清空全部'),
+          ]),
+          newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+            h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '项目名称，例：肿瘤队列分析', ariaLabel: '新项目名称', style: { flex: '1 1 200px' } }),
+            h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
+          ]) : null,
+          backupOpen ? h('div', { key: 'backup', style: { display: 'grid', gap: 8 } }, [
+            h('strong', { key: 't', style: { fontSize: 12, color: C.muted } }, '粘贴此前导出的 JSON 备份（增量合并：已存在的条目跳过，不会覆盖现有笔记）'),
+            h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
+            h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
+              h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !backup.trim(), onClick: importJson }, '恢复'),
+              h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
+            ]),
+          ]) : null,
+        ]),
+
+        // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
+        h(Toolbar, { key: 'filters', sticky: true }, [
+          h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
+            h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
+          ]),
+          h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
+        ]),
+        loading ? h(Spinner, { key: 'loading', text: '正在加载证据条目……' }) : null,
+        !loading && !filtered.length ? h(EmptyState, {
+          key: 'empty',
+          icon: 'database',
+          text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
+          hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
+        }) : null,
+        h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+          h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
+            h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
+              item.url
+                ? h('a', { key: 'title', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 15, fontWeight: 700, color: C.teal, lineHeight: 1.45 } }, item.title)
+                : h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
+              h(Badge, { key: 'status', color: STATUS_COLORS[item.status] || C.muted }, EVIDENCE_STATUS_LABELS[item.status] || item.status),
+              item.sourceDatabase ? h(Badge, { key: 'db', color: C.slate }, item.sourceDatabase) : null,
+              item.identifier ? h(Badge, { key: 'id', color: C.teal }, `${EVIDENCE_IDENTIFIER_LABELS[item.identifierKind] || '标识符'} ${item.identifier}`) : null,
+            ]),
+            h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatTime(item.savedAt)}`),
+          ]),
+          item.reason || item.note || item.project || (item.tags || []).length
+            ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
+              item.reason ? h('p', { key: 'reason', style: { margin: 0 } }, `保存原因：${item.reason}`) : null,
+              item.note ? h('p', { key: 'note', style: { margin: 0 } }, `笔记：${item.note}`) : null,
+              item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
+              (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
+                item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+            ])
+            : null,
+          h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 } }, [
+            h('span', { key: 'label', style: { fontSize: 12, color: C.muted } }, '核验状态'),
+            h(Select, {
+              key: 'status',
+              value: item.status,
+              options: EVIDENCE_STATUSES.map(status => ({ value: status, label: EVIDENCE_STATUS_LABELS[status] })),
+              onChange: value => changeStatus(item, value),
+              ariaLabel: `设置「${item.title}」的核验状态`,
+              style: { width: 'auto', minWidth: 96 },
+            }),
+            h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+            h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => removeEntry(item) }, '删除'),
+          ]),
+        ]))),
+      ])
+    }
+
+
+
     const QUERY_PATH = '/dsh-research-kit/query'
 
     function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }) {
       const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
       const [query, setQuery] = React.useState('')
       const [state, setState] = React.useState({ status: 'idle', result: null, message: '' })
+      // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
+      const [saveTarget, setSaveTarget] = React.useState('')
+      const [savedKeys, setSavedKeys] = React.useState([])
       const canWrite = typeof inputActions?.setDraft === 'function'
       const canSubmit = canWrite && typeof inputActions?.submit === 'function'
       const agentTask = sources => {
@@ -5051,15 +5833,40 @@ window.__ModuleLoader__.load({
         ]),
         loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
         state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [
-          ...(state.result?.sources || []).map((item, index) => h('article', {
-            key: item.id || index,
-            className: 'rk-card',
-            style: { padding: 12, border: `1px solid ${C.line}`, borderRadius: 10, background: C.surface },
-          }, [
-            h('a', { key: 't', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { color: C.teal, fontWeight: 700, fontSize: 13, lineHeight: 1.45 } }, item.title),
-            item.meta ? h('div', { key: 'm', style: { marginTop: 4, color: C.muted, fontSize: 12 } }, item.meta) : null,
-            item.summary ? h('p', { key: 's', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.summary) : null,
-          ])),
+          ...(state.result?.sources || []).map((item, index) => {
+            const sourceKey = String(item.id || item.url || index)
+            const saved = savedKeys.includes(sourceKey)
+            return h('article', {
+              key: item.id || index,
+              className: 'rk-card',
+              style: { padding: 12, border: `1px solid ${C.line}`, borderRadius: 10, background: C.surface },
+            }, [
+              h('a', { key: 't', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { color: C.teal, fontWeight: 700, fontSize: 13, lineHeight: 1.45 } }, item.title),
+              item.meta ? h('div', { key: 'm', style: { marginTop: 4, color: C.muted, fontSize: 12 } }, item.meta) : null,
+              item.summary ? h('p', { key: 's', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.summary) : null,
+              h('div', { key: 'save-row', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 } }, [
+                h(Button, {
+                  key: 'save',
+                  size: 'sm',
+                  variant: saved ? 'ghost' : 'soft',
+                  icon: saved ? 'check' : 'bookmark',
+                  disabled: saved,
+                  onClick: () => setSaveTarget(current => (current === sourceKey ? '' : sourceKey)),
+                }, saved ? '已保存到证据库' : '保存到证据库'),
+              ]),
+              saveTarget === sourceKey ? h(EvidenceSaveForm, {
+                key: 'form',
+                source: item,
+                databaseName: database.name,
+                onCancel: () => setSaveTarget(''),
+                onSaved: () => {
+                  setSavedKeys(rows => [...rows, sourceKey])
+                  setSaveTarget('')
+                  setState(current => ({ ...current, message: '已保存到证据库，默认标记为「未核验」，需逐条打开来源核验。' }))
+                },
+              }) : null,
+            ])
+          }),
           state.result?.sources?.length
             ? h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
               h(Button, { key: 'write', size: 'sm', variant: 'soft', icon: 'edit', disabled: !canWrite, onClick: writeSources }, '将候选来源写入输入框'),
@@ -5500,6 +6307,14 @@ window.__ModuleLoader__.load({
     const VERIFICATION_COLORS = { confirmed: C.statusVerified, pending: C.statusToVerify, refuted: C.statusRefuted, inconclusive: C.muted }
     const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '研究见解' }
 
+    // 沉淀层的两个子模块：灵感库回答「想过什么」，证据库回答「依据什么」。
+    // 刻意不做成第五个并列分区——ROADMAP §4 的产品定位是「沉淀层升级为研究资产库」，
+    // 先把两个子模块收在同一层里，等 4b–4d 落地后再整体更名。
+    const VAULT_TABS = [
+      { value: 'assets', label: '灵感资产' },
+      { value: 'evidence', label: '证据库' },
+    ]
+
     function formatTime(at) {
       try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
     }
@@ -5521,6 +6336,7 @@ window.__ModuleLoader__.load({
       const [backup, setBackup] = React.useState('')
       const [backupOpen, setBackupOpen] = React.useState(false)
       const [notice, setNotice] = React.useState('')
+      const [tab, setTab] = React.useState('assets')
       const setError = message => setNotice(`⚠️ ${message}`)
 
       const refresh = React.useCallback(() => {
@@ -5637,14 +6453,19 @@ window.__ModuleLoader__.load({
         h(PageHead, {
           key: 'head',
           kicker: 'Research Kit',
-          title: '研究灵感库',
-          lead: '沉淀可复用的提示词、研究问题与待验证假设；原始数据与完整查询结果不入库。',
-          actions: [
+          title: tab === 'evidence' ? '研究证据库' : '研究灵感库',
+          lead: tab === 'evidence'
+            ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「未核验」。'
+            : '沉淀可复用的提示词、研究问题与待验证假设；原始数据与完整查询结果不入库。',
+          actions: tab === 'evidence' ? [] : [
             h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
             h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
           ],
         }),
-        backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
+        h('div', { key: 'subnav', style: { marginTop: 14 } }, [
+          h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: setTab, ariaLabel: '沉淀层子模块' }),
+        ]),
+        tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
           h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的 JSON 备份（增量合并，不覆盖现有资产）'),
           h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
           h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
@@ -5652,7 +6473,7 @@ window.__ModuleLoader__.load({
             h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
           ]),
         ]) : null,
-        formOpen ? h(Card, {
+        tab === 'assets' && formOpen ? h(Card, {
           key: 'form',
           style: { marginTop: 16, display: 'grid', gap: 12, border: `1px solid ${C.tealLine}`, background: C.surface },
         }, [
@@ -5679,7 +6500,7 @@ window.__ModuleLoader__.load({
         // 二级吸顶带 = 该分区「随时要用的操作」：检索、状态筛选、项目筛选、新建资产。
         // 「新建资产」是最高频的主操作，随页面滚走后每次都要先滚回顶部；导出/恢复是一次性
         // 维护动作，留在封面即可。分层原则见 docs/ARCHITECTURE.md §2.3。
-        h(Toolbar, { key: 'filters', sticky: true }, [
+        tab === 'assets' ? h(Toolbar, { key: 'filters', sticky: true }, [
           h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
             h('span', { key: 'icon', 'aria-hidden': 'true', style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' } }, h(Icon, { name: 'search', size: 14 })),
             h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、内容、标签、项目……', ariaLabel: '搜索灵感资产', style: { paddingLeft: 32 } }),
@@ -5694,15 +6515,16 @@ window.__ModuleLoader__.load({
             style: { width: 'auto' },
           }) : null,
           h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
-        ]),
-        loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
-        !loading && !filtered.length ? h(EmptyState, {
+        ]) : null,
+        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane' }) : null,
+        tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
+        tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
           icon: 'bookmark',
           text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
           hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
         }) : null,
-        h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+        tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
           h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
             h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
               h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -5750,8 +6572,8 @@ window.__ModuleLoader__.load({
               h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 9, background: C.tealTint, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, item.body),
             ]),
           ]) : null,
-        ]))),
-        notice ? h(Notice, {
+        ]))) : null,
+        tab === 'assets' && notice ? h(Notice, {
           key: 'notice',
           tone: notice.startsWith('⚠️') ? 'warn' : 'info',
           icon: notice.startsWith('⚠️') ? 'shield' : 'check',

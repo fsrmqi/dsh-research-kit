@@ -164,7 +164,8 @@ Plus 8 skills and 55 database entries. Full definitions live in [`catalog/`](cat
 | --- | --- | --- |
 | Current session composer | Writes or submits the final prompt only when you click "Write/Send" | No Enter interception, no auto-send, never touches other sessions' history |
 | `@file` mentions | Only nudges you toward DSH's native mention menu | Never reads, uploads or parses file contents |
-| Browser storage | Favorites & history (`localStorage`) | No parameter values, full prompts or file contents; clearing browser data clears them |
+| Browser storage | Favorites, history, method cards and research-vault assets (`localStorage`) | No parameter values, full prompts or file contents; clearing browser data clears them |
+| Current-page memory | Per-session evidence index (started workflows and direct-query source summaries) | Used only to update the evidence graph across views; cleared on refresh or page close, and never stores query terms, raw files or full results |
 | Network | Direct public-database lookup (only when you trigger it) | Requests go through DSH's controlled web service; the plugin holds no API keys |
 
 **Zero telemetry.** Nothing is collected or uploaded. Every workflow output is framed as a **draft pending human verification** and does not replace the researcher, reviewer or ethics approval.
@@ -181,7 +182,7 @@ Remaining databases state the MCP, subscription, API key or data-use agreement t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (128 entries, 128 unique IDs), 84 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
+Verified so far: catalog contract validation (128 entries, 128 unique IDs), 113 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -190,7 +191,7 @@ Verified so far: catalog contract validation (128 entries, 128 unique IDs), 84 r
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic and contract regression tests (84)
+npm test        # pure-logic and contract regression tests (113)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).

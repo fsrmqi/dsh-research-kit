@@ -2,6 +2,7 @@ import React from 'react'
 import { h, C } from './theme.js'
 import { Card, Button, Input, Notice, Spinner, Badge } from './ui.js'
 import { createEvidenceStore } from './evidence-store.js'
+import { EvidenceSaveForm } from './research-evidence-vault.js'
 
 const QUERY_PATH = '/dsh-research-kit/query'
 
@@ -9,6 +10,9 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
   const [query, setQuery] = React.useState('')
   const [state, setState] = React.useState({ status: 'idle', result: null, message: '' })
+  // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
+  const [saveTarget, setSaveTarget] = React.useState('')
+  const [savedKeys, setSavedKeys] = React.useState([])
   const canWrite = typeof inputActions?.setDraft === 'function'
   const canSubmit = canWrite && typeof inputActions?.submit === 'function'
   const agentTask = sources => {
@@ -70,15 +74,40 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
     ]),
     loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
     state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [
-      ...(state.result?.sources || []).map((item, index) => h('article', {
-        key: item.id || index,
-        className: 'rk-card',
-        style: { padding: 12, border: `1px solid ${C.line}`, borderRadius: 10, background: C.surface },
-      }, [
-        h('a', { key: 't', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { color: C.teal, fontWeight: 700, fontSize: 13, lineHeight: 1.45 } }, item.title),
-        item.meta ? h('div', { key: 'm', style: { marginTop: 4, color: C.muted, fontSize: 12 } }, item.meta) : null,
-        item.summary ? h('p', { key: 's', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.summary) : null,
-      ])),
+      ...(state.result?.sources || []).map((item, index) => {
+        const sourceKey = String(item.id || item.url || index)
+        const saved = savedKeys.includes(sourceKey)
+        return h('article', {
+          key: item.id || index,
+          className: 'rk-card',
+          style: { padding: 12, border: `1px solid ${C.line}`, borderRadius: 10, background: C.surface },
+        }, [
+          h('a', { key: 't', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { color: C.teal, fontWeight: 700, fontSize: 13, lineHeight: 1.45 } }, item.title),
+          item.meta ? h('div', { key: 'm', style: { marginTop: 4, color: C.muted, fontSize: 12 } }, item.meta) : null,
+          item.summary ? h('p', { key: 's', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.summary) : null,
+          h('div', { key: 'save-row', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 } }, [
+            h(Button, {
+              key: 'save',
+              size: 'sm',
+              variant: saved ? 'ghost' : 'soft',
+              icon: saved ? 'check' : 'bookmark',
+              disabled: saved,
+              onClick: () => setSaveTarget(current => (current === sourceKey ? '' : sourceKey)),
+            }, saved ? '已保存到证据库' : '保存到证据库'),
+          ]),
+          saveTarget === sourceKey ? h(EvidenceSaveForm, {
+            key: 'form',
+            source: item,
+            databaseName: database.name,
+            onCancel: () => setSaveTarget(''),
+            onSaved: () => {
+              setSavedKeys(rows => [...rows, sourceKey])
+              setSaveTarget('')
+              setState(current => ({ ...current, message: '已保存到证据库，默认标记为「未核验」，需逐条打开来源核验。' }))
+            },
+          }) : null,
+        ])
+      }),
       state.result?.sources?.length
         ? h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
           h(Button, { key: 'write', size: 'sm', variant: 'soft', icon: 'edit', disabled: !canWrite, onClick: writeSources }, '将候选来源写入输入框'),

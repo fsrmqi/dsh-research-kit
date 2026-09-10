@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/evidence-graph-core.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/research-workbench.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/research-console.js', 'dsh/standalone-glue.js']
+const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/evidence-vault-store.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/research-workbench.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/research-console.js', 'dsh/standalone-glue.js']
 const data = {
   workflows: JSON.parse(readFileSync(resolve(root, 'catalog/workflows.json'), 'utf8')),
   skills: JSON.parse(readFileSync(resolve(root, 'catalog/skills.json'), 'utf8')),
@@ -20,6 +20,9 @@ function collapseImports(source) {
 function strip(source) {
   return collapseImports(source).split('\n').filter(line => !/^\s*import\s/.test(line)).map(line => line
     .replace(/^(\s*)export\s+const\s/, '$1const ')
+    // async 必须单独一条且排在普通 function 之前：`export async function` 不匹配
+    // `^export function`，漏掉会让产物里残留 export 关键字，直接语法错误。
+    .replace(/^(\s*)export\s+async\s+function\s/, '$1async function ')
     .replace(/^(\s*)export\s+function\s/, '$1function ')
     .replace(/^export\s+\{[^}]*\}\s*$/, '')
   ).join('\n')
@@ -43,6 +46,9 @@ const ORDERED_SYMBOLS = [
   'catalog', 'composeWorkflow',    // src/catalog.js
   'RESEARCH_CONSOLE_SECTIONS', 'normalizeConsoleSection', 'findConsoleSection', // src/lib/console-sections.js
   'POPOVER_GAP', 'overlayMaxHeight', 'findScrollport', // src/lib/overlay-anchor.js
+  'normalizeEvidenceEntry',                       // src/lib/evidence-vault-core.js
+  'createEvidenceVaultStore',                     // src/evidence-vault-store.js
+  'EvidenceSaveForm', 'EvidenceVaultPane',        // src/research-evidence-vault.js
   'researchMethodProvider', 'researchAssetProvider', 'ResearchPromptStudioHost', // dsh/prompt-studio-glue.js
   'ResearchVaultHost',             // src/research-vault.js
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js

@@ -79,11 +79,13 @@ dsh-research-kit/
 │   ├── catalog-storage.js           # 收藏与使用历史的 CatalogStorage 接口
 │   ├── research-selection-store.js  # 会话级资源选择（仅存于当前会话）
 │   ├── evidence-store.js            # 本会话证据索引（只读汇总）
+│   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB 最小 schema + 内存降级 + 项目隔离 / 去重 / 备份
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
 │   ├── research-console.js          # 统一视图容器：分区调度 + 两级吸顶偏移实测
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装
-│   ├── research-vault.js            # 分区③「研究灵感库」：资产增删改 / 版本 / 验证状态
+│   ├── research-vault.js            # 分区③「研究灵感库」：资产增删改 / 版本 / 验证状态 + 沉淀层子模块切换
+│   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
 │   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
@@ -93,6 +95,7 @@ dsh-research-kit/
 │       ├── enhance-output.js        # 模型输出协议解析（Node half 与浏览器共用）
 │       ├── vault-core.js            # 灵感资产纯逻辑与隐私边界
 │       ├── evidence-graph-core.js   # 证据图谱布局纯逻辑
+│       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       └── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 ├── dsh/
@@ -112,7 +115,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 84 项测试（13 个文件：纯逻辑 + vm 沙箱断言）
+├── test/                            # 113 项测试（15 个测试文件 + 1 个 IndexedDB 桩：纯逻辑 + vm 沙箱断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -127,7 +130,8 @@ dsh-research-kit/
 | `src/catalog.js` | 纯函数、数据校验、搜索、Prompt 组装 | 访问 DOM、网络、`localStorage`。 |
 | `src/catalog-storage.js` | 收藏/历史读写、变更通知，隔离 localStorage | 存参数值或完整 Prompt；网络访问。 |
 | `src/research-selection-store.js` | 会话级资源选择的读写与广播 | 跨会话持久化。 |
-| `src/evidence-store.js` | 汇总本会话已选资源、已启动工作流与直查来源的**索引** | 执行查询、保存原始文件或检索词、生成结论。 |
+| `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
+| `src/evidence-vault-store.js` | 证据库持久化：IndexedDB 最小 schema、按项目隔离与去重、备份序列化，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目。 |
 | `src/theme.js` | 主题 CSS 变量与 GlobalStyle 注入 | 读取宿主私有主题 API。 |
 | `src/ui.js` | 无业务状态的基础组件与图标 | 持有业务逻辑或读取目录数据。 |
 | `src/research-console.js` | 分区调度、分区导航、两级吸顶偏移实测 | 持有任何分区的业务逻辑，或读写分区的数据。 |

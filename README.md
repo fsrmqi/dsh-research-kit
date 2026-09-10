@@ -164,7 +164,8 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 | --- | --- | --- |
 | 当前会话输入框 | 仅在点击「写入/发送」时写入或提交最终 Prompt | 不拦截 Enter，不自动发送，不改动其他会话历史 |
 | `@文件` 引用 | 只提示你使用 DSH 原生提及 | 不读取、不上传、不解析文件内容 |
-| 浏览器本地 | 收藏与使用历史（`localStorage`） | 不存参数值、完整 Prompt、文件内容；清除浏览器数据即清空 |
+| 浏览器本地 | 收藏、使用历史、方法卡与灵感资产（`localStorage`） | 不存参数值、完整 Prompt、文件内容；清除浏览器数据即清空 |
+| 当前页面内存 | 本会话证据索引（已启动工作流、直查来源摘要） | 仅供工作台各分区实时形成证据图谱；刷新或关闭页面即清空，不保存检索词、原始文件或完整结果 |
 | 网络 | 公开数据源直查（仅在你主动触发时） | 出网经 DSH 受控 web 服务；插件不持有任何 API Key |
 
 **零遥测。** 不上传使用统计，不采集数据。所有工作流产出一律标注为**需人工核验的草案**，不替代研究者、审稿人或伦理审批。
@@ -181,7 +182,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（128 项、128 唯一 ID）、84 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
+已通过的验证：目录契约校验（128 项、128 唯一 ID）、113 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -190,7 +191,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑与契约回归测试（84 项）
+npm test        # 纯逻辑与契约回归测试（113 项）
 ```
 
 改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。

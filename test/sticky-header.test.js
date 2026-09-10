@@ -23,8 +23,10 @@ const callBlock = (source, name) => {
   return match[0]
 }
 
+// 结尾兼容 `]),` 与 `]) : null,`：吸顶带可能被三元条件包裹（例如沉淀层的
+// 灵感资产 / 证据库子模块切换），只要调用本身仍是 sticky:true 的 Toolbar，契约就成立。
 const toolbarBlock = (source, key) => {
-  const match = new RegExp(`h\\(Toolbar,\\s*\\{\\s*key:\\s*'${key}',\\s*sticky:\\s*true\\s*\\},[\\s\\S]*?\\n {4}\\]\\),`).exec(source)
+  const match = new RegExp(`h\\(Toolbar,\\s*\\{\\s*key:\\s*'${key}',\\s*sticky:\\s*true\\s*\\},[\\s\\S]*?\\n {4}\\](?:\\),|\\)\\s*:\\s*null,)`).exec(source)
   assert.ok(match, `未找到 key: '${key}' 的二级吸顶带调用块`)
   return match[0]
 }
