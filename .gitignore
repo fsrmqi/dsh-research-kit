@@ -7,3 +7,4 @@ node_modules/
 
 # 内部开发笔记：仅本地保留，不随仓库发布
 /docs-internal/
+/.github/
