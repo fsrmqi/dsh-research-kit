@@ -1,0 +1,60 @@
+# 第三方组件与归属声明
+
+本仓库以 MIT 许可证发布（见 [LICENSE](LICENSE)）。下列第三方内容随本仓库分发或以其他方式被使用，其权利归各自作者所有。
+
+---
+
+## 1. Vendored 构建工件
+
+### dsh-promptkit
+
+| 项 | 值 |
+| --- | --- |
+| 文件 | `vendor/promptkit-embed.js` |
+| 来源 | [fsrmqi/dsh-promptkit](https://github.com/fsrmqi/dsh-promptkit)（源文件 `ui/embed.js`） |
+| 许可证 | MIT |
+| 锁定方式 | 来源 commit 与 SHA-256 记录在 `vendor/vendor-manifest.json`，由 `scripts/check-vendor.mjs` 校验 |
+| 用途 | 提供「方法工坊」界面组件（`PromptKit.PromptStudio`）、草稿增强组件（`PromptKit.QuickEnhancer`）、静态方法与资产 provider |
+
+该工件是构建产物，**不得手工编辑**。更新需同步 `vendor/vendor-manifest.json`。
+
+### KaTeX（经上述工件间接引入）
+
+上述工件内含 [KaTeX](https://github.com/KaTeX/KaTeX) 的数学排版代码与字体资源，用于渲染方法卡中的公式。
+
+| 项 | 值 |
+| --- | --- |
+| 许可证 | MIT |
+| 版权 | Copyright (c) 2013-2020 Khan Academy and other contributors |
+
+---
+
+## 2. 第三方来源链接（未复制代码或文本）
+
+下列项目均为独立的第三方开源项目，仅作为公开资料查阅与来源标注列出。本仓库不包含其代码、图标资产或 Prompt 原文，与其作者之间不存在隶属、合作或背书关系。
+
+| 来源 | 许可证 | 说明 |
+| --- | --- | --- |
+| [K-Dense-AI/k-dense-byok](https://github.com/K-Dense-AI/k-dense-byok) | MIT | 第三方开源科研工作流项目。本仓库 `catalog/` 下的条目为面向本项目目录契约的中文重写，不是上游文本的复制 |
+
+### DeepSeek Harness
+
+| 项 | 值 |
+| --- | --- |
+| 来源 | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) |
+| 许可证 | MIT |
+| 关系 | **运行宿主**，不是代码来源。本仓库是该宿主的插件，不包含宿主源码 |
+
+---
+
+## 3. 内容性数据的来源
+
+`catalog/databases.json` 中列出的是**公开科研数据源的接口地址与访问前提**（如 PubMed、Crossref、UniProt 等）。这些名称与 URL 仅作为事实性引用，不表示与相应机构存在合作、背书或授权关系。
+
+各数据源的服务条款、速率限制与数据使用协议由使用者自行遵守。本项目不对任何数据源的使用授权作担保。
+
+---
+
+## 4. 报告归属问题
+
+若你认为本仓库的某处内容侵犯了你的权利或署名不当，请通过 [SECURITY.md](SECURITY.md) 中的私密渠道联系，或开一个 Issue 说明。我会尽快核实并处理。

@@ -1,0 +1,17 @@
+{
+  "$comment": "vendored 工件清单。更新 vendor/ 下任何文件后必须同步更新本清单（scripts/check-vendor.mjs 会校验）。sourceCommit 为 dsh-promptkit 仓库中该产物对应来源文件的最近 commit。",
+  "version": 1,
+  "artifacts": [
+    {
+      "path": "vendor/promptkit-embed.js",
+      "sourceRepo": "dsh-promptkit",
+      "sourceFile": "ui/embed.js",
+      "sourceCommit": "f6338528bb5a327134ffd830c359a978b0c3ad74",
+      "sha256": "0f6fa7a1e8e5b93774e8dc253f08280f1ede8361b37819810e595787b20f3195",
+      "sizeBytes": 652057,
+      "vendoredAt": "2026-09-10",
+      "embeddingProtocol": "Embed Protocol v1",
+      "exports": ["PromptKit.PromptStudio", "PromptKit.QuickEnhancer", "PromptKit.StaticMethodProvider", "PromptKit.StaticAssetProvider", "PromptKit.utils", "PromptKit.builtinMethods"]
+    }
+  ]
+}

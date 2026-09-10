@@ -1,0 +1,98 @@
+# 变更日志
+
+本项目的所有重要变更记录在此文件中。
+
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+> 当前版本 `0.1.0`，**尚未发布到 npm**；下述变更均在 `main` 分支上。安装方式见 [README](README.md)。
+
+## [未发布]
+
+### 修复
+
+- 🔝 三个分区的顶部操作行统一吸顶，「科研模式」「新建资产」不再随页面滚走：原先只有「资源与工作流 / 研究灵感库」两个分区的检索行吸顶，方法工坊整段随页面滚走（其 vendored 左列的 `position: sticky` 是死代码），而「科研模式」（原挂分区封面右侧）与「新建资产」（原挂封面动作区）也会滚走——实测 `科研模式` 滚 800px 后 top = −555。现统一为「**吸顶只放随时要用的操作，不放读一次就够的内容**」：一级 = 分区导航；二级 = 各分区的模式 / 检索 / 筛选 / 主操作行；分区封面只留标题、导语与低频动作（导出、恢复备份）。三个分区覆盖面一致，不再有"一个吸、两个不吸"。
+  - **方法工坊的两条 vendor 解绑（都只有真实宿主才暴露）**：① 左列是栅格中最高的项（实测 910px），`align-items: start` 下它的包含块与自身等高、没有滑动余量，vendor 写的 `position: sticky; top: 14px` 完全无效（实测滚 700px 后左列 top = −355，检索框彻底消失），改为解除整列吸顶、只让筛选块吸顶；② `S.page` 的 `overflow: auto` 会在嵌入场景变成一个不再滚动的内层滚动盒，把 `<main>` 内所有 sticky 的参照系锁死在它自己身上（实测祖先链 `MAIN of=auto`），必须 `overflow: visible` 解绑。
+  - **折行顺序与弹性基准按"同占一行"倒推**：DOM 顺序取「模式 → 检索 → 筛选」，让最宽的筛选项最后折行以占满整行；若把「科研模式」放末尾，被挤到第二行的是它一个窄控件、会留下一整行空白（1180px 窗口即触发）。检索框 flex 基准取 `1 1 200px`（922px 内容宽下 176 + 200 + 495 + 20 = 891 ≤ 922），基准给到 260 就会把筛选挤到第二行（带高 76 → 126px）。
+  - 真实 DSH 实测（`scrollBody` 高 557px）：三分区滚 200 / 400 / 600px，吸顶顶边均等于导航底边（225px）；视口 1400 / 1280px 操作行单行（带高 76px），1100 / 980 / 820 / 700px 折两行（带高 126px）且顶边仍对齐；≤880px 时方法工坊双栏栅格塌陷为单列，筛选块在列表可见区间内恒贴住导航底（256px）。
+- 🧹 移除分区导航右上角的「原「研究方法工坊」」等迁移提示徽标：合并过渡期已过，徽标只是常驻噪声，且它随窗口变窄折行会反过来改变导航高度（而导航高度正是二级吸顶的偏移量来源）。同步删除 `console-sections.js` 中已无消费方的 `formerLabel` 契约字段（六要素 → 五要素）。
+- 🧱 修复方法工坊分区在窄屏不塌陷：vendored 双栏栅格是内联样式，880px 以下仍并排挤压，而另外两个分区已单列。现由媒体查询把 `.rk-studio-host main > div` 一并塌陷为单列，三个分区窄屏行为一致。
+- 🖼 方法工坊分区不再收成居中窄栏：vendored `PromptStudio` 的根 `<main>` 内联了 `width: min(1240px, max(100%, calc(100vw - 280px)))` + `margin: 0 auto`（独立插件页为宿主侧栏预留 280px 的写法）。嵌入统一容器后父容器已是扣除侧栏的可视区，该上限使本分区在宽屏被压到 1240px 居中、在窄容器反而横向溢出，与铺满的「资源与工作流 / 研究灵感库」两个分区视觉割裂。现由 `dsh/prompt-studio-glue.js` 包装出 `.rk-studio-host` 锚点，`src/theme.js` 以 author 级 `!important` 覆盖内联宽度，vendor 工件零改动、能力集合不变。真实 Chromium 实测：父容器 1440px 时 main 宽 1240px → 1440px（铺满）；父容器 900px 时 1000px（溢出）→ 900px（贴合）。
+- 📐 分区内边距改为流式令牌、消除硬编码像素：原先「资源与工作流 / 研究灵感库 / 方法工坊」三个分区与容器导航条各自硬编码 34px 水平内边距，窄窗口下会挤占内容宽度。现统一引用 `--rk-gutter: clamp(16px, 3vw, 34px)`（`src/theme.js` 唯一定义处，四处落点共同消费），视口 ≥1133px 时取上限 34px 保持既有视觉刻度，其间随窗口线性收缩，880px 以下由媒体查询锁定 16px。宽度方向一律用 `100%` 相对父容器解算，不出现固定 px 宽度。真实 Chromium 实测（四档视口，方法工坊分区）：600px / 880px → 16px、1000px → 30px（3vw）、1440px → 34px，各断点均铺满且无横向溢出。
+- 🎯 输入卡片浮层改为锚定卡片，不再钉在视口上：`conversation.input.overlay` 的槽位锚点是输入卡片顶边的零高条（宿主自身光标菜单 `MenuView` 用同一锚点，定位为 `position:absolute; bottom:calc(100% + 4px); left:0`），且槽位包装是 `display:contents` 不参与布局。原实现用 `position:fixed; left:14px; bottom:96px; width:min(560px, calc(100vw - 28px)); max-height:min(620px, calc(100vh - 160px))`，后果有三：① 浮层左缘停在视口左侧、距卡片左缘 179px，与触发按钮脱节；② `bottom:96px` 是个猜的输入区高度，实测压住输入卡片 10px，输入框越高错位越大；③ 卡片居中位置与宽度随窗口变化时，浮层不跟随。现改为 `position:absolute; left:0; bottom:calc(100% + 8px)` 与宽度 `min(560px, 100%)`（全部相对锚点解算），可用高度由新增 `src/lib/overlay-anchor.js` 实测「卡片顶边 → 滚动区顶边」得出，并随卡片尺寸、滚动区尺寸（`ResizeObserver`）与窗口尺寸（`resize`）重算。真实 Chromium 实测（同一构建产物、同一 DOM、1180px 视口）：修复前 浮层 left=14 / 卡片 left=193 / 浮层底边压住卡片顶 10px；修复后 浮层 left=194 / 卡片 left=193 / 浮层底边距卡片顶 7px。
+- 🛡 补登构建模块清单：`scripts/build-client.mjs` 的 `files` 是显式白名单，漏登记的新模块不会被拼入产物，只会在运行时 `ReferenceError`（`node --check` 查不出）。本次把 `src/lib/overlay-anchor.js` 补入 `files` 与 `ORDERED_SYMBOLS`，`npm run check` 同步纳入语法校验。
+- 测试扩充至 80 项：新增「分区宽度一致」守护（vendor 宽度写法漂移检测 + 宿主锚点 + 覆盖规则齐备 + 三分区内边距同刻度，避免后续重构静默删除这条对 vendored 内联样式的覆盖）、「浮层锚定」守护（可用高度解算必须以裁剪边界为先 + 空间不足时不得产生越界高度 + 非法输入回落上限 + 定位不得回到视口固定写法 + 锚点与重算监听齐备）与「顶部吸顶」守护（两级吸顶齐备 + 偏移必须引用实测变量而非写死像素 + 三个分区都接入含方法工坊 vendor 侧解绑与漂移检测 + 常驻操作必须在吸顶带内且不留在封面 + 二级层级低于一级 + 构建产物含锚点），以及「分区契约」新增的「不残留迁移提示徽标 / `formerLabel` 死字段」守护。
+
+### 新增
+
+- 🔝 顶部改为两层吸顶，检索行不再随页面滚走：统一视图内容很长（分区①详情栏、分区③资产列表都能把页面撑到数千像素），原先只有分区导航吸顶，检索与筛选行会随页面滚出视口，128 项资源里每次筛选都要先滚回顶部。现拆成两级——一级仍为 `.rk-console-nav`（分区导航 + 说明块，`position:sticky; top:0`），二级为新增的 `.rk-sticky-toolbar`（检索框 + 类型/状态筛选），两个分区都已接入。分区封面 `PageHead`（kicker / 标题 / 导语 / 分区动作）**不吸顶**：它的定位是"封面"，标题与一级导航的当前标签重复、导语是读一次的介绍，吸住会白占约 87px 并放大重复感。
+  - **偏移量实测而非写死**：二级吸顶的 `top` 取 `var(--rk-console-nav-h)`，由 `ResearchConsole` 用 `ResizeObserver` 观察一级导航并写入（挂载先写一次，卸载清理）。导航高度会随窗口变窄换行（说明块变 4–5 行）而变化，实测 1280px 宽下为 149px、780px 宽下为 180px，写死必然错位。
+  - **`ResizeObserver` 必须显式观察 `box: 'border-box'`**：默认只观察 content-box，因此"内边距/边框把导航撑高而内容框不变"的变化不会触发回调，二级吸顶会停在旧位置并压进导航底下。此缺陷只在真实宿主里扰动导航高度才暴露得出来。
+  - 吸顶带的垂直节奏由内边距而非外边距承接（外边距区域不绘制背景，吸顶后会露缝透出滚动内容），故 `Toolbar` 在 `sticky` 态把外边距置零、由 `.rk-sticky-toolbar` 的 `padding` 接管；二级 `z-index: 15` 低于一级 `20`，不遮挡分区切换。
+  - 真实 DSH 实测（`scrollBody` 高 557px）：滚动 0 / 200 / 600 / 700 / 900px 时，二级吸顶顶边始终等于一级导航底边（225px，严丝合缝）；扰动导航高度 149 → 189 → 185 → 149px，CSS 变量与吸顶位置逐次跟随；分区③「研究灵感库」同样对齐，吸顶带背景 `rgb(244,247,249)` 与页面底色一致。
+
+- 🎨 三视图视觉统一重构：新增统一基础组件层 `src/ui.js`（Button / Card / Panel / Field / Input / Textarea / Select / Chip / Badge / Segmented / ListRow / EmptyState / Spinner / Notice / Modal / Page / Toolbar）与图标层 `src/lib/icons.js`（ICON_PATHS 与 dsh-promptkit 逐项同源）。科研工作台、资源/工作流程浮层、研究灵感库、输入框入口与数据库查询面板全部改为复用该组件层，移除各视图内联的样式常量工厂。
+- 视觉令牌与「研究方法工厂对话增强器」对齐：`src/theme.js` 的 `--rk-*` 调色板、阴影刻度、字号层级（13px 正文 / 14px 面板标题 / 27px 页面标题）、圆角（卡片 12px、控件 8px、芯片 999px）与交互反馈（`.rk-btn` 位移、`.rk-card` 悬浮抬升、统一焦点环）逐项对齐 `--pk-*`；暗色保持 `--rk-d-*` 单一真源 + 系统暗色与 DSH 暗色双路触发。
+- 构建器健壮性：`scripts/build-client.mjs` 新增符号顺序断言（`ORDERED_SYMBOLS`），模块间无 import、符号依赖拼接顺序可见，文件顺序错位会在构建期报错而非运行时崩溃；新增多行 `import {}` 折叠，修复跨行 import 只删首行导致产物语法错误的问题。
+- 🧭 三个并列视图合并为统一容器：原「科研工作台」「研究方法工坊」「研究灵感库」三个 `conversation.view` 标签收敛为单一视图 `dsh-research-kit-console`，内部按「发现 → 构造 → 沉淀」的科研闭环做二级分区——**资源与工作流**（原工作台：目录检索、参数化组装、公开数据源直查）、**方法工坊**（原方法工坊：方法卡库、变量填充、关系图谱）、**研究灵感库**（原灵感库：资产增删改、版本对比、验证跟进）。分区导航常驻顶部并记忆上次位置，切换时同步展示该分区的定位、核心用途与职责边界。合并只发生在导航层：三个分区组件原样复用（本仓库组件走 `embedded` 模式，vendored 方法工坊零改动），能力集合与合并前完全一致，无功能丢失。
+- 分区契约单一真源 `src/lib/console-sections.js`：每个分区显式声明名称、定位、核心用途、职责边界与独占数据；`test/research-console.test.js` 守护五要素非空、边界含否定项、数据归属互斥、分区 id 与组件映射一一对应（杜绝"有导航无内容"的空分区）。
+- 统一基础组件层补齐 `ListRow` 行尾操作槽：工作台资源列表改用它渲染，消除最后一处视图内联行样式。
+- 测试扩充至 66 项：新增分区契约与导航映射（4 项）、会话模型路由惰性兜底（2 项）、构建产物卫生（3 项：无残留 import/export、视觉层与统一组件已拼入、三视图不再各自内联样式常量）与分区嵌入契约（1 项：守护「分区不得重复渲染页面外壳」）。
+- 📋 真实 profile 手工验收清单 [`docs/MANUAL-QA.md`](docs/MANUAL-QA.md)：把验收清单收敛为「快线 4 项（F1–F4）+ 发布门槛 2 项（R1–R2）+ 观测 3 项（O1–O3）」，给出**按症状分层的失败定位树**（L1 加载 / L2 注册 / L3 契约 / L4 渲染 / L5 路由）与修复位置原则（宿主 props 变更只改 `standalone-glue.js`、vendored 工件禁改）。
+
+- 🚀 方法工坊与草稿增强器并入本插件：按 [`docs/METHOD-WORKSHOP.md`](docs/METHOD-WORKSHOP.md) 的设计将 dsh-promptkit 的核心能力纳入本仓库，用户只需安装 dsh-research-kit 即可获得全部能力。
+- 研究草稿增强器（`conversation.input.right`，`dsh-research-kit-draft-enhancer`）：输入框旁一键增强，轻量档（零 Token 结构化整理）与语义档（复用当前会话模型、SSE 流式上屏、五维诊断、可取消）；强度三档（低=润色/中=补边界/高=详述）；增强后可撤销与对比原稿。优先级低于宿主模型选择器与发送按钮，不截获普通 Enter。
+- 语义增强 Node half（`dsh/semantic-enhance.js`）：`/dsh-research-kit/semantic-enhance`（非流式）与 `/stream`（SSE）两条路由统一注册进根 `index.js`（inject `['webServer', 'web', 'llm', 'sessions']`）；会话模型路由随 `agent/created`/`agent/disposed` 增删，只存 provider/model 标识，浏览器端与服务器均不持有模型 Key。研究化 system 指令强制：不编造引用/DOI/数据集/页码/临床结论、保持草稿研究范围、受限数据保密、结论标注待人工核验。
+- 研究上下文桥：每次语义增强自动携带当前会话已选数据库/技能/工作流的只读摘要（请求体 `researchContext`，服务端 4000 字符上限），供改写对齐术语与范围；不授予数据源访问权，改写不得声称已查询。
+- 研究灵感库完整管理视图（合并后为统一视图 `dsh-research-kit-console` 的「研究灵感库」分区；`src/research-vault.js`）：搜索、编辑、派生变体（保留来源关系）、版本对比、JSON 导出/增量恢复、收藏、验证状态跟进（待验证→已证实/已被推翻）；隐私边界：正文超 8000 字符拒绝保存，原始数据与完整查询结果不入库。
+- 模型输出协议模块（`src/lib/enhance-output.js`）：`[DIAG]` 五维诊断行 + `===PROMPT===` 分隔的统一解析，Node half 与浏览器共用；支持流式尾部剥离与中英文维度别名。
+- vendored 工件治理：`vendor/vendor-manifest.json` 记录工件来源 commit 与 SHA-256；`scripts/check-vendor.mjs` 在 `npm run check` 首步校验一致性；构建器在拼接时把工件内残留的 `/dsh-promptkit/` 路由改写为 `/dsh-research-kit/`，产物不出现跨插件 fetch 路径。
+- 公开数据源查询预算：`/dsh-research-kit/query` 增加 5 分钟结果缓存（200 条上限，命中不重复出网）与每 IP 每分钟 12 次速率预算（超出返回 429 并提示走 Agent 查询）；Agent 回退响应继续携带可直接执行的查询任务文本。
+- DSH slot 注册表单一事实源（`dsh/slot-registry.js`）：槽位的 id/order 集中定义，供 glue 与测试共用；`dsh/standalone-glue.js` 仍是唯一注册入口。当前为合并后的 **4 个槽位**（统一视图 `dsh-research-kit-console` + 左入口 + 浮层 + 右增强器；合并前为 6 个）。
+- 测试扩充至 56 项：语义增强路由（SSE 帧、会话路由增删、400/405/503 路径、研究上下文约束）、输出协议解析（流式/别名/未知维度）、灵感库隐私边界与筛选、查询缓存与速率限制、slot 注册表完整性。
+
+- 🧪 科研模式领域预设：工作台头部一键切换三个领域预设——「基因遗传」（附加 6 项技能，纪律段含 ACMG/AMP 解读规则、组学过滤留痕、关联不等于因果、跨物种外推限制）、「临床队列」（仅去标识化数据、强制“研究草案——非临床用途”标注、偏倚逐项讨论）、「通用科研」（基础纪律段）；再次点击同一预设关闭。写入/发送/复制均按预设组装。语义是「预设指导组合」而非能力开关——不会自动执行任何工具。
+- 数据源目录扩充至 30 条（原 4 条）：文献研究 14 条（PubMed、Crossref、OpenAlex、Semantic Scholar、CORE、ORCID、Unpaywall、bioRxiv/medRxiv、Europe PMC、DOAJ、ERIC、Springer Nature、Scopus、arXiv）+ 生医数据分析 16 条（NCBI E-utilities、ClinicalTrials.gov、openFDA、GTEx、gnomAD、KEGG、UniProt、RCSB PDB、ChEMBL、PubChem、STRING、Reactome、PhysioNet、WHO GHO、ChEBI、Ensembl），覆盖免费可访问的科研数据源，全部中文重写并附接口地址与访问前提（机构订阅/API 密钥要求如实标注）。
+- 新增「研究数据源选择」工作流：按研究问题匹配可访问数据库、生成检索词组合与优先顺序，关联全部 30 个数据源；要求声明访问限制、标注需确认项，不假设会话已能访问。
+- 🧬 扩充基因组学与临床研究学科工作流：新增「基因组学」类目 22 条（bulk/single-cell RNA-seq、变异检测、GWAS、ACMG 变异解读、基因集富集、调控网络、比较基因组、宏基因组、系统发育、表达图谱、甲基化、ATAC-seq、ChIP-seq、基因组注释、RNA velocity、空间转录组、细胞类型注释、轨迹拟时序、多组学整合、免疫画像、标志物发现）与「临床研究」类目 5 条（患者队列、病例对照、纵向数据、电子病历、风险预测模型——均强制标注"研究草案——非临床用途"）。参数提示词内嵌具体研究场景示例。
+- 数据源补充专业领域关键库：ClinVar、OMIM、GWAS Catalog、HGNC、GEO（数据源总数 35）。
+- 工作流目录合计 65 条（原 38 条）：论文与手稿 13、文献研究 12、基因组学 22、临床研究 5、数据分析 11、研究设计 2。新增内容覆盖下列场景：投稿信、稿件翻译、补充材料、研究版图扫描、引文模式分析、公开数据集检索、研究趋势追踪、预印本快报、方法学对比、统计分析执行、Meta 分析、生存分析、回归建模、方差分析、研究计划撰写；全部中文重写，保留防编造边界与"需人工核验"定位，计算类工作流保留"有工具则实际运行、无工具则输出方案"的双路径语义。
+- 资源面板学科二级筛选：输入框资源弹层按目录分类聚合数据源与技能；工作台数据源详情展示接口地址。
+- 使用历史面板：成功写入/发送/复制工作流后自动记录历史（本地保存 20 条，含名称、Prompt 首行摘要与时间戳；经 `CatalogStorage.recordHistory` 存储并广播变更）；筛选栏新增「历史」分组，点历史条目直接回到对应工作流；历史记录只存 ID、名称与首行摘要，不存完整 Prompt。
+- 「复制 Prompt」出口：工作台与输入框预览弹窗均可一键复制提示词，宿主动作缺失时的兜底路径；复制同样计入使用历史。
+- 表单一键清空：恢复到模板初始状态，与「恢复自动生成」配合覆盖手动编辑的所有回退场景。
+- 收藏与使用历史（`src/catalog-storage.js`）：列表条目一键星标收藏；筛选栏新增「★ 收藏」虚拟分组；存储经 `CatalogStorage` 接口隔离 `localStorage`，隐私模式或宿主禁用时降级为空操作。
+- 输入框资源选择器反馈：资源面板底部实时显示已选资源 chip 清单，可单个移除或一键清空，并说明附加语义。
+- 启动弹窗必填校验：缺失必填字段时给出字段级错误（红色边框、`aria-invalid`、逐字段说明），不写入草稿；需要材料的工作流在弹窗内展示材料添加方式与流程边界。
+- 输入框快捷入口（`conversation.input.left` + `conversation.input.overlay`）：工具行「资源 / 工作流程」两个紧凑按钮，经自定义事件在输入卡片上方打开弹层选择器；工作流面板按科研场景分类筛选、选择后弹出预览确认弹窗（参数填写、Prompt 预览编辑、「使用工作流程」只写草稿不自动发送）；资源面板在全部/数据库/技能间勾选，选择仅记录于当前会话。
+- 数据库附加语义：`composeWorkflow` 新增 `extraDatabaseIds`，勾选的数据库以「研究资源提示」并入 Prompt，并强制携带"未确认当前会话具备访问能力前，不得声称已检索"的边界声明。
+- 槽位注册测试（`test/dsh-slots.test.js`）：以 vm 沙箱执行构建产物，断言工作台、输入框入口与输入浮层三个槽位全部注册且返回统一释放函数。
+- `npm test` 现在先重建浏览器产物再运行测试，保证产物与源码同步后才断言。
+- 首批科研工作流目录：22 条人工审核的工作流（论文与手稿 10、文献研究 5、研究设计 1、数据分析 6），每条含参数化 Prompt、防编造边界与"需人工核验"定位；全部中文撰写并适配 DSH `@文件` 约定。
+- 可组合技能指导模块：8 项技能各带 `promptFragment` 纪律片段与 `checklist` 人工检查清单；`composeWorkflow` 支持 `extraSkillIds`，勾选后以「附加指导」并入 Prompt 末尾，未知或非技能 ID 静默忽略。
+- 数据源条目 4 项（PubMed、Crossref、arXiv、OpenAlex），均保守标注 `requires-mcp`。
+- 目录契约校验器（`scripts/validate-catalog.mjs`）：校验 ID 唯一性与格式、公共字段、占位符双向一致、防编造边界必含、availability 合法、关联存在性、技能模块字段；已接入 `npm run check`，CLI 与测试共用纯逻辑库。
+- 科研工作台 UI：搜索（覆盖名称、描述、标签与正文）、类型筛选、参数表单、技能勾选、Prompt 预览与手动编辑（含"恢复自动生成"）、写入/发送与宿主动作降级。
+- 主题基础（`src/theme.js`）：明暗双套调色板以 CSS 变量为单一真源，双路跟随系统暗色与 DSH `body[data-ds-dark-theme]`；880px 以下单列；`aria-*` 与焦点环。
+- GitHub Actions CI：目录契约 + 语法检查、构建、构建可复现校验、测试。
+
+### 修复
+
+- 语义增强英文指令与中文不一致：英文 contextLine 仍声明包含 `file references`，而 `researchContextSummary()` 实际只读会话勾选的目录资源、不含 `@文件` 引用；已改为 “catalog resources selected in this session, e.g. databases and skills”。
+- 会话模型路由惰性兜底：插件晚于会话启动（或热重载）时 `agent/created` 不再触发，增强会误报“尚未建立模型路由”。现在缓存未命中时向 `ctx.sessions` 反查一次并缓存；宿主形状未知或探测抛错时安全退化为原有 503 行为，不崩溃。
+- 构建器跨行 `import {}` 只删首行，剩余行残留成非法语句导致 `ui/client.js` 语法错误；新增折叠预处理。
+- `dsh/slot-registry.js` 纳入 `npm run check` 语法检查。
+- 文档与实现对齐：`ARCHITECTURE.md` 的 §1.2、§2 目录树与 §2.1 分层规则不再把 `index.js` 描述为“空 Node half”，改为说明两条受控路由（`/query` 与 `/semantic-enhance`）的边界。
+- 文档数字校准：回归测试 40 → 61；公开直查数据源 9 → 11（补 GBIF、iNaturalist）；研究设计类目 3 → 2；基因组学类目 21 → 22。
+- 开发手册补齐 Milestone C 的烟测验收记录表，并明确仓库内测试无法替代真实 profile 验证。
+- 筛选后详情必须属于当前结果集（`selectedCatalogItem`），修复"技能筛选下继续显示先前工作流"。
+- 手动编辑态改用 `null` 语义，用户清空 Prompt 不再被误判回自动组装。
+- 成功提示仅在 `setDraft`/`submit` 真实存在并执行后出现；缺失时按钮禁用并说明原因。
+- 🐛 **统一容器的「研究灵感库」分区未以 `embedded` 模式渲染**（真实 profile 烟测 F2 发现）：`src/research-console.js` 的 vault 分支未传 `embedded`，`ResearchVaultHost` 也不接收、不透传该参数，导致容器 `Page` 内嵌套第二层 `Page`——产物出现两个 `main.rk-page`，`min-height:100vh` 叠加使内容高 782px（视口仅 633px），产生多余滚动并把分区工具栏推到标签栏背后（`elementFromPoint(941,51)` 命中 `DIV.pV0-EW_tabs` 而非插件按钮）。修复后 `main.rk-page` 由 2 → 1、高度 782 → 633。新增回归测试「分区嵌入契约」（`test/research-console.test.js`）守护该缺陷类。
+
+### 已知限制
+
+- 真实 DSH profile 烟测已完成两轮走查（F1–F4 快线、R1 发布门槛与 O1–O3 观测项全部通过，逐项步骤见 `docs/MANUAL-QA.md`）；**仅 R2 宿主动作缺失降级（无法从外部构造）仍未覆盖**。升级 DSH 版本后需按该清单复验——该次走查证明的只是当时那个 build 的 props 形状。
+- R2 的降级守卫（`research-workbench.js:107/163/170`、`composer-overlay.js:48`）仅有代码审查确认，**无自动化测试覆盖**；建议补一个不传 `inputActions` 的渲染级测试。
+- 工作台左列（资源列表）未做 sticky：右列详情约 1044px，左列仅 415px 且随页面滚走，滚到详情底部出口按钮时列表已滑出视口（F2 期间观察，非本次改造引入）。
+- profile 侧的环境残留（与插件无关，R1 期间发现）：`remove` 不清理 `link:` 依赖的 `node_modules` 符号链接，卸载后 `require('dsh-research-kit')` 仍可解析（插件树由 `bundles` 驱动，残留链接不会被加载，影响为低）。
+- 深色主题与窄屏已实现但未经真机截图核验；收藏、历史与个人工作流属 Phase 2。
