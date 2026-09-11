@@ -464,5 +464,47 @@
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
     ]
+  },
+  {
+    "id": "exploratory-data-audit",
+    "type": "workflow",
+    "name": "探索性数据审计执行",
+    "description": "对本地数据执行有界 EDA、缺失与泄漏审计。",
+    "category": "数据分析",
+    "tags": [
+      "EDA",
+      "数据审计",
+      "泄漏检查"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "analysis_goal",
+        "label": "分析目标",
+        "required": true,
+        "multiline": true,
+        "hint": "如：为生存建模做数据体检"
+      },
+      {
+        "key": "data_dict",
+        "label": "数据字典",
+        "required": true,
+        "multiline": true,
+        "hint": "变量名、含义、单位、采集方式；未知处标注"
+      },
+      {
+        "key": "grouping",
+        "label": "分组与泄漏关注点",
+        "required": true,
+        "multiline": true,
+        "hint": "如按患者分组划分训练/测试；时间字段是否进入特征"
+      }
+    ],
+    "suggestedSkillIds": [
+      "exploratory-data-analysis",
+      "data-integrity",
+      "statistics-review"
+    ],
+    "prompt": "请对 @文件 提供的数据执行探索性数据审计，分析目标：{analysis_goal}。先核验会话具备 Python 执行能力（pandas/matplotlib 可用并记录版本，缺失时如实报告）。数据字典：{data_dict}。步骤：1. 有界画像：行列数、字段类型、缺失率、唯一值、数值分布与离群、类别频次，报告扫描范围与截断，不静默外推；2. 按 {data_dict} 校验单位与哨兵值（如 -999、空串被当数值）；3. 泄漏审计：{grouping}——目标泄漏、时间泄漏、重复记录跨集、聚合字段过度携带；4. 只报告发现与建议，不做插补、删除等修改性操作；5. 输出审计报告（含分布图与相关性热图）与进入验证性分析前的 FWER/FDR 方案建议。EDA 结论是诊断性的，不是验证性或因果结论；不输出原始行数据；不得编造统计量；输出为需人工核验的审计报告草案。"
   }
 ]

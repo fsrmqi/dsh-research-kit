@@ -444,5 +444,170 @@
       "跨组学关联不等于机制因果；样本对齐和批次结构必须先核验。"
     ],
     "prompt": "请基于 @文件 为“{layers}”多组学数据制定整合与批次效应分析计划。核对样本身份、配对关系、测量层级、缺失、批次与混杂；选择适合的归一化、批次处理、整合模型和交叉验证，并报告每步版本、参数和对结论的敏感性。不得编造组学关联、潜在因子或机制结论；输出可复现流程与独立验证需求。"
+  },
+  {
+    "id": "rnaseq-fastq-pipeline",
+    "type": "workflow",
+    "name": "bulk RNA-seq 原始数据流水线",
+    "description": "从 FASTQ 原始数据执行 QC、修剪、比对定量到计数矩阵。",
+    "category": "生物信息学",
+    "tags": [
+      "RNA-seq",
+      "FASTQ",
+      "流水线"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "sample_sheet",
+        "label": "样本表与 FASTQ 组织",
+        "required": true,
+        "multiline": true,
+        "hint": "每行：样本名、FASTQ 路径、组别、文库类型（单端/双端）"
+      },
+      {
+        "key": "design",
+        "label": "分组设计与比较",
+        "required": true,
+        "multiline": true,
+        "hint": "如：对照 3 例 vs 处理 3 例"
+      },
+      {
+        "key": "reference",
+        "label": "物种与参考版本",
+        "required": true,
+        "multiline": false,
+        "hint": "如 GRCh38 + GENCODE v44"
+      }
+    ],
+    "suggestedSkillIds": [
+      "bulk-rnaseq",
+      "reproducibility",
+      "data-integrity"
+    ],
+    "prompt": "请对 {sample_sheet} 中的 RNA-seq 原始数据（FASTQ）执行从 QC 到计数矩阵的流水线。先核验环境：FastQC、fastp、STAR 或 Salmon、MultiQC 是否可用并记录实际安装版本，缺失时如实报告并给出安装方案，不得虚构已安装。物种与参考版本：{reference}；分组设计：{design}。依次执行：1. FastQC + MultiQC 汇总原始质量（报告 Q30、接头与过序列情况）；2. fastp 修剪并报告修剪前后 reads 保留率；3. 选比对（STAR）或定量（Salmon）并说明选择理由，报告比对率/定量率与多映射比例；4. 生成基因×样本计数矩阵（原始整数计数），样本与基因过滤须报告数量；5. PCA 与样本相关性复查，报告离群样本。产出计数矩阵 CSV、QC 报告与运行记录（工具版本、命令、参考版本），后续差异表达可衔接目录内「bulk RNA-seq 差异表达」工作流。不得编造运行结果、比对率或统计量；失败与警告如实报告；输出为需人工核验的分析报告草案。"
+  },
+  {
+    "id": "nfcore-pipeline-execution",
+    "type": "workflow",
+    "name": "nf-core 流水线执行",
+    "description": "以 test profile 冒烟验证后正式运行 nf-core 流程并留痕。",
+    "category": "生物信息学",
+    "tags": [
+      "nf-core",
+      "Nextflow",
+      "可复现"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "pipeline",
+        "label": "流程与版本",
+        "required": true,
+        "multiline": false,
+        "hint": "如 nf-core/rnaseq 3.14.0"
+      },
+      {
+        "key": "input_sheet",
+        "label": "样本表与输入",
+        "required": true,
+        "multiline": true,
+        "hint": "samplesheet 路径与内容要点"
+      },
+      {
+        "key": "compute",
+        "label": "执行环境与资源",
+        "required": true,
+        "multiline": true,
+        "hint": "本地 Docker / SLURM+Singularity；内存、CPU、预计时长"
+      }
+    ],
+    "suggestedSkillIds": [
+      "nextflow",
+      "reproducibility"
+    ],
+    "prompt": "请执行 nf-core 流水线 {pipeline}。先核验环境：java -version、nextflow -version、容器引擎（Docker/Singularity/Apptainer/Conda）可用性，固定 NXF_VER 与流程 -r 版本并写入运行记录，参数语义以官方文档当前版本为准，不凭记忆改写。执行环境：{compute}。步骤：1. 先用 -profile test 冒烟验证环境，失败则排查并如实报告；2. 按 {input_sheet} 准备正式输入，先以 -preview 或 stub-run 核对通道；3. 正式运行并监控，失败时保存 .nextflow.log 与相关 work 目录片段，报告直接原因；4. 产出 multiqc 汇总与产物清单，注明可 -resume 的断点。不得虚构运行状态、完成进度或结果；计费与资源消耗按 {compute} 的上限控制；输出为需人工核验的运行报告。"
+  },
+  {
+    "id": "pathway-enrichment-execution",
+    "type": "workflow",
+    "name": "通路富集执行",
+    "description": "执行 ORA/GSEA 富集并控制背景宇宙与多重检验。",
+    "category": "生物信息学",
+    "tags": [
+      "GSEA",
+      "ORA",
+      "富集"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "gene_list",
+        "label": "差异基因与 ID 类型",
+        "required": true,
+        "multiline": true,
+        "hint": "@文件 或粘贴；注明 Entrez/Ensembl/基因符号"
+      },
+      {
+        "key": "background",
+        "label": "背景宇宙与物种",
+        "required": true,
+        "multiline": false,
+        "hint": "如：检测到的全部基因（人）"
+      },
+      {
+        "key": "libraries",
+        "label": "基因集库",
+        "required": true,
+        "multiline": true,
+        "hint": "如 GO BP、KEGG、MSigDB Hallmark；注明获取日期"
+      }
+    ],
+    "suggestedSkillIds": [
+      "pathway-enrichment",
+      "statistics-review"
+    ],
+    "prompt": "请对 {gene_list} 执行通路富集分析。先核验环境：gseapy 或 gprofiler-official 是否可用并记录版本与网络可达性（离线则确认本地 GMT 路径）；按 {libraries} 获取基因集并记录库名与版本/获取日期，不硬编码凭记忆的库列表。背景宇宙：{background}。步骤：1. 基因 ID 映射到所选库的命名空间，报告映射成功率，未映射基因不得静默丢弃；2. ORA（超几何/Fisher）与 GSEA（完整 ranked list，固定随机种子）分别运行；3. 按 FDR<0.05 过滤，核对每条通路的基因集大小与 overlap 数，合并冗余 GO 项并说明合并依据；4. 输出富集表（通路、集合大小、overlap、富集倍数、p、FDR、前导基因）与点状/条形图。显著不等于生物学相关，解读须结合方向与效应；不得编造富集统计量；输出为需人工核验的分析报告草案。"
+  },
+  {
+    "id": "phylogenetics-execution",
+    "type": "workflow",
+    "name": "系统发育构建执行",
+    "description": "执行比对修剪、模型选择与建树并报告支持度。",
+    "category": "生物信息学",
+    "tags": [
+      "系统发育",
+      "IQ-TREE",
+      "MAFFT"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "sequences",
+        "label": "序列来源",
+        "required": true,
+        "multiline": true,
+        "hint": "@文件 未比对 FASTA；注明核苷酸/氨基酸与物种范围"
+      },
+      {
+        "key": "marker",
+        "label": "标记区与取样策略",
+        "required": true,
+        "multiline": true,
+        "hint": "如：COI 单基因 / 多个直系同源基因串联"
+      },
+      {
+        "key": "rooting",
+        "label": "外群与定根策略",
+        "required": true,
+        "multiline": false,
+        "hint": "外群类群或中点 rooting"
+      }
+    ],
+    "suggestedSkillIds": [
+      "phylogenetics",
+      "reproducibility"
+    ],
+    "prompt": "请对 {sequences} 执行系统发育构建（标记区与取样：{marker}）。先核验环境：MAFFT、TrimAl、IQ-TREE 2 或 FastTree 的安装与实际版本，缺失时如实报告。步骤：1. MAFFT 自动策略比对，报告比对长度；2. TrimAl 修剪并报告保留位点比例；3. IQ-TREE 以 -m TEST 自动选模型（记录所选模型），超快自展≥1000；序列超过 5000 条时改用 FastTree 并如实说明精度取舍；4. 按 {rooting} 定根；5. 输出 Newick 树、各分支支持度汇总与关键分支解读，附完整命令行与随机种子。树的可信度受比对质量、模型与取样影响，关键拓扑须人工检查支持度后再采信；不得编造模型选择结果或支持度数值；输出为需人工核验的分析报告草案。"
   }
 ]

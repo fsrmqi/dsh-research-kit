@@ -449,5 +449,46 @@
       "不替代期刊投稿系统或作者最终声明；目标期刊规则无法核验时必须标注。"
     ],
     "prompt": "请对 @文件 中的稿件做投稿前完整性核对，目标期刊：{journal}。检查题名页与作者信息、摘要、图表和补充材料编号、引用与参考文献、数据/代码可用性、伦理与利益冲突声明、适用报告清单及期刊格式要求。每项标为已见、缺失、待作者确认或需外部核验；不得把未见材料推断为已完成，不得虚构期刊规则。输出可勾选提交前清单与阻断投稿的问题。"
+  },
+  {
+    "id": "research-report-docx",
+    "type": "workflow",
+    "name": "研究报告文档生成",
+    "description": "执行生成结构化 .docx 研究报告并自检格式。",
+    "category": "论文与手稿",
+    "tags": [
+      "docx",
+      "报告生成",
+      "执行侧"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "report_outline",
+        "label": "报告结构与受众",
+        "required": true,
+        "multiline": true,
+        "hint": "章节结构与读者（如课题组月报/资助进展报告）"
+      },
+      {
+        "key": "data_sources",
+        "label": "数据与图表来源",
+        "required": true,
+        "multiline": true,
+        "hint": "@文件 结果文件/图表；或说明引用会话内产物"
+      },
+      {
+        "key": "doc_spec",
+        "label": "格式要求",
+        "required": true,
+        "multiline": false,
+        "hint": "模板、字号、页边距、图表编号规则"
+      }
+    ],
+    "suggestedSkillIds": [
+      "docx",
+      "scientific-writing"
+    ],
+    "prompt": "请生成一份 .docx 研究报告。先核验会话具备 Python 执行能力且 python-docx 可用（记录实际版本；不可用时如实说明并给出安装方案，不得假装已生成）。报告结构：{report_outline}。内容来源：{data_sources}——只使用会话内已确认的结果与所引用文件，不引入未提供的数据；不得编造结果、引用或页码。格式要求：{doc_spec}。步骤：1. 搭建文档骨架（标题层级、图注、表格、交叉引用锚点）；2. 逐节填充内容并插入图表（带编号与图注）；3. 按 doc_spec 应用模板、字号与页边距；4. 生成后自检：重新打开文件核对章节完整性、图表编号、交叉引用与页码，报告任何异常；5. 输出文档路径、结构摘要与自检结果。生成结果需人工复核后方可提交。"
   }
 ]

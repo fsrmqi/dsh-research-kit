@@ -453,5 +453,80 @@
       "仅作研究与信息整理，不构成法律意见、FTO 结论或专利有效性判断。"
     ],
     "prompt": "请围绕技术主题“{topic}”制定专利与技术版图分析草案。明确检索数据库、关键词、司法辖区、时间范围和覆盖局限；按专利族整理公开申请/授权、权利人、技术主题、时间线与引用关系，区分已核验记录和待核验记录；识别潜在重叠或空白时只能作为需专业人士复核的线索，不得给出自由实施、侵权、有效性或法律结论。输出可复现检索策略、证据表、主题版图与待核验清单。"
+  },
+  {
+    "id": "literature-api-search",
+    "type": "workflow",
+    "name": "文献 API 检索执行",
+    "description": "跨 PubMed/OpenAlex 等公开 API 执行系统检索并留痕。",
+    "category": "文献研究",
+    "tags": [
+      "文献检索",
+      "公开 API",
+      "PRISMA"
+    ],
+    "requiresFiles": false,
+    "placeholders": [
+      {
+        "key": "research_question",
+        "label": "研究问题",
+        "required": true,
+        "multiline": true,
+        "hint": "一至三句，含研究对象与结局"
+      },
+      {
+        "key": "inclusion_rules",
+        "label": "纳入排除与时间窗",
+        "required": true,
+        "multiline": true,
+        "hint": "研究类型、语言、起止年份"
+      },
+      {
+        "key": "output_format",
+        "label": "输出格式",
+        "required": true,
+        "multiline": false,
+        "hint": "如 BibTeX / 证据表（题录+摘要+DOI）"
+      }
+    ],
+    "suggestedSkillIds": [
+      "paper-lookup",
+      "citation-hygiene"
+    ],
+    "prompt": "请把 {research_question} 转成检索式并跨公开文献 API 执行检索。先核验会话可执行 Bash/curl、Python≥3.11 与网络可达性，并如实记录；所用 API 清单、检索串、执行日期与各库命中数须逐条留痕（供 PRISMA 流程图使用）。纳入排除与时间窗：{inclusion_rules}。步骤：1. 拆解检索式（布尔组合与同义扩展），先在 PubMed 试检并按命中量调整；2. 依次查询 PubMed、Europe PMC、OpenAlex，遵守限速（如 arXiv 1 次/3 秒），超约 1000 条先确认；3. 去重合并，按 {output_format} 输出，每条含 DOI/PMID 等稳定标识与来源 API；4. 空结果与分页截断如实报告，不用弱记录凑数。API 可能以 HTTP 200 掩盖失败；结果需人工核验后方可引用；不得编造题录、摘要或命中数。"
+  },
+  {
+    "id": "citation-bibtex-build",
+    "type": "workflow",
+    "name": "BibTeX 引文核验生成",
+    "description": "检索补全元数据并校验生成投稿用 BibTeX。",
+    "category": "文献研究",
+    "tags": [
+      "BibTeX",
+      "引用核验",
+      "元数据"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "source_refs",
+        "label": "引文来源",
+        "required": true,
+        "multiline": true,
+        "hint": "@文件 或粘贴 DOI 列表/参考文献段落"
+      },
+      {
+        "key": "target_style",
+        "label": "目标样式",
+        "required": true,
+        "multiline": false,
+        "hint": "如 venue 要求的 bst/样式与键名规则"
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-management",
+      "citation-hygiene"
+    ],
+    "prompt": "请解析 {source_refs} 中的引文线索（DOI/标题/作者），检索补全元数据并生成可投稿的 BibTeX。先核验会话可执行 Bash/Python 与网络（记录所涉 API）；目标样式：{target_style}。步骤：1. 逐条经 CrossRef/OpenAlex/PubMed 检索补全，记录每条的来源 API 与查询串；2. 预印本核对是否已有正式版本并注明；3. 生成 BibTeX：键名按目标样式、特殊字符防注入、字段完整，缺失字段标注待核验而非留空猜测；4. 运行去重与键名唯一性校验；5. 输出 .bib 内容与核验清单——哪些字段经 API 证实、哪些待人工确认。元数据按不可信数据处理，不得编造作者、年份、卷期页码；投稿前需人工逐条核对。"
   }
 ]

@@ -8,7 +8,7 @@
 
 [English](README.en.md) · [简体中文](README.md)
 
-> A catalog and launcher for research workflows in DeepSeek Harness: 308 human-reviewed workflows, 86 skill entries, 122 scientific data sources.
+> A catalog and launcher for research workflows in DeepSeek Harness: 316 human-reviewed workflows, 86 skill entries, 122 scientific data sources.
 
 It turns recurring research tasks — peer review, writing an introduction, literature synthesis, planning a statistical analysis — into **parameterized, editable prompts that you review before sending**. The plugin only assembles the task and hands it back to your session; execution stays with your own DSH agent.
 
@@ -42,7 +42,7 @@ Research Kit turns those four into reusable assets.
 ## How it works
 
 ```text
-Research capability catalog (516 entries)
+Research capability catalog (524 entries)
   → pick a workflow
   → fill parameters, reference materials via @file
   → review and edit the final prompt
@@ -60,7 +60,7 @@ Deliberate trade-offs:
 
 ## Capabilities
 
-**🧪 308 human-reviewed research workflows**
+**🧪 316 human-reviewed research workflows**
 Across twenty-four workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
 
 **🧩 86 skill entries: 23 guidance modules + 63 capability entries**
@@ -137,7 +137,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 516 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 524 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live;
@@ -158,11 +158,11 @@ Workflows are maintained as per-family shards under `catalog/workflows/` (one JS
 
 | Category (shard) | Count |
 | --- | --- |
-| Paper & manuscript (paper-manuscript) | 16 |
-| Literature research (literature) | 14 |
-| Data analysis (data-analysis) | 17 |
+| Paper & manuscript (paper-manuscript) | 17 |
+| Literature research (literature) | 16 |
+| Data analysis (data-analysis) | 18 |
 | Study design (research-design) | 5 |
-| Bioinformatics (bioinformatics) | 14 |
+| Bioinformatics (bioinformatics) | 18 |
 | Genomics (genomics) | 14 |
 | Clinical research (clinical) | 19 |
 | Crop breeding (crop-breeding) | 8 |
@@ -210,7 +210,7 @@ The remaining 111 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (516 entries, 516 unique IDs, shards identical to the aggregated entries), 153 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (524 entries, 524 unique IDs, shards identical to the aggregated entries), 153 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
