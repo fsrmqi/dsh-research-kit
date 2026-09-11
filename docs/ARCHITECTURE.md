@@ -75,7 +75,7 @@ dsh-research-kit/
 │   ├── workflows/                   # 参数化 Prompt 工作流，按流程族分片（308 条 / 24 个类目）
 │   │   ├── index.js                 # 唯一聚合入口：按固定顺序导出数组，新增分片必须在此登记
 │   │   └── <流程族>.json            # 每个分类一个分片（paper-manuscript、genomics、ecology…）
-│   ├── skills/                      # 技能，按稳定用途分片（core / crop-breeding / bioinformatics，共 11 条）
+│   ├── skills/                      # 技能，按稳定用途分片（core / crop-breeding / bioinformatics，共 23 条）
 │   ├── resources/                   # 数据源，按稳定用途分片（crop-breeding / literature / genomics / omics / general-science，共 122 条）
 │   │   ├── index.js                 # 唯一聚合入口，并导出 database-metadata.json 的分组展示元数据
 │   │   └── database-metadata.json   # 数据源分组等展示元数据（对象型配置，不是条目分片）
@@ -202,7 +202,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 | --- | --- | --- | --- |
 | 一级 | `.rk-console-nav`（分区导航 + 说明块） | 是 | 回答"我在哪个分区"，跨分区切换不应需要回滚 |
 | — | 分区封面 `PageHead`（kicker / 标题 / 导语 / 低频动作） | 否 | 定位是"封面"：标题与一级导航的当前标签重复，导语是读一次的介绍；吸住会白占约 87px 并放大重复感 |
-| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 441 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
+| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 453 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
 
 四个分区的二级吸顶带按同一口径组装（检索 + 筛选 + 该分区的模式/主操作）：
 
