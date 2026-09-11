@@ -219,7 +219,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（149 项）
+npm test        # 纯逻辑、契约与渲染级回归测试（152 项）
 ```
 
 改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。

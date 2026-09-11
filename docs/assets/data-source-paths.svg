@@ -8,13 +8,13 @@
 </defs>
 
 <rect x="270" y="40" width="280" height="46" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
-<text x="410" y="63" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">122 个科学数据源目录</text>
+<text x="410" y="63" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">科学数据源目录</text>
 
 <path d="M410 86 V108 H200 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
 <path d="M410 86 V108 H620 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
 
 <rect x="30" y="136" width="340" height="80" rx="10" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
-<text x="50" y="160" font-size="14" font-weight="500" fill="#173404">插件可直接查询 · 11 个</text>
+<text x="50" y="160" font-size="14" font-weight="500" fill="#173404">插件可直接查询</text>
 <text x="50" y="180" font-size="12" fill="#3B6D11">目录状态 available-in-plugin</text>
 <text x="50" y="200" font-size="12" fill="#3B6D11">无需宿主 MCP，点开即可查询</text>
 

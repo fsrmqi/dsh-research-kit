@@ -219,7 +219,7 @@ Verified so far: catalog contract validation (441 entries, 441 unique IDs, shard
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (149)
+npm test        # pure-logic, contract and render-level regression tests (152)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).
