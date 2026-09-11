@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 508" width="820" height="508" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
-<title>82 个科学数据源的两条查询路径：插件直查与 Agent 回退</title>
+<title>122 个科学数据源的两条查询路径：插件直查与 Agent 回退</title>
 <desc>11 个来源由插件内置适配器直接查询，44 个来源明确标注接入前提并回退到当前会话的 Agent。</desc>
 <defs>
   <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -8,7 +8,7 @@
 </defs>
 
 <rect x="270" y="40" width="280" height="46" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
-<text x="410" y="63" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">82 个科学数据源目录</text>
+<text x="410" y="63" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">122 个科学数据源目录</text>
 
 <path d="M410 86 V108 H200 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
 <path d="M410 86 V108 H620 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>

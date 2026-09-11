@@ -2,7 +2,7 @@
 
 本文面向需要改动 `dsh-research-kit` 的开发者：环境准备、模块登记规则、测试策略与交付检查单。
 
-当前仓库处于**可用状态**——299 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
+当前仓库处于**可用状态**——339 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
 
 ## 1. 开始前
 
@@ -100,7 +100,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 ### Milestone D：扩充第一批内容 ✅
 
-已完成。当前 206 条工作流（16 个类目，按流程族分片维护于 `catalog/workflows/`，类目明细见 [README「目录内容」](../README.md#目录内容)）、11 项技能（`catalog/skills/`）与 82 个数据源（`catalog/resources/`），全部通过契约校验与「分片 ↔ 入口 ↔ 产物」三向断言。
+已完成。当前 206 条工作流（16 个类目，按流程族分片维护于 `catalog/workflows/`，类目明细见 [README「目录内容」](../README.md#目录内容)）、11 项技能（`catalog/skills/`）与 122 个数据源（`catalog/resources/`），全部通过契约校验与「分片 ↔ 入口 ↔ 产物」三向断言。
 
 后续扩充方向见 [ROADMAP.md](../ROADMAP.md)。
 

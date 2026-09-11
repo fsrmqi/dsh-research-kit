@@ -10,6 +10,9 @@
 
 ### 变更
 
+- 🗄 **数据源批量迁入 40 条（pending-source-migration 台账清零）**：按迁移台账把 K-Dense 上游非金融科研数据源全部迁入 `catalog/resources/general-science.json`，目录规模 82 → **122** 个数据源（总资源 299 → 339）。覆盖天文与空间（NASA ADS / Earthdata / INSPIRE-HEP / Launch Library 2 等 7 条）、化学与材料（Materials Project / ChemSpider / NIST WebBook 等 6 条）、地球气候环境（NOAA CDO / Copernicus CDS / EPA AQS / Sentinel Hub 等 16 条）、地理空间（US Census / OpenCage / ArcGIS REST 等 5 条）与生物多样性、粒子物理、地质样品等 6 条；每条均按迁入门槛完成中文化改写，如实标注访问前提（API Key / 注册 / 订阅 / 许可），未验证直查能力前一律标 `requires-mcp`（仅 GADM 纯下载类标 `reference-only`）。
+  - **研究入口分组同步扩充**：新增「材料与物理科学」入口组（Materials Project / MPDS / AFLOW / Particle Data Group），其余 35 条分别归入天文与空间科学、气候/地球/环境、地理空间与社会数据、生物多样性与生态、化学/药物/毒理五个既有入口组；仅 open-food-facts 走「其他研究数据源」兜底组。
+  - 台账本身经上游 229 条 id + URL 双重比对核验：原记录「42 条待迁」实为计数失误——41 条清单中有 1 条（`openstreetmap`）早已改名 `openstreetmap-overpass` 迁入，真实待迁为 40 条；台账已标注完结并保留溯源信息。
 - 🗂 **目录数据模块化拆分（docs-internal/catalog-modularization-plan.md 全量落地）**：单文件目录按「流程族 / 稳定用途」拆为三个分片目录并各设唯一聚合入口——`catalog/workflows/`（206 条工作流按 16 个类目分片，另预留 ecology / neuroscience / physics / astronomy / social-science / mathematics / machine-learning / engineering 八个空分片）、`catalog/skills/`（11 条按 core / crop-breeding / bioinformatics 分片）、`catalog/resources/`（82 个数据源按 crop-breeding / literature / genomics / omics / general-science 分片，`database-metadata.json` 分组元数据随 resources 入口导出）。大批量迁入从此是独立、可审阅的分片变更，不再挤同一个 JSON 文件。
   - **对外 API 与构建产物语义不变**：`src/catalog.js` 只 import 三个 `index.js` 入口，`catalog` / `itemById()` / `searchCatalog()` / `composeWorkflow()` 等出口与调用方完全解耦；构建器从入口加载后仍整体内联进 `ui/client.js`，浏览器端零动态请求。根 `index.js`（Node half）同步改从 resources 入口取数据源清单。
   - 🔒 **「分片 ↔ 入口 ↔ 产物」三向断言**：新增 `scripts/lib/catalog-entries.mjs`（fs 直读分片 + ESM 加载入口两条独立路径），`validate-catalog.mjs` 与测试断言目录中每个 `*.json` 都被对应 `index.js` 登记、分片条目总数等于聚合数组长度且逐条一致、构建产物内联数组与聚合入口相等——分片遗漏或未登记在 `npm run check` 直接失败。新增 6 项加载与聚合测试（总 149 项）。

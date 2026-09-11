@@ -81,7 +81,10 @@
       "ids": [
         "chembl",
         "pubchem",
-        "chebi"
+        "chebi",
+        "chemspider",
+        "nist-webbook",
+        "nmrshiftdb"
       ]
     },
     {
@@ -95,7 +98,14 @@
         "simbad",
         "vizier",
         "sdss",
-        "celestrak"
+        "celestrak",
+        "nasa-ads",
+        "nasa-earthdata",
+        "inspirehep",
+        "launch-library-2",
+        "open-notify",
+        "arcsecond",
+        "asterank-mpc"
       ]
     },
     {
@@ -107,7 +117,9 @@
         "gbif",
         "inaturalist",
         "itis",
-        "paleobiology-db"
+        "paleobiology-db",
+        "vertnet",
+        "ecoengine"
       ]
     },
     {
@@ -121,7 +133,24 @@
         "usgs-water",
         "open-meteo",
         "openaq",
-        "nasa-firms"
+        "nasa-firms",
+        "noaa-cdo",
+        "ncei-data-service",
+        "usgs-national-map",
+        "usgs-minerals",
+        "usgs-volcanoes",
+        "usgs-geomagnetism",
+        "epa-air-quality",
+        "water-quality-portal",
+        "copernicus-cds",
+        "openweathermap",
+        "world-air-quality",
+        "global-fishing-watch",
+        "sentinel-hub",
+        "nsidc",
+        "uk-met-office",
+        "windy-api",
+        "sesar-samples"
       ]
     },
     {
@@ -132,7 +161,25 @@
       "ids": [
         "openstreetmap-overpass",
         "geonames",
-        "natural-earth"
+        "natural-earth",
+        "us-census",
+        "opencage",
+        "gadm",
+        "arcgis-rest",
+        "what3words",
+        "marine-traffic"
+      ]
+    },
+    {
+      "group": "材料与物理科学",
+      "dataKind": "材料计算与实验性质、晶体结构与粒子物理常数",
+      "queryExample": "按材料体系、化学式、性质指标或粒子名称查询，并记录数据库版本与理论方法。",
+      "citationRule": "记录数据库名称、条目标识、版本/生成方法和访问日期；计算性质须注明理论方法。",
+      "ids": [
+        "materials-project",
+        "mpds",
+        "aflow",
+        "particle-data-group"
       ]
     }
   ],

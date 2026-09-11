@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
-> 面向 DeepSeek Harness 的科研工作流目录与启动器：206 条人工审核的工作流、11 个技能指导模块、82 个科学数据源。
+> 面向 DeepSeek Harness 的科研工作流目录与启动器：206 条人工审核的工作流、11 个技能指导模块、122 个科学数据源。
 
 把反复执行的科研任务（审稿、写引言、做综述、设计分析计划）变成**参数化、可编辑、发送前可见**的提示词。插件只负责把任务组装好并交还当前会话，执行仍由你自己的 DSH Agent 完成。
 
@@ -42,7 +42,7 @@ Research Kit 把这四点做成可复用的资产。
 ## 它怎么工作
 
 ```text
-科研能力目录（299 项）
+科研能力目录（339 项）
   → 选择工作流
   → 填写参数、用 @文件 引用材料
   → 预览并编辑最终 Prompt
@@ -66,7 +66,7 @@ Research Kit 把这四点做成可复用的资产。
 **🧩 11 个可组合的技能指导模块**
 科学写作、统计审查、引用核验、证据综合、可重复性检查、评审伦理与保密、数据完整性守护、不确定性表达，以及农业试验设计、作物基因组与育种证据、生信流程治理三个领域模块。每个带一段纪律性指导片段与人工检查清单，启动工作流时勾选即可并入提示词。
 
-**🔬 82 个科学数据源，其中 11 个支持插件直查**
+**🔬 122 个科学数据源，其中 11 个支持插件直查**
 文献、临床、遗传、组学、蛋白/化学，以及天文空间、生物多样性、气候环境、地理空间。公开 API 可直查并返回带链接与稳定标识符的候选记录；限流、需授权或需专业参数的来源会明确回退到 DSH Agent/MCP。
 
 **✍️ 发送前完整可见、可编辑**
@@ -137,7 +137,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 **方式一：科研工作台统一视图**
 
-1. 在会话中打开「科研工作台」，默认落在「资源与工作流」，搜索或按类型筛选 299 项资源；
+1. 在会话中打开「科研工作台」，默认落在「资源与工作流」，搜索或按类型筛选 339 项资源；
 2. 选择工作流，查看目的、所需材料与使用限制；
 3. 填写参数；需要材料的工作流请先在 DSH 输入框用 `@文件` 引用文件；
 4. 按需勾选「附加技能指导」，预览实时更新；
@@ -176,7 +176,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 | 材料科学（materials） | 12 |
 | 预留流程族（ecology / neuroscience / physics / astronomy / social-science / mathematics / machine-learning / engineering） | 0（待迁入） |
 
-另有 11 项技能（`catalog/skills/`：core 8 / crop-breeding 2 / bioinformatics 1）与 82 个数据源条目（`catalog/resources/`：crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 41）。完整定义见 [`catalog/`](catalog/)，数据契约见[架构文档 §4](docs/ARCHITECTURE.md)。
+另有 11 项技能（`catalog/skills/`：core 8 / crop-breeding 2 / bioinformatics 1）与 122 个数据源条目（`catalog/resources/`：crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81）。完整定义见 [`catalog/`](catalog/)，数据契约见[架构文档 §4](docs/ARCHITECTURE.md)。
 
 ## 隐私与安全
 
@@ -197,13 +197,13 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 数据源详情页可直接查询首批公开来源：PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist——这 11 个来源在目录里标记为 `available-in-plugin`，详情页状态显示「插件可直接查询」。候选结果显示来源链接与稳定标识符，可写入输入框，或显式点击「让 Agent 核验并继续查询」——该按钮会调用当前 DSH 会话的 Agent，由它使用自己已拥有的 Web / MCP / 文件工具完成多步检索。
 
-其余 71 个数据源标记为 `requires-mcp` 或 `reference-only`，会清楚提示所需的 MCP、订阅、API Key 或数据使用协议，并提供同一受控 Agent 回退。目录标注与查询实现由 `npm run check` 双向校验（有适配器就必须标出来，标了就必须有适配器），因此界面上的能力状态不会与实现漂移。**插件不会伪造任何检索结果。**
+其余 111 个数据源标记为 `requires-mcp` 或 `reference-only`，会清楚提示所需的 MCP、订阅、API Key 或数据使用协议，并提供同一受控 Agent 回退。目录标注与查询实现由 `npm run check` 双向校验（有适配器就必须标出来，标了就必须有适配器），因此界面上的能力状态不会与实现漂移。**插件不会伪造任何检索结果。**
 
 ## 兼容性与状态
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（299 项、299 唯一 ID，分片与聚合入口逐条一致）、149 项回归测试（含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
+已通过的验证：目录契约校验（339 项、339 唯一 ID，分片与聚合入口逐条一致）、149 项回归测试（含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 

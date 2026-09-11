@@ -35,7 +35,7 @@ test('聚合入口：数量、类型与分组元数据形状正确', async () =>
   const { workflows, skills, resources, databaseMetadataConfig } = await loadCatalogEntries()
   assert.equal(workflows.length, 206)
   assert.equal(skills.length, 11)
-  assert.equal(resources.length, 82)
+  assert.equal(resources.length, 122)
   assert.ok(workflows.every(item => item.type === 'workflow'))
   assert.ok(skills.every(item => item.type === 'skill'))
   assert.ok(resources.every(item => item.type === 'database'))

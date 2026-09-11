@@ -594,5 +594,641 @@
     "url": "https://www.naturalearthdata.com/",
     "accessNote": "以数据下载为主，不是通用搜索 API；Agent 应引用具体数据集版本与比例尺。",
     "availability": "reference-only"
+  },
+  {
+    "id": "nasa-ads",
+    "type": "database",
+    "name": "NASA Astrophysics Data System",
+    "description": "天文学与天体物理学的文献检索与全文获取服务，覆盖期刊、预印本与观测提案。",
+    "category": "天文与空间",
+    "tags": [
+      "天文",
+      "文献",
+      "引文",
+      "天体物理"
+    ],
+    "url": "https://ui.adsabs.harvard.edu/help/api/api-docs.html",
+    "accessNote": "API 需注册 NASA ADS 账号并申请 API Token，有速率限制；引用时使用 ADS bibcode 或 DOI。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nasa-earthdata",
+    "type": "database",
+    "name": "NASA Earthdata",
+    "description": "NASA 地球观测数据门户，覆盖大气、生物圈、冰冻圈、海洋与陆地的遥感产品。",
+    "category": "天文与空间",
+    "tags": [
+      "NASA",
+      "地球观测",
+      "遥感",
+      "对地观测"
+    ],
+    "url": "https://www.earthdata.nasa.gov/",
+    "accessNote": "检索与多数产品下载公开；部分数据需免费注册 Earthdata Login，受控产品另有数据使用协议。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "inspirehep",
+    "type": "database",
+    "name": "InspireHEP",
+    "description": "高能物理领域的文献、数据与会议论文集索引，支持结构化元数据检索。",
+    "category": "天文与空间",
+    "tags": [
+      "高能物理",
+      "文献",
+      "预印本",
+      "引文"
+    ],
+    "url": "https://github.com/inspirehep/rest-api-doc",
+    "accessNote": "公开 API 无需认证，高负载下有限流；引用时使用 INSPIRE record id 或 DOI。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "launch-library-2",
+    "type": "database",
+    "name": "Launch Library 2",
+    "description": "全球航天发射任务、运载火箭与航天事件数据库，含发射窗口与任务结果。",
+    "category": "天文与空间",
+    "tags": [
+      "航天",
+      "发射任务",
+      "运载火箭",
+      "航天事件"
+    ],
+    "url": "https://thespacedevs.com/llapi",
+    "accessNote": "公开 API，匿名访问有速率限制，可免费申请 API Key 提升限额；引用任务编号与检索时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "open-notify",
+    "type": "database",
+    "name": "Open Notify",
+    "description": "国际空间站实时位置与当前在轨人数等简化查询接口。",
+    "category": "天文与空间",
+    "tags": [
+      "国际空间站",
+      "实时位置",
+      "航天"
+    ],
+    "url": "http://api.open-notify.org",
+    "accessNote": "公开无凭据接口，仅 HTTP 且无服务级别承诺，适合教学演示；结果为实时状态，须标注查询时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "arcsecond",
+    "type": "database",
+    "name": "Arcsecond.io",
+    "description": "面向天文研究的多源查询接口，覆盖恒星、系外行星与全球天文台信息。",
+    "category": "天文与空间",
+    "tags": [
+      "恒星",
+      "系外行星",
+      "天文台",
+      "巡天"
+    ],
+    "url": "https://api.arcsecond.io/",
+    "accessNote": "公开 API 无需认证；底层来自各巡天与天文台目录，引用时保留原始数据来源。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "asterank-mpc",
+    "type": "database",
+    "name": "Asterank / Minor Planet Center",
+    "description": "小行星、彗星等太阳系小天体的轨道与物理参数查询，含经济与可达性评估。",
+    "category": "天文与空间",
+    "tags": [
+      "小行星",
+      "彗星",
+      "轨道",
+      "太阳系小天体"
+    ],
+    "url": "http://www.asterank.com/mpc",
+    "accessNote": "公开接口；轨道数据源自 IAU 小行星中心（MPC），大量抓取与商用需遵守站点条款。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "materials-project",
+    "type": "database",
+    "name": "Materials Project",
+    "description": "无机材料的 DFT 计算性质数据库，提供晶体结构、能量与电子性质查询。",
+    "category": "材料科学",
+    "tags": [
+      "材料科学",
+      "DFT",
+      "晶体结构",
+      "计算材料"
+    ],
+    "url": "https://api.materialsproject.org",
+    "accessNote": "需免费注册并申请 API Key；数据遵循 CC BY 4.0，使用须按要求引用 Materials Project。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "chemspider",
+    "type": "database",
+    "name": "ChemSpider",
+    "description": "英国皇家化学会的免费化学结构数据库，收录逾一亿结构及关联性质与文献。",
+    "category": "化学",
+    "tags": [
+      "化学结构",
+      "化合物",
+      "RSC",
+      "结构检索"
+    ],
+    "url": "https://developer.rsc.org/",
+    "accessNote": "需向 RSC 申请免费 API Key；使用遵守 RSC 服务条款，引用保留 ChemSpider ID。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "mpds",
+    "type": "database",
+    "name": "MPDS（Materials Platform for Data Science）",
+    "description": "面向数据科学的材料科学 curated 实验数据库，覆盖晶体结构与发展中的物性数据。",
+    "category": "材料科学",
+    "tags": [
+      "材料科学",
+      "晶体结构",
+      "实验数据",
+      "物性"
+    ],
+    "url": "https://mpds.io",
+    "accessNote": "部分数据公开，完整 API 访问需 API Key（含付费/合作计划）；引用注明 MPDS 条目与版本。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "aflow",
+    "type": "database",
+    "name": "AFLOW",
+    "description": "高通量计算材料数据库，含逾 300 万化合物结构的计算性质与表征数据。",
+    "category": "材料科学",
+    "tags": [
+      "计算材料",
+      "高通量筛选",
+      "晶体结构",
+      "DFT"
+    ],
+    "url": "https://aflowlib.org/aflow-service/",
+    "accessNote": "公开 REST 接口，无需认证；高频访问需自行限速，引用 AFLOW 条目编号（AFLOW-ID）。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nist-webbook",
+    "type": "database",
+    "name": "NIST Chemistry WebBook",
+    "description": "NIST 化学参考数据：逾 8 万化合物的热化学、热物理与光谱性质。",
+    "category": "化学",
+    "tags": [
+      "热化学",
+      "质谱",
+      "红外光谱",
+      "化合物性质"
+    ],
+    "url": "https://webbook.nist.gov/chemistry/form-ser/",
+    "accessNote": "公开检索接口，无需认证；引用注明 NIST WebBook 版本与检索日期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nmrshiftdb",
+    "type": "database",
+    "name": "NMRShiftDB",
+    "description": "开放的核磁共振化学位移数据库，用于结构解析与谱图对照。",
+    "category": "化学",
+    "tags": [
+      "NMR",
+      "化学位移",
+      "结构解析",
+      "开放数据"
+    ],
+    "url": "https://nmrshiftdb.nmr.de/NMRShiftDB/sdfservice/",
+    "accessNote": "开放许可数据，提供 SDF 与 Web 服务接口；社区贡献谱图需自行核验质量并注明出处。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "noaa-cdo",
+    "type": "database",
+    "name": "NOAA Climate Data Online",
+    "description": "NOAA 历史气候记录 API：全球气象站台的逐日与逐月观测序列。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "气候",
+      "历史观测",
+      "气象站",
+      "NOAA"
+    ],
+    "url": "https://www.ncdc.noaa.gov/cdo-web/webservices/v2",
+    "accessNote": "需免费申请 CDO API Token，有每秒与每日调用限额；引用站点编号与要素时段。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ncei-data-service",
+    "type": "database",
+    "name": "NCEI Data Service",
+    "description": "NOAA 国家环境信息中心的通用数据检索服务，支持 JSON、CSV 与 NetCDF 输出。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "NOAA",
+      "海洋",
+      "大气",
+      "NetCDF"
+    ],
+    "url": "https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation",
+    "accessNote": "公开数据服务，无需认证；大文件应分块或异步获取，引用数据集编号与版本。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-national-map",
+    "type": "database",
+    "name": "USGS National Map",
+    "description": "美国国家地形数据库：高程、土地覆盖、水文与影像等地理空间产品下载与检索。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "地形",
+      "高程",
+      "土地覆盖",
+      "USGS"
+    ],
+    "url": "https://tnmaccess.nationalmap.gov/api/v1/docs/",
+    "accessNote": "公开 API 与产品下载，无需认证；引用产品名称、版本与获取时间戳。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-minerals",
+    "type": "database",
+    "name": "USGS Mineral Resources",
+    "description": "USGS 矿产资源数据：矿点、地球化学样本与资源图层的目录接口。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "矿产",
+      "地球化学",
+      "地质",
+      "USGS"
+    ],
+    "url": "https://mrdata.usgs.gov/catalog/api.php",
+    "accessNote": "公开 API，无需认证；引用对应数据集编号与 USGS 发布版本。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-volcanoes",
+    "type": "database",
+    "name": "USGS Volcanoes",
+    "description": "美国地质调查局火山监测：警报等级、喷发历史与观测站信息。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "火山",
+      "警报",
+      "监测",
+      "USGS"
+    ],
+    "url": "https://volcanoes.usgs.gov/hans-public/api/volcano/",
+    "accessNote": "公开 API，无需认证；警报等级随时间更新，引用必须带检索时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-geomagnetism",
+    "type": "database",
+    "name": "USGS Geomagnetism",
+    "description": "USGS 地磁台站的磁场观测与地磁数据 Web 服务。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "地磁",
+      "观测台站",
+      "空间天气",
+      "USGS"
+    ],
+    "url": "https://www.usgs.gov/tools/web-service-geomagnetism-data",
+    "accessNote": "公开 Web 服务，无需认证；引用台站代码、采样率与观测时段。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "epa-air-quality",
+    "type": "database",
+    "name": "EPA Air Quality System",
+    "description": "美国 EPA 空气质量监测数据：污染物浓度、监测站点与采样测量记录。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "空气质量",
+      "污染物",
+      "监测站",
+      "EPA"
+    ],
+    "url": "https://aqs.epa.gov/aqsweb/documents/data_api.html",
+    "accessNote": "需免费注册 EPA AQS 账号并经邮箱获取 API Key；引用站点编号、参数代码与采样周期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "water-quality-portal",
+    "type": "database",
+    "name": "Water Quality Portal",
+    "description": "USGS 与 EPA 联合的水质数据服务，聚合逾 400 家机构的地表水监测结果。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "水质",
+      "水文",
+      "监测",
+      "USGS/EPA"
+    ],
+    "url": "https://www.waterqualitydata.us/webservices_documentation/",
+    "accessNote": "公开 Web 服务，无需认证；引用提供机构、站点标识与采样日期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "copernicus-cds",
+    "type": "database",
+    "name": "Copernicus Climate Data Store",
+    "description": "欧盟气候数据中心：ERA5 等再分析数据集与气候指标的官方检索与下载 API。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "再分析",
+      "ERA5",
+      "气候",
+      "Copernicus"
+    ],
+    "url": "https://cds.climate.copernicus.eu/how-to-api",
+    "accessNote": "需免费注册 CDS 账号并接受数据许可；新版 API 的重请求进入排队，引用数据集版本与检索日期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "openweathermap",
+    "type": "database",
+    "name": "OpenWeatherMap",
+    "description": "全球当前天气、预报与历史天气数据的商业气象 API。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "天气",
+      "预报",
+      "历史天气",
+      "气象"
+    ],
+    "url": "https://openweathermap.org/api",
+    "accessNote": "免费档需注册 API Key 且有调用限额；历史与专业数据集需订阅，结果须标注观测或预报时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "world-air-quality",
+    "type": "database",
+    "name": "World Air Quality Index",
+    "description": "全球 1.2 万余个监测站的实时空气质量指数（AQI）数据接口。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "空气质量",
+      "AQI",
+      "实时监测",
+      "大气污染"
+    ],
+    "url": "https://aqicn.org/api/",
+    "accessNote": "需免费申请 API Token；引用监测站名称、来源机构与读数时间。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "global-fishing-watch",
+    "type": "database",
+    "name": "Global Fishing Watch",
+    "description": "基于 AIS 的全球捕捞船活动与航迹数据，支持渔船行为与海洋治理研究。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "渔业",
+      "AIS",
+      "船舶追踪",
+      "海洋治理"
+    ],
+    "url": "https://globalfishingwatch.org/our-apis/",
+    "accessNote": "需注册并同意使用条款获取 API Token；非商业研究有限额，数据为推断结果须注明方法学边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "sentinel-hub",
+    "type": "database",
+    "name": "Sentinel Hub",
+    "description": "Sentinel、Landsat、MODIS 等卫星影像的 Processing API 与瓦片服务。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "卫星影像",
+      "Sentinel",
+      "遥感",
+      "地表监测"
+    ],
+    "url": "https://www.sentinel-hub.com/develop/api/",
+    "accessNote": "需注册账号，免费档有限额；大规模或商业使用需订阅，影像使用遵守对应数据许可。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nsidc",
+    "type": "database",
+    "name": "NSIDC",
+    "description": "美国国家冰雪数据中心：海冰、冰川、冻土等冰冻圈数据集的检索与获取。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "冰冻圈",
+      "海冰",
+      "冰川",
+      "雪"
+    ],
+    "url": "https://nsidc.org/data/user-resources/help-center/api",
+    "accessNote": "多数数据集公开，部分需 Earthdata Login；引用数据集版本号与 DOI。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "uk-met-office",
+    "type": "database",
+    "name": "UK Met Office DataPoint",
+    "description": "英国气象局 DataPoint：英国境内天气预报、观测与气候站点数据。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "英国",
+      "天气预报",
+      "观测",
+      "Met Office"
+    ],
+    "url": "https://www.metoffice.gov.uk/services/data/datapoint/api-documentation",
+    "accessNote": "需免费注册获取 API Key；DataPoint 计划由 Weather DataHub 接替，使用前确认服务可用性。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "windy-api",
+    "type": "database",
+    "name": "Windy",
+    "description": "全球风、浪与天气形势预报数据的点查询与图层 API。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "风场",
+      "海浪",
+      "预报",
+      "可视化"
+    ],
+    "url": "https://api.windy.com",
+    "accessNote": "需免费申请 API Key，点查询与图层各有限额；商用需单独授权，引用预报模式与时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "us-census",
+    "type": "database",
+    "name": "US Census Bureau API",
+    "description": "美国人口普查局数据接口：人口、经济、地理与住房等调查数据集。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "人口普查",
+      "人口",
+      "经济",
+      "住房"
+    ],
+    "url": "https://www.census.gov/data/developers/data-sets.html",
+    "accessNote": "多数数据集公开，部分需免费 API Key；引用调查名称与年份（如 ACS 年份）。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "opencage",
+    "type": "database",
+    "name": "OpenCage Geocoding",
+    "description": "基于开放数据源的正向与逆向地理编码 API。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "地理编码",
+      "正向/逆向解析",
+      "开放数据"
+    ],
+    "url": "https://opencagedata.com/api",
+    "accessNote": "需免费 API Key（免费档每日限额）；底层为 OSM 等开放数据，遵守对应许可与署名。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "gadm",
+    "type": "database",
+    "name": "GADM 行政边界",
+    "description": "全球各级行政区划边界数据集，提供多层级矢量边界下载。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "行政边界",
+      "行政区划",
+      "矢量数据"
+    ],
+    "url": "https://gadm.org/data.html",
+    "accessNote": "静态数据下载，无查询 API；学术使用免费、禁止商业再分发，引用 GADM 版本号。",
+    "availability": "reference-only"
+  },
+  {
+    "id": "arcgis-rest",
+    "type": "database",
+    "name": "ArcGIS REST Services",
+    "description": "ESRI ArcGIS REST 接口：GIS 图层、地图与空间分析服务的统一访问方式。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "GIS",
+      "地图服务",
+      "空间数据",
+      "ESRI"
+    ],
+    "url": "https://developers.arcgis.com/rest/",
+    "accessNote": "公开服务与需凭据服务并存；部分内容服务有配额与商用限制，遵守 ESRI 使用条款。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "what3words",
+    "type": "database",
+    "name": "what3words",
+    "description": "地理坐标与三词地址互转的专有编码 API。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "地址编码",
+      "坐标",
+      "专有方案"
+    ],
+    "url": "https://developer.what3words.com",
+    "accessNote": "商业 API，需 API Key（免费档有限额）；三词地址为专有编码体系，学术引用须说明转换方式。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "marine-traffic",
+    "type": "database",
+    "name": "MarineTraffic",
+    "description": "全球船舶 AIS 轨迹、港口挂靠与航运动态数据的商业服务。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "船舶",
+      "AIS",
+      "港口",
+      "航运"
+    ],
+    "url": "https://www.marinetraffic.com/en/ais-api-services",
+    "accessNote": "API 需商业订阅；免费信息仅限网页查询，科研使用前须确认许可范围。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "vertnet",
+    "type": "database",
+    "name": "VertNet",
+    "description": "自然史博物馆脊椎动物标本记录的联合检索网络，含采集地与馆藏信息。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "标本",
+      "脊椎动物",
+      "自然史",
+      "博物馆"
+    ],
+    "url": "http://portal.vertnet.org/api",
+    "accessNote": "公开 API，无需认证；引用馆藏编号（catalog number）与数据发布机构。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ecoengine",
+    "type": "database",
+    "name": "Berkeley Ecoengine",
+    "description": "UC Berkeley 自然史馆藏开放接口：标本、照片与野外观测记录。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "自然史",
+      "标本",
+      "野外观测",
+      "伯克利"
+    ],
+    "url": "https://ecoengine.berkeley.edu/docs/",
+    "accessNote": "公开 API，无需认证；各记录许可可能不同，引用馆藏与记录许可。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "open-food-facts",
+    "type": "database",
+    "name": "Open Food Facts",
+    "description": "全球众包食品产品数据库：配料、营养成分与标签信息的开放数据。",
+    "category": "生命科学",
+    "tags": [
+      "食品",
+      "营养",
+      "配料",
+      "开放数据"
+    ],
+    "url": "https://world.openfoodfacts.org/data",
+    "accessNote": "开放数据（ODbL），提供公开 API 与批量导出；产品信息为众包，营养数值需核验后使用。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "particle-data-group",
+    "type": "database",
+    "name": "Particle Data Group",
+    "description": "粒子物理国际权威数据：粒子质量、寿命、衰变模式与耦合常数的年度评审数据 API。",
+    "category": "物理",
+    "tags": [
+      "粒子物理",
+      "质量",
+      "衰变模式",
+      "物理常数"
+    ],
+    "url": "https://pdg.lbl.gov/2022/api/index.html",
+    "accessNote": "公开 API 与年度 Review；数据随测量更新，引用必须注明 PDG 版本年份。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "sesar-samples",
+    "type": "database",
+    "name": "SESAR / EarthSamples",
+    "description": "地球样品注册系统：岩石、沉积物等地质样品的 IGSN 国际标识登记与检索。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "地质样品",
+      "IGSN",
+      "样本登记",
+      "地球科学"
+    ],
+    "url": "https://www.geosamples.org/interop/api",
+    "accessNote": "公开 API，无需认证；IGSN 可作稳定标识符，引用样品号与登记录源。",
+    "availability": "requires-mcp"
   }
 ]
