@@ -11,7 +11,7 @@
 <circle cx="64" cy="79" r="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
 <text x="64" y="79" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">1</text>
 <text x="92" y="72" font-size="14" font-weight="500" fill="#26215C">选择工作流</text>
-<text x="92" y="94" font-size="12" fill="#5F5E5A">128 项资源可按名称、描述、标签、学科与模板正文检索；每条都标注用途、所需材料与使用限制。</text>
+<text x="92" y="94" font-size="12" fill="#5F5E5A">资源可按名称、描述、标签、学科与模板正文检索；每条都标注用途、所需材料与使用限制。</text>
 
 <path d="M410 110 L410 130" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
 

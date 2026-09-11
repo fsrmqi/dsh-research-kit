@@ -44,10 +44,10 @@
 | `architecture.svg` | 全局架构：宿主 / 插件 / 两条受控路由 / 外部通道 | README（中英）、ARCHITECTURE §1.1 |
 | `research-loop.svg` | 科研闭环四分区 | README（中英）、PRODUCT §3 |
 | `prompt-pipeline.svg` | Prompt 组装五步链路 | ARCHITECTURE §3 |
-| `data-source-paths.svg` | 数据源双路径（11 直查 vs 44 回退） | PRODUCT §2、ARCHITECTURE §3.0a |
+| `data-source-paths.svg` | 数据源双路径（插件直查 vs Agent 回退） | PRODUCT §2、ARCHITECTURE §3.0a |
 | `responsibility-boundary.svg` | 三方责任边界（插件 / DSH / 研究者） | PRODUCT §7 |
 
-改图时的三条要求：**①** 保持手写 SVG，不引入构建步骤——`ui/client.js` 之外的产物越多，维护面越大；**②** 图里的数字必须与实测一致（条目数、数据源数、测试数），不得写推测值；**③** 改完在真实浏览器里渲染核对一遍排版，确认无文字溢出、无元素重叠——手写坐标最容易在这里出错。
+改图时的三条要求：**①** 保持手写 SVG，不引入构建步骤——`ui/client.js` 之外的产物越多，维护面越大；**②** 图里不写会随内容增长的统计数字（条目数、数据源数、直查来源数），一律改用无数量的措辞——图是随仓库分发的静态文件，写死数字后每加一条资源就要回来改图，实际已因此漂移（`architecture.svg` 曾停在 128 项，而当时真实值已是 441 项）。**设计与结构性数字不受此限**（四个分区、五个步骤、两条受控路由），它们描述的是设计不变量，不随目录增长而变；统计数字只写在能被校验的文本文档里（README / PRODUCT / ARCHITECTURE），且必须与实测一致；**③** 改完在真实浏览器里渲染核对一遍排版，确认无文字溢出、无元素重叠——手写坐标最容易在这里出错。
 
 ## 三条最重要的约束
 

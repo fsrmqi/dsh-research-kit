@@ -8,7 +8,7 @@
 <line x1="46" y1="120" x2="254" y2="120" stroke="#CECBF6" stroke-width="1"/>
 <rect x="48" y="136" width="48" height="17" rx="8.5" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
 <text x="72" y="145" font-size="12" fill="#173404" text-anchor="middle" dominant-baseline="central">负责</text>
-<text x="48" y="172" font-size="12" fill="#3C3489">维护 128 项目录资产</text>
+<text x="48" y="172" font-size="12" fill="#3C3489">维护目录资产</text>
 <text x="48" y="192" font-size="12" fill="#3C3489">组装并校验 Prompt</text>
 <text x="48" y="212" font-size="12" fill="#3C3489">收藏与使用历史</text>
 <text x="48" y="232" font-size="12" fill="#3C3489">证据库与灵感资产</text>
