@@ -20,7 +20,15 @@ cd dsh-research-kit
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
 npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、构建产物、分区契约与 DSH 槽位注册测试（152 项）
+npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
+npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
+
+浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React 与 `ui/client.js`，通过插件槽位挂载工作台和输入框弹层。覆盖三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果，以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
+
+默认使用 Playwright Chromium；本机已有 Chrome 时可运行 `PLAYWRIGHT_CHANNEL=chrome npm run test:browser`。截图输出到已忽略的 `browser-results/`，失败时额外保存 `failure.png`；CI 在 push 和 pull request 时执行并上传截图。启动或断言失败会以非零状态退出，服务器与浏览器会在退出前关闭。此回归不替代真实 DSH profile 的集成验收。
+
+工作台和弹层分类栏统一使用 `src/catalog-category-filter.js` 中的 `CatalogCategoryFilter`，通过 `type / categories / value / onChange` 传入状态；快捷分类及颜色在此集中维护。新增组件已登记到构建器的 UI 组件之后、两处调用方之前。
 
 每次改动目录或浏览器源码后，统一执行：
 

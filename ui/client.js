@@ -4829,6 +4829,71 @@ window.__ModuleLoader__.load({
 
 
 
+
+    const CATEGORY_TYPE_LABELS = { workflow: '工作流程', skill: '技能', database: '数据库' }
+    const WORKBENCH_CATEGORY_SHORTCUTS = {
+      workflow: ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种'],
+      skill: ['论文与手稿', '文献研究', '生物信息学', '农业研究'],
+      database: ['文献与引文', '基因组与遗传变异', '组学与表达数据', '临床与公共卫生'],
+    }
+    const WORKBENCH_CATEGORY_COLORS = {
+      '论文与手稿': C.blue,
+      '文献研究': C.statusPreference,
+      '数据分析': C.statusVerified,
+      '研究设计': C.amber,
+      '基因组学': C.teal,
+      '临床研究': C.red,
+    }
+    const workbenchFallbackCategoryColor = C.teal
+
+    function CatalogCategoryFilter({ type, categories, value, onChange }) {
+      const quickCategories = (WORKBENCH_CATEGORY_SHORTCUTS[type] || []).filter(category => categories.includes(category))
+      const additionalCategories = categories.filter(category => !quickCategories.includes(category))
+      const selectIsActive = value === 'all' || additionalCategories.includes(value)
+      return h('div', {
+        role: 'group',
+        'aria-label': `${CATEGORY_TYPE_LABELS[type]}分类筛选`,
+        style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' },
+      }, [
+        h(Select, {
+          key: 'all-categories',
+          value,
+          onChange,
+          ariaLabel: `全部${CATEGORY_TYPE_LABELS[type]}分类`,
+          className: 'rk-workflow-category-select',
+          style: {
+            padding: '5px 25px 5px 10px', borderRadius: 999,
+            borderColor: selectIsActive ? C.teal : `${C.teal}40`,
+            background: selectIsActive ? C.teal : 'transparent',
+            color: selectIsActive ? C.onInk : C.teal,
+            fontSize: 12, fontWeight: 700,
+          },
+          options: [
+            { value: 'all', label: '全部' },
+            ...quickCategories.map(category => ({ value: category, label: category })),
+            ...additionalCategories.map(category => ({ value: category, label: category })),
+          ],
+        }),
+        ...quickCategories.map(category => {
+          const color = WORKBENCH_CATEGORY_COLORS[category] || workbenchFallbackCategoryColor
+          const active = value === category
+          return h('button', {
+            key: category,
+            type: 'button',
+            onClick: () => onChange(category),
+            'aria-pressed': active,
+            className: 'rk-btn',
+            style: {
+              padding: '5px 10px', border: `1px solid ${active ? color : `${color}40`}`, borderRadius: 999,
+              whiteSpace: 'nowrap', cursor: 'pointer', background: active ? color : 'transparent',
+              color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
+            },
+          }, category)
+        }),
+      ])
+    }
+
+
     // 模型输出协议：Node half 与浏览器端共用同一解析与展示定义，避免两端漂移。
     // 与 PromptKit 源仓库保持协议兼容（[DIAG] 行 + ===PROMPT=== 分隔符）。
     // 注：本模块是纯字符串协议解析器，不做任何 shell 执行、求值或文件系统访问。
@@ -6306,18 +6371,6 @@ window.__ModuleLoader__.load({
 
 
     const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
-    // 分类色取自与增强器共享的调色板（teal/blue/amber/red/紫/绿），不再另起一套色系。
-    const WORKFLOW_CATEGORY_COLORS = {
-      '论文与手稿': C.blue,
-      '文献研究': C.statusPreference,
-      '数据分析': C.statusVerified,
-      '研究设计': C.amber,
-      '基因组学': C.teal,
-      '临床研究': C.red,
-    }
-    const fallbackWorkflowColor = C.teal
-    // 工作流选择器优先呈现科研写作与生命科学常用入口；完整学科目录仍可通过“全部”下拉访问。
-    const DEFAULT_WORKFLOW_CATEGORIES = ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种']
 
     function unique(ids) { return [...new Set(ids)] }
 
@@ -6380,7 +6433,7 @@ window.__ModuleLoader__.load({
         useWorkflow()
       }
       const attachedResources = [...skillIds, ...databaseIds].map(itemById).filter(Boolean)
-      const color = WORKFLOW_CATEGORY_COLORS[workflow.category] || fallbackWorkflowColor
+      const color = WORKBENCH_CATEGORY_COLORS[workflow.category] || workbenchFallbackCategoryColor
       return h(Modal, {
         title: workflow.name,
         subtitle: workflow.description,
@@ -6509,14 +6562,12 @@ window.__ModuleLoader__.load({
       const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
       const recommendedWorkflows = recommendedWorkflowsForResources(resourceIds).slice(0, 4)
       const workflowCategories = unique(catalog.filter(item => item.type === 'workflow').map(item => item.category))
-      const defaultWorkflowCategories = DEFAULT_WORKFLOW_CATEGORIES.filter(category => workflowCategories.includes(category))
-      const additionalWorkflowCategories = workflowCategories.filter(category => !defaultWorkflowCategories.includes(category))
       const resourceTabs = [
         { value: 'all', label: `全部（${catalog.filter(item => item.type !== 'workflow').length}）` },
         { value: 'database', label: `数据库（${catalog.filter(item => item.type === 'database').length}）` },
         { value: 'skill', label: `技能（${catalog.filter(item => item.type === 'skill').length}）` },
       ]
-      const categoryStyle = WORKFLOW_CATEGORY_COLORS[workflowCategory] || fallbackWorkflowColor
+      const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
       return h(React.Fragment, null, [
         mode ? h('section', {
           key: 'popover',
@@ -6550,43 +6601,7 @@ window.__ModuleLoader__.load({
             }),
             mode === 'resources'
               ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-              : h('div', { key: 'cats', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingBottom: 2 } }, [
-                h('select', {
-                  key: 'all-categories',
-                  value: workflowCategory,
-                  onChange: event => setWorkflowCategory(event.target.value),
-                  'aria-label': '全部工作流程分类',
-                  className: 'rk-btn rk-workflow-category-select',
-                  style: {
-                    padding: '5px 25px 5px 10px', borderRadius: 999, cursor: 'pointer',
-                    border: `1px solid ${workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : `${C.teal}40`}`,
-                    background: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : 'transparent',
-                    color: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.onInk : C.teal,
-                    fontSize: 12, fontWeight: 700,
-                  },
-                }, [
-                  h('option', { key: 'all', value: 'all' }, '全部'),
-                  ...defaultWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
-                  ...additionalWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
-                ]),
-                ...defaultWorkflowCategories.map(category => {
-                  const color = WORKFLOW_CATEGORY_COLORS[category] || fallbackWorkflowColor
-                  const active = workflowCategory === category
-                  return h('button', {
-                    key: category,
-                    type: 'button',
-                    onClick: () => setWorkflowCategory(category),
-                    'aria-pressed': active,
-                    className: 'rk-btn',
-                    style: {
-                      padding: '5px 10px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer',
-                      border: `1px solid ${active ? color : `${color}40`}`,
-                      background: active ? color : 'transparent',
-                      color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
-                    },
-                  }, category)
-                }),
-              ]),
+              : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
           ]),
           h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
             mode === 'workflows' && rows.length ? h('div', {
@@ -6594,7 +6609,7 @@ window.__ModuleLoader__.load({
               style: { padding: '2px 15px 7px', color: categoryStyle, fontSize: 12, fontWeight: 750 },
             }, `${workflowCategory === 'all' ? '全部工作流程' : workflowCategory}（${rows.length}）`) : null,
             rows.length ? rows.map(item => mode === 'workflows' ? (() => {
-              const color = WORKFLOW_CATEGORY_COLORS[item.category] || fallbackWorkflowColor
+              const color = WORKBENCH_CATEGORY_COLORS[item.category] || workbenchFallbackCategoryColor
               return h('button', {
                 key: item.id,
                 type: 'button',
@@ -7307,20 +7322,6 @@ window.__ModuleLoader__.load({
 
 
     const TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
-    const WORKBENCH_CATEGORY_SHORTCUTS = {
-      workflow: ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种'],
-      skill: ['论文与手稿', '文献研究', '生物信息学', '农业研究'],
-      database: ['文献与引文', '基因组与遗传变异', '组学与表达数据', '临床与公共卫生'],
-    }
-    const WORKBENCH_CATEGORY_COLORS = {
-      '论文与手稿': C.blue,
-      '文献研究': C.statusPreference,
-      '数据分析': C.statusVerified,
-      '研究设计': C.amber,
-      '基因组学': C.teal,
-      '临床研究': C.red,
-    }
-    const workbenchFallbackCategoryColor = C.teal
     const RESEARCH_PLAN_STAGES = {
       '论文与手稿': ['确认材料与研究问题', '双语检索与来源核验', '结构与章节计划', '分段起草或修改', '引文、图表与一致性核对', '作者确认与交付'],
       '文献研究': ['界定问题与范围', '双语检索式', '筛选与证据表', '主题综合与研究空白', '核验引用与待确认项', '输出综述草案'],
@@ -7410,52 +7411,6 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    function CatalogCategoryFilter({ type, categories, value, onChange }) {
-      const quickCategories = (WORKBENCH_CATEGORY_SHORTCUTS[type] || []).filter(category => categories.includes(category))
-      const additionalCategories = categories.filter(category => !quickCategories.includes(category))
-      const selectIsActive = value === 'all' || additionalCategories.includes(value)
-      return h('div', {
-        role: 'group',
-        'aria-label': `${TYPE_LABELS[type]}分类筛选`,
-        style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' },
-      }, [
-        h(Select, {
-          key: 'all-categories',
-          value,
-          onChange,
-          ariaLabel: `全部${TYPE_LABELS[type]}分类`,
-          className: 'rk-workflow-category-select',
-          style: {
-            padding: '5px 25px 5px 10px', borderRadius: 999,
-            borderColor: selectIsActive ? C.teal : `${C.teal}40`,
-            background: selectIsActive ? C.teal : 'transparent',
-            color: selectIsActive ? C.onInk : C.teal,
-            fontSize: 12, fontWeight: 700,
-          },
-          options: [
-            { value: 'all', label: '全部' },
-            ...quickCategories.map(category => ({ value: category, label: category })),
-            ...additionalCategories.map(category => ({ value: category, label: category })),
-          ],
-        }),
-        ...quickCategories.map(category => {
-          const color = WORKBENCH_CATEGORY_COLORS[category] || workbenchFallbackCategoryColor
-          const active = value === category
-          return h('button', {
-            key: category,
-            type: 'button',
-            onClick: () => onChange(category),
-            'aria-pressed': active,
-            className: 'rk-btn',
-            style: {
-              padding: '5px 10px', border: `1px solid ${active ? color : `${color}40`}`, borderRadius: 999,
-              whiteSpace: 'nowrap', cursor: 'pointer', background: active ? color : 'transparent',
-              color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
-            },
-          }, category)
-        }),
-      ])
-    }
 
     function catalogCategory(item, type = item?.type) {
       return type === 'database' ? databaseMetadata(item).group : item?.category

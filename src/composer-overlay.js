@@ -11,18 +11,7 @@ import {
 import { RESEARCH_COMPOSER_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
 
 const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
-// 分类色取自与增强器共享的调色板（teal/blue/amber/red/紫/绿），不再另起一套色系。
-const WORKFLOW_CATEGORY_COLORS = {
-  '论文与手稿': C.blue,
-  '文献研究': C.statusPreference,
-  '数据分析': C.statusVerified,
-  '研究设计': C.amber,
-  '基因组学': C.teal,
-  '临床研究': C.red,
-}
-const fallbackWorkflowColor = C.teal
-// 工作流选择器优先呈现科研写作与生命科学常用入口；完整学科目录仍可通过“全部”下拉访问。
-const DEFAULT_WORKFLOW_CATEGORIES = ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种']
+import { CatalogCategoryFilter, WORKBENCH_CATEGORY_COLORS, workbenchFallbackCategoryColor } from './catalog-category-filter.js'
 
 function unique(ids) { return [...new Set(ids)] }
 
@@ -85,7 +74,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     useWorkflow()
   }
   const attachedResources = [...skillIds, ...databaseIds].map(itemById).filter(Boolean)
-  const color = WORKFLOW_CATEGORY_COLORS[workflow.category] || fallbackWorkflowColor
+  const color = WORKBENCH_CATEGORY_COLORS[workflow.category] || workbenchFallbackCategoryColor
   return h(Modal, {
     title: workflow.name,
     subtitle: workflow.description,
@@ -214,14 +203,12 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
   const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
   const recommendedWorkflows = recommendedWorkflowsForResources(resourceIds).slice(0, 4)
   const workflowCategories = unique(catalog.filter(item => item.type === 'workflow').map(item => item.category))
-  const defaultWorkflowCategories = DEFAULT_WORKFLOW_CATEGORIES.filter(category => workflowCategories.includes(category))
-  const additionalWorkflowCategories = workflowCategories.filter(category => !defaultWorkflowCategories.includes(category))
   const resourceTabs = [
     { value: 'all', label: `全部（${catalog.filter(item => item.type !== 'workflow').length}）` },
     { value: 'database', label: `数据库（${catalog.filter(item => item.type === 'database').length}）` },
     { value: 'skill', label: `技能（${catalog.filter(item => item.type === 'skill').length}）` },
   ]
-  const categoryStyle = WORKFLOW_CATEGORY_COLORS[workflowCategory] || fallbackWorkflowColor
+  const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
   return h(React.Fragment, null, [
     mode ? h('section', {
       key: 'popover',
@@ -255,43 +242,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
         }),
         mode === 'resources'
           ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-          : h('div', { key: 'cats', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingBottom: 2 } }, [
-            h('select', {
-              key: 'all-categories',
-              value: workflowCategory,
-              onChange: event => setWorkflowCategory(event.target.value),
-              'aria-label': '全部工作流程分类',
-              className: 'rk-btn rk-workflow-category-select',
-              style: {
-                padding: '5px 25px 5px 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : `${C.teal}40`}`,
-                background: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : 'transparent',
-                color: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.onInk : C.teal,
-                fontSize: 12, fontWeight: 700,
-              },
-            }, [
-              h('option', { key: 'all', value: 'all' }, '全部'),
-              ...defaultWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
-              ...additionalWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
-            ]),
-            ...defaultWorkflowCategories.map(category => {
-              const color = WORKFLOW_CATEGORY_COLORS[category] || fallbackWorkflowColor
-              const active = workflowCategory === category
-              return h('button', {
-                key: category,
-                type: 'button',
-                onClick: () => setWorkflowCategory(category),
-                'aria-pressed': active,
-                className: 'rk-btn',
-                style: {
-                  padding: '5px 10px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer',
-                  border: `1px solid ${active ? color : `${color}40`}`,
-                  background: active ? color : 'transparent',
-                  color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
-                },
-              }, category)
-            }),
-          ]),
+          : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
       ]),
       h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
         mode === 'workflows' && rows.length ? h('div', {
@@ -299,7 +250,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
           style: { padding: '2px 15px 7px', color: categoryStyle, fontSize: 12, fontWeight: 750 },
         }, `${workflowCategory === 'all' ? '全部工作流程' : workflowCategory}（${rows.length}）`) : null,
         rows.length ? rows.map(item => mode === 'workflows' ? (() => {
-          const color = WORKFLOW_CATEGORY_COLORS[item.category] || fallbackWorkflowColor
+          const color = WORKBENCH_CATEGORY_COLORS[item.category] || workbenchFallbackCategoryColor
           return h('button', {
             key: item.id,
             type: 'button',
