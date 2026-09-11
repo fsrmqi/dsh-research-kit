@@ -21,7 +21,7 @@
 conversation.view            dsh-research-kit-console   科研工作台（统一容器）
 ├── 分区① 资源与工作流      catalog + Prompt 组装 + 公开数据源直查
 ├── 分区② 方法工坊          Method Workshop（vendored 组件 + 宿主装配）
-├── 分区③ 研究灵感库        灵感资产管理与验证跟进
+├── 分区③ 研究资产库        灵感资产 / 证据库管理
 └── 分区④ 研究证据图谱      本会话资源 / 工作流 / 查询来源 / 资产的关系图
 conversation.input.left      dsh-research-kit-launcher          资源 / 工作流程入口
 conversation.input.overlay   dsh-research-kit-overlay           选择器与启动弹窗
@@ -40,7 +40,7 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 | `dsh/standalone-glue.js` | 所有 slot 注册的唯一入口 |
 | `src/lib/enhance-output.js` | 模型输出协议（`[DIAG]` + `===PROMPT===`）解析，Node/浏览器共用 |
 | `src/lib/vault-core.js` | 灵感资产纯逻辑（隐私边界、筛选） |
-| `src/research-vault.js` | 研究灵感库管理视图 |
+| `src/research-vault.js` | 研究资产库管理视图 |
 | `scripts/build-client.mjs` | 把 vendored 工件与自有模块拼接为 `ui/client.js`（含工件内旧路径改写） |
 
 ## 3. vendored 工件：为什么要它、怎么维护

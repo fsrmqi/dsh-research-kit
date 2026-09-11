@@ -35,10 +35,24 @@
 
 如果你需要某份英文文档，请开 Issue 说明用途，比维护一份自动翻译更有价值。
 
+## 配图
+
+对外展示用的架构图放在 `assets/`，全部是手写 SVG，随仓库分发、不经过构建：
+
+| 文件 | 内容 | 引用处 |
+| --- | --- | --- |
+| `architecture.svg` | 全局架构：宿主 / 插件 / 两条受控路由 / 外部通道 | README（中英）、ARCHITECTURE §1.1 |
+| `research-loop.svg` | 科研闭环四分区 | README（中英）、PRODUCT §3 |
+| `prompt-pipeline.svg` | Prompt 组装五步链路 | ARCHITECTURE §3 |
+| `data-source-paths.svg` | 数据源双路径（11 直查 vs 44 回退） | PRODUCT §2、ARCHITECTURE §3.0a |
+| `responsibility-boundary.svg` | 三方责任边界（插件 / DSH / 研究者） | PRODUCT §7 |
+
+改图时的三条要求：**①** 保持手写 SVG，不引入构建步骤——`ui/client.js` 之外的产物越多，维护面越大；**②** 图里的数字必须与实测一致（条目数、数据源数、测试数），不得写推测值；**③** 改完在真实浏览器里渲染核对一遍排版，确认无文字溢出、无元素重叠——手写坐标最容易在这里出错。
+
 ## 三条最重要的约束
 
 无论你读哪份文档，这三条都是前提：
 
 1. **`ui/client.js` 是构建产物，不得手改。** 改源码后必须 `npm run build` 并提交产物，CI 会校验一致性。
 2. **`vendor/promptkit-embed.js` 是 SHA 锁定的工件，不得手改。** 改动会导致 `npm run check` 失败。
-3. **自动化测试无法替代真实 profile 验收。** 仓库内 113 项测试全是纯逻辑与 vm 沙箱断言；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。
+3. **自动化测试无法替代真实 profile 验收。** 仓库内 116 项测试全是纯逻辑与 vm 沙箱断言；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。

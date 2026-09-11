@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 456" width="820" height="456" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>插件、DSH 宿主与研究者的三方责任边界</title>
+<desc>插件只负责目录资产与 Prompt 组装；模型调用、会话与工具执行归 DSH；判断与核验责任归研究者本人。</desc>
+
+<rect x="30" y="50" width="240" height="318" rx="12" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="48" y="82" font-size="15" font-weight="500" fill="#26215C">Research Kit</text>
+<text x="48" y="104" font-size="12" fill="#534AB7">组装层 · 只做 Prompt 组装</text>
+<line x1="46" y1="120" x2="254" y2="120" stroke="#CECBF6" stroke-width="1"/>
+<rect x="48" y="136" width="48" height="17" rx="8.5" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
+<text x="72" y="145" font-size="12" fill="#173404" text-anchor="middle" dominant-baseline="central">负责</text>
+<text x="48" y="172" font-size="12" fill="#3C3489">维护 128 项目录资产</text>
+<text x="48" y="192" font-size="12" fill="#3C3489">组装并校验 Prompt</text>
+<text x="48" y="212" font-size="12" fill="#3C3489">收藏与使用历史</text>
+<text x="48" y="232" font-size="12" fill="#3C3489">证据库与灵感资产</text>
+<rect x="48" y="256" width="60" height="17" rx="8.5" fill="#F1EFE8" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="78" y="265" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">不负责</text>
+<text x="48" y="292" font-size="12" fill="#5F5E5A">不调用模型、不持密钥</text>
+<text x="48" y="312" font-size="12" fill="#5F5E5A">不读取或上传文件</text>
+<text x="48" y="332" font-size="12" fill="#5F5E5A">不建沙箱与任务队列</text>
+<text x="48" y="352" font-size="12" fill="#5F5E5A">不伪造检索结果</text>
+
+<rect x="290" y="50" width="240" height="318" rx="12" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="308" y="82" font-size="15" font-weight="500" fill="#042C53">DSH 宿主</text>
+<text x="308" y="104" font-size="12" fill="#185FA5">执行层 · 一切皆插件</text>
+<line x1="306" y1="120" x2="514" y2="120" stroke="#B5D4F4" stroke-width="1"/>
+<rect x="308" y="136" width="48" height="17" rx="8.5" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
+<text x="332" y="145" font-size="12" fill="#173404" text-anchor="middle" dominant-baseline="central">负责</text>
+<text x="308" y="172" font-size="12" fill="#0C447C">模型路由与调用</text>
+<text x="308" y="192" font-size="12" fill="#0C447C">会话与 @文件 注入</text>
+<text x="308" y="212" font-size="12" fill="#0C447C">MCP / Web / 工具执行</text>
+<text x="308" y="232" font-size="12" fill="#0C447C">输入框写入与发送</text>
+<rect x="308" y="256" width="60" height="17" rx="8.5" fill="#F1EFE8" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="338" y="265" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">不负责</text>
+<text x="308" y="292" font-size="12" fill="#5F5E5A">不提供科研 Prompt 资产</text>
+<text x="308" y="312" font-size="12" fill="#5F5E5A">不做科研判断</text>
+<text x="308" y="332" font-size="12" fill="#5F5E5A">槽位契约随版本演进</text>
+
+<rect x="550" y="50" width="240" height="318" rx="12" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="568" y="82" font-size="15" font-weight="500" fill="#04342C">研究者</text>
+<text x="568" y="104" font-size="12" fill="#0F6E56">责任层 · 判断与核验</text>
+<line x1="566" y1="120" x2="774" y2="120" stroke="#9FE1CB" stroke-width="1"/>
+<rect x="568" y="136" width="48" height="17" rx="8.5" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
+<text x="592" y="145" font-size="12" fill="#173404" text-anchor="middle" dominant-baseline="central">负责</text>
+<text x="568" y="172" font-size="12" fill="#085041">判断材料是否适用</text>
+<text x="568" y="192" font-size="12" fill="#085041">逐条核验结论与引用</text>
+<text x="568" y="212" font-size="12" fill="#085041">确认授权与合规</text>
+<text x="568" y="232" font-size="12" fill="#085041">承担署名学术责任</text>
+<rect x="568" y="256" width="60" height="17" rx="8.5" fill="#F1EFE8" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="598" y="265" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">不负责</text>
+<text x="568" y="292" font-size="12" fill="#5F5E5A">不可外包给模型</text>
+<text x="568" y="312" font-size="12" fill="#5F5E5A">不替代伦理审批</text>
+<text x="568" y="332" font-size="12" fill="#5F5E5A">不替代同行评审</text>
+
+<rect x="30" y="388" width="760" height="48" rx="12" fill="#F1EFE8" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="410" y="405" font-size="12" font-weight="500" fill="#2C2C2A" text-anchor="middle">所有工作流的产出一律标注为「需人工核验的草案」</text>
+<text x="410" y="423" font-size="12" fill="#5F5E5A" text-anchor="middle">不替代研究者、审稿人或伦理审批；保存证据也不等于认可其结论。</text>
+</svg>

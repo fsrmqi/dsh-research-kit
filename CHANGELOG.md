@@ -8,8 +8,23 @@
 
 ## [未发布]
 
+### 变更
+
+- 🏷 **分区③「研究灵感库」更名为「研究资产库」**：4a–4b 落地后该分区已是「灵感资产 / 证据库」双子模块结构，旧名只描述其中一个子模块——用户点开前无法预知里面还有证据库。更名同时更新分区契约的 `purpose`（两个子模块显式并列）与页导语。英文 README 沿用 "Research Vault"（本就是中性词），无需改动。
+  - **为何提前于原计划**：原定「4b–4d 全部落地后整体更名」。但更名的触发条件本质是「沉淀层不再只是灵感库」，而这一点在证据库具备完整的保存、项目隔离、去重与导出导入能力后已经成立；4c–4d 是对既有条目的增强，不改变结构事实。继续沿用旧名会让界面持续误导用户，代价高于提前更名。
+- 🗃 **数据源 `availability` 新增 `available-in-plugin` 一档，11 个来源如实标注**：此前 55 个数据源一律标 `requires-mcp`，而其中 11 个（PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist）实际由插件内置适配器直接查询。用户读到「需要 MCP 或 Web 能力」会以为用不了，**少报了 20% 已兑现的能力**。
+  - 根因是原字段只表达「宿主能力」，缺「插件能力」这一档。新增值专指实现已兑现的直查能力，与需要宿主探测的 `available-in-host` 分开；工作台详情页的状态色与 `toolHint` 文案同步区分，`accessNote` 逐条改写（GBIF / iNaturalist 保留各自的认证与许可提示）。
+  - 🔒 **升级为双向契约**：`scripts/validate-catalog-lib.mjs` 新增 `readDirectQueryIds()`，从 `dsh/database-query.js` 读出适配器清单（10 条 `DIRECT_ADAPTERS` + PubMed 的独立分支），与目录标注双向比对——有适配器却未标、或标了却无适配器，`npm run check` 直接失败。`validate-catalog.mjs` 的通过信息现在会报出直查来源数。
+
+### 新增
+
+- 📊 **`docs/assets/` 新增 5 张对外展示用架构图**（SVG 随仓库分发，README 与文档直接引用）：全局架构（宿主 / 插件 / 两条受控路由 / 外部通道）、科研闭环四分区、Prompt 组装五步链路、数据源双路径（11 直查 vs 44 回退）、三方责任边界（插件 / DSH / 研究者）。全部经真实 Chromium 渲染核验排版，无溢出与重叠；README（中英）、`docs/PRODUCT.md`、`docs/ARCHITECTURE.md` 共 8 处引用。
+- 测试扩充至 116 项：新增「目录标注的插件可直查与实现里的适配器完全一致」（先锁住清单提取结果，避免一致性断言空转）与「契约校验能抓住漏标与虚标」两项守护。
+
 ### 修复
 
+- 🔬 修复「分区嵌入契约」测试的假阴性：断言写作 `/researchAssetProvider,\s*embedded\s*\}/`，把正则锚在属性对象的结尾 `}` 上；`ResearchVaultHost` 多透传一个 `inputActions` 后即误报失败（缺陷实际不存在）。改为只断言 `h(ResearchVault, { … })` 的 props 里出现 `embedded`，不再耦合属性顺序与对象结尾。
+- 🔁 修复已提交构建产物与源码不同步：`src/research-vault.js` 的 `ResearchVaultHost` 与 `ui/client.js` 中同一处的属性顺序不一致，CI 的「构建后可复现」校验必然失败。已重新构建并提交产物；重复构建零 diff 已实测。
 - 🧯 **修复统一视图与输入框浮层整屏白屏**：`src/research-selection-store.js` 与 `src/evidence-store.js` 各定义了一个顶层 `stateFor`（返回的 state 形状不同——前者有 `ids` 字段，后者是 `queries` / `workflows`）。构建器把模块拼进同一函数作用域时，**后者的声明静默覆盖前者**：`function` 重名不报错、产物照样通过 `node --check`，只在渲染时才炸成 `TypeError: state.ids is not iterable`。受影响的不止「资源与工作流」分区——`composer-overlay` 与 `prompt-enhancer-glue` 复用同一个 store，因此工具行的「资源 / 工作流程」入口与分区切换一并白屏。修法分两步：① 两个 store 的内部函数按职责改名（`evidenceKeyFor` / `evidenceStateFor`），`formatTime` 的三份同名副本也分别改为 `formatWorkbenchTime` / `formatAssetTime` / `formatEvidenceTime`；② 在 `scripts/build-client.mjs` 新增构建期断言 `assertUniqueTopLevelSymbols`——项目模块顶层符号重名直接让 `npm run build` 失败并报出 `文件:行`，把这类「静默覆盖」从"靠人记得扫一遍"变成"不可能漏"。该断言只覆盖项目模块，vendored 工件的内部声明都在 `const PromptKit = (React => {…})` 作用域内。
 - 🧩 修复两个「改了源码但没重新 build 就不会暴露」的构建期缺陷：① `src/evidence-store.js` 与 `src/research-selection-store.js` 各有一个模块级 `const sessions`，构建器把模块拼进同一作用域（strip 掉 import、符号靠拼接顺序可见），重名常量直接让产物 `SyntaxError: Identifier 'sessions' has already been declared`（前者已改名为 `evidenceSessions`，并补注释说明顶层符号必须全局唯一）；② 构建器 `strip()` 不支持 `export async function`（`^export function` 匹配不到它），残留的 `export` 关键字会让产物 `SyntaxError: Unexpected token 'export'`（已补规则，且该规则必须排在普通 `export function` 之前）。
 - 🔝 三个分区的顶部操作行统一吸顶，「科研模式」「新建资产」不再随页面滚走：原先只有「资源与工作流 / 研究灵感库」两个分区的检索行吸顶，方法工坊整段随页面滚走（其 vendored 左列的 `position: sticky` 是死代码），而「科研模式」（原挂分区封面右侧）与「新建资产」（原挂封面动作区）也会滚走——实测 `科研模式` 滚 800px 后 top = −555。现统一为「**吸顶只放随时要用的操作，不放读一次就够的内容**」：一级 = 分区导航；二级 = 各分区的模式 / 检索 / 筛选 / 主操作行；分区封面只留标题、导语与低频动作（导出、恢复备份）。三个分区覆盖面一致，不再有"一个吸、两个不吸"。

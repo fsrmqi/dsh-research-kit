@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 508" width="820" height="508" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>55 个科学数据源的两条查询路径：插件直查与 Agent 回退</title>
+<desc>11 个来源由插件内置适配器直接查询，44 个来源明确标注接入前提并回退到当前会话的 Agent。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<rect x="270" y="40" width="280" height="46" rx="10" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="410" y="63" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle" dominant-baseline="central">55 个科学数据源目录</text>
+
+<path d="M410 86 V108 H200 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M410 86 V108 H620 V132" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="136" width="340" height="80" rx="10" fill="#EAF3DE" stroke="#97C459" stroke-width="0.5"/>
+<text x="50" y="160" font-size="14" font-weight="500" fill="#173404">插件可直接查询 · 11 个</text>
+<text x="50" y="180" font-size="12" fill="#3B6D11">目录状态 available-in-plugin</text>
+<text x="50" y="200" font-size="12" fill="#3B6D11">无需宿主 MCP，点开即可查询</text>
+
+<rect x="450" y="136" width="340" height="80" rx="10" fill="#FAEEDA" stroke="#EF9F27" stroke-width="0.5"/>
+<text x="470" y="160" font-size="14" font-weight="500" fill="#412402">依赖宿主能力 · 44 个</text>
+<text x="470" y="180" font-size="12" fill="#854F0B">requires-mcp 或 reference-only</text>
+<text x="470" y="200" font-size="12" fill="#854F0B">需对应 MCP、订阅、API Key 或数据协议</text>
+
+<path d="M200 216 V236" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M620 216 V236" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="240" width="340" height="40" rx="8" fill="#FFFFFF" stroke="#C0DD97" stroke-width="0.5"/>
+<text x="200" y="260" font-size="12" fill="#3B6D11" text-anchor="middle" dominant-baseline="central">/query 路由 → DSH ctx.web.fetch()</text>
+
+<rect x="450" y="240" width="340" height="40" rx="8" fill="#FFFFFF" stroke="#FAC775" stroke-width="0.5"/>
+<text x="620" y="260" font-size="12" fill="#854F0B" text-anchor="middle" dominant-baseline="central">显式点击「让 Agent 核验并继续查询」</text>
+
+<path d="M200 280 V300" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M620 280 V300" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="304" width="340" height="40" rx="8" fill="#FFFFFF" stroke="#C0DD97" stroke-width="0.5"/>
+<text x="200" y="324" font-size="12" fill="#3B6D11" text-anchor="middle" dominant-baseline="central">公开 API 返回结构化候选记录</text>
+
+<rect x="450" y="304" width="340" height="40" rx="8" fill="#FFFFFF" stroke="#FAC775" stroke-width="0.5"/>
+<text x="620" y="324" font-size="12" fill="#854F0B" text-anchor="middle" dominant-baseline="central">当前会话 Agent 用已配置工具多步检索</text>
+
+<path d="M200 344 V372 H410" fill="none" stroke="#888780" stroke-width="1.5"/>
+<path d="M620 344 V372 H410" fill="none" stroke="#888780" stroke-width="1.5"/>
+<path d="M410 372 V394" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="180" y="396" width="460" height="56" rx="10" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="410" y="418" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">带来源链接与稳定标识符的候选记录</text>
+<text x="410" y="438" font-size="12" fill="#185FA5" text-anchor="middle">DOI / PMID / NCT / arXiv · 保存前由用户逐条确认</text>
+
+<text x="410" y="482" font-size="12" fill="#5F5E5A" text-anchor="middle">两条路径的共同底线：未接通的能力如实标注前提，绝不伪造检索结果。</text>
+</svg>

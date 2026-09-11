@@ -50,6 +50,8 @@ Research capability catalog (128 entries)
   → executed by the current DSH session's agent and its configured tools
 ```
 
+![Architecture: the plugin only assembles prompts; execution stays with the DSH host](docs/assets/architecture.svg)
+
 Deliberate trade-offs:
 
 - **No model calls, no stored keys.** Execution belongs entirely to the current session;
@@ -79,6 +81,8 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 | Method Workshop | Construct | Method cards + variable fill-in → editable prompt; extract a draft from the current conversation |
 | Research Vault | Deposit | Asset CRUD, version diff, verification tracking; an **Evidence Vault** sub-module saves source metadata and notes per item, project-isolated and de-duplicated |
 | Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources and assets |
+
+![The research loop across four sections: discover, construct, deposit, evidence](docs/assets/research-loop.svg)
 
 <details>
 <summary><strong>More capabilities</strong> (click to expand)</summary>
@@ -176,15 +180,15 @@ Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
 ### Database queries
 
-Database detail pages can query a first batch of public sources directly: PubMed, Crossref, OpenAlex, Semantic Scholar, Europe PMC, ClinicalTrials.gov, openFDA, UniProt, PubChem, GBIF and iNaturalist. Candidate results show source links and stable identifiers and can be written into the composer, or you can explicitly click "Let the agent verify and continue" — that button invokes the current DSH session's agent, which then uses the web/MCP/file tools it already has to complete a multi-step search.
+Database detail pages can query a first batch of public sources directly: PubMed, Crossref, OpenAlex, Semantic Scholar, Europe PMC, ClinicalTrials.gov, openFDA, UniProt, PubChem, GBIF and iNaturalist. These 11 entries are marked `available-in-plugin` in the catalog, and their detail page reads "queryable directly by the plugin". Candidate results show source links and stable identifiers and can be written into the composer, or you can explicitly click "Let the agent verify and continue" — that button invokes the current DSH session's agent, which then uses the web/MCP/file tools it already has to complete a multi-step search.
 
-Remaining databases state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. **The plugin never fabricates a search result.**
+The remaining 44 sources are marked `requires-mcp` or `reference-only`, state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. Catalog labels and the query implementation are cross-checked by `npm run check` in both directions (an adapter must be labelled, and a label must have an adapter), so the capability shown in the UI cannot drift from what is actually implemented. **The plugin never fabricates a search result.**
 
 ## Compatibility & status
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (128 entries, 128 unique IDs), 113 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
+Verified so far: catalog contract validation (128 entries, 128 unique IDs), 116 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -193,7 +197,7 @@ Verified so far: catalog contract validation (128 entries, 128 unique IDs), 113 
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic and contract regression tests (113)
+npm test        # pure-logic and contract regression tests (116)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).

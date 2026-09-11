@@ -50,6 +50,8 @@ Research Kit 把这四点做成可复用的资产。
   → 由当前 DSH 会话的 Agent 与其已配置工具执行
 ```
 
+![dsh-research-kit 全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主](docs/assets/architecture.svg)
+
 关键设计取舍：
 
 - **不调模型、不存密钥**。执行完全交给当前会话；
@@ -77,8 +79,10 @@ Research Kit 把这四点做成可复用的资产。
 | --- | --- | --- |
 | 资源与工作流 | 发现 | 目录检索、参数化组装、公开数据源直查 |
 | 方法工坊 | 构造 | 方法卡 + 变量填充 → 可编辑 Prompt；可从当前对话提取草稿 |
-| 研究灵感库 | 沉淀 | 灵感资产增删改、版本对比、验证状态跟进；**证据库**子模块逐条保存公开来源的元数据与笔记，按项目隔离去重 |
+| 研究资产库 | 沉淀 | 灵感资产增删改、版本对比、验证状态跟进；**证据库**子模块逐条保存公开来源的元数据与笔记，按项目隔离去重 |
 | 研究证据图谱 | 证据 | 把本会话的资源、工作流、查询来源与资产连成可追溯关系 |
+
+![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](docs/assets/research-loop.svg)
 
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
@@ -176,15 +180,15 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 ### 数据库查询
 
-数据源详情页可直接查询首批公开来源：PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist。候选结果显示来源链接与稳定标识符，可写入输入框，或显式点击「让 Agent 核验并继续查询」——该按钮会调用当前 DSH 会话的 Agent，由它使用自己已拥有的 Web / MCP / 文件工具完成多步检索。
+数据源详情页可直接查询首批公开来源：PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist——这 11 个来源在目录里标记为 `available-in-plugin`，详情页状态显示「插件可直接查询」。候选结果显示来源链接与稳定标识符，可写入输入框，或显式点击「让 Agent 核验并继续查询」——该按钮会调用当前 DSH 会话的 Agent，由它使用自己已拥有的 Web / MCP / 文件工具完成多步检索。
 
-其余数据库会清楚提示所需的 MCP、订阅、API Key 或数据使用协议，并提供同一受控 Agent 回退。**插件不会伪造任何检索结果。**
+其余 44 个数据源标记为 `requires-mcp` 或 `reference-only`，会清楚提示所需的 MCP、订阅、API Key 或数据使用协议，并提供同一受控 Agent 回退。目录标注与查询实现由 `npm run check` 双向校验（有适配器就必须标出来，标了就必须有适配器），因此界面上的能力状态不会与实现漂移。**插件不会伪造任何检索结果。**
 
 ## 兼容性与状态
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（128 项、128 唯一 ID）、113 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
+已通过的验证：目录契约校验（128 项、128 唯一 ID）、116 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -193,7 +197,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑与契约回归测试（113 项）
+npm test        # 纯逻辑与契约回归测试（116 项）
 ```
 
 改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。

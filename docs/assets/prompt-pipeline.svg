@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 456" width="820" height="456" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>从一个科研任务到一条可发送 Prompt 的五个步骤</title>
+<desc>选工作流、填参数引用材料、实时预览编辑、必填校验、三个出口；全流程不自动发送。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<rect x="30" y="50" width="760" height="58" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="64" cy="79" r="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="64" y="79" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">1</text>
+<text x="92" y="72" font-size="14" font-weight="500" fill="#26215C">选择工作流</text>
+<text x="92" y="94" font-size="12" fill="#5F5E5A">128 项资源可按名称、描述、标签、学科与模板正文检索；每条都标注用途、所需材料与使用限制。</text>
+
+<path d="M410 110 L410 130" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="132" width="760" height="58" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="64" cy="161" r="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="64" y="161" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">2</text>
+<text x="92" y="154" font-size="14" font-weight="500" fill="#26215C">填写参数、引用材料</text>
+<text x="92" y="176" font-size="12" fill="#5F5E5A">只替换 Prompt 中声明过的占位符；需要材料时提示你使用 DSH 原生 @文件——插件不读取、不上传文件内容。</text>
+
+<path d="M410 192 L410 212" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="214" width="760" height="58" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="64" cy="243" r="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="64" y="243" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">3</text>
+<text x="92" y="236" font-size="14" font-weight="500" fill="#26215C">实时预览并可直接编辑</text>
+<text x="92" y="258" font-size="12" fill="#5F5E5A">参数变化实时生成 Prompt；手动编辑后参数变更不会静默改写正文，并提供「恢复自动生成」。</text>
+
+<path d="M410 274 L410 294" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="296" width="760" height="58" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="64" cy="325" r="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="64" y="325" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">4</text>
+<text x="92" y="318" font-size="14" font-weight="500" fill="#26215C">启动前必填校验</text>
+<text x="92" y="340" font-size="12" fill="#5F5E5A">缺失必填项时给出字段级错误并禁用出口，不会把半成品 Prompt 写进输入框。</text>
+
+<path d="M410 356 L410 376" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="30" y="378" width="760" height="58" rx="10" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<circle cx="64" cy="407" r="14" fill="#FFFFFF" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="64" y="407" font-size="13" font-weight="500" fill="#0F6E56" text-anchor="middle" dominant-baseline="central">5</text>
+<text x="92" y="400" font-size="14" font-weight="500" fill="#04342C">三个出口，都不自动发送</text>
+<text x="92" y="422" font-size="12" fill="#0F6E56">写入输入框（保留再编辑机会）· 发送到当前会话 · 复制 Prompt（宿主动作缺失时的兜底）。</text>
+</svg>

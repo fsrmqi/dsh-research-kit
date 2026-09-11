@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { catalog, composeWorkflow, searchCatalog, itemById, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources } from '../src/catalog.js'
-import { validateCatalogItems } from '../scripts/validate-catalog-lib.mjs'
+import { validateCatalogItems, readDirectQueryIds } from '../scripts/validate-catalog-lib.mjs'
 
 test('目录包含三类科研资源', () => {
   assert.ok(catalog.some(item => item.type === 'workflow'))
@@ -71,7 +71,7 @@ test('工作流 Prompt 含防编造或待核验边界', () => {
 test('skill 与 database 的 availability 合法且保守', () => {
   const legal = {
     skill: ['prompt-guidance', 'requires-host-capability'],
-    database: ['reference-only', 'requires-mcp', 'available-in-host']
+    database: ['reference-only', 'requires-mcp', 'available-in-plugin', 'available-in-host']
   }
   for (const item of catalog) {
     if (item.type === 'skill') {
@@ -84,6 +84,31 @@ test('skill 与 database 的 availability 合法且保守', () => {
       assert.notEqual(item.availability, 'available-in-host', `${item.id} 尚未实现能力探测，不得标注 available-in-host`)
     }
   }
+})
+
+test('目录标注的「插件可直查」与实现里的适配器完全一致', () => {
+  const direct = readDirectQueryIds()
+  // 先锁住提取结果本身：10 条 DIRECT_ADAPTERS + PubMed 独立分支 = 11。
+  // 提取正则若漂移，会先在这里失败，而不是让下面的一致性断言空转通过。
+  assert.deepEqual(
+    [...direct].sort(),
+    ['clinicaltrials', 'crossref', 'europe-pmc', 'gbif', 'inaturalist', 'openalex', 'openfda', 'pubchem', 'pubmed', 'semantic-scholar', 'uniprot'],
+    `从查询实现中提取到的直查来源不符：${direct.join(', ')}`
+  )
+  const declared = catalog
+    .filter(item => item.type === 'database' && item.availability === 'available-in-plugin')
+    .map(item => item.id)
+  assert.deepEqual([...declared].sort(), [...direct].sort(), '目录标注的插件可直查来源与实现里的适配器不一致')
+})
+
+test('契约校验能抓住漏标与虚标「插件可直查」', () => {
+  const base = { type: 'database', name: '演示库', description: '演示数据源', category: '文献研究', tags: ['演示'], accessNote: '演示说明。' }
+  const silent = validateCatalogItems([{ ...base, id: 'pubmed', availability: 'requires-mcp' }], { directQueryIds: ['pubmed'] })
+  assert.ok(silent.some(error => error.includes('已实现直查适配器')), '漏标 available-in-plugin 未被发现')
+  const empty = validateCatalogItems([{ ...base, id: 'pubmed', availability: 'available-in-plugin' }], { directQueryIds: [] })
+  assert.ok(empty.some(error => error.includes('没有对应的直查适配器')), '无适配器却标为可直查未被发现')
+  const orphan = validateCatalogItems([{ ...base, id: 'pubmed', availability: 'available-in-plugin' }], { directQueryIds: ['missing-source'] })
+  assert.ok(orphan.some(error => error.includes('不在目录中')), '适配器指向不存在的目录条目未被发现')
 })
 
 test('每个数据库均归入一个研究入口，并具备访问和引用指引', () => {

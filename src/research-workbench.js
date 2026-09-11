@@ -57,10 +57,16 @@ function groupEntriesByCategory(entries) {
 
 function databaseAvailabilityLabel(value) {
   return {
+    'available-in-plugin': '插件可直接查询',
     'available-in-host': '当前会话可用',
     'requires-mcp': '需要 MCP 或 Web 能力',
     'reference-only': '仅作研究参考'
   }[value] || '接入状态未知'
+}
+
+// 状态色：插件直查与宿主已确认可用都算「现在就能查」，其余为待配置的琥珀色。
+function isDatabaseReady(availability) {
+  return availability === 'available-in-plugin' || availability === 'available-in-host'
 }
 
 function MetaRow({ label, children }) {
@@ -365,7 +371,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
                 h(MetaRow, { key: 'group', label: '研究入口' }, databaseMetadata(selected).group),
                 h(MetaRow, { key: 'kind', label: '数据类型' }, databaseMetadata(selected).dataKind),
                 h(MetaRow, { key: 'id', label: '标识符' }, h('span', { style: { fontFamily: C.fontMono, fontSize: 12 } }, selected.id)),
-                h(MetaRow, { key: 'status', label: '当前状态' }, h('span', { style: { color: selected.availability === 'available-in-host' ? C.statusVerified : C.amber, fontWeight: 700 } }, databaseAvailabilityLabel(selected.availability))),
+                h(MetaRow, { key: 'status', label: '当前状态' }, h('span', { style: { color: isDatabaseReady(selected.availability) ? C.statusVerified : C.amber, fontWeight: 700 } }, databaseAvailabilityLabel(selected.availability))),
                 h(MetaRow, { key: 'access', label: '访问方式' }, databaseMetadata(selected).accessMode),
               ])),
             h(Notice, { key: 'usage', tone: 'warn', icon: 'database' }, [

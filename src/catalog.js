@@ -31,7 +31,11 @@ export function databaseMetadata(databaseOrId) {
     queryExample: record?.queryExample || '按研究问题和稳定标识符查询，并记录检索范围。',
     citationRule: record?.citationRule || '记录数据库名称、稳定标识符、版本和访问日期。',
     accessMode: RESTRICTED_DATABASE_ACCESS.get(id) || '公开网页或 API；当前会话仍需 Web 或 MCP 能力',
-    toolHint: database?.availability === 'available-in-host' ? '当前宿主已声明可用；仍应在结果中说明来源。' : '在 DSH 当前会话通过 Web 或已连接 MCP 查询；未接通时只能作为检索建议。'
+    toolHint: database?.availability === 'available-in-plugin'
+      ? '本插件已内置该来源的直查适配器，可直接查询；候选结果仍应回到原文逐条核验。'
+      : database?.availability === 'available-in-host'
+        ? '当前宿主已声明可用；仍应在结果中说明来源。'
+        : '在 DSH 当前会话通过 Web 或已连接 MCP 查询；未接通时只能作为检索建议。'
   }
 }
 

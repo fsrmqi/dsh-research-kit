@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 364" width="820" height="364" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>科研闭环的四个分区：发现、构造、沉淀、证据</title>
+<desc>四个分区按科研工作流的自然顺序排列，共享同一套防编造与人工核验纪律。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#7F77DD" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<rect x="30" y="60" width="172" height="220" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="116" cy="90" r="15" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="116" y="90" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">1</text>
+<text x="116" y="128" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle">资源与工作流</text>
+<text x="116" y="150" font-size="12" fill="#534AB7" text-anchor="middle">发现层</text>
+<line x1="46" y1="164" x2="186" y2="164" stroke="#EEEDFE" stroke-width="1"/>
+<text x="116" y="190" font-size="13" fill="#3C3489" text-anchor="middle">把任务变成提示词</text>
+<text x="116" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">检索工作流程</text>
+<text x="116" y="246" font-size="12" fill="#5F5E5A" text-anchor="middle">填参数与附加技能</text>
+<text x="116" y="266" font-size="12" fill="#5F5E5A" text-anchor="middle">公开数据源直查</text>
+
+<path d="M204 170 L220 170" fill="none" stroke="#7F77DD" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="226" y="60" width="172" height="220" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="312" cy="90" r="15" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="312" y="90" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">2</text>
+<text x="312" y="128" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle">方法工坊</text>
+<text x="312" y="150" font-size="12" fill="#534AB7" text-anchor="middle">构造层</text>
+<line x1="242" y1="164" x2="382" y2="164" stroke="#EEEDFE" stroke-width="1"/>
+<text x="312" y="190" font-size="13" fill="#3C3489" text-anchor="middle">把输入变成框架</text>
+<text x="312" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">命名思维方法卡</text>
+<text x="312" y="246" font-size="12" fill="#5F5E5A" text-anchor="middle">变量填充成草稿</text>
+<text x="312" y="266" font-size="12" fill="#5F5E5A" text-anchor="middle">从对话提取草稿</text>
+
+<path d="M400 170 L416 170" fill="none" stroke="#7F77DD" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="422" y="60" width="172" height="220" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="508" cy="90" r="15" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="508" y="90" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">3</text>
+<text x="508" y="128" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle">研究资产库</text>
+<text x="508" y="150" font-size="12" fill="#534AB7" text-anchor="middle">沉淀层</text>
+<line x1="438" y1="164" x2="578" y2="164" stroke="#EEEDFE" stroke-width="1"/>
+<text x="508" y="190" font-size="13" fill="#3C3489" text-anchor="middle">把结论存成资产</text>
+<text x="508" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">灵感资产与版本</text>
+<text x="508" y="246" font-size="12" fill="#5F5E5A" text-anchor="middle">证据库逐条确认</text>
+<text x="508" y="266" font-size="12" fill="#5F5E5A" text-anchor="middle">按项目隔离去重</text>
+
+<path d="M596 170 L612 170" fill="none" stroke="#7F77DD" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="618" y="60" width="172" height="220" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<circle cx="704" cy="90" r="15" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="704" y="90" font-size="13" font-weight="500" fill="#534AB7" text-anchor="middle" dominant-baseline="central">4</text>
+<text x="704" y="128" font-size="14" font-weight="500" fill="#26215C" text-anchor="middle">研究证据图谱</text>
+<text x="704" y="150" font-size="12" fill="#534AB7" text-anchor="middle">证据层</text>
+<line x1="634" y1="164" x2="774" y2="164" stroke="#EEEDFE" stroke-width="1"/>
+<text x="704" y="190" font-size="13" fill="#3C3489" text-anchor="middle">把关系讲清楚</text>
+<text x="704" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">本会话证据索引</text>
+<text x="704" y="246" font-size="12" fill="#5F5E5A" text-anchor="middle">只读关系可视化</text>
+<text x="704" y="266" font-size="12" fill="#5F5E5A" text-anchor="middle">不执行、不生成结论</text>
+
+<rect x="30" y="296" width="760" height="48" rx="12" fill="#F1EFE8" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="410" y="313" font-size="12" fill="#444441" text-anchor="middle">四个分区共享同一套纪律</text>
+<text x="410" y="331" font-size="12" fill="#5F5E5A" text-anchor="middle">证据有出处 · 不编造文献与数据 · 产出一律标注为「需人工核验的草案」</text>
+</svg>

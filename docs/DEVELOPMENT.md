@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（113 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（116 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -89,7 +89,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 113 项测试全是纯逻辑与 vm 沙箱断言（`test/dsh-slots.test.js` 虽执行构建产物，但 slots 服务是模拟的），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 116 项测试全是纯逻辑与 vm 沙箱断言（`test/dsh-slots.test.js` 虽执行构建产物，但 slots 服务是模拟的），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

@@ -24,7 +24,7 @@ const VERIFICATION_LABELS = { confirmed: '已证实', pending: '待验证', refu
 const VERIFICATION_COLORS = { confirmed: C.statusVerified, pending: C.statusToVerify, refuted: C.statusRefuted, inconclusive: C.muted }
 const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '研究见解' }
 
-// 沉淀层的两个子模块：灵感库回答「想过什么」，证据库回答「依据什么」。
+// 沉淀层的两个子模块：灵感资产回答「想过什么」，证据库回答「依据什么」。
 // 刻意不做成第五个并列分区——ROADMAP §4 的产品定位是「沉淀层升级为研究资产库」，
 // 先把两个子模块收在同一层里，等 4b–4d 落地后再整体更名。
 const VAULT_TABS = [
@@ -170,10 +170,10 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
-      title: tab === 'evidence' ? '研究证据库' : '研究灵感库',
+      title: tab === 'evidence' ? '研究证据库' : '研究资产库',
       lead: tab === 'evidence'
         ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「未核验」。'
-        : '沉淀可复用的提示词、研究问题与待验证假设；原始数据与完整查询结果不入库。',
+        : '两个子模块并列：灵感资产沉淀可复用的提示词、研究问题与待验证假设；证据库存放逐条确认的公开来源。原始数据与完整查询结果不入库。',
       actions: tab === 'evidence' ? [] : [
         h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
         h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),

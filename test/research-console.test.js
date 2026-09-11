@@ -92,11 +92,13 @@ test('分区嵌入契约：自带页面外壳的分区必须以 embedded 模式�
   // 宿主必须把 embedded 透传给实际组件，否则上面的开关不生效。
   const vaultSource = readFileSync(new URL('../src/research-vault.js', import.meta.url), 'utf8')
   assert.match(vaultSource, /function ResearchVaultHost\(\{\s*embedded/, 'ResearchVaultHost 未接收 embedded')
-  assert.match(vaultSource, /researchAssetProvider,\s*embedded\s*\}/, 'ResearchVaultHost 未把 embedded 透传给 ResearchVault')
+  // 只断言 ResearchVault 的 props 对象里出现 embedded，不锚定属性顺序或对象结尾——
+  // 原先写作 /researchAssetProvider,\s*embedded\s*\}/，多传一个 inputActions 就误报失败。
+  assert.match(vaultSource, /h\(ResearchVault,\s*\{[^}]*\bembedded\b/, 'ResearchVaultHost 未把 embedded 透传给 ResearchVault')
 })
 
 test('分区宽度一致：方法工坊解绑 vendored 组件的阅读宽度上限', () => {
-  // 「资源与工作流 / 研究灵感库」的 embedded 根是普通块级容器，宽度铺满父级；
+  // 「资源与工作流 / 研究资产库」的 embedded 根是普通块级容器，宽度铺满父级；
   // 而方法工坊复用 vendored PromptStudio，其根 <main> 内联了
   // `width: min(1240px, max(100%, calc(100vw - 280px)))` + `margin: 0 auto`——
   // 那是「独立插件页 + 为宿主侧栏预留 280px」场景的写法，嵌入统一容器后父容器

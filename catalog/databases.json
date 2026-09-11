@@ -11,8 +11,8 @@
       "生物医学"
     ],
     "url": "https://pubmed.ncbi.nlm.nih.gov/",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "crossref",
@@ -26,8 +26,8 @@
       "元数据"
     ],
     "url": "https://api.crossref.org",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "openalex",
@@ -41,8 +41,8 @@
       "机构"
     ],
     "url": "https://docs.openalex.org",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "arxiv",
@@ -71,8 +71,8 @@
       "引用"
     ],
     "url": "https://api.semanticscholar.org/api-docs/",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "core-api",
@@ -142,8 +142,8 @@
       "文献"
     ],
     "url": "https://europepmc.org/RestfulWebService",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "doaj",
@@ -227,8 +227,8 @@
       "注册"
     ],
     "url": "https://clinicaltrials.gov/data-api/api",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "openfda",
@@ -241,8 +241,8 @@
       "药物安全"
     ],
     "url": "https://open.fda.gov/apis/",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "gtex",
@@ -297,8 +297,8 @@
       "序列"
     ],
     "url": "https://www.uniprot.org/help/api",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "pdb",
@@ -339,8 +339,8 @@
       "化合物"
     ],
     "url": "https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest",
-    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "string-db",
@@ -575,8 +575,8 @@
     "category": "生物多样性与生态",
     "tags": ["物种", "出现记录", "生物多样性", "生态"],
     "url": "https://api.gbif.org/v1/",
-    "accessNote": "大多数查询无需认证；应用集成应设置可识别 User-Agent，并遵守数据使用与许可说明。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器；公开查询无需认证，建议设置可识别 User-Agent 并遵守数据使用许可。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "inaturalist",
@@ -586,8 +586,8 @@
     "category": "生物多样性与生态",
     "tags": ["自然观察", "物种", "公民科学", "生态"],
     "url": "https://api.inaturalist.org/v1/docs/",
-    "accessNote": "公开读取可用但有速率限制；照片和观察记录须保留原始许可信息。",
-    "availability": "requires-mcp"
+    "accessNote": "插件内置直查适配器；公开读取可用但有速率限制，照片与观察记录须保留原始许可信息。",
+    "availability": "available-in-plugin"
   },
   {
     "id": "itis",

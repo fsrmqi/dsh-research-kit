@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 540" width="820" height="540" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>dsh-research-kit 全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主</title>
+<desc>上层是 DSH 宿主提供的视图槽位与输入动作；中层是插件的四个分区；下层是仅有的两条受控路由与它们依赖的外部通道。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<rect x="30" y="30" width="760" height="80" rx="14" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="50" y="52" font-size="14" font-weight="500" fill="#2C2C2A">DSH 宿主</text>
+<text x="120" y="52" font-size="12" fill="#5F5E5A">Developer Preview · 一切皆插件</text>
+<rect x="50" y="64" width="230" height="32" rx="8" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="165" y="80" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">conversation.view</text>
+<rect x="294" y="64" width="230" height="32" rx="8" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="409" y="80" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">conversation.input.left / overlay</text>
+<rect x="538" y="64" width="230" height="32" rx="8" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="653" y="80" font-size="12" fill="#444441" text-anchor="middle" dominant-baseline="central">inputActions · setDraft / submit</text>
+
+<path d="M410 138 L410 114" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="422" y="126" font-size="12" fill="#5F5E5A">注册槽位 · 写入草稿与发送</text>
+
+<rect x="30" y="140" width="760" height="176" rx="14" fill="#EEEDFE" stroke="#AFA9EC" stroke-width="0.5"/>
+<text x="50" y="162" font-size="14" font-weight="500" fill="#3C3489">dsh-research-kit</text>
+<text x="172" y="162" font-size="12" fill="#534AB7">浏览器侧插件 · 只组装，不执行</text>
+
+<rect x="50" y="176" width="171" height="76" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="135" y="200" font-size="14" font-weight="500" fill="#3C3489" text-anchor="middle">资源与工作流</text>
+<text x="135" y="222" font-size="12" fill="#534AB7" text-anchor="middle">发现</text>
+<text x="135" y="240" font-size="12" fill="#7F77DD" text-anchor="middle">128 项可检索资源</text>
+
+<rect x="233" y="176" width="171" height="76" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="318" y="200" font-size="14" font-weight="500" fill="#3C3489" text-anchor="middle">方法工坊</text>
+<text x="318" y="222" font-size="12" fill="#534AB7" text-anchor="middle">构造</text>
+<text x="318" y="240" font-size="12" fill="#7F77DD" text-anchor="middle">方法卡 → Prompt</text>
+
+<rect x="416" y="176" width="171" height="76" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="501" y="200" font-size="14" font-weight="500" fill="#3C3489" text-anchor="middle">研究资产库</text>
+<text x="501" y="222" font-size="12" fill="#534AB7" text-anchor="middle">沉淀</text>
+<text x="501" y="240" font-size="12" fill="#7F77DD" text-anchor="middle">灵感资产 + 证据库</text>
+
+<rect x="599" y="176" width="171" height="76" rx="10" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="684" y="200" font-size="14" font-weight="500" fill="#3C3489" text-anchor="middle">研究证据图谱</text>
+<text x="684" y="222" font-size="12" fill="#534AB7" text-anchor="middle">证据</text>
+<text x="684" y="240" font-size="12" fill="#7F77DD" text-anchor="middle">本会话关系可视化</text>
+
+<text x="410" y="298" font-size="12" fill="#534AB7" text-anchor="middle">目录资产：65 条人工审核工作流 · 8 个技能指导模块 · 55 个科学数据源</text>
+
+<path d="M410 318 L410 344" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="422" y="335" font-size="12" fill="#5F5E5A">仅两条受控路由</text>
+
+<rect x="30" y="348" width="760" height="72" rx="14" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="50" y="370" font-size="14" font-weight="500" fill="#085041">Node half</text>
+<text x="118" y="370" font-size="12" fill="#0F6E56">仅保留两条无法在浏览器侧完成的受控路由，不做插件私有后端</text>
+<rect x="50" y="382" width="349" height="28" rx="8" fill="#FFFFFF" stroke="#9FE1CB" stroke-width="0.5"/>
+<text x="224" y="396" font-size="12" fill="#085041" text-anchor="middle" dominant-baseline="central">/query · 公开数据源直查</text>
+<rect x="421" y="382" width="349" height="28" rx="8" fill="#FFFFFF" stroke="#9FE1CB" stroke-width="0.5"/>
+<text x="595" y="396" font-size="12" fill="#085041" text-anchor="middle" dominant-baseline="central">/semantic-enhance · 草稿语义增强</text>
+
+<path d="M410 422 L410 448" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
+<text x="422" y="439" font-size="12" fill="#5F5E5A">出网必经 DSH 受控通道 · 插件不持有任何密钥</text>
+
+<rect x="30" y="452" width="760" height="68" rx="14" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="50" y="474" font-size="13" font-weight="500" fill="#0C447C">公开科研数据源</text>
+<text x="152" y="474" font-size="12" fill="#185FA5">与当前会话已建立的模型路由</text>
+<text x="50" y="498" font-size="12" fill="#185FA5">不自行调用模型、不持有 API Key、不伪造检索结果；未接通的来源一律明确回退，不假装已查。</text>
+</svg>

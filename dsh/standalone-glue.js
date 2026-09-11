@@ -4,7 +4,7 @@ import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 
 export function researchKitApply(ctx) {
-  // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究灵感库 / 研究证据图谱」。
+  // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
   function ResearchConsoleHost(props) {
     return React.createElement(ResearchConsole, props)
   }

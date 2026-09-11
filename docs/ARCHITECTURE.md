@@ -25,7 +25,7 @@
 │  ResearchConsole（统一容器 + 两级吸顶）                              │
 │    ├─ ①「资源与工作流」 catalog.js ──► catalog/*.json               │
 │    ├─ ②「方法工坊」     vendored 工件 + prompt-studio-glue          │
-│    ├─ ③「研究灵感库」   research-vault.js ◄─► vault-core.js         │
+│    ├─ ③「研究资产库」   research-vault.js ◄─► vault-core.js         │
 │    └─ ④「研究证据图谱」 evidence-store.js ◄─► evidence-graph-core   │
 │                                                                     │
 │  所有分区共享同一出口：setDraft() / submit()，缺失时降级为复制 Prompt │
@@ -34,6 +34,8 @@
         │  /query（公开数据源直查，经 ctx.web.fetch） · /semantic-enhance*
 └───────┴──── DSH 受控 web 服务 / 当前会话模型路由
 ```
+
+![全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主](assets/architecture.svg)
 
 ### 1.2 不引入独立后端的原因
 
@@ -84,7 +86,7 @@ dsh-research-kit/
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
 │   ├── research-console.js          # 统一视图容器：分区调度 + 两级吸顶偏移实测
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装
-│   ├── research-vault.js            # 分区③「研究灵感库」：资产增删改 / 版本 / 验证状态 + 沉淀层子模块切换
+│   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
 │   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
 │   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
@@ -115,7 +117,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 113 项测试（15 个测试文件 + 1 个 IndexedDB 桩：纯逻辑 + vm 沙箱断言）
+├── test/                            # 116 项测试（16 个测试文件 + helpers 下的 IndexedDB 桩：纯逻辑 + vm 沙箱断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -148,13 +150,13 @@ dsh-research-kit/
 
 ### 2.2 统一视图的分区契约
 
-三个并列视图（科研工作台 / 研究方法工坊 / 研究灵感库）已合并为单一 `conversation.view`（`dsh-research-kit-console`），内部按「发现 → 构造 → 沉淀 → 证据」的科研闭环做四个二级分区。证据图谱是 Research Kit 自有分区，汇总本会话资源、工作流、查询来源与资产关系；其余三个分区组件继续以 `embedded` 模式复用。
+三个并列视图（科研工作台 / 研究方法工坊 / 研究灵感库——后者即今天的「研究资产库」）已合并为单一 `conversation.view`（`dsh-research-kit-console`），内部按「发现 → 构造 → 沉淀 → 证据」的科研闭环做四个二级分区。证据图谱是 Research Kit 自有分区，汇总本会话资源、工作流、查询来源与资产关系；其余三个分区组件继续以 `embedded` 模式复用。
 
 | 分区 | 定位 | 核心用途 | 职责边界 | 独占数据 |
 | --- | --- | --- | --- | --- |
 | 资源与工作流 | 发现层 | 目录检索、按参数与技能组装 Prompt、公开数据源直查 | 不生产知识、不沉淀资产、不直接出网 | 目录收藏与使用历史 |
 | 方法工坊 | 构造层 | 方法卡库、变量填充生成可编辑 Prompt、从当前对话提取草稿并写回输入框 | 不管理资产正文、不检索项目记忆或最近会话、不替工作流决定领域参数 | 方法卡与工坊资产 |
-| 研究灵感库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不自动入库、不静默注入 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
+| 研究资产库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不自动入库、不静默注入 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
 | 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源与资产之间的关系 | 不执行查询、不生成结论、不保存原始文件与检索词 | 本会话证据索引（`evidence-store`） |
 
 契约由 `src/lib/console-sections.js` 声明、`test/research-console.test.js` 守护：
@@ -205,7 +207,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 | --- | --- | --- |
 | 资源与工作流 | 科研模式 · 检索框 · 类型筛选（全部/工作流程/技能/数据库/收藏/历史） | `Toolbar sticky` |
 | 方法工坊 | 方法检索框 · 分类下拉 | vendored 组件的筛选块（宿主侧解绑，见下） |
-| 研究灵感库 | 灵感资产：检索框 · 状态筛选 · 项目筛选 · 新建资产；证据库：检索框 · 核验状态筛选 · 项目选择 · 导出 / 导入 / 清空 | 两个子模块各一条 `Toolbar sticky` |
+| 研究资产库 | 灵感资产：检索框 · 状态筛选 · 项目筛选 · 新建资产；证据库：检索框 · 核验状态筛选 · 项目选择 · 导出 / 导入 / 清空 | 两个子模块各一条 `Toolbar sticky` |
 | 研究证据图谱 | 节点计数 · 关系计数 · 图例 | `Toolbar sticky` |
 
 **操作下沉而非封面吸顶**：`科研模式` 原挂在分区封面右侧、`新建资产` 原挂在封面动作区，都会随页面滚走（实测 `科研模式` 滚 800px 后 top = −555），每次切换都要先回顶部。两者都是常驻控件，因此下沉进二级吸顶带；而导出/恢复备份是一次性维护动作，留在封面即可，不占用常驻高度。
@@ -245,11 +247,22 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 
 ## 3. 运行时数据流
 
+从一条工作流到一条可发送 Prompt 的完整链路：
+
+![从科研任务到可发送 Prompt 的五个步骤](assets/prompt-pipeline.svg)
+
 ### 3.0a 完整资源中心（统一视图 · 分区①「资源与工作流」）
 
 统一容器 `dsh-research-kit-console` 默认落在「资源与工作流」分区。该分区是深度浏览面：顶部统一筛选全部、技能、数据库、工作流程；左侧按领域分组显示条目；右侧显示选中项详情。数据库按六个研究入口分组：文献与引文、临床与公共卫生、基因组与遗传变异、组学与表达数据、蛋白质/结构/通路、化学/药物/毒理。详情固定显示官方 URL、数据类型、稳定标识符、访问方式、查询提示、引用记录要求和当前状态（仅参考 / 需要 MCP 或 Web / 当前会话可用），不得以目录元数据暗示已完成检索。
 
-数据库查询有两条执行路径：公开直查由插件 Node half 的 `/dsh-research-kit/query` 路由完成，所有网络请求经 DSH `ctx.web.fetch()` 发出，浏览器不持有密钥；首批适配器包括 PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt 和 PubChem。另一条是显式的 Agent 调用：用户点击“让 Agent 查询”后，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，DSH Agent 自行使用可用 Web、MCP、文件与工具完成多步查询。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应服务端凭据/连接器配置前走 Agent/MCP 回退，不得伪造查询结果。
+数据库查询有两条执行路径，由目录条目的 `availability` 如实标注（**不得根据资源名称推断数据源已可用**）：
+
+![55 个科学数据源的两条查询路径：插件直查与 Agent 回退](assets/data-source-paths.svg)
+
+- **插件直查**（`available-in-plugin`，11 个）：由插件 Node half 的 `/dsh-research-kit/query` 路由完成，所有网络请求经 DSH `ctx.web.fetch()` 发出，浏览器侧不持有密钥、插件不持有任何 API Key。适配器覆盖 PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist；候选结果带来源链接与稳定标识符，可直接写入输入框。
+- **Agent 回退**（`requires-mcp` / `reference-only`，44 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
+
+两条路径的目录标注与实现由 `scripts/validate-catalog-lib.mjs` 的**双向契约**守护：实现了适配器就必须标 `available-in-plugin`（否则用户看到「需要 MCP」而实际能查，属于少报能力），标了就必须有适配器（否则是虚假承诺）。**任何一条路径都不得伪造查询结果。**
 
 ### 3.0 输入框入口与资源选择器
 
@@ -434,11 +447,13 @@ type ResearchDatabase = BaseItem & {
   type: 'database'
   accessNote: string
   url?: string             // 接口地址，详情页展示
-  availability: 'reference-only' | 'requires-mcp' | 'available-in-host'
+  // available-in-plugin：插件内置适配器可直查（须与查询实现一一对应）
+  // available-in-host：宿主已确认可用（须先实现真实能力探测）
+  availability: 'reference-only' | 'requires-mcp' | 'available-in-plugin' | 'available-in-host'
 }
 ```
 
-当前目录只应使用 `prompt-guidance` 和 `requires-mcp` 等保守状态。只有实现了对 DSH/MCP 能力的真实探测并覆盖自动化测试后，才允许标记 `available-in-host`。
+`available-in-plugin` 是**实现已兑现**的能力，由 `scripts/validate-catalog-lib.mjs` 的 `readDirectQueryIds()` 从 `dsh/database-query.js` 读出适配器清单后双向比对，两边漂移即校验失败。而 `available-in-host` 表示**宿主已声明**的能力：只有实现了对 DSH/MCP 能力的真实探测并覆盖自动化测试后，才允许标记（见 [ROADMAP §6](../ROADMAP.md)）。其余条目一律保守标记 `requires-mcp` 或 `reference-only`。
 
 ### 4.4 关联资源与附加技能
 

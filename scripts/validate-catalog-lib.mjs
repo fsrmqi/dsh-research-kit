@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-export function validateCatalogItems(all) {
+export function validateCatalogItems(all, { directQueryIds } = {}) {
   const errors = []
   const fail = (id, message) => errors.push(`[${id}] ${message}`)
   const BASE_FIELDS = ['id', 'type', 'name', 'description', 'category', 'tags']
@@ -16,7 +16,9 @@ export function validateCatalogItems(all) {
   const GUARD = /核验|不得编造|不编造|待核验|待补充|需作者确认|需人工|待确认|需补充|不得虚构|禁止虚构/
   const AVAILABILITY = {
     skill: new Set(['prompt-guidance', 'requires-host-capability']),
-    database: new Set(['reference-only', 'requires-mcp', 'available-in-host'])
+    // available-in-plugin：插件内置直查适配器，无需宿主 MCP；
+    // available-in-host：宿主声明可用（须先实现真实能力探测，见 ROADMAP §6）。
+    database: new Set(['reference-only', 'requires-mcp', 'available-in-plugin', 'available-in-host'])
   }
   const ids = new Set()
 
@@ -75,7 +77,38 @@ export function validateCatalogItems(all) {
       if (!ids.has(ref)) fail(item.id, `关联资源不存在：${ref}`)
     }
   }
+
+  // 「插件可直查」是目录标注与实现之间的双向契约：适配器存在就必须标出来（否则用户
+  // 看到「需要 MCP」而实际能查，属于少报能力），标注了就必须有适配器（否则是虚假承诺）。
+  // 仅在调用方显式传入清单时校验，避免只测单条合法性的用例被牵连。
+  if (Array.isArray(directQueryIds)) {
+    const directSet = new Set(directQueryIds)
+    for (const id of directSet) {
+      if (!ids.has(id)) fail(id, '直查适配器指向的 id 不在目录中')
+    }
+    for (const item of all) {
+      if (item.type !== 'database') continue
+      const declared = item.availability === 'available-in-plugin'
+      if (directSet.has(item.id) && !declared) {
+        fail(item.id, `已实现直查适配器，availability 应标为 available-in-plugin（当前为 ${item.availability}）`)
+      }
+      if (declared && !directSet.has(item.id)) {
+        fail(item.id, '标为 available-in-plugin 但没有对应的直查适配器')
+      }
+    }
+  }
   return errors
+}
+
+// 从 Node half 的查询实现里读出「插件能直查哪些来源」，供目录契约校验比对。
+// 适配器表 `DIRECT_ADAPTERS` 是主要来源；PubMed 走 esearch + esummary 两步、结构不同，
+// 以 `database.id === '...'` 独立分支实现，故一并提取。两边漂移时校验会直接失败。
+export function readDirectQueryIds(path = resolve(root, 'dsh', 'database-query.js')) {
+  const source = readFileSync(path, 'utf8')
+  const block = source.match(/const DIRECT_ADAPTERS = \{([\s\S]*?)\n\}/)
+  const ids = block ? [...block[1].matchAll(/^ {2}'?([a-z0-9-]+)'?:\s*\{/gm)].map(match => match[1]) : []
+  for (const match of source.matchAll(/database\.id === '([a-z0-9-]+)'/g)) ids.push(match[1])
+  return [...new Set(ids)]
 }
 
 export function loadCatalogFromDisk() {
