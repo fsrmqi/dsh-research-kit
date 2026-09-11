@@ -1,6 +1,6 @@
 // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [] } = {}) {
+export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [] } = {}) {
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -25,11 +25,22 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
     const assetId = `asset:${asset.id}`
     add({ id: assetId, kind: 'asset', label: asset.title || '未命名研究资产', detail: asset.epistemicStatus || asset.verification?.status || '' })
     if (asset.parentId) link(assetId, `asset:${asset.parentId}`, 'derives')
-    for (const related of asset.relatedIds || []) link(assetId, `asset:${related}`, 'relates')
+    for (const related of asset.relatedIds || []) link(assetId, String(related).startsWith('evidence:') ? String(related) : `asset:${related}`, 'relates')
+  }
+  for (const entry of savedEvidence) {
+    const evidenceId = `evidence:${entry.id}`
+    add({ id: evidenceId, kind: 'evidence', label: entry.title || '未命名证据', detail: `${entry.sourceDatabase || '来源未提供'} · ${entry.identifier || '无稳定标识符'} · ${entry.status || 'unverified'}` })
+    const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
+    if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')
+    for (const query of queries) for (const source of query.sources || []) {
+      const sameUrl = entry.url && source.url && entry.url === source.url
+      const sameIdentifier = entry.identifier && source.id && String(entry.identifier) === String(source.id)
+      if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
+    }
   }
   return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
 }
 
 export const EVIDENCE_NODE_COLORS = {
-  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d'
+  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c'
 }
