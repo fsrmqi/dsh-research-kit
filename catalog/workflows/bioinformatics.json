@@ -1,0 +1,448 @@
+[
+  {
+    "id": "rnaseq-deseq2",
+    "type": "workflow",
+    "name": "bulk RNA-seq 差异表达",
+    "description": "从计数矩阵到差异表达与功能富集的标准分析。",
+    "category": "生物信息学",
+    "tags": [
+      "RNA-seq",
+      "差异表达",
+      "DESeq2"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "design",
+        "label": "分组设计与比较",
+        "required": true,
+        "multiline": true,
+        "hint": "如：对照 3 例 vs 处理 3 例，比较处理-对照"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "kegg",
+      "reactome",
+      "ncbi-entrez"
+    ],
+    "prompt": "请对用户通过 @文件 引用的 RNA-seq 计数矩阵（基因×样本，原始整数计数）做差异表达分析。先记录物种、基因组版本与注释来源（如 GRCh38、GENCODE 版本）。分组设计与比较：{design}。依次进行：1. 质控：检视文库大小、每样本计数分布，用 PCA 与样本相关性图发现离群与批次效应，过滤低计数基因并报告数量；2. 用 DESeq2/edgeR 等标准流程做标准化与差异检验，报告 log2FC、p 值与校正后 FDR；3. 对显著基因做 GO/KEGG/Reactome 富集（注意背景基因集）；4. 输出火山图、热图与关键基因表达箱线图。若当前会话具备执行代码的工具，实际运行并报告随机种子与包版本；否则输出完整分析方案。不得编造计数或结果；样本与基因的任何过滤都须报告数量。输出为需人工核验的分析报告草案。"
+  },
+  {
+    "id": "single-cell-rnaseq",
+    "type": "workflow",
+    "name": "单细胞 RNA-seq 全流程",
+    "description": "从原始计数到细胞类型注释的 scRNA-seq 标准管线。",
+    "category": "生物信息学",
+    "tags": [
+      "单细胞",
+      "scRNA-seq",
+      "聚类"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "tissue",
+        "label": "组织或样本来源",
+        "required": true,
+        "hint": "如：人睾丸组织、卵巢皮质"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的单细胞计数矩阵执行完整 scRNA-seq 管线（scanpy/anndata）。先记录物种、参考基因组版本与注释版本，固定随机种子。组织来源：{tissue}。依次进行：1. 质控：按线粒体比例、基因数、UMI 总数的分布确定阈值过滤细胞与基因（报告各步保留数量），标记并可选去除双细胞；2. 归一化（counts-per-cell 加 log1p）、选高变基因、降维（PCA 到 UMAP）；3. 聚类（Leiden），按分辨率扫描并说明选择；4. 用已知标志基因和参考图谱注释细胞类型，标记批次效应与注释不确定的簇；5. 差异表达与簇间比较。结果解释必须与 {tissue} 的已知生物学对照，不得虚构细胞类型或标志基因表达。输出为需人工核验的分析报告草案。"
+  },
+  {
+    "id": "variant-calling",
+    "type": "workflow",
+    "name": "变异检测与注释",
+    "description": "从测序数据到变异检测、过滤与注释的标准流程。",
+    "category": "生物信息学",
+    "tags": [
+      "变异检测",
+      "WES",
+      "WGS"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "reference",
+        "label": "参考基因组版本",
+        "required": true,
+        "hint": "如 GRCh38 加对应注释版本"
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "gnomad",
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的测序数据（FASTQ/BAM）执行变异检测，参考基因组：{reference}；记录所用工具与版本。依次进行：1. 读段质控，比对（BWA-MEM/minimap2），标记重复，报告比对率、覆盖度与重复率；2. 检测 SNP 与 indel（GATK HaplotypeCaller 或 bcftools），按需做碱基校正；3. 硬过滤或 VQSR 过滤，报告各步骤保留的变异数量；4. 功能注释（经典转录本上的后果：错义、无义、剪接、移码）。若当前会话具备执行代码与相应工具环境，实际运行；否则输出含具体命令序列的可执行方案。每步过滤报告数量，禁止静默丢弃；不得虚构覆盖度或变异数字。输出为需人工核验的变异检测报告草案。"
+  },
+  {
+    "id": "methylation-analysis",
+    "type": "workflow",
+    "name": "DNA 甲基化分析",
+    "description": "芯片或亚硫酸盐数据的甲基化差异分析。",
+    "category": "生物信息学",
+    "tags": [
+      "甲基化",
+      "表观遗传",
+      "DMR"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "data_type",
+        "label": "数据平台",
+        "required": true,
+        "hint": "如 Illumina 450K/EPIC 芯片、WGBS、RRBS"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "ncbi-entrez"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的 DNA 甲基化数据，平台：{data_type}；记录基因组版本与芯片 manifest 或比对器版本。依次进行：1. 平台对应的质控与标准化（芯片：检测 p 值过滤、探针与样本 QC、染料偏差校正、去 SNP 与交叉反应探针；亚硫酸盐：比对、覆盖过滤），报告 β 值/M 值分布与各步保留数量；2. 差异甲基化位点与区域（DMR）分析，做多重校正，报告效应量；3. 注释 DMR 到启动子、CpG 岛、增强子等基因组背景；4. 与已知生殖生物学（如印记、精子发生相关甲基化）对照解读，区分新发现与已知印记区域。探针过滤数量逐项报告；不得虚构甲基化水平。输出为需人工核验的甲基化分析报告草案。"
+  },
+  {
+    "id": "atacseq-analysis",
+    "type": "workflow",
+    "name": "ATAC-seq 染色质可及性",
+    "description": "从读段到可及性峰与差异分析的标准管线。",
+    "category": "生物信息学",
+    "tags": [
+      "ATAC-seq",
+      "染色质",
+      "峰calling"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "比较设计",
+        "required": false,
+        "hint": "如：对照组 vs 处理组各 2 重复"
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "kegg"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的 ATAC-seq 数据；记录物种、基因组版本与注释版本。比较设计：{comparison}。依次进行：1. 读段质控与比对（Bowtie2），ATAC 特异性质控：片段大小周期性、TSS 富集分数、FRiP，去线粒体与重复读段并做 Tn5 偏移；2. 峰calling（MACS2），评估重复间重现性；3. 差异可及性分析（如 DiffBind/DESeq2），报告 log2FC 与 FDR；4. 峰注释到最近基因与基因组背景，motif 富集分析；5. 结合生殖生物学解读（如启动子与远端增强子、已知转录因子 motif）。质控指标与过滤数量逐项报告；不得虚构峰数或富集结果。输出为需人工核验的 ATAC-seq 分析报告草案。"
+  },
+  {
+    "id": "chipseq-analysis",
+    "type": "workflow",
+    "name": "ChIP-seq 峰分析",
+    "description": "转录因子或组蛋白修饰的峰calling与注释。",
+    "category": "生物信息学",
+    "tags": [
+      "ChIP-seq",
+      "峰calling",
+      "转录因子"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "factor",
+        "label": "靶因子或修饰",
+        "required": true,
+        "hint": "如 CREM、H3K4me3"
+      },
+      {
+        "key": "peak_type",
+        "label": "峰类型",
+        "required": false,
+        "hint": "窄峰（转录因子）或宽峰（组蛋白修饰），默认窄峰"
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "reactome"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的 ChIP-seq 数据，靶标：{factor}；记录物种、基因组版本与注释版本，并确认是否有 input/IgG 对照。峰类型：{peak_type}。依次进行：1. 读段质控、比对（BWA/Bowtie2）、去重，报告比对率、重复率、文库复杂度与 FRiP；2. 对着匹配对照做峰calling（窄峰与宽峰参数不同），用 IDR 评估重复重现性；3. 若设计含比较，做差异结合分析；4. 峰注释（启动子、增强子、基因体分布）、motif 富集、与目标基因关联；5. 结合 {factor} 已知生物学与生殖领域文献解读。对照缺失时明确说明对峰calling可靠性的影响。每步过滤报告数量；不得虚构峰数量或 motif 结果。输出为需人工核验的 ChIP-seq 报告草案。"
+  },
+  {
+    "id": "spatial-transcriptomics",
+    "type": "workflow",
+    "name": "空间转录组分析",
+    "description": "Visium 或单细胞分辨率空间数据的分析管线。",
+    "category": "生物信息学",
+    "tags": [
+      "空间转录组",
+      "Visium",
+      "MERFISH"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "platform",
+        "label": "技术平台",
+        "required": true,
+        "hint": "如 Visium、MERFISH、Xenium"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的空间转录组数据，平台：{platform}；记录物种、参考版本，固定随机种子。依次进行：1. 平台对应质控（每 spot 或细胞的计数与基因数；成像平台查阴性探针），归一化（log-norm 或 SCTransform 等价方法）；2. 空间特征识别：空间可变基因与聚类；3. 与组织学背景对照（如有 H&E 图像）；4. spot 平台做去卷积（参考单细胞数据），单细胞分辨率平台直接注释；5. 相邻区域间配体-受体通讯推断（如 CellChat/CellPhoneDB），明确这是计算推断。去卷积与通讯推断都是假设生成，标注分辨率与假设限制；不得虚构空间模式。输出为需人工核验的空间分析草案。"
+  },
+  {
+    "id": "multi-omics-integration",
+    "type": "workflow",
+    "name": "多组学整合",
+    "description": "跨转录组、表观、蛋白层的联合分析。",
+    "category": "生物信息学",
+    "tags": [
+      "多组学",
+      "整合",
+      "scvi"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "modalities",
+        "label": "数据层",
+        "required": true,
+        "hint": "如 scRNA + scATAC；scRNA + CITE-seq"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "kegg"
+    ],
+    "prompt": "请整合用户通过 @文件 引用的多组学数据，数据层：{modalities}。依次进行：1. 各层独立质控与归一化（RNA 用 log-norm、ATAC 用 TF-IDF/LSI、蛋白用 CLR 等，按层说明），对齐特征与细胞；2. 选择合适的 multimodal 方法（如 totalVI、MultiVI、WNN），校正批次效应并记录方法与参数；3. 生成联合嵌入并评估各层信息保留度；4. 跨层关联分析（如基因表达与染色质可及性的峰值-基因关联，注明是统计关联而非因果）；5. 联合解读，重点放在单层看不到的跨层发现。多组学整合方法假设较强，结果标注方法依赖性；不得虚构跨层关联。输出为需人工核验的整合分析草案。"
+  },
+  {
+    "id": "bioinformatics-qc-pipeline",
+    "type": "workflow",
+    "name": "生信数据质控与可重复分析计划",
+    "description": "从原始组学数据到可复现分析的质控、版本与流程设计。",
+    "category": "生物信息学",
+    "tags": [
+      "生信",
+      "质控",
+      "可重复性",
+      "组学"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "assay",
+        "label": "测序或组学类型",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "geo"
+    ],
+    "limitations": [
+      "无实际原始数据和工具输出时只能生成计划，不得声称已完成质控或分析。"
+    ],
+    "prompt": "请为 @文件 中的“{assay}”数据制定或执行生信质控与可重复分析计划。核对样本表、原始文件完整性、读长/质量、污染、批次、参考版本与元数据；明确每一步工具、参数、版本、随机种子、输入输出和验收指标。区分可实际运行的步骤与待执行计划；不得编造 FastQC 指标、比对率、表达量、变异或聚类结果。输出质量风险、最小可复现流程与待补材料清单。"
+  },
+  {
+    "id": "rnaseq-qc-analysis",
+    "type": "workflow",
+    "name": "RNA-seq 质控与差异表达分析",
+    "description": "从原始 reads 到差异表达与富集分析的可追溯 RNA-seq 流程。",
+    "category": "生物信息学",
+    "tags": [
+      "RNA-seq",
+      "差异表达",
+      "质控"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "contrast",
+        "label": "比较组或对比",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "geo",
+      "ensembl"
+    ],
+    "limitations": [
+      "无实际原始数据和运行日志时只能提供计划；差异表达不等于功能因果。"
+    ],
+    "prompt": "请基于 @文件 为“{contrast}”执行或制定 RNA-seq 质控与差异表达流程。记录参考基因组、注释、样本表、fastq 质控、比对/定量、批次与异常样本判断、过滤、归一化、模型设计、多重校正和富集分析。报告每一步保留样本/基因数、软件版本与参数；不得编造 reads、比对率、差异基因或富集结果。"
+  },
+  {
+    "id": "variant-calling-qc",
+    "type": "workflow",
+    "name": "变异检测与质控流程",
+    "description": "从测序 reads 到经质控的变异集与注释的可复现流程。",
+    "category": "生物信息学",
+    "tags": [
+      "变异检测",
+      "VCF",
+      "质控"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "物种与参考版本",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl"
+    ],
+    "limitations": [
+      "变异结果受覆盖度、参考版本和 calling 参数影响，需独立验证。"
+    ],
+    "prompt": "请基于 @文件 为“{organism}”制定或执行变异检测与质控流程。明确参考基因组、reads 质控、比对、重复标记、变异 calling、联合分型、硬过滤或 VQSR、样本/位点指标、注释版本和输出 VCF 追溯信息。报告每步数量与阈值；不得编造变异、覆盖度、质量值或功能影响。输出可复现命令计划与验证建议。"
+  },
+  {
+    "id": "single-cell-qc-analysis",
+    "type": "workflow",
+    "name": "单细胞 RNA-seq 质控与注释",
+    "description": "完成单细胞质控、双细胞/批次检查、聚类和细胞类型注释计划。",
+    "category": "生物信息学",
+    "tags": [
+      "单细胞",
+      "scRNA-seq",
+      "细胞注释"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "物种与组织",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "geo"
+    ],
+    "limitations": [
+      "聚类和注释是证据综合判断，不能仅凭单个标记基因断言细胞类型。"
+    ],
+    "prompt": "请基于 @文件 为“{organism}”单细胞 RNA-seq 制定或执行质控与注释流程。报告细胞/基因过滤阈值、双细胞与环境 RNA 检查、批次处理、归一化、降维、聚类稳定性和标记基因证据；注释需结合多个标记和参考资料。不得编造细胞数、簇、表达或注释结果；输出版本、参数和待核验注释清单。"
+  },
+  {
+    "id": "atacseq-qc-analysis",
+    "type": "workflow",
+    "name": "ATAC-seq 质控与可及性分析",
+    "description": "从 reads 到峰、差异可及性和注释的可追溯 ATAC-seq 流程。",
+    "category": "生物信息学",
+    "tags": [
+      "ATAC-seq",
+      "染色质",
+      "峰分析"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "contrast",
+        "label": "比较条件",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "bioinformatics-workflow-governance",
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl"
+    ],
+    "limitations": [
+      "开放染色质峰不等于调控因果或基因表达变化。"
+    ],
+    "prompt": "请为 @文件 中“{contrast}”的 ATAC-seq 数据制定或执行质控与分析流程。记录参考版本、reads 质控、比对、重复率、TSS 富集、片段长度、峰调用、批次、差异可及性与峰注释；报告每步保留数量、版本与参数。不得编造峰、富集指标或调控结论；输出可复现流程和待验证的调控假设。"
+  },
+  {
+    "id": "multiomics-integration-plan",
+    "type": "workflow",
+    "name": "多组学整合与批次效应分析",
+    "description": "为多组学数据制定对齐、批次检查、整合模型与验证计划。",
+    "category": "生物信息学",
+    "tags": [
+      "多组学",
+      "批次效应",
+      "整合"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "layers",
+        "label": "组学层类型",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "bioinformatics-workflow-governance",
+      "data-integrity",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "geo"
+    ],
+    "limitations": [
+      "跨组学关联不等于机制因果；样本对齐和批次结构必须先核验。"
+    ],
+    "prompt": "请基于 @文件 为“{layers}”多组学数据制定整合与批次效应分析计划。核对样本身份、配对关系、测量层级、缺失、批次与混杂；选择适合的归一化、批次处理、整合模型和交叉验证，并报告每步版本、参数和对结论的敏感性。不得编造组学关联、潜在因子或机制结论；输出可复现流程与独立验证需求。"
+  }
+]

@@ -1,0 +1,422 @@
+[
+  {
+    "id": "molecular-property-prediction",
+    "name": "Molecular Property Prediction",
+    "description": "Predict physicochemical and biological properties of molecules",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Predict properties of the uploaded molecules (SMILES or SDF). Properties to predict: {properties}. First parse and standardize all structures (RDKit sanitization, salt stripping, charge/tautomer normalization) and drop or flag invalid entries.\n\nWork in this order:\n1. Compute descriptors (MW, LogP, TPSA, HBD/HBA, rotatable bonds, aromatic rings).\n2. Apply validated models for the requested properties, naming each method/tool and version; treat outputs as predictions with uncertainty, not measurements.\n3. Assess drug-likeness (Lipinski, Veber, Ghose).\n4. Note the applicability domain and flag out-of-domain or unusual structures.\n5. Set a random seed for reproducibility. If a requested property is ambiguous or lacks a sound model, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (IDs + SMILES + predictions), per-molecule property dashboards as PNG, and a concise Markdown report. Summarize key findings and outliers in chat, name the files, and state limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "properties",
+        "label": "Properties to predict (e.g., solubility, toxicity, pKa)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "reaction-prediction",
+    "name": "Chemical Reaction Prediction",
+    "description": "Predict products, yields, or conditions for chemical reactions",
+    "category": "化学",
+    "icon": "Sparkles",
+    "prompt": "Predict the products and conditions for the reaction: {reaction}. First parse and standardize reactant SMILES (sanitize, balance atoms, note any ambiguity).\n\nWork in this order:\n1. Identify reaction type and plausible mechanism.\n2. Predict major and minor products with structures.\n3. Estimate regio- and stereoselectivity, stating the basis.\n4. Suggest reaction conditions (solvent, temperature, catalyst, base) with literature precedent where available.\n5. Give an expected yield range, framed as an estimate with uncertainty, not a guarantee.\n6. Flag side reactions and safety/hazard concerns. Name the tools/models and versions used; record a seed if any stochastic step is involved. If the substrate, reagents, or intent are ambiguous enough to change products, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save predicted reaction schemes/structures as PNG, a products table as CSV (SMILES + role + confidence), and a Markdown report. Summarize top products and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Reaction SMILES, description, or uploaded reaction scheme",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "retrosynthesis-planning",
+    "name": "Retrosynthesis Planning",
+    "description": "Plan synthetic routes to a target molecule",
+    "category": "化学",
+    "icon": "GitBranch",
+    "prompt": "Plan a retrosynthetic route to: {target}. First resolve and standardize the target structure (canonical SMILES, sanitization) and confirm stereochemistry.\n\nWork in this order:\n1. Identify strategic disconnections.\n2. Propose 3-5 distinct synthetic routes.\n3. Evaluate each on step count, building-block/reagent availability, expected yields, and convergence.\n4. Check literature/databases for precedent reactions and cite sources.\n5. Rank routes by overall practicality and risk.\n6. Give a detailed forward synthesis for the top route with specific reagents, conditions, and key intermediates. Treat predicted feasibility and yields as hypotheses requiring experimental confirmation; name tools/databases and versions used. If the target identity or constraints (scale, chirality, available starting materials) are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save route schemes as PNG, a route-comparison table as CSV (steps, yield, availability, score), and a Markdown report. Summarize the recommended route and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "target",
+        "label": "Target molecule (SMILES, name, or structure)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "conformer-generation",
+    "name": "Conformer Generation & Analysis",
+    "description": "Generate and analyze 3D molecular conformations",
+    "category": "化学",
+    "icon": "Hexagon",
+    "prompt": "Generate and analyze conformers for: {molecule}. First resolve the structure to canonical SMILES, sanitize, add explicit Hs, and assign stereochemistry.\n\nWork in this order:\n1. Generate a diverse conformer ensemble (ETKDG) with a fixed random seed for reproducibility.\n2. Optimize geometries with a force field (e.g., MMFF94/UFF), noting the method and version.\n3. Rank conformers by energy and deduplicate by RMSD.\n4. Analyze the conformational landscape (key torsions, RMSD clustering, energy spread).\n5. Identify the global minimum and key metastable states, noting that force-field energies are approximate and may need QM refinement.\n6. Visualize low-energy conformers. If the input is ambiguous (protonation/tautomer state, stereochemistry) and would change the ensemble, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save conformers as SDF, ensemble/torsion plots and conformer renders as PNG, an energy-ranking table as CSV, and a Markdown report. Summarize the minimum and accessible states in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "molecule",
+        "label": "Molecule (SMILES or name)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "qsar-modeling",
+    "name": "QSAR Modeling",
+    "description": "Build quantitative structure-activity relationship models",
+    "category": "化学",
+    "icon": "TrendingUp",
+    "prompt": "Build a QSAR model for {target_property} using the uploaded molecular dataset. First standardize all structures (sanitize, strip salts, normalize charges/tautomers), deduplicate, and validate/transform the activity column (e.g., pIC50).\n\nWork in this order:\n1. Compute descriptors and fingerprints.\n2. Split using scaffold (Bemis-Murcko) splits to avoid train/test leakage, with a fixed seed.\n3. Train multiple models (random forest, gradient boosting, neural network).\n4. Evaluate with nested or scaffold cross-validation reporting R2, RMSE, MAE with uncertainty/confidence intervals.\n5. Analyze feature importance and define the applicability domain.\n6. Predict {target_property} for new molecules if provided, flagging out-of-domain predictions as low-confidence. Record package versions and seeds. If the endpoint, units, or activity column are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save predictions/metrics as CSV (IDs + SMILES), performance and importance plots as PNG, and a Markdown report. Summarize best model, metrics, and limitations in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "target_property",
+        "label": "Target property (e.g., IC50, EC50, solubility, permeability)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "chemical-space-exploration",
+    "name": "Chemical Space Exploration",
+    "description": "Visualize and navigate chemical space of a compound library",
+    "category": "化学",
+    "icon": "Map",
+    "prompt": "Explore the chemical space of the uploaded compound library. First standardize structures (sanitize, strip salts, normalize) and deduplicate.\n\nWork in this order:\n1. Compute molecular fingerprints (e.g., ECFP) for all compounds.\n2. Reduce to 2D/3D with t-SNE and UMAP, fixing random seeds and reporting key parameters (perplexity, n_neighbors).\n3. Color by {property} if available.\n4. Identify clusters and outliers.\n5. Compare with an accessible, citable reference compound collection from database-lookup to contextualize coverage; record its version and access date.\n6. Identify underexplored regions.\n7. Report diversity metrics (scaffold diversity, internal similarity, property coverage). Note that embeddings are non-deterministic across parameter choices and are exploratory, not definitive; record package versions. If the library format or the intended {property} coloring is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save embedding and cluster figures as PNG, a per-compound table as CSV (IDs + SMILES + coordinates + cluster), and a Markdown report. Summarize structure, clusters, and gaps in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "property",
+        "label": "Property to color by (optional, e.g., activity, source)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spectral-analysis-nmr",
+    "name": "NMR Spectral Analysis",
+    "description": "Interpret and assign NMR spectra",
+    "category": "化学",
+    "icon": "Waves",
+    "prompt": "Analyze the uploaded NMR spectrum ({nmr_type}) for: {compound}. First confirm the data format, solvent, and reference; if a structure is provided, standardize it (canonical SMILES).\n\nWork in this order:\n1. Identify all peaks and chemical shifts.\n2. Assign peaks to structural features, integrating where applicable.\n3. Analyze multiplicity/coupling (1H) or DEPT editing (13C).\n4. Determine connectivity from 2D experiments if provided (COSY, HSQC, HMBC).\n5. Confirm or propose the molecular structure, noting alternative assignments and ambiguities; predicted shifts (name tool/version) are estimates with error.\n6. Report a complete assignments table. Treat any structure elucidation as a hypothesis needing orthogonal confirmation. If {compound} is unknown or the experiment type/conditions are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save an annotated spectrum as PNG, the assignments table as CSV, and a Markdown report. Summarize the assignment and confidence in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "nmr_type",
+        "label": "NMR type (1H, 13C, 2D COSY, HSQC, HMBC)",
+        "required": true
+      },
+      {
+        "key": "compound",
+        "label": "Expected compound (if known)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spectral-analysis-ms",
+    "name": "Mass Spectrometry Analysis",
+    "description": "Analyze and interpret mass spectra",
+    "category": "化学",
+    "icon": "BarChart3",
+    "prompt": "Analyze the uploaded mass spectrometry data ({ms_type}). First confirm polarity, mass accuracy/resolution, and calibration.\n\nWork in this order:\n1. Identify the molecular ion/adduct and derive candidate molecular formulae within a stated ppm tolerance.\n2. Interpret the fragmentation pattern and rationalize key losses.\n3. Match fragments and spectra against libraries (e.g., MassBank, mzCloud) with match scores.\n4. Propose structural fragments for unassigned peaks, marked as tentative.\n5. Quantify target compounds if standards/calibration provided, reporting uncertainty.\n6. Generate an annotated spectrum. Treat formula and structure assignments as hypotheses with confidence levels, not certainties; name tools/databases and versions. If adduct, polarity, or instrument details are ambiguous and would change formulae, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the annotated spectrum as PNG, a peak/annotation table as CSV (m/z, intensity, formula, score), and a Markdown report. Summarize identifications and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "ms_type",
+        "label": "MS type (ESI, MALDI, EI, LC-MS/MS, GC-MS)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "thermodynamics-calculation",
+    "name": "Thermodynamics Calculation",
+    "description": "Calculate thermodynamic properties and equilibria",
+    "category": "化学",
+    "icon": "Thermometer",
+    "prompt": "Calculate thermodynamic properties for: {system}. First specify states, phases, stoichiometry, and the data source for thermochemical values (e.g., NIST), citing them.\n\nWork in this order:\n1. Compute standard enthalpies, entropies, and Gibbs free energies of reaction.\n2. Determine equilibrium constants at {temperature} (default 298.15 K).\n3. Generate van't Hoff plots across a sensible temperature range, noting the assumption of temperature-independent dH/dS and its limits.\n4. Assess spontaneity and feasibility.\n5. Estimate activation energy if kinetic data are provided.\n6. Compare with experimental literature values and report discrepancies. Propagate uncertainty from input data and state assumptions; record any package versions and seeds. If the system, phases, or conditions are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save van't Hoff and related plots as PNG, a results table as CSV (quantity, value, uncertainty, source), and a Markdown report. Summarize key thermodynamic conclusions and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "system",
+        "label": "Chemical system or reaction",
+        "required": true
+      },
+      {
+        "key": "temperature",
+        "label": "Temperature (K, default: 298.15)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "pka-prediction",
+    "name": "pKa Prediction",
+    "description": "Predict acid dissociation constants for molecules",
+    "category": "化学",
+    "icon": "Droplet",
+    "prompt": "Predict pKa values for: {molecule}. First resolve and standardize the structure (canonical SMILES, sanitize, neutralize, enumerate relevant tautomers).\n\nWork in this order:\n1. Identify all ionizable groups.\n2. Predict microscopic pKa for each site, naming the method/tool and version and treating values as predictions with error bars.\n3. Determine the dominant protonation/charge state at pH {ph} (default 7.4).\n4. Generate a microspeciation diagram across pH.\n5. Compare with experimental pKa if available and report deviations.\n6. Analyze how pH affects charge state and solubility. Note model applicability limits for unusual scaffolds. If the structure, tautomer, or pH of interest is ambiguous and would change conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the microspeciation diagram as PNG, a pKa/site table as CSV (site, pKa, type), and a Markdown report. Summarize the dominant species at the target pH and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Rowan only when credentials are configured and the user authorizes the remote calculation. If unavailable, do not fabricate pKa values: provide a clearly labeled local estimate only when a validated method is available, or return an execution plan.",
+    "placeholders": [
+      {
+        "key": "molecule",
+        "label": "Molecule (SMILES or name)",
+        "required": true
+      },
+      {
+        "key": "ph",
+        "label": "pH of interest (default: 7.4)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "solubility-prediction",
+    "name": "Solubility Prediction",
+    "description": "Predict aqueous solubility and formulation considerations",
+    "category": "化学",
+    "icon": "Droplet",
+    "prompt": "Predict the aqueous solubility of: {molecules}. First parse and standardize all structures (sanitize, strip salts, normalize charges/tautomers) and flag invalid entries.\n\nWork in this order:\n1. Calculate LogS using multiple methods (e.g., ESOL, group contribution, ML), naming each tool/version and treating outputs as predictions with uncertainty, not measurements.\n2. Predict intrinsic and pH-dependent solubility, noting required pKa assumptions.\n3. Analyze structural features driving solubility.\n4. Suggest salt forms or co-crystal strategies to improve solubility where needed.\n5. Compare with experimental data if available and report deviations.\n6. Report BCS classification (with the permeability assumption stated). Note applicability-domain limits and set a seed if models are stochastic. If the input set or pH context is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (IDs + SMILES + LogS + method), comparison/feature plots as PNG, and a Markdown report. Summarize key solubility findings and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "molecules",
+        "label": "Molecules (SMILES list or uploaded file)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "reaction-optimization",
+    "name": "Reaction Optimization",
+    "description": "Design experiments to optimize reaction conditions",
+    "category": "化学",
+    "icon": "Target",
+    "prompt": "Design an optimization campaign for the reaction: {reaction}. First confirm the response/objective metric (yield, selectivity, conversion) and standardize any reactant structures.\n\nWork in this order:\n1. Identify key variables and ranges (temperature, solvent, catalyst loading, concentration, time).\n2. Design a DoE plan (factorial/response-surface) or a Bayesian optimization loop, fixing a random seed and stating priors/factor encodings.\n3. Suggest an initial screening set of experiments.\n4. Define the objective function and constraints (cost, safety, practicality).\n5. Propose an iterative strategy with stopping criteria.\n6. Estimate the number of experiments needed and expected information gain. Treat predicted optima as hypotheses to verify experimentally; name tools and versions. If the objective or controllable variables are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the proposed design matrix as CSV, design-space/response plots as PNG, and a Markdown report. Summarize the recommended plan and assumptions in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Reaction to optimize",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "polymer-design",
+    "name": "Polymer Design & Analysis",
+    "description": "Design polymers with target properties",
+    "category": "化学",
+    "icon": "Hexagon",
+    "prompt": "Design or analyze a polymer for {application}. Target properties: {properties}. First clarify constraints (cost, processing, regulatory, biodegradability) and standardize any monomer structures (canonical SMILES).\n\nWork in this order:\n1. Identify candidate monomer/repeat-unit structures.\n2. Predict key polymer properties (Tg, Tm, mechanical strength, solubility), naming methods/tools and versions and treating values as estimates with uncertainty, not measurements.\n3. Evaluate sustainability and processability.\n4. Compare with existing polymers from the literature, citing sources.\n5. Suggest plausible synthesis/polymerization routes.\n6. Recommend characterization experiments to validate predictions. Note that empirical property models for polymers carry substantial error; set a seed for any stochastic step. If the application or target properties are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save candidate structures/property plots as PNG, a candidate-comparison table as CSV (monomer SMILES + predicted properties), and a Markdown report. Summarize top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "application",
+        "label": "Target application",
+        "required": true
+      },
+      {
+        "key": "properties",
+        "label": "Desired properties",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "catalyst-design",
+    "name": "Catalyst Design",
+    "description": "Design and screen catalysts for chemical reactions",
+    "category": "化学",
+    "icon": "Zap",
+    "prompt": "Design a catalyst for: {reaction}. First standardize reactant/product structures and define the performance metric (activity, selectivity, turnover).\n\nWork in this order:\n1. Analyze the mechanism and identify the rate-determining step.\n2. Propose candidate catalyst classes (metal-organic, enzymatic, organocatalytic) with rationale.\n3. Predict activity/selectivity trends using descriptors or scaling relationships, naming the approach.\n4. Screen candidates computationally, recording method, level of theory/model, and versions.\n5. Compare with known catalysts from the literature, citing sources.\n6. Recommend top candidates for experimental testing. Treat computed activity as a hypothesis with error, not a guarantee, and note scoring/descriptor limitations; set seeds where applicable. If the target reaction, conditions, or selectivity goal are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save candidate structures and trend plots as PNG, a ranking table as CSV (catalyst, descriptor, predicted performance), and a Markdown report. Summarize top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Target reaction",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "chemical-safety-assessment",
+    "name": "Chemical Safety Assessment",
+    "description": "Evaluate hazards and safety of chemical compounds",
+    "category": "化学",
+    "icon": "Shield",
+    "prompt": "Perform a safety assessment of: {chemicals}. First resolve each input (name/CAS/SMILES) to a standardized structure and confirm identity.\n\nWork in this order:\n1. Look up GHS classification and hazard statements from authoritative sources, citing them.\n2. Predict toxicity endpoints (LD50, LC50, mutagenicity), naming tools/versions and treating predictions as estimates with uncertainty, not regulatory determinations.\n3. Assess environmental fate (biodegradation, bioaccumulation).\n4. Check regulatory status (REACH, TSCA).\n5. Identify incompatibilities and storage/handling requirements.\n6. Compile a safety data summary. Clearly distinguish authoritative/experimental data from in silico predictions; note this is informational and not a substitute for an official SDS or expert review. If a chemical identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a structured summary table as CSV (chemical, GHS, predicted endpoints, sources), hazard visuals as PNG, and a Markdown report. Summarize key hazards and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "chemicals",
+        "label": "Chemical names, CAS numbers, or SMILES",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolite-identification",
+    "name": "Metabolite Identification",
+    "description": "Identify metabolites from mass spectrometry data",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Identify metabolites from the uploaded {data_type} data. First confirm acquisition mode, mass accuracy, and adduct/ionization assumptions.\n\nWork in this order:\n1. Process and align spectral features (peak picking, deisotoping).\n2. Match against spectral databases (HMDB, MassBank, METLIN) with similarity scores.\n3. Predict identities from accurate mass and fragmentation within a stated tolerance.\n4. Assign confidence levels per the Metabolomics Standards Initiative (identified, putative, unknown).\n5. Map identified metabolites to pathways (e.g., KEGG).\n6. Report a ranked candidate list per feature. Treat putative IDs as hypotheses requiring authentic-standard confirmation; name tools/databases and versions. If the data type, polarity, or adduct context is ambiguous and would change matches, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranked candidate table as CSV (feature, m/z, candidate, score, confidence), annotated spectra/pathway figures as PNG, and a Markdown report. Summarize confident identifications and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "data_type",
+        "label": "Data type (LC-MS, GC-MS, NMR)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "synthetic-accessibility",
+    "name": "Synthetic Accessibility Score",
+    "description": "Evaluate how easy compounds are to synthesize",
+    "category": "化学",
+    "icon": "Gauge",
+    "prompt": "Evaluate the synthetic accessibility of the uploaded molecules. First parse and standardize all structures (sanitize, strip salts, normalize) and flag invalid entries.\n\nWork in this order:\n1. Calculate SA scores (e.g., SAScore) for each compound, naming the method/version.\n2. Identify challenging motifs (strained rings, dense stereocenters, rare functional groups).\n3. Estimate the number of synthetic steps, framed as a rough indicator with uncertainty.\n4. Flag commercially available building blocks where identifiable, citing the source.\n5. Rank compounds by ease of synthesis.\n6. Suggest simplifications for hard-to-make compounds while preserving key features. Note that SA scores are heuristic proxies, not route guarantees, and depend on the scoring model; set a seed if any step is stochastic. If structures are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranking table as CSV (ID + SMILES + SA score + flags), example structures as PNG, and a Markdown report. Summarize easiest/hardest compounds and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolomics-analysis",
+    "name": "Metabolomics Data Analysis",
+    "description": "Analyze untargeted or targeted metabolomics datasets",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Analyze the uploaded metabolomics dataset ({platform}). First confirm the experimental design, sample/QC layout, and metadata.\n\nWork in this order:\n1. Preprocess: peak picking, alignment, normalization, with transformation noted.\n2. Quality control: QC-sample assessment and batch correction.\n3. Statistical analysis: PCA and PLS-DA between {comparison}, validating PLS-DA by permutation to guard against overfitting and fixing a seed.\n4. Identify significant metabolites (fold change > {fc}, FDR < 0.05), reporting effect sizes.\n5. Pathway enrichment via KEGG/MetaboAnalyst, citing versions.\n6. Generate volcano plot, pathway-impact plot, and metabolite heatmap. Treat annotations as confidence-leveled and findings as associations, not causation; record package versions. If the grouping or design is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the plots as PNG, a significant-feature table as CSV (feature, FC, p, FDR, annotation), and a Markdown report. Summarize key metabolites, pathways, and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "platform",
+        "label": "Platform (LC-MS, GC-MS, NMR)",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      },
+      {
+        "key": "fc",
+        "label": "Fold change threshold (default: 1.5)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

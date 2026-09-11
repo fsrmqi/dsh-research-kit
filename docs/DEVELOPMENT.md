@@ -2,7 +2,7 @@
 
 本文面向需要改动 `dsh-research-kit` 的开发者：环境准备、模块登记规则、测试策略与交付检查单。
 
-当前仓库处于**可用状态**——128 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
+当前仓库处于**可用状态**——299 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
 
 ## 1. 开始前
 
@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、渲染级降级、构建产物、分区契约与 DSH 槽位注册测试（143 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、构建产物、分区契约与 DSH 槽位注册测试（149 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -92,7 +92,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 143 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 149 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
@@ -100,7 +100,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 ### Milestone D：扩充第一批内容 ✅
 
-已完成。当前 65 条工作流（论文与手稿 13、文献研究 12、基因组学 22、临床研究 5、数据分析 11、研究设计 2）、8 项技能与 55 个数据源，全部通过契约校验；学科类目覆盖论文与手稿、文献研究、基因组学、临床研究、数据分析与研究设计。
+已完成。当前 206 条工作流（16 个类目，按流程族分片维护于 `catalog/workflows/`，类目明细见 [README「目录内容」](../README.md#目录内容)）、11 项技能（`catalog/skills/`）与 82 个数据源（`catalog/resources/`），全部通过契约校验与「分片 ↔ 入口 ↔ 产物」三向断言。
 
 后续扩充方向见 [ROADMAP.md](../ROADMAP.md)。
 

@@ -1,0 +1,260 @@
+[
+  {
+    "id": "crop-gwas-breeding",
+    "type": "workflow",
+    "name": "作物 GWAS 与育种候选位点分析",
+    "description": "对作物基因型与表型数据进行群体结构校正、关联分析和候选位点核验。",
+    "category": "作物遗传育种",
+    "tags": [
+      "作物",
+      "GWAS",
+      "育种",
+      "QTL"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "目标性状",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "agricultural-experiment-design",
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "gwas-catalog",
+      "ensembl"
+    ],
+    "limitations": [
+      "关联位点不等于因果基因或可直接育种应用；须在独立群体和环境中验证。"
+    ],
+    "prompt": "请基于 @文件 对作物性状“{trait}”开展研究性 GWAS 与育种候选位点分析。记录物种/品种、参考基因组与注释版本、表型定义、地点季节和管理条件；完成样本/变异质控、群体结构校正、关联检验、多重比较控制、候选区间与基因注释。报告效应、不确定性、G×E 限制和独立验证计划。不得编造位点、显著性或育种价值。"
+  },
+  {
+    "id": "crop-multi-environment-trial",
+    "type": "workflow",
+    "name": "作物多环境试验与 G×E 分析",
+    "description": "分析多地点、多季节田间试验中的品种表现、环境效应与稳定性。",
+    "category": "作物遗传育种",
+    "tags": [
+      "田间试验",
+      "G×E",
+      "品种稳定性"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "目标性状",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "agricultural-experiment-design",
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "fao-faostat"
+    ],
+    "limitations": [
+      "环境稳定性与品种推荐须由试验设计、地点覆盖和独立季节验证支持。"
+    ],
+    "prompt": "请基于 @文件 对性状“{trait}”进行作物多环境试验与 G×E 分析。核对试验单位、区组、重复、地点季节、管理措施、缺失小区与性状测量；分解基因型、环境和交互效应，检查模型假设，报告稳定性指标及其不确定性。不得把单地点或单季结果泛化为普适推荐，也不得编造数据质量问题或分析结果；输出可复现计划与独立验证建议。"
+  },
+  {
+    "id": "genomic-selection-plan",
+    "type": "workflow",
+    "name": "基因组选择与育种值预测",
+    "description": "设计研究性基因组选择训练、验证和候选材料排序流程。",
+    "category": "作物遗传育种",
+    "tags": [
+      "基因组选择",
+      "育种值",
+      "交叉验证"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "预测性状",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "agricultural-experiment-design",
+      "reproducibility",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "预测准确度依赖训练群体和环境代表性，不构成品种审定或商业推荐。"
+    ],
+    "prompt": "请针对 @文件 中的“{trait}”设计研究性基因组选择流程。明确训练/验证群体、基因型编码、表型校正、亲缘关系泄漏防控和按环境分层验证；比较适当模型并报告交叉验证设计、预测准确度和不确定性。候选材料排序只能作为待验证线索，不得编造育种值或声称可直接推广。输出可复现训练计划与验证门槛。"
+  },
+  {
+    "id": "crop-phenotype-qc",
+    "type": "workflow",
+    "name": "作物表型数据质控与标准化",
+    "description": "核对田间或温室表型的单位、重复、缺失、异常与环境元数据。",
+    "category": "作物遗传育种",
+    "tags": [
+      "表型",
+      "质控",
+      "田间试验"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "表型或性状",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "agricultural-experiment-design",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "try-plant-trait"
+    ],
+    "limitations": [
+      "异常值处理须保留原始值与理由，不得静默删除小区或材料。"
+    ],
+    "prompt": "请对 @文件 中的作物性状“{trait}”进行表型数据质控与标准化。核对单位、编码、试验单位、重复、地点季节、测量日期、环境和管理元数据；量化缺失、异常与不一致，提出可追溯处理方案并保留原始值。不得编造表型、环境记录或质控结果；输出清洗日志、待确认项和适合后续遗传分析的数据字典。"
+  },
+  {
+    "id": "crop-cross-design",
+    "type": "workflow",
+    "name": "作物亲本选择与杂交设计",
+    "description": "基于目标性状、遗传多样性和验证计划制定研究性杂交方案。",
+    "category": "作物遗传育种",
+    "tags": [
+      "杂交",
+      "亲本选择",
+      "育种设计"
+    ],
+    "placeholders": [
+      {
+        "key": "goal",
+        "label": "育种目标",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "agricultural-experiment-design",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "亲本推荐是研究计划，不保证杂交成功、性状遗传或商业表现。"
+    ],
+    "prompt": "请围绕育种目标“{goal}”制定亲本选择与杂交设计草案。明确目标性状、亲本已知证据、遗传多样性、亲缘风险、杂交组合、群体规模、世代推进、表型与基因型验证、环境试验和淘汰判据。区分已知数据与假设；不得编造亲本基因型、杂交成功率或育种值。输出可执行设计与风险/替代方案。"
+  },
+  {
+    "id": "germplasm-comparison",
+    "type": "workflow",
+    "name": "作物种质资源比较与优先级排序",
+    "description": "基于性状、来源、遗传多样性和环境适配证据比较种质材料。",
+    "category": "作物遗传育种",
+    "tags": [
+      "种质资源",
+      "遗传多样性",
+      "育种"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "goal",
+        "label": "比较或选育目标",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "agricultural-experiment-design",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "gramene"
+    ],
+    "limitations": [
+      "种质优先级是研究线索，须在授权、检疫和独立试验前提下复核。"
+    ],
+    "prompt": "请基于 @文件 为目标“{goal}”比较作物种质资源。整理材料身份、来源、性状、基因型/群体结构、环境适配与数据缺口；定义透明排序维度，避免把缺失记录当作不利证据。不得编造种质、性状或可用性信息；输出比较表、优先级理由、验证试验设计与需人工确认的许可/检疫事项。"
+  },
+  {
+    "id": "crop-qtl-validation",
+    "type": "workflow",
+    "name": "作物 QTL 与候选基因验证计划",
+    "description": "把 QTL/关联信号转为可验证的候选基因与功能验证方案。",
+    "category": "作物遗传育种",
+    "tags": [
+      "QTL",
+      "候选基因",
+      "功能验证"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "目标性状",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "agricultural-experiment-design",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl-plants",
+      "gramene"
+    ],
+    "limitations": [
+      "候选基因只是待验证假设，不能由邻近关系或单次关联直接确认。"
+    ],
+    "prompt": "请基于 @文件 为性状“{trait}”制定 QTL/候选基因验证计划。核对定位区间、连锁不平衡、参考注释、表达/功能证据、群体与环境一致性；提出独立群体、近等基因系、编辑/互补或表达验证等分层方案，并说明每项证据能排除什么替代解释。不得编造基因功能、验证结果或因果结论。"
+  },
+  {
+    "id": "crop-expression-evidence",
+    "type": "workflow",
+    "name": "作物基因表达与育种证据整合",
+    "description": "整合表达、性状、变异与环境信息，形成待验证的育种候选证据链。",
+    "category": "作物遗传育种",
+    "tags": [
+      "基因表达",
+      "作物",
+      "育种",
+      "候选基因"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "trait",
+        "label": "目标性状或胁迫",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "crop-genomics",
+      "bioinformatics-workflow-governance",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl-plants",
+      "gramene",
+      "crop-ontology"
+    ],
+    "limitations": [
+      "表达关联和候选排序不等于调控因果或可直接推广的育种结论。"
+    ],
+    "prompt": "请基于 @文件 为作物性状或胁迫“{trait}”整合基因表达、变异、表型和环境证据。记录物种、组织/时期、参考版本、表达定量方法、性状术语与环境条件；区分已观测关联、文献支持和待验证推断；提出独立材料、时空重复和功能验证方案。不得编造表达模式、候选基因或育种价值。输出可追溯证据表与育种决策边界。"
+  }
+]

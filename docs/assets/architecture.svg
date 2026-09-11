@@ -44,7 +44,7 @@
 <text x="684" y="222" font-size="12" fill="#534AB7" text-anchor="middle">证据</text>
 <text x="684" y="240" font-size="12" fill="#7F77DD" text-anchor="middle">本会话关系可视化</text>
 
-<text x="410" y="298" font-size="12" fill="#534AB7" text-anchor="middle">目录资产：65 条人工审核工作流 · 8 个技能指导模块 · 55 个科学数据源</text>
+<text x="410" y="298" font-size="12" fill="#534AB7" text-anchor="middle">目录资产：206 条人工审核工作流 · 11 个技能指导模块 · 82 个科学数据源</text>
 
 <path d="M410 318 L410 344" fill="none" stroke="#888780" stroke-width="1.5" marker-end="url(#a)"/>
 <text x="422" y="335" font-size="12" fill="#5F5E5A">仅两条受控路由</text>

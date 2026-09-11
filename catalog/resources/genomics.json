@@ -1,0 +1,122 @@
+[
+  {
+    "id": "ncbi-entrez",
+    "type": "database",
+    "name": "NCBI E-utilities",
+    "description": "统一访问 PubMed、PMC、Gene、Genome、Protein 等 40+ NCBI 数据库。",
+    "category": "数据分析",
+    "tags": [
+      "基因",
+      "序列",
+      "NCBI"
+    ],
+    "url": "https://www.ncbi.nlm.nih.gov/books/NBK25501/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力；高频访问建议配置 NCBI 账户密钥。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "gnomad",
+    "type": "database",
+    "name": "gnomAD",
+    "description": "基因组聚合数据库：人群遗传变异频率。",
+    "category": "数据分析",
+    "tags": [
+      "变异",
+      "人群频率"
+    ],
+    "url": "https://gnomad.broadinstitute.org/about",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ensembl",
+    "type": "database",
+    "name": "Ensembl",
+    "description": "基因组注释、变异、基因树与比较基因组学。",
+    "category": "数据分析",
+    "tags": [
+      "基因组",
+      "注释"
+    ],
+    "url": "https://rest.ensembl.org/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "clinvar",
+    "type": "database",
+    "name": "ClinVar",
+    "description": "NCBI 变异-表型关系档案：致病性分级与临床意义证据。",
+    "category": "数据分析",
+    "tags": [
+      "ClinVar",
+      "致病性",
+      "变异解读"
+    ],
+    "url": "https://www.ncbi.nlm.nih.gov/clinvar/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力；解读须注明提交者评级与评审状态（星级）。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "omim",
+    "type": "database",
+    "name": "OMIM",
+    "description": "在线人类孟德尔遗传：基因-表型关系的权威知识库。",
+    "category": "数据分析",
+    "tags": [
+      "OMIM",
+      "遗传病",
+      "基因型"
+    ],
+    "url": "https://www.omim.org/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力；OMIM 内容有使用授权限制，引用须遵循其条款。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "gwas-catalog",
+    "type": "database",
+    "name": "GWAS Catalog",
+    "description": "NHGRI-EBI 全基因组关联研究已发表位点汇总。",
+    "category": "数据分析",
+    "tags": [
+      "GWAS",
+      "位点",
+      "已发表关联"
+    ],
+    "url": "https://www.ebi.ac.uk/gwas/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力；引用时注明版本与发布日期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "hgnc",
+    "type": "database",
+    "name": "HGNC",
+    "description": "HUGO 基因命名委员会：人类基因官方符号与 ID。",
+    "category": "数据分析",
+    "tags": [
+      "基因命名",
+      "符号",
+      "ID 映射"
+    ],
+    "url": "https://www.genenames.org/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ncbi-datasets",
+    "type": "database",
+    "name": "NCBI Datasets API v2",
+    "description": "下载和检索 NCBI 整理的基因组、基因、蛋白质及相关数据集。",
+    "category": "基因组与遗传变异",
+    "tags": [
+      "NCBI",
+      "基因组",
+      "基因",
+      "蛋白质",
+      "数据集"
+    ],
+    "url": "https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/",
+    "accessNote": "公开 API；高频使用建议配置 NCBI API Key，并记录数据集版本与下载日期。",
+    "availability": "requires-mcp"
+  }
+]

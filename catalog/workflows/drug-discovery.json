@@ -1,0 +1,354 @@
+[
+  {
+    "id": "target-identification",
+    "name": "Drug Target Identification",
+    "description": "Identify and validate therapeutic targets for a disease",
+    "category": "药物发现",
+    "icon": "Target",
+    "prompt": "Identify potential drug targets for: {disease}. First confirm the precise indication/subtype and scope.\n\nWork in this order:\n1. Query disease-gene associations from OpenTargets, OMIM, and the GWAS catalog, citing evidence.\n2. Prioritize targets by genetic evidence strength, expression, and druggability.\n3. Check existing drugs/programs per target.\n4. Assess tractability (structure availability, assayability, ligandability).\n5. Evaluate safety liabilities (tissue expression breadth, mouse KO phenotypes).\n6. Recommend the top 5-10 targets with explicit rationale and evidence grade. Distinguish genetic/experimental evidence from computational inference; treat prioritization as hypothesis-generating, not validated. Name databases and versions/access dates. If the indication is ambiguous or overly broad, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranked target table as CSV (target, evidence, druggability, safety flags), evidence/expression plots as PNG, and a Markdown report. Summarize the top targets and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "disease",
+        "label": "Disease name or indication",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "virtual-screening",
+    "name": "Virtual Screening",
+    "description": "Screen compound libraries against a target",
+    "category": "药物发现",
+    "icon": "Search",
+    "prompt": "Perform virtual screening against {target}. First validate the prepared target: obtain/clean structure (PDB: {pdb_id}), fix protonation, add hydrogens, remove waters/artifacts, and validate the binding site (ideally redock a known ligand to check pose recovery).\n\nWork in this order:\n1. Prepare the target structure.\n2. Define the binding site.\n3. Standardize and dock the uploaded compound library or a ZINC subset ({library_size} compounds), generating reasonable 3D states/protonation; record docking tool and version and a seed.\n4. Rank by docking score, noting that scoring functions are noisy and poorly correlated with true affinity.\n5. Apply ADMET filters and PAINS/structural alerts.\n6. Cluster top hits by scaffold for diversity.\n7. Select a diverse top 50 for experimental testing. Treat all hits as hypotheses requiring assay confirmation. If the target/site or library is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranked hits CSV (ID + SMILES + score + filters), pose/cluster figures as PNG, and a Markdown report. Summarize top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "target",
+        "label": "Drug target name",
+        "required": true
+      },
+      {
+        "key": "pdb_id",
+        "label": "PDB ID of target structure",
+        "required": false
+      },
+      {
+        "key": "library_size",
+        "label": "Library size to screen",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "admet-prediction",
+    "name": "ADMET Prediction",
+    "description": "Predict absorption, distribution, metabolism, excretion, and toxicity",
+    "category": "药物发现",
+    "icon": "Activity",
+    "prompt": "Predict ADMET properties for the uploaded compounds. First parse and standardize all structures (sanitize, strip salts, normalize charges/tautomers) and flag invalid entries.\n\nWork in this order:\n1. Absorption: Caco-2 permeability, oral bioavailability, P-gp substrate.\n2. Distribution: plasma protein binding, VDss, BBB penetration.\n3. Metabolism: CYP inhibition/induction (1A2, 2C9, 2C19, 2D6, 3A4), metabolic stability.\n4. Excretion: clearance, half-life.\n5. Toxicity: hERG, AMES, hepatotoxicity.\n6. Generate a traffic-light dashboard with per-endpoint confidence/applicability-domain flags. Name each model/tool and version, set a seed, and treat every value as an in silico prediction with error, not a measurement; flag out-of-domain compounds as low-confidence. If structures or the compound set are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (ID + SMILES + endpoints + confidence), the dashboard as PNG, and a Markdown report. Summarize key liabilities and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "lead-optimization",
+    "name": "Lead Optimization",
+    "description": "Optimize a lead compound for potency, selectivity, and ADMET",
+    "category": "药物发现",
+    "icon": "Wrench",
+    "prompt": "Optimize the lead compound: {compound} for {target}. First standardize the lead and any analog data (canonical SMILES, sanitize) and check the SAR dataset for quality and leakage.\n\nWork in this order:\n1. Analyze the SAR from the uploaded data.\n2. Identify key pharmacophore features and liabilities.\n3. Propose structural modifications to improve {property} while monitoring potency, selectivity, and ADMET trade-offs.\n4. Predict ADMET and, where possible, activity for proposed analogs, naming tools/versions and treating outputs as predictions with uncertainty.\n5. Rank modifications by predicted improvement and synthetic accessibility, flagging out-of-domain designs.\n6. Design a focused library of 20-50 analogs for synthesis. Set seeds for reproducibility; treat all designs as testable hypotheses. If {target}, the optimization goal, or the SAR data are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the analog library as CSV (SMILES + predicted properties + rationale), SAR/property plots as PNG, and a Markdown report. Summarize top analogs and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "compound",
+        "label": "Lead compound (SMILES or name)",
+        "required": true
+      },
+      {
+        "key": "target",
+        "label": "Drug target",
+        "required": true
+      },
+      {
+        "key": "property",
+        "label": "Property to optimize (potency, selectivity, solubility, metabolic stability)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "drug-repurposing",
+    "name": "Drug Repurposing",
+    "description": "Identify existing drugs for new therapeutic indications",
+    "category": "药物发现",
+    "icon": "RefreshCw",
+    "prompt": "Identify drug repurposing candidates for: {disease}. First confirm the precise indication and mechanistic hypothesis of interest.\n\nWork in this order:\n1. Query drug-disease associations from knowledge graphs (PrimeKG) and databases, citing evidence.\n2. Identify approved drugs targeting related pathways/targets.\n3. Check clinical trials and the literature for off-label or prior use.\n4. Predict drug-target interactions computationally, naming tools/versions and treating predictions as hypotheses with uncertainty.\n5. Assess safety profiles from existing clinical data.\n6. Rank candidates by evidence strength, mechanistic plausibility, and feasibility. Distinguish established clinical evidence from computational inference; note that repurposing requires prospective validation. Record database versions/access dates. If the indication is ambiguous or broad, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranked candidate table as CSV (drug, target, evidence, safety, score), an evidence network/plot as PNG, and a Markdown report. Summarize the top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "disease",
+        "label": "Disease or indication",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "pharmacokinetics-modeling",
+    "name": "PK Modeling",
+    "description": "Pharmacokinetic modeling and simulation",
+    "category": "药物发现",
+    "icon": "LineChart",
+    "prompt": "Analyze the uploaded concentration-time data for {drug} as a research-only pharmacokinetic modeling exercise. Inspect dose, route, formulation, units, sampling schedule, subject/occasion identifiers, steady-state status, and the below-quantification-limit rule before computing anything. Proposed regimens to evaluate: {doses}.\n\nWork in this order:\n1. Define the exposure metric and analysis population before viewing model comparisons. Distinguish AUC(0-t), AUC(0-inf), and steady-state AUC(0-tau).\n2. Run non-compartmental analysis when the sampling supports it, reporting Cmax, Tmax, AUC, terminal-slope diagnostics, half-life, clearance, volume, and the percentage of extrapolated AUC with uncertainty and units.\n3. Fit one- and two-compartment models only when justified by the design. State the residual-error model and compare structural models using goodness-of-fit, residual diagnostics, information criteria, and identifiability—not convergence alone.\n4. Report parameter estimates with confidence intervals or relative standard errors, correlations, and any unidentifiable parameters. Do not add compartments or covariates merely to absorb misspecification.\n5. Simulate the user-supplied candidate regimens with parameter uncertainty and, when supported, between-subject variability. Clearly separate interpolation from extrapolation and report target-attainment assumptions.\n6. Compare observed and predicted profiles, run sensitivity analyses, and state the model's valid population and data range.\n7. Do not select a clinical-trial dose, recommend an individual dose, or claim bioequivalence, efficacy, or safety. Present results for qualified pharmacometric and clinical review.\n\nSave the parameter and exposure tables as CSV, observed-versus-predicted and diagnostic plots as PNG, simulation outputs as CSV, and a reproducible Markdown report. Summarize key estimates, identifiability problems, extrapolations, unresolved inputs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "drug",
+        "label": "Drug name or compound ID",
+        "required": true
+      },
+      {
+        "key": "doses",
+        "label": "Doses to simulate (e.g., 10 mg, 50 mg, 100 mg)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "dose-response-analysis",
+    "name": "Dose-Response Analysis",
+    "description": "Fit dose-response curves and calculate EC50/IC50",
+    "category": "药物发现",
+    "icon": "TrendingUp",
+    "prompt": "Analyze the uploaded dose-response data. First inspect the data (replicates, controls, normalization, units) and confirm orientation (agonist vs inhibitor).\n\nWork in this order:\n1. Fit a 4-parameter logistic (Hill) curve per compound, handling normalization and constraints appropriately.\n2. Calculate EC50/IC50 with 95% confidence intervals.\n3. Determine the Hill coefficient and maximal response.\n4. Compare potency across compounds, noting overlapping CIs.\n5. Assess curve quality (R2, residual plots, convergence) and flag poorly constrained fits (e.g., incomplete curves).\n6. Generate publication-quality dose-response plots with error bars on a log-dose axis. Report uncertainty rather than point estimates alone; record package versions and a seed for any resampling. If data layout or assay direction is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results table as CSV (compound, EC50/IC50, CI, Hill, R2), fitted-curve plots as PNG, and a Markdown report. Summarize potency ranking and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "drug-interaction-prediction",
+    "name": "Drug Interaction Prediction",
+    "description": "Predict drug-drug interactions and mechanisms",
+    "category": "药物发现",
+    "icon": "Network",
+    "prompt": "Prepare an aggregate research evidence review of potential interactions among: {drugs}. Do not use this workflow to evaluate a named patient, recommend medication changes, or provide management instructions. Resolve each drug to an unambiguous standardized identity before searching.\n\nWork in this order:\n1. Retrieve documented interaction evidence from current authoritative labels, regulatory guidance, and curated databases, recording source versions and access dates.\n2. Separate pharmacokinetic mechanisms (enzymes, transporters, exposure changes) from pharmacodynamic mechanisms, and preserve the population, dose, route, and evidence context of each source.\n3. Assess CYP inhibition or induction and transporter mechanisms only from supported data. Use PK/PD or static DDI modeling as a research calculation with explicit assumptions and uncertainty.\n4. Distinguish established clinical observations, label statements, in vitro evidence, and computational hypotheses; never promote a prediction to a documented interaction.\n5. Build a pairwise evidence matrix with mechanism, direction, evidence level, source, and unresolved uncertainty. Do not assign patient-specific severity or action.\n6. Flag identity conflicts, stale sources, missing dose/exposure context, and questions requiring a clinical pharmacist or prescriber.\n\nSave the evidence matrix as CSV, a mechanism overview as PNG, and an evidence-traceable Markdown research report. Summarize the strongest documented signals, purely predictive signals, review needs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "drugs",
+        "label": "Drug names or list",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "clinical-trial-design",
+    "name": "Clinical Trial Design",
+    "description": "Design a clinical trial protocol",
+    "category": "药物发现",
+    "icon": "ClipboardCheck",
+    "prompt": "Prepare a research protocol synopsis for studying {drug} in {indication}. This is a planning draft, not an authorization to enroll participants, select a dose, or begin a trial. Base every design choice on supplied evidence, current primary guidance, and explicit assumptions; qualified clinical, biostatistical, ethical, and regulatory reviewers retain every decision.\n\nWork in this order:\n1. Define phase, target population, estimand, primary objective, comparator, and the independent unit of randomization.\n2. Specify one primary endpoint and justified secondary endpoints, including measurement timing, outcome definitions, and handling of intercurrent events.\n3. Choose a design that answers the question, then define controls, randomization, allocation concealment, masking, blocking or stratification, and procedures that prevent operational confounding.\n4. Perform an a priori sample-size analysis using a defensible smallest important effect, alpha, power, allocation, multiplicity, dropout, and clustering assumptions; include sensitivity scenarios.\n5. Draft eligibility criteria tied to the target population without making individual eligibility decisions.\n6. Summarize only externally supplied and verified dose/regimen rationale. Mark dose selection, escalation, stopping boundaries, and safety monitoring as decisions for the qualified protocol team; do not invent them.\n7. Outline analysis populations, missing-data handling, multiplicity, interim analyses, adverse-event reporting, data monitoring, and reproducible randomization procedures.\n8. Map the synopsis to the applicable current ICH, SPIRIT, CONSORT-extension, ethics, and jurisdictional requirements without claiming compliance.\n\nSave a design-summary table and power scenarios as CSV, a study-schema and power-curve figure as PNG, and a Markdown protocol synopsis labeled as a draft requiring qualified review. Summarize key choices, unresolved decisions, evidence gaps, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "drug",
+        "label": "Drug or intervention",
+        "required": true
+      },
+      {
+        "key": "indication",
+        "label": "Disease indication",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "toxicity-prediction",
+    "name": "Toxicity Prediction",
+    "description": "Predict compound toxicity and safety liabilities",
+    "category": "药物发现",
+    "icon": "Shield",
+    "prompt": "Predict toxicity for the uploaded compounds. First parse and standardize all structures (sanitize, strip salts, normalize charges/tautomers) and flag invalid entries.\n\nWork in this order:\n1. AMES mutagenicity.\n2. hERG channel inhibition (cardiac toxicity).\n3. Hepatotoxicity (DILI risk).\n4. Skin sensitization.\n5. Acute oral toxicity (LD50).\n6. Carcinogenicity.\n7. Endocrine-disruption potential. Generate a traffic-light safety dashboard with per-endpoint confidence and applicability-domain flags. Name each model/tool and version, set a seed, and report structural alerts where relevant. Treat all outputs as in silico predictions with error, not regulatory or experimental conclusions; flag out-of-domain compounds as low-confidence and recommend experimental confirmation for high-risk flags. If structures or the compound set are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (ID + SMILES + endpoints + confidence + alerts), the dashboard as PNG, and a Markdown report. Summarize the highest-risk compounds and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "pharmacogenomics-analysis",
+    "name": "Pharmacogenomics Analysis",
+    "description": "Analyze genetic variants affecting drug response",
+    "category": "药物发现",
+    "icon": "Dna",
+    "prompt": "Prepare a research-only pharmacogenomic evidence review for {drug} and {genotype}. Use only a gene, allele, synthetic genotype, or aggregate cohort context—never interpret a named person's genotype or recommend an individual dose or treatment change.\n\nWork in this order:\n1. Resolve the drug, genes, alleles, star-allele definitions, reference assembly, and source versions unambiguously.\n2. Retrieve ClinPGx/PharmGKB, CPIC, DPWG, FDA-label, and primary-literature evidence where available, recording evidence levels, dates, and exact scope.\n3. Describe verified allele-to-function and diplotype-to-phenotype mappings, including copy-number, phasing, ancestry, and platform limitations. Do not infer a phenotype from incomplete or ambiguous genotype data.\n4. Summarize how evidence links genetic variation to exposure, efficacy, or toxicity, separating replicated clinical evidence from mechanistic or computational inference.\n5. Quote or faithfully summarize guideline and label statements with their population and conditions of use. Do not convert them into patient-specific prescribing advice.\n6. Build an evidence table and list every issue requiring a genetics, pharmacy, laboratory, or prescribing professional.\n\nSave the evidence table as CSV and an evidence-traceable Markdown report labeled as a research draft. Summarize source-backed findings, unresolved alleles or mappings, professional-review needs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "drug",
+        "label": "Drug name",
+        "required": true
+      },
+      {
+        "key": "genotype",
+        "label": "Gene, allele, or synthetic/aggregate genotype context",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "drug-target-network",
+    "name": "Drug-Target Interaction Network",
+    "description": "Map the polypharmacology network of compounds",
+    "category": "药物发现",
+    "icon": "Network",
+    "prompt": "Build a drug-target interaction network for: {compounds}. First resolve and standardize each compound (canonical SMILES) and confirm identities.\n\nWork in this order:\n1. Query known targets from ChEMBL, DrugBank, and BindingDB, recording assay/activity values and citing sources.\n2. Predict additional targets computationally, naming tools/versions and treating predictions as hypotheses with uncertainty.\n3. Construct the drug-target network.\n4. Identify off-target effects and polypharmacology.\n5. Enrich targets with pathway information.\n6. Visualize the network and distinguish therapeutic vs safety-relevant targets. Separate experimentally documented interactions from in silico predictions; note that predicted off-targets need experimental confirmation. Record database versions/access dates and a seed for any stochastic prediction. If a compound identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save an edge list as CSV (compound, target, evidence, activity, source), the network figure as PNG, and a Markdown report. Summarize key targets, polypharmacology, and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "compounds",
+        "label": "Compound names or SMILES list",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "competitive-landscape-pharma",
+    "name": "Pharma Competitive Landscape",
+    "description": "Analyze the competitive landscape for a therapeutic area",
+    "category": "药物发现",
+    "icon": "Gauge",
+    "prompt": "Analyze the competitive landscape for {indication}. First confirm the precise scope (geography, modalities, line of therapy).\n\nWork in this order:\n1. Map drugs in development (preclinical through Phase 3) from ClinicalTrials.gov and other sources, citing them.\n2. Categorize by mechanism of action.\n3. Identify the most advanced programs and likely timelines.\n4. Analyze patent-expiry timelines for key incumbents.\n5. Assess market size and pricing, stating sources and assumptions.\n6. Identify white-space opportunities and unmet needs. Distinguish primary-source facts from estimates/inference and note data recency (access dates); market and timeline figures are uncertain projections, not guarantees. If the indication or scope is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a pipeline table as CSV (program, sponsor, MoA, phase, status, source), landscape/timeline figures as PNG, and a Markdown report. Summarize the most advanced programs, white space, and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "indication",
+        "label": "Therapeutic area or indication",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "side-effect-prediction",
+    "name": "Side Effect Prediction",
+    "description": "Predict adverse drug reactions from molecular structure",
+    "category": "药物发现",
+    "icon": "HeartPulse",
+    "prompt": "Predict potential side effects for: {compound}. First resolve and standardize the structure (canonical SMILES, sanitize) and confirm identity.\n\nWork in this order:\n1. Query known side effects of structurally similar drugs (e.g., SIDER), citing sources.\n2. Predict off-target activity against safety panels, naming tools/versions.\n3. Analyze structural alerts for reactive metabolites.\n4. Predict organ-specific toxicity (liver, kidney, heart, CNS).\n5. Compare the risk profile with same-class drugs.\n6. Compile a side-effect risk report with per-endpoint confidence scores. Treat all predictions as in silico hypotheses with uncertainty, not clinical evidence; flag out-of-domain cases and recommend experimental/clinical confirmation. Set a seed and record versions. If the compound identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a risk table as CSV (endpoint, prediction, confidence, basis), a risk dashboard as PNG, and a Markdown report. Summarize the highest-risk effects and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "compound",
+        "label": "Compound (SMILES or drug name)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "formulation-optimization",
+    "name": "Formulation Optimization",
+    "description": "Optimize drug formulation for bioavailability",
+    "category": "药物发现",
+    "icon": "FlaskConical",
+    "prompt": "Optimize the formulation of {compound} for {route} administration. First resolve and standardize the structure (canonical SMILES) and gather/estimate key inputs.\n\nWork in this order:\n1. Analyze physicochemical properties (solubility, stability, LogP, pKa), naming prediction tools/versions and treating computed values as estimates with uncertainty.\n2. Evaluate BCS classification (stating the permeability assumption).\n3. Screen formulation strategies appropriate to {route} (salt form, amorphous solid dispersion, nanoparticles, cyclodextrins, lipid systems).\n4. Predict dissolution profiles, noting model limitations.\n5. Recommend excipient selection with compatibility rationale.\n6. Design a stability-testing plan (ICH conditions). Treat recommendations as hypotheses requiring experimental confirmation; set seeds where applicable. If the compound or route is ambiguous and would change the strategy, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a strategy-comparison table as CSV (approach, rationale, predicted benefit, risk), property/dissolution plots as PNG, and a Markdown report. Summarize the recommended formulation and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "compound",
+        "label": "Compound (SMILES or name)",
+        "required": true
+      },
+      {
+        "key": "route",
+        "label": "Administration route (oral, IV, topical, inhaled)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

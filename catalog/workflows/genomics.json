@@ -1,0 +1,430 @@
+[
+  {
+    "id": "gwas-analysis",
+    "type": "workflow",
+    "name": "GWAS 关联分析",
+    "description": "全基因组关联研究的质控、关联检验与位点解析。",
+    "category": "基因组学",
+    "tags": [
+      "GWAS",
+      "关联分析",
+      "Manhattan"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "phenotype",
+        "label": "表型定义",
+        "required": true,
+        "hint": "如：非梗阻性无精子症病例 vs 正常生育对照"
+      },
+      {
+        "key": "maf",
+        "label": "MAF 阈值",
+        "required": false,
+        "hint": "默认 0.01"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "gnomad",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的基因型与表型数据执行 GWAS。记录基因组版本、变异注释来源与表型定义。表型：{phenotype}；MAF 阈值：{maf}。依次进行：1. 样本与变异质控：MAF、检出率、对照 Hardy-Weinberg 平衡、杂合度离群、亲缘与重复检查，各步报告保留数量；2. 用 PCA 做群体分层，保留前几个主成分作协变量并检查人群结构；3. 关联检验（质量性状用 logistic、数量性状用线性模型），校正 PCs 与相关协变量，报告基因组膨胀因子 λ；4. 生成 Manhattan 与 QQ 图；5. 以全基因组显著阈值（p<5e-8）识别位点，用 clumping 定义独立信号；6. 对显著位点做区域注释，与已知位点比对（引用 GWAS Catalog 时注明版本）。结果解释强调关联不等于因果，需功能实验验证。若会话具备执行工具则实际运行并报告种子；否则输出分析方案。输出为需人工核验的 GWAS 报告草案。"
+  },
+  {
+    "id": "variant-annotation",
+    "type": "workflow",
+    "name": "变异注释与致病性解读",
+    "description": "按 ACMG/AMP 框架注释并优先级排序变异。",
+    "category": "基因组学",
+    "tags": [
+      "ACMG",
+      "致病性",
+      "VCF"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "phenotype",
+        "label": "相关表型或疾病",
+        "required": true,
+        "hint": "如：非梗阻性无精子症、卵巢早衰"
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "gnomad",
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的变异列表（VCF 或表格）做注释与致病性解读，表型背景：{phenotype}。先记录基因组版本、转录本集与数据库版本，并将变异规范化对齐到该版本。依次进行：1. 加功能注释（经典转录本上的错义、无义、剪接、移码后果）；2. 查询 gnomAD 人群频率（注明版本），标记稀有或新发变异；3. 查 ClinVar 已知致病与可能致病记录（注明版本）；4. 加计算预测（CADD、PolyPhen、SIFT 等），指出预测不一致之处；5. 标记 ACMG actionable 基因中的变异；6. 结合 {phenotype} 做优先级排序，按 ACMG/AMP 证据组合规则给出致病性分类建议，标注质量与覆盖度混杂。明确声明：这是研究性解读草案，临床决策须由持证遗传咨询师或临床医生依据正式检测报告做出；不得虚构数据库版本或频率数字。输出为变异解读草案并逐条列出证据类别。"
+  },
+  {
+    "id": "gene-set-enrichment",
+    "type": "workflow",
+    "name": "基因集富集分析",
+    "description": "对基因列表或排序列表做 ORA 与 GSEA。",
+    "category": "基因组学",
+    "tags": [
+      "富集",
+      "GSEA",
+      "GO"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "gene_id_type",
+        "label": "基因 ID 类型",
+        "required": true,
+        "hint": "如 gene symbol、Ensembl ID"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "kegg",
+      "reactome",
+      "ncbi-entrez"
+    ],
+    "prompt": "请对用户通过 @文件 引用的基因列表或排序列表做基因集富集分析。先记录物种与基因 ID 类型（{gene_id_type}），统一 ID 映射，确认合适的背景基因集。依次进行：1. 以明确背景做超几何过表达分析（ORA，对照 GO、KEGG、Reactome）；2. 若提供倍数变化，做预排序 GSEA（固定种子），报告 NES 与 FDR；3. 富集结果用条形图或气泡图呈现；4. 结合已知生物学解释 top 通路与目标研究背景的关系，区分统计显著与生物学意义。路径数据库注明版本；不得虚构通路名或富集数字；报告各步骤的基因映射丢失率。输出为需人工核验的富集分析报告草案。"
+  },
+  {
+    "id": "gene-regulatory-network",
+    "type": "workflow",
+    "name": "基因调控网络推断",
+    "description": "从表达数据推断转录调控网络并评估稳定性。",
+    "category": "基因组学",
+    "tags": [
+      "GRN",
+      "调控网络",
+      "转录因子"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "物种",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "kegg"
+    ],
+    "prompt": "请从用户通过 @文件 引用的表达数据推断基因调控网络，物种：{organism}；记录基因 ID 类型与表达单位，固定随机种子。依次进行：1. 表达预处理（过滤、标准化），用经整理的转录因子列表选出候选调控因子；2. 用 GRNBoost2 或 GENIE3 等方法推断网络，运行多个随机种子评估边稳定性，只保留跨种子稳定的边；3. 网络拓扑分析（枢纽基因、模块）；4. 用已知通路或文献验证关键调控关系，区分数据驱动推断与已证实调控。推断网络是计算假设而非已验证的生物学事实，明确标注这一点；不得虚构转录因子或靶基因关系。输出为需人工核验的网络推断草案。"
+  },
+  {
+    "id": "comparative-genomics",
+    "type": "workflow",
+    "name": "比较基因组学",
+    "description": "跨物种直系同源与进化分析。",
+    "category": "基因组学",
+    "tags": [
+      "比较基因组",
+      "直系同源",
+      "进化"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "species",
+        "label": "涉及物种",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "ensembl",
+      "ncbi-entrez"
+    ],
+    "prompt": "请对以下物种执行比较基因组分析：{species}；记录每个物种的基因组版本、注释版本与数据来源。依次进行：1. 用互最佳命中或 OrthoFinder 类方法识别直系同源基因；2. 对一对一 ortholog 做密码子比对并计算 dN/dS，跨基因做多重检验校正，识别正选择基因；3. 比较目标基因家族的扩张与收缩；4. 结合已知生殖生物学解释发现（如精子发生相关基因的保守性）。涉及模式动物到人的推论须明确标注跨物种外推的局限，模式生物的结论不能直接当作人类事实。物种与版本信息不得虚构。输出为需人工核验的比较基因组报告草案。"
+  },
+  {
+    "id": "metagenomics-analysis",
+    "type": "workflow",
+    "name": "宏基因组分析",
+    "description": "16S 或 shotgun 数据的物种与功能谱分析。",
+    "category": "基因组学",
+    "tags": [
+      "宏基因组",
+      "16S",
+      "微生物组"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "seq_type",
+        "label": "测序类型",
+        "required": true,
+        "hint": "16S 扩增子 或 shotgun 宏基因组"
+      }
+    ],
+    "suggestedSkillIds": [
+      "data-integrity",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的宏基因组数据，测序类型：{seq_type}；记录参考数据库及版本。依次进行：1. 读段质控、去接头与低质量修剪，去除宿主读段并报告各步保留数量；2. 物种分类与丰度谱（shotgun 用 Kraken2/MetaPhlAn，16S 用 DADA2 等 ASV 方法），构建特征表；3. 计算 alpha 与 beta 多样性，做组间显著性检验；4. 差异丰度分析（注意组成性数据的相对丰度陷阱，说明所用方法如 ANCOM-BC/ALDEx2）；5. shotgun 数据可加功能通路分析。组成性数据的解释须谨慎：相对丰度变化不等于绝对丰度变化。每步过滤报告数量；不得虚构丰度或多样性数字。输出为需人工核验的微生物组分析报告草案。"
+  },
+  {
+    "id": "phylogenetic-analysis",
+    "type": "workflow",
+    "name": "系统发育分析",
+    "description": "序列比对、模型选择与系统发育树构建。",
+    "category": "基因组学",
+    "tags": [
+      "系统发育",
+      "进化树"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "seq_info",
+        "label": "序列说明",
+        "required": true,
+        "hint": "核苷酸或蛋白、条数、是否包含外群"
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的序列做系统发育分析。序列说明：{seq_info}；固定随机种子。依次进行：1. 检查序列长度与质量离群，用 MAFFT/MUSCLE 比对并修剪比对差的列；2. 选择最拟合的进化模型（ModelFinder/jModelTest）并报告；3. 构建最大似然树（IQ-TREE/RAxML），做 bootstrap 支持度评估（不少于 1000 次）；4. 树的可视化与关键分支解读，结合已知分类学与生殖生物学背景。明确说明：树形与支持度反映的是序列数据与模型假设，不是确定的进化历史；不得虚构支持度数值。输出为需人工核验的系统发育报告草案。"
+  },
+  {
+    "id": "gene-expression-atlas",
+    "type": "workflow",
+    "name": "基因表达图谱查询",
+    "description": "跨组织跨条件汇总目标基因的表达证据。",
+    "category": "基因组学",
+    "tags": [
+      "表达谱",
+      "GTEx",
+      "组织表达"
+    ],
+    "placeholders": [
+      {
+        "key": "genes",
+        "label": "目标基因列表",
+        "required": true,
+        "multiline": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "gtex",
+      "ncbi-entrez"
+    ],
+    "prompt": "请为以下基因构建表达图谱：{genes}。先把每个 symbol 映射到稳定 ID（注明物种与注释版本），无法解析的符号明确列出而非跳过。依次进行：1. 查询 GTEx 组织级表达模式（注明 release 版本）；2. 检索 GEO/ArrayExpress 中与研究条件相关的数据集，记录登录号；3. 生成组织表达热图（log 或 z-score 标准化并注明方法）；4. 重点解读基因在生殖相关组织（睾丸、附睾、卵巢等）的表达证据，与已有文献对照。所有表达数字注明数据来源与版本；查不到的如实报告，不得编造表达值。输出为表达证据汇总草案，供研究者评估基因的生殖组织相关性。"
+  },
+  {
+    "id": "genome-annotation",
+    "type": "workflow",
+    "name": "基因组注释",
+    "description": "新组装基因组的基因与非编码元件注释。",
+    "category": "基因组学",
+    "tags": [
+      "注释",
+      "组装",
+      "基因预测"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "物种",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请注释用户通过 @文件 引用的基因组组装，物种：{organism}；记录组装版本与所引用参考数据库。依次进行：1. 先评估组装质量（连续性 N50、碱基组成），软屏蔽重复序列；2. 蛋白编码基因预测：从头预测结合同源与证据方法（如 AUGUSTUS 加蛋白与转录本证据）；3. 非编码 RNA 注释（tRNA、rRNA、miRNA 等）；4. 功能注释（比对 UniProt/KEGG 等库，注明版本）；5. 注释质量评估（BUSCO 完整性）。工具与数据库版本全部记录在案；注释是预测而非确定事实，低支持度模型如实标注。输出为需人工核验的注释报告草案。"
+  },
+  {
+    "id": "rna-velocity",
+    "type": "workflow",
+    "name": "RNA velocity 分析",
+    "description": "从剪接与未剪接计数推断细胞状态动力学。",
+    "category": "基因组学",
+    "tags": [
+      "RNA velocity",
+      "拟时序",
+      "scVelo"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "dynamic_context",
+        "label": "生物学背景",
+        "required": true,
+        "hint": "如：精子发生过程中生殖细胞的分化阶段"
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez"
+    ],
+    "prompt": "请对用户通过 @文件 引用的单细胞数据执行 RNA velocity 分析（scVelo/scanpy）；记录物种与参考版本，固定随机种子。生物学背景：{dynamic_context}。依次进行：1. 读取或定量剪接与未剪接计数，核查各细胞比例是否合理（velocyto 矩阵缺失时如实说明）；2. 预处理（过滤、归一化、高变基因、矩计算），拟合 velocity 模型（随机或动力学模式并说明选择）；3. velocity 流场投影到 UMAP、PAGA 图与潜在时间推断；4. 识别 driver 基因；5. 结合 {dynamic_context} 解读细胞状态转换方向。RNA velocity 依赖强假设（如剪接动力学稳态），方向推断可能因数据质量不稳，须标注置信度低的分支；不得虚构方向或 driver 基因。输出为需人工核验的 velocity 分析草案。"
+  },
+  {
+    "id": "cell-type-annotation",
+    "type": "workflow",
+    "name": "细胞类型注释",
+    "description": "用参考图谱与标志基因注释 scRNA-seq 细胞类型。",
+    "category": "基因组学",
+    "tags": [
+      "细胞注释",
+      "scRNA-seq",
+      "标志基因"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "tissue",
+        "label": "组织来源",
+        "required": true,
+        "hint": "如：人睾丸、卵巢"
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的 scRNA-seq 数据做细胞类型注释。组织来源：{tissue}。依次进行：1. 先完成质控与归一化（线粒体比例、双细胞去除、log 归一化、高变基因），再做自动注释（scvi-tools/scANVI、CellTypist 等），记录参考图谱及版本；2. 用 {tissue} 的经典标志基因验证预测，标记查询与参考之间的批次效应；3. 对模糊簇给出候选类型并列出支持与反对证据，而不是强行指定；4. 低置信度注释明确标注。注释结果须与 {tissue} 已知细胞组成（如生殖细胞各发育阶段、支持细胞、间质细胞等）对照；不得虚构标志基因表达或参考图谱版本。输出为需人工核验的注释报告草案。"
+  },
+  {
+    "id": "trajectory-analysis",
+    "type": "workflow",
+    "name": "轨迹与拟时序分析",
+    "description": "重建细胞分化轨迹与拟时序。",
+    "category": "基因组学",
+    "tags": [
+      "拟时序",
+      "轨迹",
+      "分化"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "root_hint",
+        "label": "起点细胞群提示",
+        "required": false,
+        "hint": "如“精原细胞为起点”；留空时由数据与标志基因推断并说明依据"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "ensembl"
+    ],
+    "prompt": "请对用户通过 @文件 引用的 scRNA-seq 数据做轨迹分析。依次进行：1. 确认上游质控/归一化/批次校正已完成，依据标志基因（而非仅图上位置）确定起点细胞群：{root_hint}；2. 计算拟时序（diffusion pseudotime 或 PAGA；有剪接/未剪接计数时加 scVelo velocity），验证轨迹拓扑在生物学上合理且非批次驱动；3. 沿轨迹做基因表达动力学分析，识别阶段特异基因；4. 结合已知分化生物学（如生殖细胞从精原细胞到精子的阶段标志）解读。拟时序是计算排序，不等于真实发育时间；方向颠倒或分支不稳时如实标注。不得虚构阶段或标志基因。输出为需人工核验的轨迹分析草案。"
+  },
+  {
+    "id": "immune-cell-profiling",
+    "type": "workflow",
+    "name": "免疫细胞画像",
+    "description": "免疫群体的识别、亚型与状态分析。",
+    "category": "基因组学",
+    "tags": [
+      "免疫",
+      "细胞画像",
+      "亚型"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "data_type",
+        "label": "数据类型",
+        "required": true,
+        "hint": "如 scRNA-seq、CyTOF、流式"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "reactome"
+    ],
+    "prompt": "请对用户通过 @文件 引用的数据做免疫细胞画像，数据类型：{data_type}。依次进行：1. 按数据类型做对应预处理（scRNA：线粒体比例、双细胞、归一化、批次校正；CyTOF/流式：补偿、变换、去碎片与活细胞门控）；2. 识别主要免疫群体（T、B、NK、髓系、DC 等）；3. 各群体细分亚型（CD4/CD8、初始/记忆/效应等）并用经典标志验证；4. 组间比较（如不育症组 vs 对照的免疫浸润差异），做统计检验与效应量。免疫微环境与生殖功能的关系是活跃研究领域——解读区分已确立结论与计算推断；不得虚构细胞比例或标志表达。输出为需人工核验的免疫画像报告草案。"
+  },
+  {
+    "id": "biomarker-discovery",
+    "type": "workflow",
+    "name": "生物标志物发现",
+    "description": "从组学数据发现并初步验证候选标志物。",
+    "category": "基因组学",
+    "tags": [
+      "标志物",
+      "特征选择",
+      "验证"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "condition",
+        "label": "目标条件或结局",
+        "required": true,
+        "hint": "如“非梗阻性无精子症 vs 梗阻性”"
+      },
+      {
+        "key": "data_type",
+        "label": "数据类型",
+        "required": true,
+        "hint": "如转录组、蛋白组、甲基化"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "ncbi-entrez",
+      "uniprot"
+    ],
+    "prompt": "请从用户通过 @文件 引用的 {data_type} 数据中发现与 {condition} 相关的候选生物标志物。依次进行：1. 检视数据（批次结构、缺失、归一化、类别平衡）并定义分组；2. 组间差异分析，做合适的多重检验校正；3. 特征选择（LASSO、随机森林重要性、互信息）在交叉验证折内进行以避免选择泄漏，固定种子；4. 构建简单预测模型评估标志物组合的性能（AUC、敏感度、特异度），报告置信区间；5. 候选标志物与已有文献对照，区分新发现与已报道；6. 明确后续验证需求（独立队列、实验验证）。发现队列中的性能必然乐观——不得直接当作最终性能；不得编造表达量或性能数字。输出标注“研究草案——非临床用途”。"
+  }
+]

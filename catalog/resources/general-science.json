@@ -1,0 +1,598 @@
+[
+  {
+    "id": "idigbio",
+    "type": "database",
+    "name": "iDigBio",
+    "description": "Digitized biological specimens from museums around the world",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://github.com/idigbio/idigbio-search-api/wiki",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "embl-ebi",
+    "type": "database",
+    "name": "EMBL-EBI APIs",
+    "description": "European bioinformatics — sequence alignment, molecular biology tools",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://www.ebi.ac.uk/Tools/webservices/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "pubmlst",
+    "type": "database",
+    "name": "PubMLST",
+    "description": "Public databases for molecular typing and microbial genome diversity",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://pubmlst.org/api",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ebird",
+    "type": "database",
+    "name": "eBird API",
+    "description": "Real-time bird observation data from citizen scientists worldwide",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://documenter.getpostman.com/view/664302/S1ENwy59",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "iucn-red-list",
+    "type": "database",
+    "name": "IUCN Red List API",
+    "description": "Conservation status and population data for threatened species",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://apiv3.iucnredlist.org",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "pubchem-pug",
+    "type": "database",
+    "name": "PubChem PUG REST",
+    "description": "Chemical structures, properties, biological assay data from NCBI",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://pubchem.ncbi.nlm.nih.gov/pug_rest/PUG_REST.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nppes",
+    "type": "database",
+    "name": "NPPES API",
+    "description": "National Plan & Provider Enumeration System — US healthcare providers",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://npiregistry.cms.hhs.gov/search",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "fooddata-central",
+    "type": "database",
+    "name": "FoodData Central (USDA)",
+    "description": "National nutrient database — detailed nutrient data for 300,000+ foods",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://fdc.nal.usda.gov/api-guide.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nutritionix",
+    "type": "database",
+    "name": "Nutritionix API",
+    "description": "World's largest verified nutrition database with NLP food parsing",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://developer.nutritionix.com",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "rxnorm",
+    "type": "database",
+    "name": "RxNorm API (NLM)",
+    "description": "Normalized names for clinical drugs and drug interactions",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://lhncbc.nlm.nih.gov/RxNav/APIs/index.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "drugbank",
+    "type": "database",
+    "name": "DrugBank API",
+    "description": "Comprehensive drug information including targets, interactions, pharmacology",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://dev.drugbank.com/guides/api",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "lapis-covid",
+    "type": "database",
+    "name": "LAPIS (SARS-CoV-2)",
+    "description": "SARS-CoV-2 genomic sequences aggregated from public sources",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://lapis.cov-spectrum.org/open/v2/docs/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "open-disease",
+    "type": "database",
+    "name": "Open Disease API",
+    "description": "COVID-19, influenza, and other disease statistics globally",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://disease.sh",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "cms-data",
+    "type": "database",
+    "name": "CMS Open Data API",
+    "description": "US Medicare and Medicaid data — costs, utilization, and quality",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://data.cms.gov",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nhs-scotland",
+    "type": "database",
+    "name": "Open Data NHS Scotland",
+    "description": "NHS Scotland medical reference data and public health statistics",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://www.opendata.nhs.scot/api/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "clinicaltrials",
+    "type": "database",
+    "name": "ClinicalTrials.gov",
+    "description": "美国与国际临床研究注册数据：45 万+ 项试验。",
+    "category": "数据分析",
+    "tags": [
+      "临床试验",
+      "注册"
+    ],
+    "url": "https://clinicaltrials.gov/data-api/api",
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "openfda",
+    "type": "database",
+    "name": "openFDA",
+    "description": "FDA 药品、器械、食品与不良事件公开数据。",
+    "category": "数据分析",
+    "tags": [
+      "FDA",
+      "药物安全"
+    ],
+    "url": "https://open.fda.gov/apis/",
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "chembl",
+    "type": "database",
+    "name": "ChEMBL",
+    "description": "生物活性类药分子及其生物学活性数据。",
+    "category": "数据分析",
+    "tags": [
+      "药物发现",
+      "活性"
+    ],
+    "url": "https://www.ebi.ac.uk/chembl/api/docs",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "pubchem",
+    "type": "database",
+    "name": "PubChem",
+    "description": "NCBI 化学结构、性质与生物测定数据。",
+    "category": "数据分析",
+    "tags": [
+      "化学",
+      "化合物"
+    ],
+    "url": "https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest",
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "physionet",
+    "type": "database",
+    "name": "PhysioNet",
+    "description": "生理信号、波形与临床研究数据库。",
+    "category": "数据分析",
+    "tags": [
+      "生理信号",
+      "心电"
+    ],
+    "url": "https://physionet.org/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力；部分受控数据集需申请授权。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "who-gho",
+    "type": "database",
+    "name": "WHO GHO",
+    "description": "世界卫生组织全球卫生观察站：1,000+ 项国家级健康指标。",
+    "category": "数据分析",
+    "tags": [
+      "公共卫生",
+      "指标"
+    ],
+    "url": "https://www.who.int/data/gho",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "chebi",
+    "type": "database",
+    "name": "ChEBI",
+    "description": "具有生物学意义的化学实体：小分子与生化物质。",
+    "category": "数据分析",
+    "tags": [
+      "代谢物",
+      "化学"
+    ],
+    "url": "https://www.ebi.ac.uk/chebi/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nasa-apis",
+    "type": "database",
+    "name": "NASA APIs",
+    "description": "NASA 面向开发者的公开科学数据接口：天文图片、火星车、近地天体和地球观测等。",
+    "category": "天文与空间",
+    "tags": [
+      "NASA",
+      "天文",
+      "空间",
+      "地球观测"
+    ],
+    "url": "https://api.nasa.gov/",
+    "accessNote": "多数接口需要 NASA API Key；可使用受控服务端凭据或交给当前 Agent 查询。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nasa-horizons",
+    "type": "database",
+    "name": "NASA HORIZONS",
+    "description": "太阳系天体的星历、物理属性与观测几何数据。",
+    "category": "天文与空间",
+    "tags": [
+      "行星",
+      "小行星",
+      "星历",
+      "JPL"
+    ],
+    "url": "https://ssd-api.jpl.nasa.gov/doc/horizons.html",
+    "accessNote": "公开查询接口；复杂时间、地点和目标参数建议交给当前 Agent 或专用适配器构造。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "simbad",
+    "type": "database",
+    "name": "SIMBAD",
+    "description": "CDS 维护的天体对象数据库，覆盖恒星、星系、星云和其他天体。",
+    "category": "天文与空间",
+    "tags": [
+      "天体",
+      "恒星",
+      "星系",
+      "CDS"
+    ],
+    "url": "https://simbad.cds.unistra.fr/simbad/sim-tap",
+    "accessNote": "公开 TAP 查询服务；需要 ADQL 或对象标识符时建议由当前 Agent 构造查询。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "vizier",
+    "type": "database",
+    "name": "VizieR",
+    "description": "CDS 维护的大型天文目录集合，覆盖观测与编目数据表。",
+    "category": "天文与空间",
+    "tags": [
+      "天文目录",
+      "观测",
+      "CDS",
+      "表格数据"
+    ],
+    "url": "https://vizier.cds.unistra.fr/",
+    "accessNote": "公开服务；目录选择和表字段解释应在查询结果中明确记录。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "sdss",
+    "type": "database",
+    "name": "SDSS SkyServer",
+    "description": "斯隆数字巡天的星系、恒星光度和光谱数据服务。",
+    "category": "天文与空间",
+    "tags": [
+      "SDSS",
+      "星系",
+      "光谱",
+      "巡天"
+    ],
+    "url": "https://skyserver.sdss.org/dr18/SkyServerWS/",
+    "accessNote": "公开 Web Service；SQL 查询应限制返回量，并记录数据发布版本。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "celestrak",
+    "type": "database",
+    "name": "CelesTrak",
+    "description": "卫星轨道两行根数与一般摄动数据。",
+    "category": "天文与空间",
+    "tags": [
+      "卫星",
+      "轨道",
+      "TLE",
+      "NORAD"
+    ],
+    "url": "https://celestrak.org/",
+    "accessNote": "公开数据服务；轨道数据时效性强，结果必须带检索时间。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "gbif",
+    "type": "database",
+    "name": "GBIF",
+    "description": "全球生物多样性信息设施，提供物种出现记录、分类与数据集元数据。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "物种",
+      "出现记录",
+      "生物多样性",
+      "生态"
+    ],
+    "url": "https://api.gbif.org/v1/",
+    "accessNote": "插件内置直查适配器；公开查询无需认证，建议设置可识别 User-Agent 并遵守数据使用许可。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "inaturalist",
+    "type": "database",
+    "name": "iNaturalist",
+    "description": "公民科学自然观察记录，覆盖动植物和真菌的照片与地点观察。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "自然观察",
+      "物种",
+      "公民科学",
+      "生态"
+    ],
+    "url": "https://api.inaturalist.org/v1/docs/",
+    "accessNote": "插件内置直查适配器；公开读取可用但有速率限制，照片与观察记录须保留原始许可信息。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "itis",
+    "type": "database",
+    "name": "ITIS",
+    "description": "综合分类学信息系统，提供权威分类名称和分类层级。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "分类学",
+      "物种命名",
+      "TSN"
+    ],
+    "url": "https://www.itis.gov/ws_description.html",
+    "accessNote": "公开 Web Service；名称核验时应保留 TSN 与接受名状态。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "paleobiology-db",
+    "type": "database",
+    "name": "Paleobiology Database",
+    "description": "深时化石出现记录、分类与古环境数据。",
+    "category": "生物多样性与生态",
+    "tags": [
+      "化石",
+      "古生物",
+      "地层",
+      "生物多样性"
+    ],
+    "url": "https://paleobiodb.org/data1.2/",
+    "accessNote": "公开 API；查询应记录时间范围、地理范围和分类过滤条件。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "noaa-weather",
+    "type": "database",
+    "name": "NOAA National Weather Service",
+    "description": "美国天气预报、警报与观测数据 API。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "天气",
+      "预报",
+      "警报",
+      "NOAA"
+    ],
+    "url": "https://www.weather.gov/documentation/services-web-api",
+    "accessNote": "公开 API；请求应带可识别 User-Agent，结果需标注观测或预报时刻。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-earthquake",
+    "type": "database",
+    "name": "USGS Earthquake API",
+    "description": "全球实时与历史地震目录及事件参数。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "地震",
+      "USGS",
+      "震级",
+      "地球物理"
+    ],
+    "url": "https://earthquake.usgs.gov/fdsnws/event/1/",
+    "accessNote": "公开 API；查询需记录时间窗、最小震级、空间边界和数据检索时间。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "usgs-water",
+    "type": "database",
+    "name": "USGS Water Data APIs",
+    "description": "河流流量、地下水、水质和水文监测站数据接口。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "水文",
+      "水质",
+      "USGS",
+      "流量"
+    ],
+    "url": "https://api.water.usgs.gov/docs",
+    "accessNote": "公开 API；选择服务路径和监测站时应在结果中保留站点与时间范围。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "open-meteo",
+    "type": "database",
+    "name": "Open-Meteo",
+    "description": "全球天气预报与历史气象数据 API。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "天气",
+      "气象",
+      "预报",
+      "历史气候"
+    ],
+    "url": "https://open-meteo.com/en/docs",
+    "accessNote": "基础公开接口可用；请求需包含地理坐标、变量与时间范围。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "openaq",
+    "type": "database",
+    "name": "OpenAQ",
+    "description": "整合全球空气质量观测与历史污染物数据。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "空气质量",
+      "污染物",
+      "环境",
+      "监测"
+    ],
+    "url": "https://docs.openaq.org/",
+    "accessNote": "API 访问与配额以官方当前规则为准；结果必须保留站点、参数和观测时间。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nasa-firms",
+    "type": "database",
+    "name": "NASA FIRMS",
+    "description": "MODIS 与 VIIRS 近实时火点、热点和野火数据服务。",
+    "category": "气候、地球与环境",
+    "tags": [
+      "野火",
+      "火点",
+      "MODIS",
+      "VIIRS"
+    ],
+    "url": "https://firms.modaps.eosdis.nasa.gov/api/",
+    "accessNote": "通常需要 MAP_KEY；时间和空间范围必须明确，不能把热点直接解释为火灾影响。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "openstreetmap-overpass",
+    "type": "database",
+    "name": "OpenStreetMap Overpass API",
+    "description": "按结构化 Overpass QL 查询全球道路、建筑、设施和其他地图要素。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "地图",
+      "OSM",
+      "地理空间",
+      "Overpass"
+    ],
+    "url": "https://overpass-api.de/",
+    "accessNote": "公开 Overpass 实例有资源限制；复杂空间查询应由 Agent 构造并控制返回量。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "geonames",
+    "type": "database",
+    "name": "GeoNames",
+    "description": "地名、行政区、海拔、时区与地理实体 Web Service。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "地名",
+      "坐标",
+      "行政区",
+      "地理编码"
+    ],
+    "url": "https://www.geonames.org/export/web-services.html",
+    "accessNote": "免费 Web Service 通常需要用户名；应使用服务端配置，不在浏览器保存账号。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "natural-earth",
+    "type": "database",
+    "name": "Natural Earth",
+    "description": "多尺度公共领域矢量与栅格地理空间基础数据集。",
+    "category": "地理空间与社会数据",
+    "tags": [
+      "边界",
+      "地图",
+      "矢量",
+      "公共领域"
+    ],
+    "url": "https://www.naturalearthdata.com/",
+    "accessNote": "以数据下载为主，不是通用搜索 API；Agent 应引用具体数据集版本与比例尺。",
+    "availability": "reference-only"
+  }
+]

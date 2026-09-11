@@ -1,4 +1,4 @@
-import databases from './catalog/databases.json' with { type: 'json' }
+import resources from './catalog/resources/index.js'
 import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
 
@@ -44,7 +44,7 @@ function createSessionRoutes(sessions) {
 
 export function apply(ctx) {
   const logger = ctx.logger?.('dsh-research-kit')
-  ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases, logger })), 'dsh-research-kit database query')
+  ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases: resources, logger })), 'dsh-research-kit database query')
   // 会话模型路由：agent/created 记录、agent/disposed 删除，只存 provider/model 标识，不存任何 Key。
   const routes = createSessionRoutes(ctx.sessions)
   ctx.effect(() => {

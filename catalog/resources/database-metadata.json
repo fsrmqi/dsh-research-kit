@@ -5,70 +5,135 @@
       "dataKind": "论文检索、引用元数据、开放获取与研究者档案",
       "queryExample": "按主题、作者、DOI、机构或引用关系检索文献，并核验版本状态。",
       "citationRule": "记录数据库名称、检索日期、检索式或 DOI；预印本须标注未同行评审。",
-      "ids": ["pubmed", "crossref", "openalex", "arxiv", "semantic-scholar", "core-api", "orcid", "unpaywall", "biorxiv", "europe-pmc", "doaj", "eric", "springer-nature", "scopus"]
+      "ids": [
+        "pubmed",
+        "crossref",
+        "openalex",
+        "arxiv",
+        "semantic-scholar",
+        "core-api",
+        "orcid",
+        "unpaywall",
+        "biorxiv",
+        "europe-pmc",
+        "doaj",
+        "eric",
+        "springer-nature",
+        "scopus"
+      ]
     },
     {
       "group": "临床与公共卫生",
       "dataKind": "临床试验注册、药物安全、公共卫生指标与受控临床数据",
       "queryExample": "按疾病、干预、试验状态、药物或卫生指标检索，并明确数据版本与覆盖范围。",
       "citationRule": "记录稳定研究编号、数据版本和访问日期；受控数据须遵循数据使用协议。",
-      "ids": ["clinicaltrials", "openfda", "physionet", "who-gho"]
+      "ids": [
+        "clinicaltrials",
+        "openfda",
+        "physionet",
+        "who-gho"
+      ]
     },
     {
       "group": "基因组与遗传变异",
       "dataKind": "基因注释、人群变异、临床变异与遗传关联",
       "queryExample": "按基因、变异、基因组版本、疾病或表型查询，并保留转录本与数据库版本。",
       "citationRule": "记录基因组版本、转录本、数据库版本与访问日期；临床解释不可替代专业诊断。",
-      "ids": ["ncbi-entrez", "gnomad", "ensembl", "clinvar", "omim", "gwas-catalog", "hgnc", "ncbi-datasets"]
+      "ids": [
+        "ncbi-entrez",
+        "gnomad",
+        "ensembl",
+        "clinvar",
+        "omim",
+        "gwas-catalog",
+        "hgnc",
+        "ncbi-datasets"
+      ]
     },
     {
       "group": "组学与表达数据",
       "dataKind": "组织表达图谱与公开组学数据集",
       "queryExample": "按组织、疾病、平台、样本属性或数据集编号筛选表达与组学数据。",
       "citationRule": "记录数据集编号、版本、处理平台、样本范围与访问日期。",
-      "ids": ["gtex", "geo"]
+      "ids": [
+        "gtex",
+        "geo"
+      ]
     },
     {
       "group": "蛋白质、结构与通路",
       "dataKind": "蛋白注释、三维结构、互作网络与生物通路",
       "queryExample": "按蛋白、基因、结构条目、物种或通路查询，并说明注释版本。",
       "citationRule": "记录条目编号、版本和访问日期；网络或通路关联不等于实验验证。",
-      "ids": ["kegg", "uniprot", "pdb", "string-db", "reactome"]
+      "ids": [
+        "kegg",
+        "uniprot",
+        "pdb",
+        "string-db",
+        "reactome"
+      ]
     },
     {
       "group": "化学、药物与毒理",
       "dataKind": "化合物、药物靶点、化学本体与毒理相关数据",
       "queryExample": "按化合物名称、结构、InChIKey、靶点或药物机制检索。",
       "citationRule": "记录化合物/本体标识符、数据库版本和访问日期；不能据此直接给出治疗建议。",
-      "ids": ["chembl", "pubchem", "chebi"]
+      "ids": [
+        "chembl",
+        "pubchem",
+        "chebi"
+      ]
     },
     {
       "group": "天文与空间科学",
       "dataKind": "天体对象、巡天目录、卫星轨道、空间任务与星历数据",
       "queryExample": "按天体名称、坐标、观测时间、任务或轨道对象检索，并保留数据发布版本。",
       "citationRule": "记录任务/目录名称、数据发布版本、查询参数和检索日期。",
-      "ids": ["nasa-apis", "nasa-horizons", "simbad", "vizier", "sdss", "celestrak"]
+      "ids": [
+        "nasa-apis",
+        "nasa-horizons",
+        "simbad",
+        "vizier",
+        "sdss",
+        "celestrak"
+      ]
     },
     {
       "group": "生物多样性与生态",
       "dataKind": "物种出现记录、分类学名称、标本与古生物数据",
       "queryExample": "按物种、分类单元、地理范围、观察日期或数据集筛选记录。",
       "citationRule": "记录数据集 DOI/键、分类单元、空间时间过滤、许可和检索日期。",
-      "ids": ["gbif", "inaturalist", "itis", "paleobiology-db"]
+      "ids": [
+        "gbif",
+        "inaturalist",
+        "itis",
+        "paleobiology-db"
+      ]
     },
     {
       "group": "气候、地球与环境",
       "dataKind": "天气、气候、水文、地震、空气质量与野火观测",
       "queryExample": "按经纬度、站点、变量、时间范围和空间边界查询环境观测。",
       "citationRule": "记录数据源、站点/网格、变量、时间范围、单位和检索日期。",
-      "ids": ["noaa-weather", "usgs-earthquake", "usgs-water", "open-meteo", "openaq", "nasa-firms"]
+      "ids": [
+        "noaa-weather",
+        "usgs-earthquake",
+        "usgs-water",
+        "open-meteo",
+        "openaq",
+        "nasa-firms"
+      ]
     },
     {
       "group": "地理空间与社会数据",
       "dataKind": "地图要素、地名、行政区与基础地理数据",
       "queryExample": "按坐标、区域、行政区或地图要素类型查询，并说明空间参考与数据版本。",
       "citationRule": "记录数据集版本、空间范围、坐标参考系、许可和检索日期。",
-      "ids": ["openstreetmap-overpass", "geonames", "natural-earth"]
+      "ids": [
+        "openstreetmap-overpass",
+        "geonames",
+        "natural-earth"
+      ]
     }
   ],
   "accessOverrides": {

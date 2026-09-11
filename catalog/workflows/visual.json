@@ -1,0 +1,241 @@
+[
+  {
+    "id": "graphical-abstract",
+    "name": "Create a Graphical Abstract",
+    "description": "Visual summary of key findings for a paper",
+    "category": "可视化与图表",
+    "icon": "Image",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a graphical abstract that summarizes the key findings of the uploaded paper or data in a single self-contained figure. First extract the actual central message, study system, and main result from the source; never invent data or results. Design a clear reading order (left-to-right or top-to-bottom) with 3-5 visual stages connected by arrows, generous whitespace, and minimal text labels (short phrases, not sentences). Use a colorblind-safe palette, consistent iconography and line weights, and legible fonts (around 14-18 pt equivalent) sized for a journal's typical ~12 x 6 cm abstract panel. Avoid chartjunk and misleading scales. If the key message, target journal, or audience is unclear and would change the design, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the abstract as a high-resolution PNG plus an editable SVG, and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "publication-figure",
+    "name": "Make a Publication Figure",
+    "description": "Publication-quality plots and visualizations from data",
+    "category": "可视化与图表",
+    "icon": "BarChart3",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate publication-quality figures from the uploaded data using only real values present in the data. Inspect the data first, then choose the chart type that fits its structure and the comparison being made (e.g., bars for categorical counts, lines for trends, box/violin or scatter for distributions). Label every axis with units, add legends and clear tick formatting, and use a colorblind-safe palette with honest, non-truncated scales. Apply a clean, consistent style with legible fonts, minimal gridlines, and no chartjunk; show uncertainty (error bars, CI) where relevant. Target standard journal specs: vector-friendly layout, 300+ DPI, and single- or double-column proportions. If figure type, grouping, or target journal is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save each figure as a high-resolution PNG plus an editable source (SVG or PDF) and list the file names in chat. {instructions}\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "instructions",
+        "label": "Specific figure instructions (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "slide-deck",
+    "name": "Build a Slide Deck",
+    "description": "Scientific presentation slides for talks or lab meetings",
+    "category": "可视化与图表",
+    "icon": "Presentation",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a scientific slide deck (PPTX) from the uploaded paper or data for a {context}, tailoring depth, jargon, and pacing to that audience. Build: a title slide, a brief outline, background/motivation, a methods overview, key results with figures, discussion points, and conclusions, plus an acknowledgements/references slide. Use 16:9 widescreen, one core idea per slide, large legible fonts (titles ~32-40 pt, body ~20-24 pt), and concise bullets or visuals over dense text. Apply a consistent template, a colorblind-safe palette, high-contrast text, and reuse the paper's actual figures at high resolution with readable labels; never fabricate results. Add short speaker notes summarizing each slide's takeaway. If talk length or audience expertise is unclear and would change scope, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the deck as a PPTX file and list the file name in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "context",
+        "label": "Presentation context (e.g., conference talk, lab meeting, journal club)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "conference-poster",
+    "name": "Create a Conference Poster",
+    "description": "Scientific poster layout from paper or results",
+    "category": "可视化与图表",
+    "icon": "LayoutGrid",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nDesign a scientific conference poster from the uploaded paper or results. Include title and authors (with affiliations), introduction/background, methods, key results with figures, conclusions/takeaways, and references plus contact/acknowledgements. Organize content in a clear column-based grid with an obvious reading order, a prominent title band, and a one-line take-home message. Use large readable type (title ~72-100 pt, headings ~36-48 pt, body ~24-32 pt), a colorblind-safe palette, strong contrast, generous whitespace, and figures reused from the paper at high resolution with honest scales; never invent data. Default to A0 portrait (841 x 1189 mm) unless told otherwise. If poster size, orientation, or the single key message is unclear and would change the layout, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the poster as a high-resolution PNG plus an editable PPTX (or LaTeX source) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "infographic",
+    "name": "Create an Infographic",
+    "description": "Visual explainer for broader audiences",
+    "category": "可视化与图表",
+    "icon": "PieChart",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate an infographic that explains the key findings from the uploaded paper or data for a broad, non-specialist audience, using only real figures and results from the source; never invent numbers. Tell one clear story with a strong title, a logical top-to-bottom reading flow, and 3-5 sections linked by visual cues. Use simple icons, large readable numbers, and minimal jargon (define unavoidable terms), with simple honest charts and no misleading scales. Apply a colorblind-safe palette, consistent iconography, generous whitespace, legible fonts, and good text/background contrast for accessibility. Default to a vertical portrait layout suitable for web and print unless told otherwise. If the audience or single key message is unclear and would change the design, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the infographic as a high-resolution PNG plus an editable SVG and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-schematic",
+    "name": "Create a Scientific Schematic",
+    "description": "Mechanistic or conceptual diagram of a process",
+    "category": "可视化与图表",
+    "icon": "Palette",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a scientific schematic diagram illustrating: {concept}. Clearly show the key components, their relationships, and the flow of the process using arrows and consistent visual encoding (shape/color = type of entity), following standard conventions for the relevant field. Establish a clear reading order, use clean lines, even spacing, and concise labels with units where applicable; never invent mechanisms or quantities not implied by the concept. Apply a colorblind-safe palette, legible fonts, high contrast, and minimal clutter so it remains readable when scaled to journal column width. Add a short caption stating what the schematic depicts. If important details (scale, level of mechanistic detail, target journal style) are ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the schematic as a high-resolution PNG plus an editable source (SVG or Mermaid file) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "concept",
+        "label": "Process or concept to illustrate",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-flowchart",
+    "name": "Create a Flowchart",
+    "description": "Experimental or analytical workflow diagram",
+    "category": "可视化与图表",
+    "icon": "Network",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a detailed flowchart for: {workflow}. Show all decision points, parallel processes, inputs/outputs, and terminal outcomes, with a clear top-to-bottom or left-to-right reading order and labeled connectors (e.g., yes/no on decision branches). Use standard symbols: rectangles for processes, diamonds for decisions, ovals for start/end, and parallelograms for inputs/outputs. Apply consistent color coding for different phases with a colorblind-safe palette and a small legend, plus legible fonts, even spacing, and minimal crossing lines. Keep labels concise and accurate to the described workflow; do not invent steps. If the workflow has ambiguous branching or scope that would change the diagram, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the flowchart as a high-resolution PNG plus an editable source (Mermaid file or SVG) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "workflow",
+        "label": "Workflow or process to diagram",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-timeline",
+    "name": "Create a Research Timeline",
+    "description": "Visual timeline of project milestones and deliverables",
+    "category": "可视化与图表",
+    "icon": "Timer",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a visual research timeline for a project on: {project}, spanning {duration}. Lay out key milestones, deliverables, and work packages along a time axis in Gantt-chart style, showing durations, dependencies (linked bars or arrows), and go/no-go decision points as distinct markers. Use color-coded phases with a colorblind-safe palette and a clear legend, a labeled time axis with sensible tick intervals matching {duration}, and legible fonts with even row spacing. Keep the structure realistic and consistent; do not invent milestones beyond what the project implies. Ensure it reads clearly left-to-right and stays legible at report and slide sizes. If the milestone list or phase breakdown is unspecified and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the timeline as a high-resolution PNG plus an editable source (SVG or the plotting script) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "Project title or description",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Project duration (e.g., 3 years, 12 months)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-heatmap",
+    "name": "Create a Heatmap",
+    "description": "Heatmap visualization from matrix data",
+    "category": "可视化与图表",
+    "icon": "LayoutGrid",
+    "prompt": "Create a publication-quality heatmap from the uploaded matrix data, using the real values only.\n\nWork in this order:\n1. Apply appropriate clustering (hierarchical or k-means) to rows and columns if it aids interpretation,\n2. choose a perceptually uniform colormap (sequential for one-directional data, diverging centered at a meaningful midpoint for signed data),\n3. add dendrograms when clustered,\n4. label rows, columns, and axes clearly with legible fonts,\n5. include a color bar with units and an honest, non-misleading scale. Consider standardizing or log-transforming only when justified and state it. Use a colorblind-safe palette, annotate cells only if the matrix is small enough to stay readable, and keep it legible at journal column width with no chartjunk. If clustering choice or normalization is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the heatmap as a high-resolution PNG plus an editable source (SVG or PDF) and list the file names in chat. {instructions}\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "instructions",
+        "label": "Additional instructions (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-network-diagram",
+    "name": "Create a Network Diagram",
+    "description": "Network or interaction graph visualization",
+    "category": "可视化与图表",
+    "icon": "Network",
+    "prompt": "Create a network visualization from the uploaded data using only the real nodes and edges present.\n\nWork in this order:\n1. Parse nodes and edges (and edge weights/direction if available),\n2. choose a layout that fits the structure (force-directed, circular, or hierarchical) and avoid excessive overlap,\n3. size nodes by {metric},\n4. color-code by community or cluster using a colorblind-safe palette,\n5. label key nodes legibly without cluttering,\n6. include a clear legend explaining size and color encodings, plus edge weight if shown. Keep fonts legible, reduce hairball density (filter or bundle edges if needed), and avoid chartjunk so it stays readable at journal column width. If node count is large or the sizing/coloring choice is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Make it publication-ready and save it as a high-resolution PNG plus an editable source (SVG or the plotting script), then list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "metric",
+        "label": "Node sizing metric (e.g., degree, betweenness)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-geographic-map",
+    "name": "Create a Geographic Map",
+    "description": "Geographic or spatial data visualization",
+    "category": "可视化与图表",
+    "icon": "Globe",
+    "prompt": "Create a geographic visualization from the uploaded data using only its real coordinates and values.\n\nWork in this order:\n1. Plot points or regions on a map projection appropriate to the extent and purpose (e.g., equal-area for area comparisons),\n2. encode quantitative values with a perceptually uniform color gradient or proportionally sized markers, classifying values honestly (state the binning method),\n3. add a legend, scale bar, and north arrow where relevant,\n4. include supporting geographic features (borders, coastlines, rivers) for context without clutter,\n5. use a colorblind-safe palette, legible labels, and good land/water contrast. Avoid misleading area or color scaling and keep it readable at journal column width. If the projection, value field, or extent is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Make it publication-ready and save it as a high-resolution PNG plus an editable source (SVG or the plotting script), then list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-dashboard",
+    "name": "Create an Interactive Dashboard",
+    "description": "Interactive multi-panel data dashboard",
+    "category": "可视化与图表",
+    "icon": "Gauge",
+    "prompt": "Create an interactive data dashboard from the uploaded dataset using Plotly, working only from the real data. Include:\n\nWork in this order:\n1. a summary statistics panel,\n2. key distributions as interactive histograms,\n3. correlation scatter plots with hover details,\n4. a filterable data table, and\n5. a time series panel if temporal data exists. Lay out panels in a clear grid with a logical reading order, descriptive titles, axis labels with units, and linked or consistent filters. Use a colorblind-safe palette, legible fonts, honest non-truncated scales, and informative hover tooltips; keep it responsive and uncluttered. Handle missing values and large row counts gracefully (sampling or aggregation) and note any such handling. If essential choices (key variables, grouping, or audience) are ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the dashboard as a self-contained HTML file and list the file name in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

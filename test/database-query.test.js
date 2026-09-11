@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import databases from '../catalog/databases.json' with { type: 'json' }
+import databases from '../catalog/resources/index.js'
 import { runDatabaseQuery, databaseQueryRoute, DATABASE_QUERY_PATH } from '../dsh/database-query.js'
 
 const database = id => databases.find(item => item.id === id)

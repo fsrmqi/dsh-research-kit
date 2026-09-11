@@ -1,7 +1,7 @@
-import workflows from '../catalog/workflows.json' with { type: 'json' }
-import skills from '../catalog/skills.json' with { type: 'json' }
-import databases from '../catalog/databases.json' with { type: 'json' }
-import databaseMetadataConfig from '../catalog/database-metadata.json' with { type: 'json' }
+// 目录数据只经三个聚合入口进入（分片见 catalog/*/index.js）；对外 API 与文件拆分解耦。
+import workflows from '../catalog/workflows/index.js'
+import skills from '../catalog/skills/index.js'
+import { resources, databaseMetadataConfig } from '../catalog/resources/index.js'
 
 // 数据库的研究用途、访问方式与引用规范。原始目录仍保留上游类别；这里提供面向
 // 研究者的六个入口组，避免把遗传、临床、化学等都笼统归入“数据分析”。
@@ -24,7 +24,7 @@ const WORKFLOW_RECOMMENDATIONS = {
 export function databaseMetadata(databaseOrId) {
   const id = typeof databaseOrId === 'string' ? databaseOrId : databaseOrId?.id
   const record = DATABASE_GROUPS.find(group => group.ids.includes(id))
-  const database = typeof databaseOrId === 'object' ? databaseOrId : databases.find(item => item.id === id)
+  const database = typeof databaseOrId === 'object' ? databaseOrId : resources.find(item => item.id === id)
   return {
     group: record?.group || '其他研究数据源',
     dataKind: record?.dataKind || '研究数据与元数据',
@@ -43,7 +43,7 @@ export function databaseMetadata(databaseOrId) {
 export function recommendedWorkflowsForResources(resourceIds = []) {
   const workflowIds = new Set()
   for (const id of resourceIds) {
-    const item = databases.find(database => database.id === id)
+    const item = resources.find(database => database.id === id)
     if (!item) continue
     for (const workflowId of WORKFLOW_RECOMMENDATIONS[databaseMetadata(item).group] || []) workflowIds.add(workflowId)
   }
@@ -57,7 +57,7 @@ function enrichItem(item) {
 
 // 目录保留多学科能力，避免用户后续需要时丢失既有工作流；
 // 新增与默认推荐则优先服务作物遗传育种、生物信息学、基因组与论文科研链路。
-export const catalog = Object.freeze([...workflows, ...skills, ...databases].map(enrichItem))
+export const catalog = Object.freeze([...workflows, ...skills, ...resources].map(enrichItem))
 
 export function searchCatalog({ query = '', type = 'all' } = {}) {
   const normalized = String(query).trim().toLowerCase()

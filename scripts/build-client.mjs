@@ -2,15 +2,14 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadCatalogEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/evidence-vault-store.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/research-workbench.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/research-console.js', 'dsh/standalone-glue.js']
-const data = {
-  workflows: JSON.parse(readFileSync(resolve(root, 'catalog/workflows.json'), 'utf8')),
-  skills: JSON.parse(readFileSync(resolve(root, 'catalog/skills.json'), 'utf8')),
-  databases: JSON.parse(readFileSync(resolve(root, 'catalog/databases.json'), 'utf8')),
-  databaseMetadataConfig: JSON.parse(readFileSync(resolve(root, 'catalog/database-metadata.json'), 'utf8'))
-}
+// 目录数据从三个聚合入口（catalog/*/index.js）加载后内联：浏览器产物始终包含完整目录，
+// 不增加任何动态文件请求。分片与入口的一致性由 scripts/lib/catalog-entries.mjs 的
+// 登记检查与校验器/测试的「分片总数 == 聚合总数」断言守护。
+const data = await loadCatalogEntries()
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
 // 若 import 跨行则只删掉首行，剩余行会残留成非法语句（产物语法错误）。
 function collapseImports(source) {
@@ -34,8 +33,9 @@ const promptKitEmbed = readFileSync(resolve(root, 'vendor/promptkit-embed.js'), 
 const promptKitEmbedRewritten = promptKitEmbed.replaceAll('/dsh-promptkit/semantic-enhance', '/dsh-research-kit/semantic-enhance')
 const projects = files.map(file => ({ file, source: strip(readFileSync(resolve(root, file), 'utf8')) }))
 let body = `${promptKitEmbedRewritten}\n\n${projects.map(entry => entry.source).join('\n\n')}`
-body = body.replace("import workflows from '../catalog/workflows.json' with { type: 'json' }\nimport skills from '../catalog/skills.json' with { type: 'json' }\nimport databases from '../catalog/databases.json' with { type: 'json' }", '')
-body = `const workflows = ${JSON.stringify(data.workflows)}\nconst skills = ${JSON.stringify(data.skills)}\nconst databases = ${JSON.stringify(data.databases)}\nconst databaseMetadataConfig = ${JSON.stringify(data.databaseMetadataConfig)}\n\n${body}`
+// strip() 已按行剥离全部 import（含 catalog.js 的三个聚合入口 import），
+// 这里以内联 const 补回同名符号，模块内引用无需感知数据来自分片还是产物。
+body = `const workflows = ${JSON.stringify(data.workflows)}\nconst skills = ${JSON.stringify(data.skills)}\nconst resources = ${JSON.stringify(data.resources)}\nconst databaseMetadataConfig = ${JSON.stringify(data.databaseMetadataConfig)}\n\n${body}`
 // 模块间没有 import：符号全部依赖 files 的拼接顺序可见。顺序一旦错位，
 // node --check 查不出，只有运行时才 ReferenceError。这里在构建期把顺序约束固化：
 // 下列符号的定义位置必须早于 standalone-glue 使用它们的位置。

@@ -1,0 +1,453 @@
+[
+  {
+    "id": "review-paper",
+    "type": "workflow",
+    "name": "审阅论文",
+    "description": "审查方法、统计严谨性、局限性并形成建设性反馈。",
+    "category": "论文与手稿",
+    "tags": [
+      "同行评审",
+      "方法学",
+      "统计"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "focus",
+        "label": "重点审查方向",
+        "required": false,
+        "hint": "留空时进行综合审阅"
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref"
+    ],
+    "limitations": [
+      "仅依据可访问材料形成草案；所有结论需由研究者核验。"
+    ],
+    "prompt": "请审阅用户通过 @文件 引用的论文。重点审查方向：{focus}。先确认审阅范围、保密要求与材料可用性；随后评估研究问题、设计、统计、局限性、可重复性以及图表和引用的一致性。每条意见应说明材料位置、观察到的问题、其重要性和可行的改进建议。区分材料未报告与方法学不足；不得编造页码、图表、数据、引用或作者意图。输出需人工核验的审阅草案。"
+  },
+  {
+    "id": "write-introduction",
+    "type": "workflow",
+    "name": "撰写论文引言",
+    "description": "围绕研究问题建立背景、研究空白与研究目标。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "引言",
+      "文献"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题或研究问题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "pubmed"
+    ],
+    "prompt": "为主题“{topic}”撰写论文引言草案。依次说明领域背景与重要性、已有研究的主要发现、尚未解决的研究空白、本研究目标与贡献。仅引用已核验的文献；无法核验时用待补充标记，禁止虚构引用。保持论证克制，区分已知事实、推断和研究假设。"
+  },
+  {
+    "id": "write-methods",
+    "type": "workflow",
+    "name": "撰写方法部分",
+    "description": "依据实验记录与方案，撰写可复现的方法章节。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "方法",
+      "可重复性"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "reproducibility"
+    ],
+    "limitations": [
+      "缺失的实验细节将以“需补充”标记列出，不得由模型推测补全。"
+    ],
+    "prompt": "请依据用户通过 @文件 引用的方案、数据或实验记录，撰写适合期刊稿件的方法部分草案，使用过去时与非人称学术表述，并按以下结构组织：1. 研究设计与场景；2. 材料、试剂、设备与软件（含版本号，如材料中有记录）；3. 实验步骤，写明独立实验室可复现所需的操作细节；4. 数据采集方法与结局指标；5. 统计分析方案，包括检验方法、假设前提、软件与显著性阈值、缺失数据处理。只使用材料中出现的细节；缺失的参数、试剂或数值用“[需补充]”标记，不得推测补全。如涉及伦理审批或报告规范，注明需用户补充的信息。输出为需人工核验的方法章节草案，并列出影响可复现性的全部材料缺口。"
+  },
+  {
+    "id": "write-results",
+    "type": "workflow",
+    "name": "撰写结果部分",
+    "description": "客观报告数据发现，按逻辑顺序引用图表与统计量。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "结果",
+      "统计"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "focus",
+        "label": "需重点报告的结果",
+        "required": false,
+        "hint": "留空时按材料顺序报告全部主要结果"
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "statistics-review"
+    ],
+    "limitations": [
+      "只报告材料中出现的数据；结果解释属于讨论部分，不在本流程范围内。"
+    ],
+    "prompt": "请依据用户通过 @文件 引用的数据、图表与统计输出，撰写结果部分草案。重点结果：{focus}。要求：客观陈述各发现，不做解释、机制推断或与其他研究的比较；每项结果引用对应图表编号；逐项报告材料中出现的精确统计量（检验统计量、自由度、p 值、置信区间、效应量），不得虚构、四舍五入或推断材料中不存在的数值；缺失或含糊的数值用“[待核验]”标记。保持时态一致，缩写首次出现时给出定义。输出为需人工核对原始统计输出的结果章节草案。"
+  },
+  {
+    "id": "write-discussion",
+    "type": "workflow",
+    "name": "撰写讨论部分",
+    "description": "解释研究发现，对照已有文献并坦陈局限。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "讨论",
+      "解释"
+    ],
+    "placeholders": [
+      {
+        "key": "findings",
+        "label": "主要发现概述",
+        "required": false,
+        "multiline": true,
+        "hint": "留空时请先总结已引用材料中的主要发现"
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "pubmed"
+    ],
+    "limitations": [
+      "解释强度不得超出数据支持范围；引用需逐条核验。"
+    ],
+    "prompt": "请针对以下主要发现撰写论文讨论部分草案：{findings}。结构依次为：1. 重述主要发现及其对研究问题的直接回答，不逐条重复统计量；2. 结合已有文献解释发现，说明与先前研究的一致与冲突之处；3. 讨论可能的机制与实践或理论意义；4. 坦陈局限性及其对结论的影响；5. 提出具体的研究方向。每处解释性论断需引用可核验的真实文献，无法核验的用“[待核验]”标记；不得虚构引用，不得超出数据支持范围夸大因果结论。输出为需人工核验的讨论章节草案。"
+  },
+  {
+    "id": "write-abstract",
+    "type": "workflow",
+    "name": "撰写摘要",
+    "description": "起草结构化摘要，覆盖背景、方法、结果与结论。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "摘要"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "details",
+        "label": "关键发现或稿件主题",
+        "required": false,
+        "multiline": true,
+        "hint": "已引用稿件时可留空"
+      },
+      {
+        "key": "word_limit",
+        "label": "字数上限",
+        "required": false,
+        "hint": "如 250、300；留空时按目标期刊惯例处理"
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing"
+    ],
+    "prompt": "请为用户通过 @文件 引用的稿件撰写结构化摘要草案；若未引用稿件，则基于以下信息撰写：{details}。结构依次为：背景与目的（1–2 句）、方法（2–3 句）、结果（2–3 句，含关键定量发现）、结论（1–2 句，说明意义与启示）。字数控制在 {word_limit}。只使用材料中出现的信息；不得虚构结果、数字或引用，无法确认的内容用“[待核验]”标记。摘要须自成一体、传达单一核心信息、避免未定义缩写，且不得夸大稿件本身的结论。输出为需人工核验的摘要草案并附字数统计。"
+  },
+  {
+    "id": "edit-manuscript",
+    "type": "workflow",
+    "name": "润色手稿",
+    "description": "改进语言的清晰度与学术规范，不改变原意与数据。",
+    "category": "论文与手稿",
+    "tags": [
+      "润色",
+      "语言",
+      "修改"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "scientific-writing"
+    ],
+    "limitations": [
+      "只修改语言表达；科学内容、数据与结论保持原样，语义含糊处标注而非擅自改写。"
+    ],
+    "prompt": "请润色用户通过 @文件 引用的手稿，在严格保持原意、论断、数据与技术准确性的前提下改进写作质量：修正语法、拼写与标点；提升句-level清晰度与简洁度；加强章节内部与章节之间的衔接；统一正式学术语气、术语与时态；压缩冗余段落。不得新增论断、引用或结果，不得修改数值或统计量，不得编造原文没有的内容。原文语义确实含糊时，保留作者可能的意图并标注该处提请作者确认，不得擅自猜测改写。输出完整修改稿，并分类汇总主要修改与需要作者注意的段落。"
+  },
+  {
+    "id": "write-rebuttal",
+    "type": "workflow",
+    "name": "撰写审稿回复",
+    "description": "逐条回应审稿意见，说明修改内容与依据。",
+    "category": "论文与手稿",
+    "tags": [
+      "同行评审",
+      "回复信",
+      "返修"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "citation-hygiene"
+    ],
+    "limitations": [
+      "回复基于稿件与用户提供的材料；需要作者决策的事项将明确列出而非代答。"
+    ],
+    "prompt": "请针对用户通过 @文件 引用的审稿意见文档，起草逐条回复信草案。开头简要致谢编辑与审稿人；随后对每条意见按顺序编号回应：1. 忠实复述审稿人的关切；2. 给出尊重且有实质内容的回应——同意并说明修改，或有依据地礼貌说明保留原设计的理由；3. 指明具体修改内容与位置（章节、行号或图表），必要时引用修改后的文字。回复仅基于稿件与已提供材料；不得虚构新结果或引用，需作者确认的事项用“[待作者确认]”标记。语气礼貌自信，不作辩护式争辩；意见不清或涉及只有作者能做的决定时明确列出，而非代替决定。输出为需人工核验的回复信草案。"
+  },
+  {
+    "id": "format-journal",
+    "type": "workflow",
+    "name": "期刊格式化",
+    "description": "按目标期刊投稿要求调整稿件结构与格式。",
+    "category": "论文与手稿",
+    "tags": [
+      "投稿",
+      "格式",
+      "期刊"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "journal",
+        "label": "目标期刊名称",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref"
+    ],
+    "limitations": [
+      "格式调整不改变科学内容；无法核验的投稿要求将明确列出，需作者向期刊确认。"
+    ],
+    "prompt": "请将用户通过 @文件 引用的稿件按 {journal} 的投稿指南调整格式。先说明所依据的作者须知版本或获取日期；无法在线核验时以通用学术惯例处理并列出待确认项。调整内容包括：章节顺序与标题层级、摘要类型与字数限制、全文/图表/参考文献数量限制、文内引用与参考文献格式、图表规范与编号、标题页与作者信息惯例及其他期刊特定要求（如结构化摘要、报告清单）。不得改变科学内容、数据或含义，只做结构调整与格式化；超出限制或缺失必备要素时明确标注，不得虚构内容补齐。输出调整后的稿件草案，以及一份未能核验、需向期刊确认的要求清单。"
+  },
+  {
+    "id": "reference-check",
+    "type": "workflow",
+    "name": "引文核验与修正",
+    "description": "核对引用真实性与格式，标记需补引的论断。",
+    "category": "论文与手稿",
+    "tags": [
+      "引用",
+      "参考文献",
+      "核验"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "style",
+        "label": "参考文献格式",
+        "required": false,
+        "hint": "如 APA、Vancouver、GB/T 7714；留空时保持稿件现有格式"
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "pubmed"
+    ],
+    "limitations": [
+      "核验范围限于模型实际能访问的来源；无法确认的引用一律标记，不默认其真实。"
+    ],
+    "prompt": "请核查用户通过 @文件 引用的稿件参考文献，并按 {style} 格式输出修正建议。依次进行：1. 逐条核验引用是否真实存在、著录信息（作者、年份、标题、期刊）是否准确，无法核验的明确标记而非默认正确；2. 修正文内引用与文献列表的格式不一致；3. 找出需要引用支撑但缺少引用的论断；4. 在合适处建议更新、更权威或更直接相关的文献，明确标注为建议；5. 指出重复、撤稿或条目残缺的问题。不得虚构引用、DOI 或书目信息；所有未核验项用“[待核验]”标记。输出修正后的文献列表草案与问题清单，供人工逐条复核。"
+  },
+  {
+    "id": "write-cover-letter",
+    "type": "workflow",
+    "name": "投稿信撰写",
+    "description": "为目标期刊起草一页内投稿信（cover letter）。",
+    "category": "论文与手稿",
+    "tags": [
+      "投稿",
+      "投稿信",
+      "期刊"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "journal",
+        "label": "目标期刊",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "peer-review-ethics"
+    ],
+    "limitations": [
+      "推荐审稿人须由作者确认无利益冲突后决定。"
+    ],
+    "prompt": "请为用户通过 @文件 引用的稿件起草投往 {journal} 的投稿信草案（约一页，致主编）。依次包括：1. 稿件标题与研究简述；2. 关键发现及其重要性；3. 具体说明为什么该期刊及其读者群是合适归宿（避免空话）；4. 原创性声明——未一稿多投、全体作者同意投稿；5. 建议审稿人及理由（如材料提供）。所有论断以稿件内容为据，不得夸大发现或虚构细节，无法确认的（如推荐审稿人信息）标记待作者确认。不得编造稿件外的发现或数据，语气专业克制。输出为供作者修改确认的投稿信草案。"
+  },
+  {
+    "id": "translate-manuscript",
+    "type": "workflow",
+    "name": "稿件翻译",
+    "description": "在保持术语与数据精确的前提下翻译科学稿件。",
+    "category": "论文与手稿",
+    "tags": [
+      "翻译",
+      "语言",
+      "润色"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "source_lang",
+        "label": "源语言",
+        "required": true
+      },
+      {
+        "key": "target_lang",
+        "label": "目标语言",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing"
+    ],
+    "limitations": [
+      "译文须对照原文核验；术语翻译需符合目标领域惯例。"
+    ],
+    "prompt": "请将用户通过 @文件 引用的科学稿件从{source_lang}翻译为{target_lang}。要求：1. 严格保持原意、数值、单位、统计结果与引用完整，不增删论断；2. 术语按目标领域学术惯例统一翻译，首次出现时可括注原文；3. 保留全部引用编号与文献列表原样；4. 原文含糊或可能有歧义处，按最合理理解翻译并在译文后集中列出提请作者核对；5. 不得编造或虚构任何原文没有的内容；译文与原文逐段对应，不得遗漏段落。输出完整译文，并附一份关键术语对照表与需作者核对的段落清单。"
+  },
+  {
+    "id": "write-supplementary",
+    "type": "workflow",
+    "name": "补充材料编制",
+    "description": "从稿件内容派生编号一致的补充材料。",
+    "category": "论文与手稿",
+    "tags": [
+      "补充材料",
+      "附件",
+      "编号"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "reproducibility"
+    ],
+    "prompt": "请为用户通过 @文件 引用的稿件编制补充材料草案，内容严格派生自稿件及其数据，按需包括：1. 因正文篇幅限制省略的详细方法与参数；2. 补充图（每张配自成一体的图注）；3. 补充表（表头与单位清晰）；4. 补充或敏感性统计分析；5. 原始或汇总数据表。所有条目统一编号（图 S1、表 S1、补充说明 1 等），保持与正文一致的记号和单位，并说明应在正文何处被引用。只使用材料中出现的信息；不得虚构数据、图表或统计结果，材料不足以支撑的补充项明确标记为待作者提供。输出为编号完整的补充材料草案。"
+  },
+  {
+    "id": "write-full-manuscript",
+    "type": "workflow",
+    "name": "撰写完整论文初稿",
+    "description": "基于已提供的研究材料组织 IMRAD 全文初稿与待补充清单。",
+    "category": "论文与手稿",
+    "tags": [
+      "论文写作",
+      "IMRAD",
+      "初稿"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "citation-hygiene",
+      "statistics-review",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref"
+    ],
+    "limitations": [
+      "只能据已提供材料起草；缺失数据、方法、引用或作者决策必须逐项标注，不得补写。"
+    ],
+    "prompt": "请依据用户通过 @文件 提供的材料，为主题“{topic}”起草 IMRAD 结构的完整论文草案：摘要、引言、方法、结果、讨论与参考文献占位。先列出材料可用性与缺口；正文中仅陈述材料支持的结果，结果与讨论严格分开；引用仅使用已核验来源，未核验处标记[待核验]；缺失的方法参数、统计量、伦理信息或作者决定标记[需补充]。不得编造数据、图表、引用、页码或研究结论。最后输出章节级待补充清单，供作者逐项确认。"
+  },
+  {
+    "id": "manuscript-revision-plan",
+    "type": "workflow",
+    "name": "制定稿件返修计划",
+    "description": "把审稿意见与现有稿件拆成可执行、可追溯的返修清单。",
+    "category": "论文与手稿",
+    "tags": [
+      "返修",
+      "审稿意见",
+      "版本管理"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "peer-review-ethics",
+      "scientific-writing",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref"
+    ],
+    "limitations": [
+      "不替作者决定是否新增实验、放弃主张或接受审稿意见；争议项必须保留给作者。"
+    ],
+    "prompt": "请依据 @文件 中的稿件与审稿意见制定返修计划。逐条建立：审稿人关切、证据或稿件位置、建议动作、需要作者决定的事项、预期修改位置、是否需要新增分析/实验、完成判据。区分编辑要求、事实性更正、表达修改和需要作者立场的争议项；不得假定已经完成修改，不得虚构实验、结果或引用。最后按优先级输出可勾选返修清单与风险项。"
+  },
+  {
+    "id": "submission-readiness-check",
+    "type": "workflow",
+    "name": "投稿前完整性核对",
+    "description": "在投稿前核对稿件、图表、作者信息、报告规范与待确认事项。",
+    "category": "论文与手稿",
+    "tags": [
+      "投稿",
+      "核对清单",
+      "报告规范"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "journal",
+        "label": "目标期刊（可选）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "reproducibility",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref"
+    ],
+    "limitations": [
+      "不替代期刊投稿系统或作者最终声明；目标期刊规则无法核验时必须标注。"
+    ],
+    "prompt": "请对 @文件 中的稿件做投稿前完整性核对，目标期刊：{journal}。检查题名页与作者信息、摘要、图表和补充材料编号、引用与参考文献、数据/代码可用性、伦理与利益冲突声明、适用报告清单及期刊格式要求。每项标为已见、缺失、待作者确认或需外部核验；不得把未见材料推断为已完成，不得虚构期刊规则。输出可勾选提交前清单与阻断投稿的问题。"
+  }
+]

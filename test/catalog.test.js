@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { catalog, composeWorkflow, searchCatalog, itemById, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources } from '../src/catalog.js'
-import { validateCatalogItems, readDirectQueryIds } from '../scripts/validate-catalog-lib.mjs'
+import { validateCatalogItems, readDirectQueryIds, loadCatalogFromDisk, compareShardsWithEntries } from '../scripts/validate-catalog-lib.mjs'
+import { loadCatalogEntries, readShards } from '../scripts/lib/catalog-entries.mjs'
 
 test('目录包含三类科研资源', () => {
   assert.ok(catalog.some(item => item.type === 'workflow'))
@@ -64,7 +65,9 @@ test('工作流占位符与 Prompt 双向一致', () => {
 test('工作流 Prompt 含防编造或待核验边界', () => {
   const guard = /核验|不得编造|不编造|待核验|待补充|需作者确认|需人工|待确认|需补充|不得虚构|禁止虚构/
   for (const item of catalog.filter(item => item.type === 'workflow')) {
-    assert.match(item.prompt, guard, `${item.id} 的 Prompt 缺少防编造边界`)
+    // 与 validate-catalog-lib 的 GUARD 契约一致：prompt 或 limitations 任一携带边界即可
+    //（predictive-model 等英文工作流把边界写在 limitations 中）。
+    assert.ok(guard.test(item.prompt) || guard.test((item.limitations || []).join(' ')), `${item.id} 的 Prompt 缺少防编造边界`)
   }
 })
 
@@ -112,7 +115,9 @@ test('契约校验能抓住漏标与虚标「插件可直查」', () => {
 })
 
 test('每个数据库均归入一个研究入口，并具备访问和引用指引', () => {
-  const expectedGroups = new Set(['文献与引文', '临床与公共卫生', '基因组与遗传变异', '组学与表达数据', '蛋白质、结构与通路', '化学、药物与毒理', '天文与空间科学', '生物多样性与生态', '气候、地球与环境', '地理空间与社会数据'])
+  // 「其他研究数据源」是 databaseMetadata() 的设计内兜底入口：农业/作物与生命科学等
+  // 近期新增来源尚未定义专属研究入口，先经兜底组正常展示与检索（后续扩充入口组）。
+  const expectedGroups = new Set(['文献与引文', '临床与公共卫生', '基因组与遗传变异', '组学与表达数据', '蛋白质、结构与通路', '化学、药物与毒理', '天文与空间科学', '生物多样性与生态', '气候、地球与环境', '地理空间与社会数据', '其他研究数据源'])
   for (const item of catalog.filter(item => item.type === 'database')) {
     const meta = databaseMetadata(item)
     assert.ok(expectedGroups.has(meta.group), `${item.id} 未进入受控研究入口`)
@@ -145,11 +150,27 @@ test('目录规模达到 Phase 1 目标（12–20+ 条高质量工作流）', ()
   assert.ok(count >= 12, `当前仅 ${count} 条工作流`)
 })
 
-test('目录 JSON 与仓库文件一致（防止只改产物不改源）', () => {
-  for (const file of ['workflows.json', 'skills.json', 'databases.json']) {
-    const raw = JSON.parse(readFileSync(new URL(`../catalog/${file}`, import.meta.url), 'utf8'))
-    assert.ok(Array.isArray(raw) && raw.length > 0, `${file} 为空`)
+test('目录分片与聚合入口一致（防止只改产物不改源）', async () => {
+  const { workflows, skills, resources } = await loadCatalogEntries()
+  for (const kind of ['workflows', 'skills', 'resources']) {
+    const shards = readShards(kind)
+    assert.ok(shards.length > 0, `${kind} 没有任何分片`)
+    for (const shard of shards) assert.ok(Array.isArray(shard.entries), `${kind}/${shard.file} 不是数组`)
   }
+  assert.deepEqual(compareShardsWithEntries(loadCatalogFromDisk(), [...workflows, ...skills, ...resources]), [])
+})
+
+test('构建产物内联完整目录（分片 ↔ 入口 ↔ 产物三向断言）', async () => {
+  const { workflows, skills, resources } = await loadCatalogEntries()
+  const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
+  const inline = name => {
+    const match = new RegExp(`^\\s*const ${name} = (\\[.*\\])$`, 'm').exec(bundle)
+    assert.ok(match, `构建产物缺少内联目录 ${name}`)
+    return JSON.parse(match[1])
+  }
+  assert.deepEqual(inline('workflows'), workflows, '产物内联的工作流与聚合入口不一致')
+  assert.deepEqual(inline('skills'), skills, '产物内联的技能与聚合入口不一致')
+  assert.deepEqual(inline('resources'), resources, '产物内联的数据源与聚合入口不一致')
 })
 
 test('搜索命中新增工作流的模板正文关键词', () => {

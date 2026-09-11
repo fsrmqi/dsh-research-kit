@@ -1,0 +1,229 @@
+[
+  {
+    "id": "plain-language-summary",
+    "name": "Plain Language Summary",
+    "description": "Rewrite for non-specialist audiences or press",
+    "category": "科研传播",
+    "icon": "MessageCircle",
+    "prompt": "Rewrite the uploaded paper or abstract in plain language for a curious non-specialist reader (roughly an 8th-grade reading level), suitable for a press release or public-facing summary.\n\nWork in this order:\n1. Read the source carefully and identify the key findings and their real-world significance.\n2. Convey them accurately in 2-3 paragraphs without distorting or overclaiming.\n3. Replace or briefly define any jargon, and use a concrete everyday analogy where it genuinely aids understanding.\n4. Frame uncertainty and limitations honestly rather than hyping results. If the intended audience or venue is unclear and would materially change the tone, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumption. Save the finished summary as a well-named Markdown file in the sandbox so the user can preview and download it, and give a short recap in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "blog-post",
+    "name": "Write a Blog Post",
+    "description": "Engaging science blog from paper or results",
+    "category": "科研传播",
+    "icon": "Rss",
+    "prompt": "Write an engaging scientific blog post (800-1200 words) based on the uploaded paper or results, for an interested general audience.\n\nWork in this order:\n1. Open with a compelling hook tied to a real problem or surprising fact.\n2. Explain the science clearly using examples and concrete analogies, defining any necessary jargon.\n3. Stay faithful to the source: do not overstate findings, and note limitations and open questions honestly.\n4. Close with why this matters and what comes next. If you add outside context, verify it via web search and cite real, verifiable sources; never fabricate references. If the desired tone, publication, or audience is unclear and would change the piece, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the post as a well-named Markdown file (with any references listed) in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "draft-protocol",
+    "name": "Draft a Protocol",
+    "description": "Step-by-step lab or computational protocol",
+    "category": "科研传播",
+    "icon": "ListChecks",
+    "prompt": "Write a detailed, reproducible step-by-step protocol for: {procedure}. Include:\n\nWork in this order:\n1. Overview and purpose,\n2. Materials and reagents (with catalog numbers, concentrations, and suppliers where applicable),\n3. Equipment needed,\n4. Numbered step-by-step procedure with timing, volumes, temperatures, and critical parameters specified,\n5. Expected results plus a troubleshooting table for common failure modes,\n6. Safety and waste-handling notes. Base any reagent or method specifics on established, verifiable references and cite them; never invent catalog numbers or citations, and flag any step where values must be validated by the user. If the scale, organism/system, or instrument is unclear and would change the steps, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the protocol as a well-named Markdown file in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "procedure",
+        "label": "Procedure or experiment to document",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-press-release",
+    "name": "Write a Press Release",
+    "description": "Institutional press release about a research finding",
+    "category": "科研传播",
+    "icon": "Megaphone",
+    "prompt": "Write an institutional press release about the uploaded research paper or findings, at roughly an 8th-grade reading level. Include:\n\nWork in this order:\n1. An attention-grabbing but accurate headline,\n2. A lead paragraph with the key finding (who, what, why it matters),\n3. Context and significance,\n4. Quotes from researchers clearly marked as placeholders for approval,\n5. Methods in plain language,\n6. Future implications,\n7. A contact information placeholder. Represent the science faithfully, avoid overclaiming, and state limitations honestly; do not invent affiliations, funding, or quotes. Verify any added external facts via web search and cite real sources. If the institution or spokesperson is unclear and would change the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the release as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "social-media-post",
+    "name": "Social Media Post",
+    "description": "Twitter/LinkedIn thread summarizing research",
+    "category": "科研传播",
+    "icon": "Send",
+    "prompt": "Create a social media thread (Twitter/X or LinkedIn) summarizing the uploaded paper or research finding for a general but engaged audience. Write {num_posts} posts that:\n\nWork in this order:\n1. Hook with the key finding,\n2. Explain the context,\n3. Describe the method simply,\n4. Present the main result,\n5. State why it matters,\n6. Include relevant, accurate hashtags. Keep each post under 280 characters for Twitter/X. Stay faithful to the source, avoid hype or overclaiming, define or skip jargon, and note key caveats honestly rather than implying certainty. Do not fabricate stats or quotes; verify any added facts. If the platform or tone is unclear and would change the thread, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the full thread as a well-named Markdown file in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "num_posts",
+        "label": "Number of posts in thread (default: 5-7)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "podcast-script",
+    "name": "Write a Podcast Script",
+    "description": "Script for a science podcast episode",
+    "category": "科研传播",
+    "icon": "Rss",
+    "prompt": "Write a podcast script discussing: {topic}, in conversational but accurate language for a curious lay audience. Structure:\n\nWork in this order:\n1. An engaging introduction with a hook,\n2. Background context,\n3. Main discussion points grounded in recent findings,\n4. Interview-style questions and talking points,\n5. A conclusion with key takeaways. Target roughly {duration} minutes of speaking. Search the web for current, credible sources, prioritize recent and well-cited work, define jargon on first use, and frame uncertainty honestly without overclaiming. Cite real sources in script notes and never fabricate references, quotes, or guest statements. If the show's audience or format is unclear and would change the script, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the script as a well-named Markdown file (with a sources list) in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Topic to discuss",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Episode duration in minutes (default: 20)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "policy-brief",
+    "name": "Write a Policy Brief",
+    "description": "Research-informed policy brief for decision makers",
+    "category": "科研传播",
+    "icon": "Scale",
+    "prompt": "Write a concise policy brief on: {topic} for this audience: {audience}, leading with actionable recommendations. Include:\n\nWork in this order:\n1. Executive summary,\n2. Problem statement with data,\n3. Key research findings,\n4. Policy options with pros and cons,\n5. Recommended actions,\n6. Implementation considerations. Search the literature and authoritative sources across multiple databases, prioritize recent and highly cited work, distinguish primary studies from secondary summaries, and cite every claim with a real, verifiable reference; never fabricate citations or statistics. Report your search scope and date, and surface consensus, controversy, and evidence gaps honestly. Keep to 2-4 pages, in clear non-technical language for decision makers. If the jurisdiction or scope is unclear and would change the recommendations, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the brief as a well-named Markdown file with a references list in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Policy topic",
+        "required": true
+      },
+      {
+        "key": "audience",
+        "label": "Target audience (e.g., legislators, public health officials)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "patient-education",
+    "name": "Patient Education Material",
+    "description": "Patient-friendly health information document",
+    "category": "科研传播",
+    "icon": "Heart",
+    "prompt": "Create general patient education material about {condition} for a broad audience at approximately a sixth-grade reading level. This must remain general information: do not assess an individual, diagnose, recommend a specific treatment, dose a medicine, or replace local clinical advice.\n\nWork in this order:\n1. Define the intended audience, region, care setting, and whether the topic is a condition, test, procedure, or prevention question.\n2. Use current authoritative public-health, professional-society, and government sources. Record publication or review dates and verify every medical claim; do not fabricate citations.\n3. Explain the topic, common causes or risk factors, symptoms or expected experiences, and how qualified professionals generally evaluate it, using plain language and defining unavoidable terms.\n4. Describe treatment or management categories only as source-backed general options, noting that suitability depends on individual evaluation.\n5. Summarize source-backed signs for contacting a qualified professional or local emergency service without triaging the reader or inventing universal thresholds; state when advice is region-specific.\n6. Add practical questions a reader can ask their healthcare professional, a concise FAQ, source dates, limitations, and an explicit general-information notice.\n7. Check readability, respectful language, accessibility, numerical risk framing, and consistency with the cited sources.\n\nSave the document as a clearly named Markdown file with a verified reference list. Summarize the audience, scope, source recency, unresolved localization needs, and saved path in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "condition",
+        "label": "Medical condition or procedure",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-textbook-chapter",
+    "name": "Write a Textbook Chapter",
+    "description": "Comprehensive educational chapter on a topic",
+    "category": "科研传播",
+    "icon": "GraduationCap",
+    "prompt": "Write a textbook chapter on: {topic} for a {level} audience, pitched at the right depth and reading level for that group. Include:\n\nWork in this order:\n1. Learning objectives,\n2. Introduction with historical context,\n3. Core concepts explained progressively,\n4. Worked examples and case studies,\n5. Key equations or formulas with derivations,\n6. Summary and key takeaways,\n7. Review questions. Target length: {length} words. Ground explanations in established, verifiable sources, prioritize authoritative and recent references, define terms on first use, and cite every factual or quantitative claim; never fabricate citations or data. Note any areas of ongoing debate or uncertainty honestly. If the field emphasis or prerequisites are unclear and would change the scope, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the chapter as a well-named Markdown file with a references list in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Chapter topic",
+        "required": true
+      },
+      {
+        "key": "level",
+        "label": "Audience level (undergraduate, graduate, professional)",
+        "required": true
+      },
+      {
+        "key": "length",
+        "label": "Target word count (default: 5000)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "elevator-pitch",
+    "name": "Write an Elevator Pitch",
+    "description": "30-second pitch for a research project",
+    "category": "科研传播",
+    "icon": "Rocket",
+    "prompt": "Write a compelling 30-60 second elevator pitch (roughly 75-150 spoken words) for the research project: {topic}, tailored to a {audience} audience and free of jargon. The pitch should:\n\nWork in this order:\n1. Open with a relatable problem or striking fact,\n2. Explain what you are doing in one clear sentence,\n3. Describe the approach briefly,\n4. State the potential impact,\n5. End with a call to action or next step. Keep claims accurate and grounded in the project as described, avoid hype or overpromising, and do not invent results, funding, or partnerships. If the audience or the project's core goal is unclear and would change the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the pitch as a well-named Markdown file in the sandbox for preview and download, and give a short recap in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research project description",
+        "required": true
+      },
+      {
+        "key": "audience",
+        "label": "Target audience (investors, general public, program officers)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

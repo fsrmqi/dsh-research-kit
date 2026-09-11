@@ -1,0 +1,457 @@
+[
+  {
+    "id": "literature-review",
+    "type": "workflow",
+    "name": "文献综述与研究空白",
+    "description": "综合已有证据，识别争议、局限性与可研究方向。",
+    "category": "文献研究",
+    "tags": [
+      "综述",
+      "证据综合",
+      "研究空白"
+    ],
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "综述问题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref"
+    ],
+    "prompt": "围绕“{question}”制定并执行一份透明的文献综述草案。先声明检索范围、时间边界、纳入/排除标准和证据局限；再按主题综合一致发现、分歧、证据强度与研究空白。未获得或未核验的文献不能作为事实依据。最后列出值得进一步验证的研究问题，而非把推断写成结论。"
+  },
+  {
+    "id": "literature-search",
+    "type": "workflow",
+    "name": "文献检索",
+    "description": "围绕主题检索高相关文献并形成结构化书目。",
+    "category": "文献研究",
+    "tags": [
+      "检索",
+      "文献",
+      "书目"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "检索主题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "evidence-synthesis"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref"
+    ],
+    "limitations": [
+      "检索覆盖面取决于当前会话可用的检索工具；未接通时结果仅基于模型已知文献，须逐条核验。"
+    ],
+    "prompt": "请围绕“{topic}”进行文献检索并形成结构化书目草案。要求：1. 找出最相关和高被引的工作，兼顾近期进展与奠基性研究；2. 逐篇概括关键发现，区分原始研究与综述等二手来源；3. 归纳主要主题与共识；4. 指出争议与相互冲突的证据；5. 标出当前知识的空白。每条论断附真实可核验的引用（标题、作者、年份、期刊与 DOI 或链接）；不得虚构引用或 DOI，无法核验的条目明确标记。说明本次检索的范围、使用的数据库与时间。若主题过宽或含糊，先说明采用的界定方式。输出为需人工核验的书目草案。"
+  },
+  {
+    "id": "summarize-paper",
+    "type": "workflow",
+    "name": "论文结构化摘要导读",
+    "description": "忠实概括单篇论文的目标、方法、发现与局限。",
+    "category": "文献研究",
+    "tags": [
+      "阅读",
+      "概括",
+      "精读"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "evidence-synthesis"
+    ],
+    "prompt": "请对用户通过 @文件 引用的论文做结构化、忠实的导读概括，依次覆盖：1. 研究目的与假设；2. 研究设计与方法；3. 关键发现与结果（含主要定量结果）；4. 作者承认的局限及你注意到的其他局限；5. 结论与意义；6. 该研究在领域中的位置。准确呈现作者的主张，区分其有证据支撑的发现与推测；不得编造论文之外的事实或结论，指出支撑不足的论断。材料不可读或疑似截断时如实说明，不得猜测。输出为供研究者快速判读的导读草案。"
+  },
+  {
+    "id": "compare-papers",
+    "type": "workflow",
+    "name": "论文对比分析",
+    "description": "比较多篇论文的方法、发现与证据强度。",
+    "category": "文献研究",
+    "tags": [
+      "对比",
+      "证据强度",
+      "批判性阅读"
+    ],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "statistics-review"
+    ],
+    "limitations": [
+      "只比较用户实际提供的论文；不可直接比较之处（人群、终点、方法不同）将明确标注。"
+    ],
+    "prompt": "请对用户通过 @文件 引用的多篇论文做结构化对比分析，依次覆盖：1. 研究问题与目标；2. 方法学路径；3. 关键发现，指出一致与直接矛盾之处；4. 各自的优势与不足；5. 哪篇证据更强及理由（从设计、样本量、严谨性与可重复性判断）。在有助于澄清处给出对照表。准确呈现每篇论文，陈述论断时引用具体章节或图表；不得虚构未提供的论文或结果。论文之间不可直接比较之处（人群、终点或方法不同）须明确标注。输出为需人工核验的对比分析草案。"
+  },
+  {
+    "id": "systematic-review-protocol",
+    "type": "workflow",
+    "name": "系统综述方案设计",
+    "description": "按 PRISMA 规范设计可注册的系统综述方案。",
+    "category": "文献研究",
+    "tags": [
+      "系统综述",
+      "PRISMA",
+      "方案"
+    ],
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "系统综述问题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref"
+    ],
+    "limitations": [
+      "本流程产出方案草案，不构成注册完成或已执行的综述；偏倚风险评估需方法学专家确认。"
+    ],
+    "prompt": "请围绕“{question}”设计一份遵循 PRISMA 规范的系统综述方案草案。依次包括：1. 按 PICO 结构表述问题；2. 明确的纳入与排除标准；3. 针对 PubMed、Web of Science、Scopus 等数据库的可复现检索策略与完整布尔检索式；4. 筛选流程（题目/摘要初筛后全文复筛，含双人独立筛选）与数据提取方案；5. 偏倚风险与质量评估工具的选择（如 Cochrane RoB 2、Newcastle-Ottawa）及理由；6. 分析计划，包括适用时的.meta 分析与异质性评估。引用真实的方法学指南与报告标准；不得虚构引用，注明哪些检索式需要通过预检索修正。输出为供注册与专家评审的方案草案。"
+  },
+  {
+    "id": "data-source-selection",
+    "type": "workflow",
+    "name": "研究数据源选择",
+    "description": "按研究问题匹配可访问的数据库，形成检索策略。",
+    "category": "文献研究",
+    "tags": [
+      "数据源",
+      "检索策略",
+      "数据库"
+    ],
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "研究问题",
+        "required": true
+      },
+      {
+        "key": "constraints",
+        "label": "访问限制",
+        "required": false,
+        "multiline": true,
+        "hint": "如无机构订阅、需开放获取、限中文文献等"
+      }
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref",
+      "openalex",
+      "arxiv",
+      "semantic-scholar",
+      "core-api",
+      "orcid",
+      "unpaywall",
+      "biorxiv",
+      "europe-pmc",
+      "doaj",
+      "eric",
+      "springer-nature",
+      "scopus",
+      "ncbi-entrez",
+      "clinicaltrials",
+      "openfda",
+      "gtex",
+      "gnomad",
+      "kegg",
+      "uniprot",
+      "pdb",
+      "chembl",
+      "pubchem",
+      "string-db",
+      "reactome",
+      "physionet",
+      "who-gho",
+      "chebi",
+      "ensembl"
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "data-integrity"
+    ],
+    "limitations": [
+      "目录只标注接入前提，不保证当前会话可访问；实际检索前需逐个确认工具可用性。"
+    ],
+    "prompt": "请针对研究问题“{question}”设计数据源与检索策略。已知访问限制：{constraints}。请：1. 从目录数据源中筛选与问题匹配的数据库，说明每个数据库覆盖的证据类型（如系统综述、原始研究、序列数据、临床试验注册）以及与其他源的互补关系；2. 为每个选定数据源给出检索词组合（同义词、布尔逻辑、字段限定）与建议的时间范围；3. 明确标注哪些数据源需要机构订阅或 API 密钥、哪些开放获取；4. 给出检索优先顺序与记录方式（检索式、日期、命中数），确保可复现。只依据用户提供的信息判断访问能力，不得假设当前会话已能访问任何数据源，也不得编造数据源覆盖范围或命中数；无法判断可访问性的数据库标记为“需确认”。输出为检索策略草案，供研究者核对后执行。"
+  },
+  {
+    "id": "research-landscape",
+    "type": "workflow",
+    "name": "研究版图扫描",
+    "description": "绘制领域研究主题、核心团队与趋势的结构化版图。",
+    "category": "文献研究",
+    "tags": [
+      "版图",
+      "趋势",
+      "团队"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "研究领域或主题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "openalex",
+      "semantic-scholar",
+      "crossref"
+    ],
+    "prompt": "请针对领域“{topic}”绘制研究版图草案。依次覆盖：1. 主要研究主题与子方向；2. 关键研究团队与实验室；3. 奠基性论文；4. 当前趋势；5. 新兴方向；6. 资助与投入格局。优先纳入近期与高被引工作，区分已确立的发现与尚属推测的方向；每处团队、论文或论断附真实可核验的引用，不得虚构引用或机构归属，无法核验的明确标记。说明检索范围与时间，指出空白与公开争论。输出为结构化版图草案（可用层级列表或概念图描述），供研究者判读与补充。"
+  },
+  {
+    "id": "citation-analysis",
+    "type": "workflow",
+    "name": "引文模式分析",
+    "description": "分析一组研究的引用轨迹、网络与影响力指标。",
+    "category": "文献研究",
+    "tags": [
+      "引文分析",
+      " bibliometrics",
+      "影响力"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "分析主题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "evidence-synthesis"
+    ],
+    "suggestedDatabaseIds": [
+      "openalex",
+      "semantic-scholar",
+      "crossref"
+    ],
+    "limitations": [
+      "引用指标随数据源与日期变化，报告须注明来源与提取时间；指标不等于质量。"
+    ],
+    "prompt": "请对主题“{topic}”做引文模式分析。依次进行：1. 找出被引最多的论文及其随时间的引用轨迹；2. 梳理关键论文之间的引用网络；3. 识别引用激增所提示的快速兴起子方向；4. 报告关键作者的 h 指数等指标，明确数据来源与日期。若当前会话具备执行代码的工具，可用代码绘制引用网络图并报告；否则描述网络结构。每条论文、作者与指标都附真实可核验的引用；不得虚构引用、DOI 或计数，无法核验的数字明确标记。指出文献计量指标的固有局限（覆盖差异、自引、跨领域不可比）。输出为需人工核验的引文分析草案。"
+  },
+  {
+    "id": "find-datasets",
+    "type": "workflow",
+    "name": "公开数据集检索",
+    "description": "按研究问题定位可用的公开数据集与获取条件。",
+    "category": "文献研究",
+    "tags": [
+      "数据集",
+      "检索",
+      "可获取性"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "研究问题或数据需求",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "data-integrity",
+      "citation-hygiene"
+    ],
+    "suggestedDatabaseIds": [
+      "ncbi-entrez",
+      "clinicaltrials",
+      "physionet",
+      "who-gho"
+    ],
+    "limitations": [
+      "数据集可用性与授权随时间变化；使用前需逐条确认许可与伦理要求。"
+    ],
+    "prompt": "请为“{topic}”检索相关的公开数据集。可搜索 GEO、ArrayExpress、TCGA、Zenodo、Figshare、Kaggle 及领域专库等公开仓库。对每个候选数据集依次说明：1. 内容与测量指标；2. 样本量与关键变量；3. 数据格式与体量；4. 核实过的获取地址；5. 许可与使用限制，以及所需的访问申请或伦理批准。只列真实存在、已核实链接可解析的数据集；不得虚构数据集名称、规模或地址，无法核验的条目明确标记。优先推荐文档完善、维护活跃的数据集，并说明与用户研究问题的匹配与缺口。输出为数据集候选清单草案，供研究者逐条确认后获取。"
+  },
+  {
+    "id": "track-research-trends",
+    "type": "workflow",
+    "name": "研究趋势追踪",
+    "description": "基于文献计量数据分析领域发文趋势与新兴方向。",
+    "category": "文献研究",
+    "tags": [
+      "趋势",
+      "文献计量",
+      "预测"
+    ],
+    "placeholders": [
+      {
+        "key": "field",
+        "label": "研究领域",
+        "required": true
+      },
+      {
+        "key": "years",
+        "label": "回溯年数",
+        "required": false,
+        "hint": "默认 5 年"
+      }
+    ],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "openalex",
+      "pubmed",
+      "semantic-scholar"
+    ],
+    "limitations": [
+      "趋势外推是推断不是事实；发文量受数据库覆盖与检索式影响。"
+    ],
+    "prompt": "请分析领域“{field}”过去 {years} 年的研究趋势，基于真实文献计量数据（OpenAlex、Semantic Scholar、PubMed 等）。依次进行：1. 呈现发文量随时间的变化；2. 找出增长最快的子方向；3. 概括研究产出的机构与地区分布；4. 指出新兴方法学；5. 对近期趋势做展望，并明确标注这些是外推推断而非事实。说明所用数据源、检索式与提取日期；关键论断附可核验引用，不得虚构统计数字或引用。若当前会话具备执行代码的工具，可绘图呈现趋势；否则用表格描述。输出为需人工核验的趋势分析草案。"
+  },
+  {
+    "id": "find-preprints",
+    "type": "workflow",
+    "name": "预印本快报",
+    "description": "汇总某主题近期预印本及其同行评审状态。",
+    "category": "文献研究",
+    "tags": [
+      "预印本",
+      "快报",
+      "前沿"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "主题",
+        "required": true
+      },
+      {
+        "key": "months",
+        "label": "回溯月数",
+        "required": false,
+        "hint": "默认 3 个月"
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "biorxiv",
+      "arxiv",
+      "europe-pmc"
+    ],
+    "prompt": "请检索主题“{topic}”近 {months} 个月的预印本，覆盖 bioRxiv、medRxiv、arXiv 及相关预印本平台。对每篇依次给出：1. 标题、作者与链接或 DOI；2. 主要发现的 2–3 句概括；3. 是否已正式发表（注明期刊与 DOI）；4. 与已有证据矛盾或方法学上值得注意之处。明确提示预印本未经同行评审、结论需谨慎对待；每条引用附真实可核验的链接或 DOI，不得虚构标题、作者或 DOI，无法核验的标记。按相关性与时效排序。输出为预印本快报草案，供研究者跟踪前沿。"
+  },
+  {
+    "id": "methods-comparison",
+    "type": "workflow",
+    "name": "方法学对比",
+    "description": "系统比较完成某任务的主流方法及适用条件。",
+    "category": "文献研究",
+    "tags": [
+      "方法学",
+      "对比",
+      "选型"
+    ],
+    "placeholders": [
+      {
+        "key": "task",
+        "label": "任务描述",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "evidence-synthesis",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "semantic-scholar"
+    ],
+    "prompt": "请系统比较用于“{task}”的主要方法，以真实文献为依据。依次进行：1. 识别主流与新兴方法；2. 按统一标准比较：准确性/性能、计算成本、易用性、关键假设、数据与样本量要求、可解释性；3. 归纳各方法在何种条件下最优；4. 给出对照表；5. 给出带权衡的具体选型建议。每条方法与性能论断附真实可核验引用，并区分基准实测结果与作者自述；不得虚构引用或性能数字，无法核验的标记。输出为方法选型对照草案，供研究者结合自身数据与约束决策。"
+  },
+  {
+    "id": "write-review-article",
+    "type": "workflow",
+    "name": "撰写综述全文",
+    "description": "按主题综合证据、争议与研究空白，形成可核验的综述初稿。",
+    "category": "文献研究",
+    "tags": [
+      "综述",
+      "证据综合",
+      "研究空白"
+    ],
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "综述问题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "evidence-synthesis",
+      "citation-hygiene",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref",
+      "openalex"
+    ],
+    "limitations": [
+      "不是系统综述的替代品；检索范围、纳入标准和每条关键引用均需人工核验。"
+    ],
+    "prompt": "请围绕“{question}”起草一篇叙述性综述全文：界定范围与检索边界，再按主题综合证据、明确一致发现、争议、不可直接比较之处和研究空白，最后给出待验证的未来方向。区分原始研究、综述和推断；每项关键论断仅引用已核验来源，无法核验时标记[待核验]。不得把研究数量当作证据强度，不得虚构引用、DOI、作者意图或结论。输出同时附检索与证据缺口清单。"
+  },
+  {
+    "id": "patent-landscape",
+    "type": "workflow",
+    "name": "专利与技术版图分析",
+    "description": "梳理技术主题的专利布局、权利人、时间趋势与待核验风险。",
+    "category": "文献研究",
+    "tags": [
+      "专利",
+      "知识产权",
+      "技术版图"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "技术主题",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref"
+    ],
+    "limitations": [
+      "仅作研究与信息整理，不构成法律意见、FTO 结论或专利有效性判断。"
+    ],
+    "prompt": "请围绕技术主题“{topic}”制定专利与技术版图分析草案。明确检索数据库、关键词、司法辖区、时间范围和覆盖局限；按专利族整理公开申请/授权、权利人、技术主题、时间线与引用关系，区分已核验记录和待核验记录；识别潜在重叠或空白时只能作为需专业人士复核的线索，不得给出自由实施、侵权、有效性或法律结论。输出可复现检索策略、证据表、主题版图与待核验清单。"
+  }
+]

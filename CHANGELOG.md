@@ -10,6 +10,13 @@
 
 ### 变更
 
+- 🗂 **目录数据模块化拆分（docs-internal/catalog-modularization-plan.md 全量落地）**：单文件目录按「流程族 / 稳定用途」拆为三个分片目录并各设唯一聚合入口——`catalog/workflows/`（206 条工作流按 16 个类目分片，另预留 ecology / neuroscience / physics / astronomy / social-science / mathematics / machine-learning / engineering 八个空分片）、`catalog/skills/`（11 条按 core / crop-breeding / bioinformatics 分片）、`catalog/resources/`（82 个数据源按 crop-breeding / literature / genomics / omics / general-science 分片，`database-metadata.json` 分组元数据随 resources 入口导出）。大批量迁入从此是独立、可审阅的分片变更，不再挤同一个 JSON 文件。
+  - **对外 API 与构建产物语义不变**：`src/catalog.js` 只 import 三个 `index.js` 入口，`catalog` / `itemById()` / `searchCatalog()` / `composeWorkflow()` 等出口与调用方完全解耦；构建器从入口加载后仍整体内联进 `ui/client.js`，浏览器端零动态请求。根 `index.js`（Node half）同步改从 resources 入口取数据源清单。
+  - 🔒 **「分片 ↔ 入口 ↔ 产物」三向断言**：新增 `scripts/lib/catalog-entries.mjs`（fs 直读分片 + ESM 加载入口两条独立路径），`validate-catalog.mjs` 与测试断言目录中每个 `*.json` 都被对应 `index.js` 登记、分片条目总数等于聚合数组长度且逐条一致、构建产物内联数组与聚合入口相等——分片遗漏或未登记在 `npm run check` 直接失败。新增 6 项加载与聚合测试（总 149 项）。
+  - **拆分零语义变更**：逐条 JSON 全等校验通过；工作流各分类组序与组内顺序与原文件一致，聚合后仅跨类目的扁平交错顺序收敛为按分类聚集（收藏 / 历史 / ID 寻址 / 检索行为不受影响）。技能与数据源的分组展示顺序有两处预期内微调（研究设计组位次、临床与公共卫生组位次），「其他研究数据源」兜底组内顺序随分片重排。
+  - 🧪 **顺带修复两个既有测试失败**（今日早前数据提交未跑测试遗留，非拆分引入）：「工作流 Prompt 含防编造边界」对齐 `validate-catalog-lib` 的 GUARD 契约（prompt 或 limitations 任一携带即可，`predictive-model` 的边界写在 limitations）；「每个数据库均归入一个研究入口」把设计内兜底组「其他研究数据源」纳入受控集合（农业 / 作物与生命科学等 27 个近期新增来源暂经兜底组展示，后续再定义专属研究入口）。
+  - 📚 **文档与数字全面同步**：README（中/英）、CONTRIBUTING、ARCHITECTURE、ROADMAP、DEVELOPMENT、PRODUCT、MANUAL-QA、NOTICE 与两份 SVG 示意图改为分片路径与当前规模（206 / 11 / 82，共 299 项），新增工作流 / 技能 / 数据源的贡献指引改为「写入对应分片并在 index.js 登记」。
+
 - 🗺 **研究证据图谱升级为可探索的专用 Viewer（ROADMAP §3.1）**：分区④在既有节点/边/方向锚点之上补齐关系探索能力——确定性分层布局与端口路由（纯逻辑，新增节点不让已有节点跳位，同侧多条边按端口展开）、Ctrl / ⌘ 滚轮缩放与拖拽平移（带边界钳制与视口中心锚点）、一键复位、右下角迷你地图（点击跳转、视口框联动）、聚焦 / 上游 / 下游 / 两点路径四种范围模式（BFS 邻域与无向最短路；非范围内节点降透明度而非移除，保留参照系）、节点键盘可达（`role="button"` + Enter / 空格）、`prefers-reduced-motion` 时链路流动自动停止、窄屏单列收敛（画布不再有固定最小宽度）。
   - 🔒 **隐私边界延伸到导出与分享**：复制视图链接只编码焦点、范围模式、路径两端与缩放（`encodeGraphView`），**绝不编码证据内容**——链接会被转发，标题与标识符都不该进去；导出快照（SVG / 离线 HTML）由用户显式触发，导出弹窗与导出文件正文都写明元数据范围（仅节点标题 / 来源库 / 稳定标识符 / 核验状态 / 关系，不含笔记、全文、检索词、附件或草稿）；导出物把当前主题解析为真实色值，脱离宿主 CSS 变量后不退化为黑块。
   - **图谱纯逻辑下沉**：`src/lib/evidence-graph-core.js` 新增 `layoutEvidenceGraph` / `routeEvidenceEdges` / `evidenceNeighborhood` / `findEvidencePath` / `encodeGraphView` / `decodeGraphView` / `clampGraphScale` 共 7 个纯函数，视图层只消费布局结果、不持有图算法，配 17 项纯逻辑测试（布局确定性 / 稳定性 / 分列规则、路由锚点、邻域与路径语义、缩放限幅、URL 编解码往返含「内容不进链接」）。

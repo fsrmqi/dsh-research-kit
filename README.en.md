@@ -8,7 +8,7 @@
 
 [English](README.en.md) · [简体中文](README.md)
 
-> A catalog and launcher for research workflows in DeepSeek Harness: 65 human-reviewed workflows, 8 skill-guidance modules, 55 scientific data sources.
+> A catalog and launcher for research workflows in DeepSeek Harness: 206 human-reviewed workflows, 11 skill-guidance modules, 82 scientific data sources.
 
 It turns recurring research tasks — peer review, writing an introduction, literature synthesis, planning a statistical analysis — into **parameterized, editable prompts that you review before sending**. The plugin only assembles the task and hands it back to your session; execution stays with your own DSH agent.
 
@@ -60,13 +60,13 @@ Deliberate trade-offs:
 
 ## Capabilities
 
-**🧪 65 human-reviewed research workflows**
-Across six disciplines: paper & manuscript, literature research, genomics, clinical research, data analysis, study design. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
+**🧪 206 human-reviewed research workflows**
+Across sixteen workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research and more — maintained as per-family shards under `catalog/workflows/` (with reserved shards for ecology, neuroscience, physics, astronomy and beyond). Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
 
-**🧩 8 composable skill-guidance modules**
-Scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication. Each carries a discipline fragment and a human checklist; toggle them at launch to fold them into the prompt.
+**🧩 11 composable skill-guidance modules**
+Scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication — plus three domain modules: agricultural experiment design, crop genomics & breeding evidence, and bioinformatics workflow governance. Each carries a discipline fragment and a human checklist; toggle them at launch to fold them into the prompt.
 
-**🔬 55 scientific data sources, 11 of them queryable in-plugin**
+**🔬 82 scientific data sources, 11 of them queryable in-plugin**
 Literature, clinical, genetics, omics, protein/chemistry — plus astronomy & space, biodiversity, climate & environment, geospatial. Public APIs return candidate records with links and stable identifiers; rate-limited, licensed or parameter-heavy sources fall back explicitly to the DSH agent / MCP.
 
 **✍️ Fully visible and editable before send**
@@ -137,7 +137,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 128 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 299 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live;
@@ -154,16 +154,29 @@ DSH performs the actual send; this plugin creates no model routes, stores no key
 
 ## Catalog contents
 
-| Category | Workflows (65) |
-| --- | --- |
-| Paper & manuscript (13) | Peer review, write introduction/methods/results/discussion, abstract, language polish, reviewer response, journal formatting, reference check, cover letter, translation, supplementary materials |
-| Literature research (12) | Literature review & gaps, literature search, structured paper digest, paper comparison, systematic-review protocol, research landscape, citation analysis, dataset finder, trend tracking, preprint digest, methods comparison, data-source selection |
-| Genomics (22) | bulk/single-cell RNA-seq, variant calling, GWAS, ACMG variant interpretation, gene set enrichment, regulatory network, comparative genomics, metagenomics, phylogenetics, expression atlas, methylation, ATAC-seq, ChIP-seq, genome annotation, RNA velocity, spatial transcriptomics, cell-type annotation, trajectory, multi-omics integration, immune profiling, biomarker discovery |
-| Clinical research (5) | Patient cohort, case-control, longitudinal data, EHR analysis, risk prediction model (all framed "research draft — not for clinical use") |
-| Data analysis (11) | Statistical analysis plan, exploratory analysis, data cleaning, reproduction check, statistical audit, figure audit, statistical analysis, meta-analysis, survival analysis, regression modeling, ANOVA |
-| Study design (2) | Sample size & power estimation, research plan |
+Workflows are maintained as per-family shards under `catalog/workflows/` (one JSON shard per category, aggregated in fixed order by `index.js`):
 
-Plus 8 skills and 55 database entries. Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
+| Category (shard) | Count |
+| --- | --- |
+| Paper & manuscript (paper-manuscript) | 16 |
+| Literature research (literature) | 14 |
+| Data analysis (data-analysis) | 17 |
+| Study design (research-design) | 5 |
+| Bioinformatics (bioinformatics) | 14 |
+| Genomics (genomics) | 14 |
+| Clinical research (clinical) | 19 |
+| Crop breeding (crop-breeding) | 8 |
+| Visualization (visual) | 12 |
+| Science communication (science-communication) | 10 |
+| Grant proposals (grants) | 10 |
+| Proteomics & structural biology (proteomics) | 13 |
+| Cell biology (cell-biology) | 9 |
+| Chemistry (chemistry) | 18 |
+| Drug discovery (drug-discovery) | 15 |
+| Materials science (materials) | 12 |
+| Reserved families (ecology / neuroscience / physics / astronomy / social-science / mathematics / machine-learning / engineering) | 0 (to be populated) |
+
+Plus 11 skills (`catalog/skills/`: core 8 / crop-breeding 2 / bioinformatics 1) and 82 database entries (`catalog/resources/`: crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 41). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
 
 ## Privacy & security
 
@@ -184,13 +197,13 @@ Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
 Database detail pages can query a first batch of public sources directly: PubMed, Crossref, OpenAlex, Semantic Scholar, Europe PMC, ClinicalTrials.gov, openFDA, UniProt, PubChem, GBIF and iNaturalist. These 11 entries are marked `available-in-plugin` in the catalog, and their detail page reads "queryable directly by the plugin". Candidate results show source links and stable identifiers and can be written into the composer, or you can explicitly click "Let the agent verify and continue" — that button invokes the current DSH session's agent, which then uses the web/MCP/file tools it already has to complete a multi-step search.
 
-The remaining 44 sources are marked `requires-mcp` or `reference-only`, state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. Catalog labels and the query implementation are cross-checked by `npm run check` in both directions (an adapter must be labelled, and a label must have an adapter), so the capability shown in the UI cannot drift from what is actually implemented. **The plugin never fabricates a search result.**
+The remaining 71 sources are marked `requires-mcp` or `reference-only`, state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. Catalog labels and the query implementation are cross-checked by `npm run check` in both directions (an adapter must be labelled, and a label must have an adapter), so the capability shown in the UI cannot drift from what is actually implemented. **The plugin never fabricates a search result.**
 
 ## Compatibility & status
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (128 entries, 128 unique IDs), 143 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (299 entries, 299 unique IDs, shards identical to the aggregated entries), 149 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -199,7 +212,7 @@ Verified so far: catalog contract validation (128 entries, 128 unique IDs), 143 
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (143)
+npm test        # pure-logic, contract and render-level regression tests (149)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).
@@ -219,7 +232,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 
 ## Contributing
 
-Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To add a workflow, append a JSON object to `catalog/workflows.json` following the existing entries and run `npm run check && npm test`; the contract validator enforces placeholder consistency and anti-fabrication boundaries.
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). To add a workflow, append a JSON object to the matching `catalog/workflows/<category>.json` shard following the existing entries and run `npm run check && npm test`; the contract validator enforces placeholder consistency, anti-fabrication boundaries and shard/entry agreement.
 
 ## License
 

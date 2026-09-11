@@ -213,7 +213,7 @@ dsh plugin --profile web add <path-to-this-repo>   # 3) 重装
 | D1 | 在工作台点开 PubMed、Crossref 等 11 个直查来源的详情 | 「当前状态」为绿色**「插件可直接查询」**，且出现可用的查询入口 | |
 | D2 | 点开一个非直查来源（如 Scopus、GTEx） | 状态为琥珀色「需要 MCP 或 Web 能力」，写明接入前提，**不伪造查询结果** | |
 
-> 这两项守护的是「目录标注与实现一致」这条双向契约。若 D1 出现琥珀色提示，说明 `catalog/databases.json` 的 `availability` 与 `dsh/database-query.js` 的适配器漂移——`npm run check` 本应拦住它，先跑一次即可定位。
+> 这两项守护的是「目录标注与实现一致」这条双向契约。若 D1 出现琥珀色提示，说明 `catalog/resources/` 分片的 `availability` 与 `dsh/database-query.js` 的适配器漂移——`npm run check` 本应拦住它，先跑一次即可定位。
 
 ---
 

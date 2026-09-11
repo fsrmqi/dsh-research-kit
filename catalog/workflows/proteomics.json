@@ -1,0 +1,318 @@
+[
+  {
+    "id": "protein-structure-analysis",
+    "name": "Protein Structure Analysis",
+    "description": "Fetch and analyze PDB structures or AlphaFold predictions",
+    "category": "蛋白组与结构生物学",
+    "icon": "Box",
+    "prompt": "Analyze the protein structure for: {protein}; first resolve it to a definitive identifier (UniProt accession and/or PDB ID), recording the organism and the source/version of the structure used.\n\nWork in this order:\n1. Retrieve the structure from the PDB (note resolution, method, and any missing residues) or from AlphaFold if no experimental structure exists.\n2. Describe the overall fold and domain architecture (cross-reference Pfam/InterPro).\n3. Identify active-site residues and binding pockets, citing known catalytic/functional residues where available.\n4. Analyze secondary-structure composition (DSSP via biopython).\n5. Visualize key structural features (overall fold, pockets, key residues).\n6. Compare with homologous structures via structural search/alignment if relevant. Validate annotations against UniProt feature records. Record database and tool versions. Deliverables: save figures as PNG, a residue/feature summary table as CSV, the retrieved coordinate file, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (resolution, predicted-vs-experimental confidence). If the protein identity or which structure/conformation is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name, UniProt ID, or PDB ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "molecular-docking",
+    "name": "Molecular Docking",
+    "description": "Dock a ligand to a protein target and analyze binding",
+    "category": "蛋白组与结构生物学",
+    "icon": "Crosshair",
+    "prompt": "Perform molecular docking of {ligand} against {target}; first resolve {target} to a definitive structure (PDB ID or AlphaFold model) and {ligand} to a canonical SMILES/structure, recording organism and source versions.\n\nWork in this order:\n1. Retrieve or prepare the protein structure (remove waters, add hydrogens, assign protonation at physiological pH, keep relevant cofactors).\n2. Prepare the ligand (rdkit: sanitize, enumerate tautomers/stereoisomers, generate 3D conformers).\n3. Define the binding site (known pocket residues, co-crystallized ligand, or blind docking) and report the chosen box/region.\n4. Run docking (diffdock or a scoring-function docker) with a fixed seed and multiple poses/replicates.\n5. Analyze binding poses and scores, checking pose plausibility and consistency.\n6. Visualize the best binding mode with key interactions (H-bonds, hydrophobic, salt bridges). Validate by re-docking any known co-crystallized ligand as a positive control. Record tool/version. Deliverables: save pose structures, a ranked pose/score table as CSV, interaction figures as PNG, and a Markdown methods+findings report with pose confidence, docking scores, and caveats; do not present a docking score as binding affinity; summarize in chat and name the files. If target or ligand identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "ligand",
+        "label": "Ligand name, SMILES, or file",
+        "required": true
+      },
+      {
+        "key": "target",
+        "label": "Protein target (name or PDB ID)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "mass-spec-proteomics",
+    "name": "Mass Spectrometry Proteomics",
+    "description": "Analyze LC-MS/MS proteomics data",
+    "category": "蛋白组与结构生物学",
+    "icon": "Scan",
+    "prompt": "Analyze the uploaded LC-MS/MS proteomics data; record the instrument/acquisition type, quantification scheme, and the {database} version used (set seeds where applicable).\n\nWork in this order:\n1. Process raw spectra (peak picking, deconvolution) with pyopenms and report QC (TIC, identification rate, missed cleavages, mass accuracy).\n2. Peptide-spectrum matching against the {database} database with a decoy database for target-decoy validation.\n3. Protein inference with FDR control at the PSM/peptide/protein level (typically 1% FDR).\n4. Label-free or TMT quantification with appropriate normalization and principled handling of missing values.\n5. Differential abundance between {comparison} using a design-matched statsmodels model or a justified permutation test, with BH FDR correction, flagging at FDR<0.05.\n6. Pathway enrichment of significant proteins with FDR correction. Validate with expected housekeeping/spike-in controls and flag batch confounds. Generate a volcano plot and heatmap. Record tool/database versions. Deliverables: save protein/peptide and DE tables as CSV, figures as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations. If the database, quant scheme, or comparison is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "database",
+        "label": "Protein database (UniProt human, mouse, etc.)",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-protein-interaction",
+    "name": "Protein-Protein Interaction Network",
+    "description": "Build and analyze PPI networks",
+    "category": "蛋白组与结构生物学",
+    "icon": "Network",
+    "prompt": "Construct a protein-protein interaction network for: {proteins}; first map inputs to stable identifiers (UniProt/STRING) for the correct organism, recording the STRING version and confidence cutoff used.\n\nWork in this order:\n1. Query the STRING database for known interactions (bioservices), applying a defined confidence score threshold.\n2. Add predicted interactions from co-expression and text-mining channels, distinguishing evidence types.\n3. Build and visualize the network (networkx).\n4. Identify hub proteins (degree/betweenness centrality) and detect clusters/modules (community detection).\n5. Perform GO enrichment on each network module with FDR correction.\n6. Compare with {context} if relevant (context-specific expression/disease genes). Validate that a few well-known interactions appear as a sanity check. Record database and tool versions. Deliverables: save the edge list, node-centrality, and module-enrichment tables as CSV, the network figure as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (text-mining false positives, organism/context specificity). If the organism or which proteins are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "proteins",
+        "label": "Protein list (gene symbols or UniProt IDs)",
+        "required": true
+      },
+      {
+        "key": "context",
+        "label": "Biological context (optional, e.g., disease, tissue)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "alphafold-prediction",
+    "name": "AlphaFold Structure Prediction",
+    "description": "Retrieve or predict protein 3D structure with AlphaFold",
+    "category": "蛋白组与结构生物学",
+    "icon": "Atom",
+    "prompt": "Obtain the AlphaFold-predicted structure for: {protein}; first resolve it to a UniProt accession, recording the organism and AlphaFold DB version.\n\nWork in this order:\n1. Check the AlphaFold database for an existing prediction (bioservices); if absent, note that de novo prediction may be required and fetch the sequence.\n2. Assess per-residue confidence (pLDDT) and, if available, the PAE matrix for inter-domain reliability.\n3. Identify well-predicted (pLDDT>70/90) versus low-confidence/disordered regions.\n4. Compare with experimental structures from the PDB if available (structural superposition, RMSD), noting agreement.\n5. Analyze key structural features (domains, active sites, interfaces), cross-referencing UniProt/Pfam annotations.\n6. Visualize and annotate the structure, coloring by pLDDT. Record database and tool versions. Deliverables: save the coordinate file, a per-region confidence table as CSV, annotated figures (including pLDDT coloring) as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (single static model, low-confidence/disordered regions, no ligands/multimers unless modeled). If the protein identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Tamarind only when it is configured and the user authorizes remote execution. Otherwise retrieve an existing AlphaFold Database model when available or prepare a validated execution plan; never imply that a de novo prediction was run.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-engineering",
+    "name": "Protein Engineering Design",
+    "description": "Design protein variants for improved function",
+    "category": "蛋白组与结构生物学",
+    "icon": "Wrench",
+    "prompt": "Design protein engineering strategies for: {protein} to improve {property}; first resolve {protein} to a UniProt accession and reference structure, recording organism and source versions.\n\nWork in this order:\n1. Analyze the wild-type structure and active/functional site (retrieve experimental or AlphaFold structure; map known functional residues).\n2. Identify candidate mutagenesis positions using evolutionary conservation (MSA-derived), structural context (proximity to active site, surface vs core), and exclusion of catalytically essential residues for {property}.\n3. Predict mutation effects using computational tools (ESM/inverse-folding likelihoods, stability predictors like FoldX/ddG), reporting uncertainty.\n4. Rank mutations by predicted impact on {property}, separating beneficial from destabilizing.\n5. Suggest a focused, combinatorial library design (positions, allowed substitutions, library size).\n6. Recommend an experimental validation strategy (assay, controls including wild-type and known variants). Record tool/model and reference versions. Deliverables: save a ranked mutation/variant table as CSV, annotated structure figures as PNG, and a Markdown methods+findings report with rationale and caveats; summarize in chat and name the files. If the protein, the target property, or the activity assay is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Tamarind only when it is configured and the user authorizes remote execution. Keep proposed sequences as computational hypotheses; do not imply that cloud-lab expression or assay validation occurred unless the user explicitly requested and authorized that separate operation.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein to engineer",
+        "required": true
+      },
+      {
+        "key": "property",
+        "label": "Property to improve (stability, activity, specificity)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "binding-site-analysis",
+    "name": "Binding Site Analysis",
+    "description": "Characterize ligand binding pockets in a protein",
+    "category": "蛋白组与结构生物学",
+    "icon": "Target",
+    "prompt": "Analyze the binding site(s) of: {protein}; first resolve it to a definitive structure (PDB ID or AlphaFold model), recording organism, resolution/confidence, and source version.\n\nWork in this order:\n1. Identify all binding pockets using geometric and energy-based methods (e.g. fpocket/CASTp), reporting the detection method.\n2. Characterize each pocket (volume, hydrophobicity, polarity, druggability score).\n3. Identify key residues lining each binding site and cross-reference known functional residues from UniProt.\n4. Map known ligands/co-crystallized molecules to the detected pockets as validation.\n5. Compare pocket conservation across homologs (sequence/structure alignment) to flag specificity-determining residues.\n6. Assess druggability and suggest pharmacophore features (H-bond donors/acceptors, hydrophobic anchors). Flag confounds (predicted-structure uncertainty, induced-fit/cryptic pockets). Record tool and database versions. Deliverables: save a pocket-characterization table and residue list as CSV, annotated pocket figures as PNG, the structure file, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations. If the protein identity or which structure to use is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or PDB ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "molecular-dynamics-sim",
+    "name": "Molecular Dynamics Simulation",
+    "description": "Set up and analyze MD simulations of biomolecules",
+    "category": "蛋白组与结构生物学",
+    "icon": "Waves",
+    "prompt": "Set up and analyze a molecular dynamics simulation of: {system}; first record the input structure source/version, force field, water model, and intended {duration}, and set random seeds for reproducibility.\n\nWork in this order:\n1. Prepare the system: clean the structure, assign protonation states at physiological pH, parameterize any ligand, select an appropriate force field, then solvate and neutralize/ionize to physiological salt.\n2. Energy minimization followed by staged NVT/NPT equilibration with position restraints, reporting temperature/pressure/density stability.\n3. Production run setup for {duration} (default a sensible length if unset), noting integrator, timestep, and thermostat/barostat.\n4. Analyze trajectory stability and dynamics: RMSD, per-residue RMSF, radius of gyration, and convergence checks.\n5. Identify key conformational changes (clustering, PCA/essential dynamics).\n6. Calculate binding free energy (MM/PBSA or similar) if a ligand is present, noting method assumptions. Validate equilibration before interpreting production. Record tool/force-field versions and seeds. Deliverables: save analysis plots as PNG, metric time-series tables as CSV, representative structures, and a Markdown methods+findings report; summarize in chat, name the files, and note sampling/timescale limitations. If the system or force field is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nBefore expensive execution, inspect available local resources and required binaries. If the full workload exceeds local capacity, use configured Modal compute only when authorized; otherwise run a bounded pilot or produce a validated execution plan. Never imply that an unexecuted full run completed.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "system",
+        "label": "Molecular system (protein, protein-ligand complex, membrane)",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Simulation duration (e.g., 100 ns)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "homology-modeling",
+    "name": "Homology Modeling",
+    "description": "Build a 3D model from a homologous template structure",
+    "category": "蛋白组与结构生物学",
+    "icon": "Layers",
+    "prompt": "Build a homology model for: {protein}; first resolve it to a sequence/UniProt accession, recording organism and template database version.\n\nWork in this order:\n1. Search the PDB for suitable template structures (BLAST/HHsearch), selecting templates by sequence identity, coverage, and resolution, and reporting the chosen template(s).\n2. Perform a careful target-template sequence alignment, manually checking conserved motifs and gap placement.\n3. Build the 3D model using comparative modeling (e.g. MODELLER), generating multiple models.\n4. Refine loop regions and side chains, especially low-identity and insertion regions.\n5. Validate the model (Ramachandran plot, ERRAT, ProSA/QMEAN, DOPE score), reporting problematic regions.\n6. Compare with the AlphaFold prediction if available (superposition, RMSD) as an independent check. Record tool and database versions. Deliverables: save the model coordinate file, a validation-metrics table as CSV, validation/structure figures as PNG, and a Markdown methods+findings report stating template identity and confidence; summarize in chat, name the files, and note limitations (low template identity, unreliable loops). If the protein identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein sequence or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-function-prediction",
+    "name": "Protein Function Prediction",
+    "description": "Predict function from sequence and structure",
+    "category": "蛋白组与结构生物学",
+    "icon": "Sparkles",
+    "prompt": "Predict the function of: {protein}; first record the organism (if known), sequence length, and reference database versions.\n\nWork in this order:\n1. Run sequence similarity searches (BLAST against UniProt/NR, HMMer against profile databases), reporting top hits with identity, coverage, and E-values.\n2. Identify conserved domains and families (InterPro, Pfam).\n3. Predict subcellular localization (e.g. DeepLoc/signal-based tools).\n4. Predict Gene Ontology terms (molecular function, biological process, cellular component) from sequence and, if a structure is available, structure-based signals.\n5. Check for signal peptides (SignalP) and transmembrane domains (TMHMM/DeepTMHMM).\n6. Integrate all evidence into a function prediction with explicit confidence scores, flagging conflicting evidence and low-similarity (twilight-zone) cases. Validate against any known annotation for close homologs. Record tool and database versions. Deliverables: save an evidence table (hits, domains, GO terms with scores) as CSV, summary figures (e.g. domain architecture) as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations of homology-based inference. If the protein identity or organism is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein sequence or accession",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "post-translational-mods",
+    "name": "PTM Analysis",
+    "description": "Predict and analyze post-translational modifications",
+    "category": "蛋白组与结构生物学",
+    "icon": "CircleDot",
+    "prompt": "Analyze post-translational modifications for: {protein}; first resolve it to a UniProt accession, recording organism and database/tool versions.\n\nWork in this order:\n1. Query known PTMs from UniProt and PhosphoSitePlus-style resources, recording evidence type.\n2. Predict phosphorylation, glycosylation (N-/O-linked), ubiquitination, and acetylation sites with established predictors, reporting per-site confidence and distinguishing predicted from experimentally validated.\n3. Map PTM sites onto the 3D structure (experimental or AlphaFold), checking surface accessibility.\n4. Assess the structural and functional impact of each PTM (proximity to active sites, interfaces, disorder).\n5. Check for disease-associated PTM changes (e.g. via variant/PTM databases).\n6. Compare PTM-site conservation across species using an alignment as a sanity check. Record database and tool versions. Deliverables: save a PTM-site table (position, type, evidence, confidence) as CSV, annotated structure/sequence figures as PNG, and a Markdown methods+findings report distinguishing known vs predicted sites; summarize in chat, name the files, and note prediction false-positive caveats. If the protein identity or organism is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "structural-alignment",
+    "name": "Structural Alignment",
+    "description": "Align and compare protein 3D structures",
+    "category": "蛋白组与结构生物学",
+    "icon": "Layers",
+    "prompt": "Perform structural alignment between: {structures}; first resolve each to a definitive PDB ID or model, recording organism, resolution/confidence, and chains/source versions used.\n\nWork in this order:\n1. Superimpose the structures using TM-align (or DALI/CE for distant homologs), reporting the method and reference structure.\n2. Calculate pairwise RMSD over aligned residues and TM-score (length-normalized) to quantify global similarity.\n3. Identify conserved structural cores versus variable/flexible regions.\n4. Map sequence differences onto the structural alignment (sequence vs structure agreement).\n5. Highlight functional-site differences (active sites, binding pockets, interfaces).\n6. Visualize the superposition with color-coded conserved/divergent regions and per-residue deviation. Sanity-check that closely related structures yield high TM-score/low RMSD. Record tool versions. Deliverables: save the superposed coordinates, an alignment-metrics table (RMSD, TM-score, aligned length) as CSV, annotated superposition figures as PNG, and a Markdown methods+findings report interpreting structural relationships; summarize in chat, name the files, and note limitations (chain/conformational-state choice, predicted-model confidence). If which structures/chains to compare is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "structures",
+        "label": "PDB IDs or protein names to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "epitope-prediction",
+    "name": "Epitope Prediction",
+    "description": "Predict B-cell and T-cell epitopes for vaccine design",
+    "category": "蛋白组与结构生物学",
+    "icon": "Shield",
+    "prompt": "Predict epitopes for: {antigen}; first resolve it to a sequence/UniProt accession, recording the organism, sequence source, and tool/database versions.\n\nWork in this order:\n1. Predict linear B-cell epitopes from surface accessibility, hydrophilicity, and flexibility (e.g. BepiPred-style methods).\n2. Predict conformational B-cell epitopes from the 3D structure (experimental or AlphaFold; e.g. DiscoTope), noting structure confidence.\n3. Predict MHC-I (8-11mer) binding peptides for {hla_alleles} (default to a common-allele supertype panel if unspecified) using NetMHCpan-style tools.\n4. Predict MHC-II binding peptides (15mer core).\n5. Rank epitopes by predicted immunogenicity and binding affinity, and flag self-similarity/conservation across strains and potential allergenicity/toxicity as filters.\n6. Map top epitopes onto the protein structure. Validate against any known epitopes (e.g. IEDB) as a positive control. Record tool and database versions. Deliverables: save ranked B-cell and T-cell epitope tables (sequence, position, allele, scores) as CSV, mapped-structure figures as PNG, and a Markdown methods+findings report suggesting prioritized vaccine candidates with caveats; summarize in chat and name the files. If the antigen identity or target HLA alleles are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "antigen",
+        "label": "Antigen protein name or sequence",
+        "required": true
+      },
+      {
+        "key": "hla_alleles",
+        "label": "HLA alleles (e.g., HLA-A*02:01, or 'common alleles')",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

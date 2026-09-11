@@ -55,4 +55,4 @@
 
 1. **`ui/client.js` 是构建产物，不得手改。** 改源码后必须 `npm run build` 并提交产物，CI 会校验一致性。
 2. **`vendor/promptkit-embed.js` 是 SHA 锁定的工件，不得手改。** 改动会导致 `npm run check` 失败。
-3. **自动化测试无法替代真实 profile 验收。** 仓库内 143 项测试覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。
+3. **自动化测试无法替代真实 profile 验收。** 仓库内 149 项测试覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。

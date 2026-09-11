@@ -1,0 +1,165 @@
+[
+  {
+    "id": "power-analysis",
+    "type": "workflow",
+    "name": "样本量与统计功效估算",
+    "description": "为研究设计估算所需样本量并给出功效曲线。",
+    "category": "研究设计",
+    "tags": [
+      "样本量",
+      "功效分析",
+      "研究设计"
+    ],
+    "placeholders": [
+      {
+        "key": "study_design",
+        "label": "研究设计与主要分析",
+        "required": true,
+        "multiline": true,
+        "hint": "如“两组随机对照，主要分析为 t 检验”"
+      },
+      {
+        "key": "effect_size",
+        "label": "预期效应量",
+        "required": true,
+        "hint": "给出依据；不确定时填“请协助从最小科学重要效应推算”"
+      },
+      {
+        "key": "alpha",
+        "label": "显著性水平",
+        "required": false,
+        "hint": "默认 0.05"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "reproducibility"
+    ],
+    "limitations": [
+      "估算基于用户给定的假设，最终样本量需统计专家与实际约束共同确定。"
+    ],
+    "prompt": "请针对以下研究设计做先验样本量与统计功效估算：{study_design}。预期效应量：{effect_size}；显著性水平：{alpha}。要求：1. 明确独立观测单位、分配方式、主要终点、假设与计划分析、单双侧及效应量指标；2. 论证效应量取值依据，优先采用最小科学重要效应而非未缩小的试点估计或惯例值；3. 使计算方法与计划分析匹配，标准设计用公式法，否则说明需按相同数据结构做模拟估算；4. 分别给出 80% 与 90% 功效对应的样本量，并说明是每组、每集群还是总数；5. 按需校正不等分配、聚类、重复测量、多重比较与脱落；6. 给出效应量与样本量范围内的敏感性分析；7. 以规划区间而非虚假精确的单点值给出建议，列出需统计专家核实的全部假设。不得虚构效应量，不报告事后观察功效；若研究已完成，改为报告既定样本量下的最小可检测效应。输出为供研究计划使用的样本量估算草案。"
+  },
+  {
+    "id": "research-plan",
+    "type": "workflow",
+    "name": "研究计划撰写",
+    "description": "把研究想法展开为完整、可评审的研究计划。",
+    "category": "研究设计",
+    "tags": [
+      "研究计划",
+      "设计",
+      "可行性"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "研究主题",
+        "required": true,
+        "multiline": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "uncertainty-communication",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "pubmed"
+    ],
+    "prompt": "请围绕主题“{topic}”撰写详细的研究计划草案。依次包括：1. 依据已有研究的研究背景与立论依据；2. 清晰、可检验的假设；3. 足以判断可行性与严谨性的实验设计与方法——关键变量、对照、样本量/功效考虑与分析方案；4. 预期结果、解释方式，以及结果不符时的具体备选策略；5. 带里程碑与 go/no-go 决策点的时间线；6. 所需资源与人员。引用证据时使用真实可核验来源，不得虚构引用、前期数据或统计数字，需要真实文献支撑处用“[待核验]”标记。输出为供合作者与导师评审的研究计划草案。"
+  },
+  {
+    "id": "grant-specific-aims",
+    "type": "workflow",
+    "name": "撰写基金 Specific Aims",
+    "description": "把研究构想收敛为可评审的中心假说、具体目标与可检验产出。",
+    "category": "研究设计",
+    "tags": [
+      "基金申请",
+      "Specific Aims",
+      "研究目标"
+    ],
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "研究问题或中心假说",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "crossref"
+    ],
+    "limitations": [
+      "不虚构前期数据、资助要求或可行性证据；目标与资源由申请人最终确认。"
+    ],
+    "prompt": "请将研究问题“{question}”起草为基金申请 Specific Aims 草案：说明未解决问题、重要性、中心假说、2–3 个相互关联但可独立评价的具体目标、每个目标的核心方法、可衡量产出、主要风险与替代路径。区分已有证据、研究假设和待验证主张；不编造前期数据、引用或资助机构要求。输出一页式 aims 草案及需申请人补充的证据清单。"
+  },
+  {
+    "id": "data-management-plan",
+    "type": "workflow",
+    "name": "撰写数据管理计划",
+    "description": "为研究数据定义采集、版本、访问、共享、保存与责任边界。",
+    "category": "研究设计",
+    "tags": [
+      "数据管理",
+      "DMP",
+      "可重复性"
+    ],
+    "placeholders": [
+      {
+        "key": "data_scope",
+        "label": "数据类型与研究范围",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "data-integrity",
+      "reproducibility"
+    ],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "不替代伦理、隐私、资助方或机构的正式合规审查。"
+    ],
+    "prompt": "请为“{data_scope}”起草研究数据管理计划。覆盖数据采集与元数据、命名与版本控制、质量控制、访问权限、去标识化与敏感数据边界、备份、保存期限、共享条件、仓库选择、代码与环境可复现性、责任人及变更记录。明确哪些要求需按资助方、机构伦理或数据使用协议核验；不得假定已有许可、加密、仓库或合规批准。输出可执行清单和待确认事项。"
+  },
+  {
+    "id": "research-milestone-plan",
+    "type": "workflow",
+    "name": "研究项目里程碑计划",
+    "description": "将研究目标拆成阶段、依赖、验收标准、风险与交付物。",
+    "category": "研究设计",
+    "tags": [
+      "项目管理",
+      "里程碑",
+      "时间线"
+    ],
+    "placeholders": [
+      {
+        "key": "goal",
+        "label": "研究目标",
+        "required": true
+      },
+      {
+        "key": "horizon",
+        "label": "计划周期",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "reproducibility",
+      "data-integrity",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "时间、人力和依赖均为计划假设，不代表资源已获批或实验必然成功。"
+    ],
+    "prompt": "请为研究目标“{goal}”在“{horizon}”内制定里程碑计划。将工作拆为可验收阶段，逐项列出输入、依赖、交付物、完成判据、风险、替代路径与需人工决策点；区分可以并行与必须串行的工作，保留数据核验、可重复性记录与结果复核阶段。不得把预测进度写成已完成事实。输出表格化计划和适合生成科研执行链路图的节点/边清单。"
+  }
+]

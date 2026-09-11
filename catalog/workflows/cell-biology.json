@@ -1,0 +1,209 @@
+[
+  {
+    "id": "scrnaseq-clustering",
+    "name": "scRNA-seq Clustering",
+    "description": "Identify and characterize cell clusters from scRNA-seq",
+    "category": "细胞生物学",
+    "icon": "CircleDot",
+    "prompt": "Perform clustering on the uploaded scRNA-seq data.\n\nWork in this order:\n1. QC: filter cells/genes on counts, n_genes, and mitochondrial % (default <15-20%, adjust per tissue), flag and remove doublets with Scrublet (Python).\n2. Normalize with a documented Scanpy-compatible method, select HVGs, scale, PCA; correct batch effects across samples (Harmony/scVI) and check the embedding for residual batch.\n3. Run Leiden/Louvain at multiple resolutions; assess cluster stability (e.g., bootstrap/silhouette) and pick an optimal resolution.\n4. Identify marker genes per cluster with the Wilcoxon rank-sum test, reporting effect sizes and BH-adjusted p-values; avoid double-dipping when interpreting.\n5. Annotate clusters using {reference} markers and validate against known biology.\n6. Visualize UMAP, marker expression, and report cluster proportions and distinguishing features. Set a random seed, record package versions. If an essential parameter (e.g., expected cell types or QC cutoffs) is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), marker tables (CSV), the processed .h5ad, and a methods+findings report (Markdown); summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reference",
+        "label": "Reference markers or cell atlas to use",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "flow-cytometry-analysis",
+    "name": "Flow Cytometry Analysis",
+    "description": "Gate, cluster, and quantify flow cytometry data",
+    "category": "细胞生物学",
+    "icon": "Droplet",
+    "prompt": "Analyze the uploaded flow cytometry data (FCS files).\n\nWork in this order:\n1. Apply compensation/spillover correction and QC: remove debris/doublets (FSC-A vs FSC-H), gate on viability, check for time-based acquisition anomalies, and transform fluorescence (arcsinh/logicle).\n2. Reproduce the manual gating strategy or run automated gating: {gating}.\n3. Dimensionality reduction (UMAP) of marker expression.\n4. Cluster with FlowSOM or PhenoGraph and annotate populations by canonical markers.\n5. Quantify cell population frequencies per sample.\n6. Compare populations between {comparison} using appropriate tests for the design (e.g., Mann-Whitney/t-test or mixed models for paired data) with multiple-comparison correction and effect sizes; flag batch/acquisition-day confounds. Set a random seed and record package versions. If the panel-to-marker mapping or comparison design is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Generate publication-quality dot plots and histograms (PNG), frequency tables (CSV), and a methods+findings report (Markdown); summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "gating",
+        "label": "Gating strategy or panel description",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "cell-cell-communication",
+    "name": "Cell-Cell Communication",
+    "description": "Infer intercellular signaling from scRNA-seq",
+    "category": "细胞生物学",
+    "icon": "Network",
+    "prompt": "Infer cell-cell communication networks from the uploaded scRNA-seq data.\n\nWork in this order:\n1. Confirm QC, normalization, and reliable cell-type annotations first, since communication inference is only as good as the labels.\n2. Identify ligand-receptor pairs between cell types and score interaction strength using a Python workflow such as LIANA or CellPhoneDB with permutation-based significance, reporting adjusted p-values.\n3. Identify dominant signaling pathways.\n4. Detect outgoing and incoming signals per cell type.\n5. Visualize communication networks (chord diagrams, dot plots, heatmaps).\n6. Compare signaling between {comparison} if multiple conditions, using differential interaction analysis and accounting for differences in cell-type abundance; flag that inferred interactions are predictions requiring spatial or functional validation. Set a random seed and record package/database versions. If conditions or the cell-type grouping are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), interaction tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions to compare (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "cell-cycle-analysis",
+    "name": "Cell Cycle Analysis",
+    "description": "Score cell cycle phases and regress out cell cycle effects",
+    "category": "细胞生物学",
+    "icon": "RefreshCw",
+    "prompt": "Perform cell cycle analysis on the uploaded scRNA-seq data.\n\nWork in this order:\n1. After normalization, score G1, S, and G2M phases using standard gene sets (e.g., Tirosh S/G2M genes), mapping to the correct species orthologs.\n2. Visualize the cell cycle distribution across clusters and on UMAP.\n3. Test whether cell cycle drives clustering (e.g., compare embeddings/cluster assignments before vs after, association tests).\n4. Regress out or correct cell cycle effects only if it is a confounder, and report the impact; avoid removing biologically meaningful proliferation signal.\n5. Compare cell cycle phase distributions between {comparison} using appropriate proportion tests with multiple-comparison correction and effect sizes.\n6. Identify cell cycle-regulated genes specific to each cell type. Set a random seed and record package versions. If the comparison groups or species are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), phase/score tables (CSV), the processed .h5ad, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions to compare (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "perturbation-analysis",
+    "name": "Perturbation / CRISPR Screen Analysis",
+    "description": "Analyze Perturb-seq or CRISPR screen data",
+    "category": "细胞生物学",
+    "icon": "Zap",
+    "prompt": "Analyze the uploaded perturbation screen data ({screen_type}).\n\nWork in this order:\n1. QC: assess guide RNA assignment, coverage, and cell numbers per perturbation, filter low-coverage guides, run standard scRNA QC (mito %, doublets), and handle multiplets/multiple-guide cells.\n2. Identify differentially expressed genes per perturbation vs non-targeting controls using a suitable model (e.g., negative-binomial/pseudobulk DE) with BH correction and reported effect sizes; avoid treating each cell as independent when pseudobulk is appropriate.\n3. Score perturbation effects on gene programs/signatures.\n4. Cluster perturbations by transcriptional similarity.\n5. Identify genetic interactions or epistasis where the design supports it.\n6. Prioritize hits for validation with explicit criteria and confidence. Set a random seed and record package versions. If the control definition or replicate structure is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), per-perturbation DE and hit tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "screen_type",
+        "label": "Screen type (Perturb-seq, CRISPRi, CRISPRa, CRISPR KO)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "lineage-tracing",
+    "name": "Lineage Tracing Analysis",
+    "description": "Reconstruct cell lineage trees from barcoding data",
+    "category": "细胞生物学",
+    "icon": "GitBranch",
+    "prompt": "Analyze lineage tracing data from the uploaded dataset.\n\nWork in this order:\n1. Process barcode or mutation data for lineage reconstruction, with QC on barcode detection/dropout and collision filtering.\n2. Build lineage trees using neighbor-joining or Bayesian/maximum-likelihood methods, reporting branch support where available.\n3. Map cell types onto the lineage tree, integrating paired transcriptomic annotations if present.\n4. Identify lineage-biased progenitors.\n5. Quantify fate probabilities for each progenitor class with uncertainty estimates.\n6. Visualize lineage trees annotated with cell types and pseudotime, and check that inferred topology is robust to barcode noise. Set a random seed and record package versions. If the barcode encoding scheme or expected lineage structure is ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), tree files and fate-probability tables (CSV), the processed object, and a concise methods+findings report (Markdown); then summarize in chat, name the files, and note limitations including barcode homoplasy and dropout.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spatial-cell-analysis",
+    "name": "Spatial Cell Analysis",
+    "description": "Analyze cell spatial organization and neighborhoods",
+    "category": "细胞生物学",
+    "icon": "Map",
+    "prompt": "Analyze spatial cell organization in the uploaded data ({platform}).\n\nWork in this order:\n1. Segment cells, QC segmentation quality, and quantify marker expression with platform-appropriate normalization (and background/autofluorescence handling for IMC/mIF; transcript QC for MERFISH/Xenium/CosMx).\n2. Classify cell types and validate with canonical markers.\n3. Identify spatial neighborhoods and niches (e.g., neighborhood enrichment, niche clustering).\n4. Compute spatial statistics (co-localization, exclusion, clustering) with permutation-based significance and multiple-comparison correction.\n5. Detect tissue microenvironments.\n6. Correlate spatial patterns with {outcome} if available, using appropriate tests and reporting effect sizes; flag batch/slide and segmentation confounds. Set a random seed and record package versions. If the cell-type scheme or outcome variable is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures including spatial overlays (PNG), neighborhood/statistics tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "platform",
+        "label": "Platform (MERFISH, Xenium, CosMx, IMC, mIF)",
+        "required": true
+      },
+      {
+        "key": "outcome",
+        "label": "Clinical outcome to correlate with (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolic-modeling",
+    "name": "Metabolic Flux Analysis",
+    "description": "Constraint-based modeling of metabolic networks",
+    "category": "细胞生物学",
+    "icon": "Network",
+    "prompt": "Perform metabolic flux analysis on {organism} using constraint-based modeling.\n\nWork in this order:\n1. Load or construct a genome-scale metabolic model (GEM) from a curated source and validate it (mass/charge balance, blocked reactions, sensible default biomass objective).\n2. Define media conditions: {media}, setting exchange bounds explicitly and recording them.\n3. Run flux balance analysis (FBA) to predict growth rate and fluxes, and sanity-check against known growth phenotypes.\n4. Perform flux variability analysis (FVA) to report flux ranges and identify alternate optima.\n5. Simulate single (and optionally double) gene knockouts and predict essential genes, comparing to known essentiality where available.\n6. Visualize metabolic flux maps on pathway diagrams. Record solver and package versions and the model identifier/version for reproducibility. If the media composition or objective is missing/ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions (e.g., default minimal media). Save flux maps and figures (PNG), flux/FVA/essentiality tables (CSV), the model file, and a concise methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "Organism (E. coli, yeast, human)",
+        "required": true
+      },
+      {
+        "key": "media",
+        "label": "Growth media composition",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "glycan-analysis",
+    "name": "Glycan Engineering & Analysis",
+    "description": "Analyze and engineer glycosylation patterns",
+    "category": "细胞生物学",
+    "icon": "Hexagon",
+    "prompt": "Analyze glycosylation patterns from the uploaded data.\n\nWork in this order:\n1. QC the input (e.g., spectral/intensity quality for MS glycomics) and identify N-linked and O-linked glycan structures with appropriate scoring/false-discovery control.\n2. Quantify glycoform distributions (relative abundances) per sample.\n3. Map glycosylation sites onto the protein sequence/structure.\n4. Compare glycoprofiles between {comparison} using appropriate statistical tests with multiple-comparison correction and effect sizes; flag batch and sample-prep confounds.\n5. Predict the impact of glycosylation on protein function and immunogenicity, citing the basis for each prediction.\n6. Suggest glycoengineering strategies to optimize the glycoprofile, with expected trade-offs. Record database and package versions for reproducibility. If the comparison groups or glycan annotation source are ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures including site maps and glycoform plots (PNG), quantification and statistics tables (CSV), and a concise methods+findings report (Markdown); then summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions or products to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

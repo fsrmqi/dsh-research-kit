@@ -1,0 +1,538 @@
+[
+  {
+    "id": "patient-cohort-study",
+    "type": "workflow",
+    "name": "患者队列分析",
+    "description": "队列特征描述、结局分析与亚组检验。",
+    "category": "临床研究",
+    "tags": [
+      "队列",
+      "Table1",
+      "亚组"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "outcome",
+        "label": "主要结局",
+        "required": true
+      },
+      {
+        "key": "subgroups",
+        "label": "预设亚组",
+        "required": false,
+        "hint": "如按年龄、不育时长、病因分类；留空时不做亚组分析"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "clinicaltrials"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的患者队列数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。主要结局：{outcome}；预设亚组：{subgroups}。依次进行：1. 描述人口学与临床特征（Table 1，组间用标准化差值）；2. 分析主要结局，报告绝对与相对效应量及 95% 置信区间；3. 多变量分析校正预设混杂因素，检查模型假设；4. 有预设亚组时做亚组分析，用正式的交互检验而非亚组内 p 值比较，并做多重性校正；5. 生成完整 Table 1 与关键图。探索性分析与预设分析分开呈现；不得编造患者数据或结局。输出标注“研究草案——非临床用途”。"
+  },
+  {
+    "id": "case-control-analysis",
+    "type": "workflow",
+    "name": "病例对照分析",
+    "description": "匹配/非匹配设计的关联强度与偏倚评估。",
+    "category": "临床研究",
+    "tags": [
+      "病例对照",
+      "OR",
+      "匹配"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "matching",
+        "label": "匹配设计",
+        "required": false,
+        "hint": "如按年龄与地域 1:2 匹配；留空按非匹配处理"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "gnomad"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的病例对照数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。匹配设计：{matching}。依次进行：1. 比较病例与对照的基线特征；2. 计算粗与校正 OR 及 95% 置信区间；3. 匹配设计用条件 logistic 回归（非匹配用非条件）；4. 检查混杂与效应修饰（分层/交互分析）；5. 适用时做剂量-反应趋势检验；6. 报告选择偏倚与回忆偏倚的可能性及方向。固定随机种子并记录软件版本；不得编造病例数据。输出标注“研究草案——非临床用途”，并附偏倚评估说明。"
+  },
+  {
+    "id": "longitudinal-study",
+    "type": "workflow",
+    "name": "纵向数据分析",
+    "description": "重复测量与面板数据的纵向建模。",
+    "category": "临床研究",
+    "tags": [
+      "纵向",
+      "重复测量",
+      "混合模型"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "time_var",
+        "label": "时间变量与测量点",
+        "required": true,
+        "hint": "如随访月数、每年一次共 3 次"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的纵向数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息。时间结构：{time_var}。依次进行：1. 描述测量模式（每人次数、缺失分布与缺失机制讨论）；2. 用混合效应模型（或 GEE）建模时间趋势与组间差异，说明随机效应结构选择依据；3. 检查残差假设与 influential points；4. 时变协变量与基线协变量分开处理并说明；5. 报告固定效应估计、置信区间与模型拟合。缺失数据的处理策略须明确说明并做敏感性分析；不得编造随访数据。输出标注“研究草案——非临床用途”。"
+  },
+  {
+    "id": "electronic-health-records",
+    "type": "workflow",
+    "name": "电子病历数据分析",
+    "description": "结构化 EHR 数据的队列定义与分析。",
+    "category": "临床研究",
+    "tags": [
+      "EHR",
+      "真实世界",
+      "队列定义"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "cohort_def",
+        "label": "队列定义",
+        "required": true,
+        "multiline": true,
+        "hint": "纳入/排除标准、索引事件、随访窗口"
+      }
+    ],
+    "suggestedSkillIds": [
+      "data-integrity",
+      "uncertainty-communication",
+      "statistics-review"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "openfda"
+    ],
+    "prompt": "请分析用户通过 @文件 引用的结构化电子病历数据。仅使用已去标识化或用户获准使用的数据；不在输出中暴露直接标识符；不做个体层面的诊疗决策。队列定义：{cohort_def}。依次进行：1. 按定义构建队列，报告每条纳入/排除标准的流失人数（CONSORT 式流程）；2. 数据质量检视：关键变量的缺失、异常值、编码不一致；3. 描述基线特征；4. 按研究问题做结局分析，明确混杂控制策略；5. 讨论 EHR 特有偏倚（编码不全、检测偏倚、 immortal time bias）及其方向。EHR 编码不等于临床事实——解读时区分诊断记录与真实状态；不得编造病历内容。输出标注“研究草案——非临床用途”。"
+  },
+  {
+    "id": "risk-prediction-model",
+    "type": "workflow",
+    "name": "风险预测模型构建",
+    "description": "临床预测模型的开发、验证与报告规范。",
+    "category": "临床研究",
+    "tags": [
+      "预测模型",
+      "验证",
+      "TRIPOD"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "target",
+        "label": "预测目标",
+        "required": true,
+        "hint": "如“非梗阻性无精子症的诊断预测”"
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed",
+      "gnomad"
+    ],
+    "prompt": "请基于用户通过 @文件 引用的数据构建临床风险预测模型，目标：{target}。仅使用已去标识化或获准使用的数据；模型不得用于个体层面的诊疗决策。依次进行：1. 明确候选预测因子，筛查数据泄漏（不得使用结局相关的过程变量）；2. 按报告规范（TRIPOD）开发模型：训练/验证划分或交叉验证，固定种子；3. 报告区分度（AUC/C-statistic）与校准（校准曲线、校准斜率）——校准与区分度同等重要；4. 决策曲线分析评估临床净收益；5. 缺失数据处理透明化（多重插补等）并做敏感性分析；6. 报告按 TRIPOD 清单自查。模型是研究产物，未经外部验证不得宣称可直接临床应用；不得虚构性能数字。输出标注“研究草案——非临床用途”。"
+  },
+  {
+    "id": "diagnostic-accuracy",
+    "type": "workflow",
+    "name": "诊断准确性研究分析",
+    "description": "研究性评估诊断/筛查指标的准确性、阈值与偏倚。",
+    "category": "临床研究",
+    "tags": [
+      "诊断准确性",
+      "ROC",
+      "STARD"
+    ],
+    "requiresFiles": true,
+    "placeholders": [
+      {
+        "key": "index_test",
+        "label": "待评估指标或检测",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "statistics-review",
+      "data-integrity",
+      "uncertainty-communication"
+    ],
+    "suggestedDatabaseIds": [
+      "pubmed"
+    ],
+    "limitations": [
+      "仅限研究分析，不作个体诊断或临床决策；参考标准与阈值须由专业人员确认。"
+    ],
+    "prompt": "请基于 @文件 对“{index_test}”进行研究性诊断准确性分析。明确目标人群、参考标准、阈值预设、纳入流程与缺失处理；计算敏感度、特异度、似然比、ROC/AUC及置信区间，评估验证偏倚、谱偏倚和不确定结果处理。按 STARD 思路列出缺失报告项。不得虚构性能数值或给出个体诊断建议。输出标注“研究草案——非临床用途”。"
+  },
+  {
+    "id": "clinical-trial-analysis",
+    "name": "Clinical Trial Analysis",
+    "description": "Analyze clinical trial data with appropriate endpoints",
+    "category": "临床研究",
+    "icon": "Stethoscope",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded clinical trial data. Pre-specify the primary endpoint and analysis before looking at comparisons; if the population, randomization, or comparator arm is ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool, otherwise state your assumptions.\n\nWork in this order:\n1. Describe the study population: demographics and baseline characteristics with a CONSORT participant flow.\n2. Analyze the primary endpoint {endpoint} with effect sizes and 95% confidence intervals, reporting both absolute and relative measures.\n3. Run intention-to-treat (primary) and per-protocol analyses, accounting for missing data.\n4. Generate Kaplan-Meier curves for time-to-event endpoints.\n5. Run pre-specified subgroup analyses with interaction tests, correcting for multiple comparisons.\n6. Tabulate adverse events. Follow CONSORT; set a random seed and record package versions. This is research and decision-support only, not clinical advice. Save KM curves and forest plots as PNG, result tables as CSV, and a findings report as Markdown; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "endpoint",
+        "label": "Primary endpoint",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "survival-analysis-clinical",
+    "name": "Clinical Survival Analysis",
+    "description": "Kaplan-Meier, Cox regression for clinical outcomes",
+    "category": "临床研究",
+    "icon": "HeartPulse",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nPerform survival analysis on the uploaded clinical data. Outcome: {outcome}, follow-up time in {time_unit}. If the event definition, censoring rule, or comparison would materially change results and is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Kaplan-Meier estimates for overall and subgroup survival with 95% CIs and numbers-at-risk.\n2. Log-rank tests comparing {groups}.\n3. Multivariable Cox regression adjusting for {covariates}, reporting hazard ratios with 95% CIs.\n4. Check the proportional-hazards assumption (Schoenfeld residuals) and handle violations.\n5. Generate a forest plot of hazard ratios.\n6. Report median survival and 5-year rates with CIs. Set a random seed, record the scikit-survival version, and address missing data. Research and decision-support only, not clinical advice. Save KM curves and the forest plot as PNG, tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "outcome",
+        "label": "Outcome (OS, PFS, DFS, etc.)",
+        "required": true
+      },
+      {
+        "key": "time_unit",
+        "label": "Time unit (days, months, years)",
+        "required": true
+      },
+      {
+        "key": "groups",
+        "label": "Groups to compare",
+        "required": true
+      },
+      {
+        "key": "covariates",
+        "label": "Covariates for adjustment",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "epidemiological-study",
+    "name": "Epidemiological Study Design",
+    "description": "Design and analyze observational epidemiological studies",
+    "category": "临床研究",
+    "icon": "Users",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nDesign an epidemiological study to investigate: {question}. Study type: {study_type}. If the exposure, outcome, or target population is ambiguous in a way that changes the design, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Define the study population, source, and sampling strategy.\n2. Specify precise exposure and outcome definitions with measurement and validity.\n3. Identify confounders and effect modifiers and a strategy to control them (a DAG helps).\n4. Calculate required sample size and power, stating assumptions.\n5. Plan the statistical analysis with appropriate adjusted measures (OR, RR, hazard ratios) reported with 95% CIs, plus absolute measures, and correction for multiple comparisons.\n6. Describe methods to address selection, information, and confounding bias, and missing-data handling. Follow STROBE for any writeup; pre-specify endpoints. This is research planning, not clinical advice. Save the protocol and analysis plan as Markdown plus any tables as CSV; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "Research question",
+        "required": true
+      },
+      {
+        "key": "study_type",
+        "label": "Study type (cohort, case-control, cross-sectional, ecological)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "medical-image-analysis",
+    "name": "Medical Image Analysis",
+    "description": "Analyze radiological or pathological images",
+    "category": "临床研究",
+    "icon": "Scan",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded {modality} images for research-only quantitative assessment of {target_structure}. Work only with authorized data handled under the user's approved privacy process. DICOM metadata, private tags, overlays, filenames, and pixels may contain identifiers: preflight locally, do not print or export full metadata, preserve originals, and use bounded allowlisted fields. Do not diagnose, classify a person, draft a radiology or pathology report, or claim clinical-grade de-identification or validation.\n\nWork in this order:\n1. Inventory modality, transfer syntax or image format, dimensions, spacing, orientation, frames, and required codecs without echoing identifying values.\n2. Define the research endpoint, reference annotation, independent unit, train/validation/test split, and acceptable segmentation or measurement metrics before modeling.\n3. Apply documented preprocessing without silently changing clinical content. Preserve raw files and record intensity, resampling, registration, artifact-correction, and exclusion steps.\n4. Segment or quantify {target_structure} with reproducible settings. Evaluate against an appropriate reference using confidence intervals and case-level—not slice-level—splits to prevent leakage.\n5. Extract only research features supported by the modality and assess robustness to scanner, site, batch, and preprocessing variation.\n6. If fitting a model, report calibration, discrimination or segmentation quality, subgroup/site performance, uncertainty, external-validation status, and failure cases. Keep all outputs non-diagnostic.\n7. Generate non-identifying overlays and aggregate figures, then state the limits that prevent clinical use.\n\nSave derived non-identifying images and figures as PNG, aggregate feature and result tables as CSV, and a Markdown research report labeled \"RESEARCH DRAFT — NOT FOR CLINICAL USE.\" Summarize methods, validation limits, privacy checks, unresolved inputs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "modality",
+        "label": "Imaging modality (CT, MRI, X-ray, H&E, IHC)",
+        "required": true
+      },
+      {
+        "key": "target_structure",
+        "label": "Structure to segment or analyze",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "treatment-comparison",
+    "name": "Treatment Comparison",
+    "description": "Compare treatment outcomes between groups",
+    "category": "临床研究",
+    "icon": "Scale",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nCompare treatment outcomes between {treatments} using the uploaded clinical data. This is observational unless stated, so address confounding explicitly; if the primary outcome, follow-up window, or comparison is ambiguous, ask the minimum set of blocking questions together via the interview tool, otherwise state assumptions.\n\nWork in this order:\n1. Check baseline balance between groups (standardized mean differences).\n2. Analyze the primary outcome with appropriate tests, reporting absolute and relative effect sizes with 95% CIs.\n3. Adjust for confounders using {method}, checking covariate overlap/positivity.\n4. Calculate number needed to treat with a CI.\n5. Analyze pre-specified secondary outcomes, correcting for multiple comparisons.\n6. Run sensitivity analyses (e.g. alternative adjustment, E-value for unmeasured confounding). Set a random seed and record package versions. Research and decision-support only, not clinical advice. Save forest/figures as PNG, tables as CSV, and a concise Markdown report following STROBE; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "treatments",
+        "label": "Treatments to compare",
+        "required": true
+      },
+      {
+        "key": "method",
+        "label": "Adjustment method (propensity score, regression, matching)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "adverse-event-analysis",
+    "name": "Adverse Event Analysis",
+    "description": "Analyze safety data from clinical studies",
+    "category": "临床研究",
+    "icon": "Shield",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze adverse events from the uploaded clinical safety data. If the safety population, exposure denominator, or treatment-emergent definition is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Tabulate AE frequencies by system organ class and preferred term (counts and patient incidence).\n2. Compare AE rates between {groups} with risk differences and risk ratios, each with 95% confidence intervals; treat these as descriptive/exploratory and avoid over-interpreting many comparisons.\n3. Identify dose-dependent AEs.\n4. Analyze time-to-onset distributions.\n5. Flag serious adverse events (SAEs) and discontinuations.\n6. Generate standardized safety tables and forest plots following ICH E3. Set a random seed and record package versions. Research and decision-support only, not clinical advice. Save forest plots and figures as PNG, safety tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "groups",
+        "label": "Treatment groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "cost-effectiveness-analysis",
+    "name": "Cost-Effectiveness Analysis",
+    "description": "Health economics evaluation of interventions",
+    "category": "临床研究",
+    "icon": "DollarSign",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nPerform a cost-effectiveness analysis comparing {interventions} for {condition}. If the perspective, time horizon, or effectiveness source is ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and cite sources.\n\nWork in this order:\n1. Define the model structure (decision tree or Markov) with a stated cycle length and time horizon.\n2. Populate with clinical effectiveness data, applying discounting to costs and outcomes.\n3. Assign costs from the {perspective} perspective.\n4. Calculate incremental cost-effectiveness ratios (ICERs) versus a defined comparator.\n5. Run deterministic one-way and probabilistic sensitivity analysis (1000+ iterations), setting a random seed and recording package versions.\n6. Generate a cost-effectiveness plane and acceptability curves, and report against willingness-to-pay thresholds. This is a research model and decision-support only, not clinical advice. Save figures as PNG, model inputs/results as CSV, and a concise Markdown report following CHEERS; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "interventions",
+        "label": "Interventions to compare",
+        "required": true
+      },
+      {
+        "key": "condition",
+        "label": "Clinical condition",
+        "required": true
+      },
+      {
+        "key": "perspective",
+        "label": "Analysis perspective (payer, societal, hospital)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "systematic-review-clinical",
+    "name": "Clinical Systematic Review",
+    "description": "PRISMA-compliant systematic review of clinical evidence",
+    "category": "临床研究",
+    "icon": "ClipboardCheck",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nConduct a systematic review on: {question}. If the PICO elements are ambiguous in a way that changes eligibility, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and register the scope.\n\nWork in this order:\n1. Define explicit PICO inclusion/exclusion criteria and pre-specify outcomes.\n2. Search PubMed, Cochrane, and Embase with documented, reproducible queries and dates.\n3. Screen titles/abstracts against the criteria, recording counts at each stage.\n4. Extract data from included studies into a structured table.\n5. Assess risk of bias (Cochrane RoB 2.0).\n6. Perform a meta-analysis if appropriate, reporting pooled effect sizes with 95% CIs, heterogeneity (I-squared), and a forest plot; consider publication bias.\n7. Generate a PRISMA flow diagram and evidence summary tables. Set a random seed for any resampling and record package versions. This is research synthesis and decision-support only, not clinical advice. Save the PRISMA diagram and forest plots as PNG, extraction/results tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "Clinical question (PICO format preferred)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "clinical-guideline-summary",
+    "name": "Clinical Guideline Summary",
+    "description": "Summarize and compare clinical practice guidelines",
+    "category": "临床研究",
+    "icon": "BookOpen",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nSummarize clinical practice guidelines for: {condition}. If the scope (patient subgroup, care setting) is ambiguous in a way that changes recommendations, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Identify current guidelines from major societies ({societies}), recording publication year and version.\n2. Compare recommendations across guidelines side by side.\n3. Note the strength of evidence and grading scheme behind each recommendation.\n4. Highlight areas of agreement and disagreement and likely reasons.\n5. Create a quick-reference comparison table.\n6. Identify gaps where evidence is lacking or guidelines conflict. Cite each source with a link or citation and flag any out-of-date guidance. This is a research summary and decision-support only, not clinical advice, and does not replace consulting the primary guidelines or clinical judgement. Save the comparison table as CSV and a concise Markdown summary; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "condition",
+        "label": "Clinical condition",
+        "required": true
+      },
+      {
+        "key": "societies",
+        "label": "Guideline societies (e.g., AHA, NICE, WHO)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "quality-improvement",
+    "name": "Quality Improvement Analysis",
+    "description": "Analyze healthcare quality metrics and improvement initiatives",
+    "category": "临床研究",
+    "icon": "TrendingUp",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze healthcare quality data for: {initiative}. If the metric definition, denominator, or intervention timing is ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Define quality metrics, operational numerators/denominators, and benchmarks.\n2. Create statistical process control charts to assess process stability, choosing the chart type appropriate to the data.\n3. Identify special-cause variation using standard run rules.\n4. Perform a pre/post intervention comparison with effect sizes and 95% confidence intervals, mindful of secular trends and confounding.\n5. Calculate process capability indices where appropriate.\n6. Recommend next PDSA steps for sustained improvement. Follow the IHI Model for Improvement; set a random seed for any resampling and record package versions. This is research and operational decision-support only, not clinical advice. Save control charts and figures as PNG, metric tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "initiative",
+        "label": "QI initiative or metric to analyze",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "health-equity-analysis",
+    "name": "Health Equity Analysis",
+    "description": "Analyze health disparities across demographic groups",
+    "category": "临床研究",
+    "icon": "Scale",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze health equity in the uploaded data. Outcome: {outcome}. If the comparison groups or outcome definition are ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and handle small-cell privacy.\n\nWork in this order:\n1. Stratify outcomes by {demographics}, reporting group sizes.\n2. Calculate absolute disparities (rate/risk differences) and relative disparities (ratios), each with 95% confidence intervals, plus a summary index where relevant.\n3. Apply decomposition methods (e.g. Oaxaca-Blinder) to identify drivers.\n4. Adjust for socioeconomic confounders while being explicit about which differences are inequities versus case-mix.\n5. Map geographic variations if data permit.\n6. Recommend targeted, evidence-informed interventions. Set a random seed and record package versions; address missing data. This is research and decision-support only, not clinical advice. Save figures/maps as PNG, disparity tables as CSV, and a concise Markdown report following STROBE; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "outcome",
+        "label": "Health outcome",
+        "required": true
+      },
+      {
+        "key": "demographics",
+        "label": "Demographic variables (race, ethnicity, income, geography)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "population-health-assessment",
+    "name": "Population Health Assessment",
+    "description": "Assess health status and needs of a population",
+    "category": "临床研究",
+    "icon": "Globe",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nConduct a population health assessment for: {population}. If the geographic boundary, time period, or priority outcomes are ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and cite data sources with years.\n\nWork in this order:\n1. Compile a demographic and socioeconomic profile.\n2. Analyze leading causes of morbidity and mortality, reporting rates with 95% confidence intervals and noting age-adjustment.\n3. Assess healthcare access and utilization.\n4. Identify health risk factors and social determinants.\n5. Compare with state/national benchmarks, distinguishing meaningful from chance differences and respecting small-cell suppression.\n6. Prioritize health needs and recommend evidence-informed interventions. Record data vintages and any package versions used. This is a research assessment and decision-support only, not clinical advice. Save figures/maps as PNG, indicator tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations and data gaps.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "population",
+        "label": "Population (county, city, or demographic group)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "digital-pathology",
+    "name": "Digital Pathology Analysis",
+    "description": "Analyze whole-slide histopathology images",
+    "category": "临床研究",
+    "icon": "Microscope",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded whole-slide image ({stain}) for research-only quantification of {metrics}. Work only with authorized data handled under the user's approved privacy process. Whole-slide files, labels, metadata, filenames, and pixels may contain identifiers: keep originals local, avoid echoing metadata, and produce only non-identifying derivatives. Do not diagnose, grade, stage, classify a person, or draft a pathology report.\n\nWork in this order:\n1. Record the stain, scanner, magnification, microns per pixel, file format, reference annotations, and independent unit of analysis without exposing identifiers.\n2. Detect tissue and quantify blur, folds, pen marks, staining variation, and other artifacts. Preserve an auditable exclusion mask and never alter raw pixels silently.\n3. Extract tiles at {magnification}x with documented overlap, normalization, and background rules. Split train, validation, and test data by patient or specimen—not by tile—to prevent leakage.\n4. Segment and classify cells or tissue only for the pre-specified research endpoint, using reproducible parameters and an appropriate reference standard.\n5. Quantify {metrics} with confidence intervals and assess robustness across slides, batches, scanners, sites, and staining conditions.\n6. Perform spatial analysis with pre-specified neighborhoods and validate all derived measurements against held-out annotations or samples.\n7. Generate non-identifying heatmaps and aggregate figures, report failure cases and external-validation status, and state why the outputs are not suitable for clinical use.\n\nSave non-identifying overlays and aggregate figures as PNG, quantitative tables as CSV, and a Markdown research report labeled \"RESEARCH DRAFT — NOT FOR CLINICAL USE.\" Summarize QC, validation limits, privacy checks, unresolved inputs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "stain",
+        "label": "Stain type (H&E, IHC, IF, special stain)",
+        "required": true
+      },
+      {
+        "key": "magnification",
+        "label": "Analysis magnification (20, 40)",
+        "required": false
+      },
+      {
+        "key": "metrics",
+        "label": "Metrics to quantify (cell counts, tumor %, TIL density)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  }
+]

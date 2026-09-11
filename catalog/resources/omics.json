@@ -1,0 +1,101 @@
+[
+  {
+    "id": "gtex",
+    "type": "database",
+    "name": "GTEx Portal",
+    "description": "基因型-组织表达数据：人体各组织的基因表达图谱。",
+    "category": "数据分析",
+    "tags": [
+      "表达谱",
+      "基因组学"
+    ],
+    "url": "https://gtexportal.org/home/api-docs",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "kegg",
+    "type": "database",
+    "name": "KEGG",
+    "description": "生物通路、基因组、疾病与化学物质知识库。",
+    "category": "数据分析",
+    "tags": [
+      "通路",
+      "代谢"
+    ],
+    "url": "https://www.kegg.jp/kegg/rest/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "uniprot",
+    "type": "database",
+    "name": "UniProt",
+    "description": "蛋白质序列、功能与注释：Swiss-Prot 与 TrEMBL。",
+    "category": "数据分析",
+    "tags": [
+      "蛋白质",
+      "序列"
+    ],
+    "url": "https://www.uniprot.org/help/api",
+    "accessNote": "插件内置直查适配器，可直接查询；出网经 DSH 受控 web 服务，无需额外凭据。",
+    "availability": "available-in-plugin"
+  },
+  {
+    "id": "pdb",
+    "type": "database",
+    "name": "RCSB PDB",
+    "description": "蛋白质、DNA、RNA 及复合物的三维大分子结构。",
+    "category": "数据分析",
+    "tags": [
+      "结构生物学",
+      "PDB"
+    ],
+    "url": "https://www.rcsb.org/docs/programmatic-access",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "string-db",
+    "type": "database",
+    "name": "STRING",
+    "description": "已知与预测的蛋白质-蛋白质相互作用网络。",
+    "category": "数据分析",
+    "tags": [
+      "蛋白互作",
+      "网络"
+    ],
+    "url": "https://string-db.org/help/api/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "reactome",
+    "type": "database",
+    "name": "Reactome",
+    "description": "经人工整理的人类与模式生物生物通路数据库。",
+    "category": "数据分析",
+    "tags": [
+      "通路",
+      " curated"
+    ],
+    "url": "https://reactome.org/dev/graph-database",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "geo",
+    "type": "database",
+    "name": "GEO",
+    "description": "NCBI 基因表达综合库：公开组学数据集的存档与检索。",
+    "category": "数据分析",
+    "tags": [
+      "GEO",
+      "数据集",
+      "表达"
+    ],
+    "url": "https://www.ncbi.nlm.nih.gov/geo/",
+    "accessNote": "需要当前 DSH 会话已具备 Web 或对应 MCP 访问能力。",
+    "availability": "requires-mcp"
+  }
+]

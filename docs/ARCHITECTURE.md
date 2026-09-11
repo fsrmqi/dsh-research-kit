@@ -23,7 +23,7 @@
 │                   DSH Research Kit（浏览器侧）                       │
 │                                                                     │
 │  ResearchConsole（统一容器 + 两级吸顶）                              │
-│    ├─ ①「资源与工作流」 catalog.js ──► catalog/*.json               │
+│    ├─ ①「资源与工作流」 catalog.js ──► catalog/*/index.js           │
 │    ├─ ②「方法工坊」     vendored 工件 + prompt-studio-glue          │
 │    ├─ ③「研究资产库」   research-vault.js ◄─► vault-core.js         │
 │    └─ ④「研究证据图谱」 evidence-store.js ◄─► evidence-graph-core   │
@@ -71,11 +71,14 @@
 
 ```text
 dsh-research-kit/
-├── catalog/                         # 人工审核的科研资产，纯数据
-│   ├── workflows.json               # 参数化 Prompt 工作流（65）
-│   ├── skills.json                  # Prompt 指导或宿主能力前提（8）
-│   ├── databases.json               # 数据源说明与接入状态（55）
-│   └── database-metadata.json       # 数据源分组等展示元数据
+├── catalog/                         # 人工审核的科研资产，纯数据；三个 index.js 是唯一数据入口
+│   ├── workflows/                   # 参数化 Prompt 工作流，按流程族分片（206 条 / 16 个类目 + 预留分片）
+│   │   ├── index.js                 # 唯一聚合入口：按固定顺序导出数组，新增分片必须在此登记
+│   │   └── <流程族>.json            # 每个分类一个分片（paper-manuscript、genomics…），空分片为预留流程族
+│   ├── skills/                      # 技能，按稳定用途分片（core / crop-breeding / bioinformatics，共 11 条）
+│   ├── resources/                   # 数据源，按稳定用途分片（crop-breeding / literature / genomics / omics / general-science，共 82 条）
+│   │   ├── index.js                 # 唯一聚合入口，并导出 database-metadata.json 的分组展示元数据
+│   │   └── database-metadata.json   # 数据源分组等展示元数据（对象型配置，不是条目分片）
 ├── src/
 │   ├── catalog.js                   # 资源读取、搜索、查询、Prompt 组装（纯函数）
 │   ├── catalog-storage.js           # 收藏与使用历史的 CatalogStorage 接口
@@ -117,7 +120,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 143 项测试（16 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 149 项测试（17 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -199,7 +202,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 | --- | --- | --- | --- |
 | 一级 | `.rk-console-nav`（分区导航 + 说明块） | 是 | 回答"我在哪个分区"，跨分区切换不应需要回滚 |
 | — | 分区封面 `PageHead`（kicker / 标题 / 导语 / 低频动作） | 否 | 定位是"封面"：标题与一级导航的当前标签重复，导语是读一次的介绍；吸住会白占约 87px 并放大重复感 |
-| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 128 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
+| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 299 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
 
 四个分区的二级吸顶带按同一口径组装（检索 + 筛选 + 该分区的模式/主操作）：
 
@@ -257,7 +260,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 
 数据库查询有两条执行路径，由目录条目的 `availability` 如实标注（**不得根据资源名称推断数据源已可用**）：
 
-![55 个科学数据源的两条查询路径：插件直查与 Agent 回退](assets/data-source-paths.svg)
+![科学数据源的两条查询路径：插件直查与 Agent 回退](assets/data-source-paths.svg)
 
 - **插件直查**（`available-in-plugin`，11 个）：由插件 Node half 的 `/dsh-research-kit/query` 路由完成，所有网络请求经 DSH `ctx.web.fetch()` 发出，浏览器侧不持有密钥、插件不持有任何 API Key。适配器覆盖 PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist；候选结果带来源链接与稳定标识符，可直接写入输入框。
 - **Agent 回退**（`requires-mcp` / `reference-only`，44 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
@@ -431,7 +434,7 @@ type BaseItem = {
   type: 'workflow' | 'skill' | 'database'
   name: string             // 面向用户的简短中文名称
   description: string      // 一句明确用途，不得承诺未接入能力
-  category: string         // 当前受控分类名称（工作流六类：论文与手稿/文献研究/基因组学/临床研究/数据分析/研究设计）
+  category: string         // 当前受控分类名称（工作流 16 个类目见 README「目录内容」；新增流程族先建分片再迁入）
   tags: string[]           // 搜索同义词和学科标签
 }
 ```
@@ -575,10 +578,12 @@ type ResearchDatabase = BaseItem & {
 
 `ui/client.js` 是适配 DSH `window.__ModuleLoader__` 的生成文件。构建脚本会：
 
-1. 读取 `catalog/*.json`；
+1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记）；
 2. 将目录数据内联；
 3. 移除源码 ESM import/export；
 4. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的浏览器模块。
+
+目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、构建产物内联数组与聚合入口逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
 
 因此**任何 `catalog/`、`src/`、`dsh/` 或构建脚本的改动**都必须重新构建并提交生成产物：
 

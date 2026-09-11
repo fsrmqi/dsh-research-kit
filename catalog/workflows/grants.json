@@ -1,0 +1,257 @@
+[
+  {
+    "id": "specific-aim",
+    "name": "Write a Specific Aim",
+    "description": "Draft a grant Specific Aim with significance and approach",
+    "category": "基金申请",
+    "icon": "Target",
+    "prompt": "Draft a one-page Specific Aims page for a grant proposal on: {topic}, targeting {agency} and following that mechanism's conventions and length. Structure it as:\n\nWork in this order:\n1. an opening paragraph establishing significance and the critical knowledge gap;\n2. a statement of the long-term goal, the overall objective of this proposal, and the central hypothesis with its basis;\n3. 2-3 specific aims, each with a brief rationale, the approach, and the expected outcome, written as testable objectives that are related but not mutually dependent;\n4. a closing paragraph on expected impact and how it advances the field. Search the literature to ground motivating claims in real, verifiable sources; never fabricate citations, statistics, or preliminary data, and flag with [VERIFY] anything unconfirmed. If the hypothesis or scope is ambiguous in a way that changes the aims, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Specific Aims page (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic and hypothesis",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency (e.g., NIH R01, NSF CAREER)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "budget-justification",
+    "name": "Draft a Budget Justification",
+    "description": "Budget narrative for a grant proposal",
+    "category": "基金申请",
+    "icon": "DollarSign",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nDraft a budget justification narrative for a grant proposal on: {topic}, with a total budget target of {budget}. Organize by standard categories: personnel (PI, co-investigators, postdocs, students, staff, with roles, percent effort, and contribution to the work), equipment, supplies/consumables, travel, publication/other direct costs, and a note on indirect costs if relevant. Justify each line item specifically in terms of the proposed research rather than with generic language, and tie effort and purchases to particular aims or tasks. Use realistic, clearly-labeled estimates; never present invented figures as institution-verified, and flag rates, salaries, or quotes that the applicant must confirm with [VERIFY]. Keep totals internally consistent with the target. If essential details (duration, key personnel, or major equipment) are missing or ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the budget justification as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project title / topic",
+        "required": true
+      },
+      {
+        "key": "budget",
+        "label": "Budget target (e.g., $250K/year for 3 years)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-biosketch",
+    "name": "Write a Biosketch",
+    "description": "NIH or NSF-style biosketch for a PI",
+    "category": "基金申请",
+    "icon": "Fingerprint",
+    "prompt": "Draft a biosketch for {name} for a {agency} proposal on {topic}, following the current {agency} biosketch format, structure, and length limits. Include:\n\nWork in this order:\n1. a Personal Statement connecting the candidate's expertise and prior work directly to this project;\n2. Positions, Scientific Appointments, and Honors in reverse-chronological order;\n3. Contributions to Science (up to 5, each a short narrative with up to 4 representative publications);\n4. Research Support, current and completed, if applicable. Use only information the user provides or that is publicly verifiable; never fabricate degrees, positions, honors, publications, or grant numbers, and clearly mark with [PROVIDE] or [VERIFY] any field you cannot fill from given material. Write in a confident, specific tone that frames the candidate as uniquely suited to the work. If essential biographical details are missing, ask the minimum set of blocking questions together via the interview tool; otherwise leave clearly-labeled placeholders. Save the biosketch as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "name",
+        "label": "PI name and current position",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency (NIH, NSF, DOE, etc.)",
+        "required": true
+      },
+      {
+        "key": "topic",
+        "label": "Proposal topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-significance",
+    "name": "Write Significance Section",
+    "description": "Establish the importance and impact of proposed research",
+    "category": "基金申请",
+    "icon": "Sparkles",
+    "prompt": "Write the Significance section for a grant proposal on: {topic}. Build a persuasive, evidence-based case that:\n\nWork in this order:\n1. establishes the scope, burden, or importance of the problem;\n2. reviews what is currently known and pinpoints the critical gap or barrier the field faces;\n3. explains how the proposed research will fill that gap and why it is timely;\n4. describes the expected impact on scientific knowledge, methods, or practice if the work succeeds. Search the literature and cite real, verifiable statistics and prior findings to motivate the work; never fabricate citations or numbers, and flag with [VERIFY] anything you cannot confirm. Write persuasively without overstating certainty, and keep the focus on the gap and payoff. If the scope or intended impact is ambiguous in a way that changes the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Significance section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-innovation",
+    "name": "Write Innovation Section",
+    "description": "Articulate what is novel about the proposed approach",
+    "category": "基金申请",
+    "icon": "Sparkles",
+    "prompt": "Write the Innovation section for a grant proposal on: {topic}. Make a specific, defensible case for novelty by describing:\n\nWork in this order:\n1. how the proposed approach departs from and improves on current practice or the status quo;\n2. the new technologies, methods, models, or reagents being developed or applied;\n3. the novel conceptual framework, hypothesis, or perspective introduced;\n4. why this innovation matters for advancing the field and shifting current paradigms. Be concrete and contrast with existing methods rather than making generic claims like 'first-ever'; where you assert that something is new or better, ground it in real, verifiable literature and flag with [VERIFY] anything unconfirmed. Never fabricate citations or prior-art comparisons. If the distinctive approach is ambiguous in a way that changes the argument, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Innovation section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic and approach",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-approach",
+    "name": "Write Research Strategy / Approach",
+    "description": "Detailed experimental plan for a grant proposal",
+    "category": "基金申请",
+    "icon": "Route",
+    "prompt": "Write the Approach/Research Strategy section for a grant on: {topic}, formatted for {agency} conventions and length. For each specific aim, cover:\n\nWork in this order:\n1. rationale and the hypothesis being tested;\n2. preliminary data supporting feasibility (clearly labeled, using only data the user provides; never fabricate results or figures);\n3. detailed experimental design including key variables, controls, sample size/power, and rigor and reproducibility measures;\n4. expected results and how they will be interpreted;\n5. potential pitfalls with concrete alternative approaches;\n6. a timeline with milestones. Ensure aims are logically connected but not fatally dependent on one another. Cite real, verifiable sources for any external claim and flag unconfirmed items with [VERIFY]. If aims, design, or available preliminary data are ambiguous in a way that materially changes the strategy, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic with specific aims",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "project-timeline",
+    "name": "Create a Project Timeline",
+    "description": "Gantt chart and milestone plan for a grant",
+    "category": "基金申请",
+    "icon": "Timer",
+    "prompt": "Create a detailed project timeline for a {duration} project on: {topic}. Include:\n\nWork in this order:\n1. a Gantt chart laying out all tasks grouped by aim across the full duration;\n2. milestones and deliverables with target dates;\n3. go/no-go decision points;\n4. personnel assignments per task;\n5. dependencies and critical-path relationships between tasks. Render the Gantt chart as an actual figure (e.g., with matplotlib), use realistic, clearly-stated task durations, and note key assumptions and scheduling risks. Base tasks on the proposed work rather than inventing unrelated activities, and flag anything that needs the user's input with [CONFIRM]. If the aims or scope are too vague to schedule meaningfully, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Gantt chart image plus a written timeline narrative (milestones, decision points, dependencies) together as well-named files in the sandbox for preview and download, and summarize the plan briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Project duration (e.g., 3 years, 5 years)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "broader-impacts",
+    "name": "Write Broader Impacts",
+    "description": "NSF broader impacts or NIH dissemination plan",
+    "category": "基金申请",
+    "icon": "GraduationCap",
+    "prompt": "Write a Broader Impacts section (NSF) or Dissemination Plan for a proposal on: {topic}, following the relevant funder's review criteria. Include concrete, well-justified activities for:\n\nWork in this order:\n1. education and training (students, mentees, curriculum);\n2. broadening participation of groups underrepresented in STEM, with specific recruitment and support mechanisms;\n3. public engagement and outreach;\n4. potential societal, economic, or health benefits tied to the science;\n5. dissemination through open-access publication, data and code sharing, and community resources. Propose realistic, measurable activities with assessment metrics rather than vague aspirations, and tie them to the project's resources and setting. Do not fabricate partnerships, programs, or statistics; flag anything the applicant must confirm with [VERIFY]. If key context (institution programs or target audiences) is missing in a way that changes the plan, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the section as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "risk-mitigation",
+    "name": "Risk Mitigation Plan",
+    "description": "Identify risks and alternative strategies for a project",
+    "category": "基金申请",
+    "icon": "Shield",
+    "prompt": "Create a risk mitigation plan for a research project on: {topic}. For each aim:\n\nWork in this order:\n1. identify the key scientific, technical, and operational risks;\n2. rate each by likelihood and impact (e.g., low/medium/high) with a brief rationale;\n3. describe specific mitigation strategies and credible alternative approaches that keep the project on track;\n4. define early warning indicators and the decision/trigger point for switching to a fallback;\n5. summarize everything in a risk matrix visualization (likelihood vs. impact) rendered as an actual figure. Base risks on the real demands of the proposed work rather than generic boilerplate, and avoid overstating or understating severity. Where a risk rests on an external assumption, state it and flag unverified claims with [VERIFY]. If the aims or scope are too vague to assess risk meaningfully, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the risk matrix image and a written risk register together as well-named files in the sandbox for preview and download, and summarize the top risks in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic and aims",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "facilities-equipment",
+    "name": "Facilities & Equipment",
+    "description": "Describe available resources and infrastructure",
+    "category": "基金申请",
+    "icon": "Wrench",
+    "prompt": "Write a Facilities, Equipment, and Other Resources section for a grant on: {topic} at {institution}, following the conventional funder format (descriptive narrative, no direct cost figures). Describe, with subheadings:\n\nWork in this order:\n1. laboratory space and major equipment relevant to the aims;\n2. computational resources (clusters, storage, software);\n3. core facilities and shared instrumentation;\n4. animal, clinical, or human-subjects facilities if applicable;\n5. institutional support, collaborations, and intellectual environment;\n6. office and meeting space. Frame each resource around how it enables the proposed research. Use only resources the user provides or that are publicly verifiable for that institution; never invent instruments, core facilities, or capabilities, and clearly mark anything to be confirmed with [VERIFY] or [PROVIDE]. If key facility details are missing in a way that materially affects the section, ask the minimum set of blocking questions together via the interview tool; otherwise leave labeled placeholders. Save the section as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      },
+      {
+        "key": "institution",
+        "label": "Institution name",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]

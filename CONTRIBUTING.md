@@ -46,7 +46,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 工作流是**发给当前 Agent 的执行指令**，不是功能宣传文案。新增前请先阅读[架构文档 §5 的 Prompt 作者规范](docs/ARCHITECTURE.md)，然后：
 
-1. 在 `catalog/workflows.json` 中按现有条目的字段结构新增 JSON 对象；
+1. 在 `catalog/workflows/<分类>.json` 对应分片中按现有条目的字段结构新增 JSON 对象（分类 → 分片映射见 [README「目录内容」](README.md#目录内容)；新分类需新建分片并在 `catalog/workflows/index.js` 登记）；
 2. `id` 使用小写 kebab-case，发布后不复用、不改名；
 3. Prompt 中的每个 `{placeholder}` 必须在 `placeholders` 中声明，反之亦然；
 4. Prompt 必须包含防编造 / 待核验边界（校验器和测试会强制检查）；
@@ -60,7 +60,8 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 技能是可组合的指导模块，不是可执行代码。除公共字段外需要：
 
-- `promptFragment`：一段纪律性指导（≥10 字符），启动工作流勾选后并入 Prompt；
+- 落位：写入 `catalog/skills/` 下按稳定用途划分的分片（core / crop-breeding / bioinformatics），新分片须在 `catalog/skills/index.js` 登记；
+- `promptFragment`：一段纪律性指导（≥10 字符），启动工作流勾选后并入 Prompt（写入 Prompt，不是自动执行）；
 - `checklist`：面向用户的人工检查清单（≥3 条）；
 - `availability`：当前只允许保守值 `prompt-guidance`；`requires-host-capability` 会失去附加能力。
 
@@ -68,7 +69,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 数据源条目本身只是**说明与接入前提**，不是已接通的能力：
 
-1. 在 `catalog/databases.json` 中新增条目，字段结构见[架构文档 §4.3](docs/ARCHITECTURE.md)；
+1. 在 `catalog/resources/` 下按稳定用途划分的分片（crop-breeding / literature / genomics / omics / general-science）中新增条目，新分片须在 `catalog/resources/index.js` 登记；字段结构见[架构文档 §4.3](docs/ARCHITECTURE.md)；
 2. `availability` 使用保守值：`reference-only` 或 `requires-mcp`；
 3. **只有实现了对宿主能力的真实探测并覆盖自动化测试后，才允许标记 `available-in-host`**；
 4. `accessNote` 必须如实写出检索前提（是否需要订阅、API Key、机构授权、数据使用协议），不得暗示已经可用；

@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readShardEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -111,7 +112,30 @@ export function readDirectQueryIds(path = resolve(root, 'dsh', 'database-query.j
   return [...new Set(ids)]
 }
 
+// 递归直读三个分片目录并摊平 —— 不经过聚合入口的独立真源。
+// 与 loadCatalogEntries()（ESM import 三个 index.js）互为印证：
+// 任何一边缺失或漂移，都会被 compareShardsWithEntries() 抓住。
 export function loadCatalogFromDisk() {
-  const load = file => JSON.parse(readFileSync(resolve(root, 'catalog', file), 'utf8'))
-  return [...load('workflows.json'), ...load('skills.json'), ...load('databases.json')]
+  return [...readShardEntries('workflows'), ...readShardEntries('skills'), ...readShardEntries('resources')]
+}
+
+// 「分片遗漏」三向断言的一向：fs 直读的分片并集必须与聚合入口数组逐条一致。
+// 顺序无关、按 id 对齐后逐条全等比较（JSON 序列化即全等，两侧都源自同一份 JSON 键序）。
+export function compareShardsWithEntries(shardItems, entryItems) {
+  const errors = []
+  if (shardItems.length !== entryItems.length) {
+    errors.push(`分片条目总数 ${shardItems.length} ≠ 聚合入口条目数 ${entryItems.length}（index.js 漏登记分片或分片未落盘）`)
+  }
+  const pending = new Map(shardItems.map(item => [item.id, item]))
+  for (const item of entryItems) {
+    const shard = pending.get(item.id)
+    if (!shard) {
+      errors.push(`[${item.id}] 聚合入口存在，但任何分片中都没有该条目`)
+      continue
+    }
+    if (JSON.stringify(shard) !== JSON.stringify(item)) errors.push(`[${item.id}] 分片内容与聚合入口不一致`)
+    pending.delete(item.id)
+  }
+  for (const id of pending.keys()) errors.push(`[${id}] 分片中存在，但聚合入口缺失（index.js 未登记该分片）`)
+  return errors
 }

@@ -1,0 +1,306 @@
+[
+  {
+    "id": "crystal-structure-prediction",
+    "name": "Crystal Structure Prediction",
+    "description": "Predict stable crystal structures for a composition",
+    "category": "材料科学",
+    "icon": "Gem",
+    "prompt": "Predict stable crystal structures for: {composition}.\n\nWork in this order:\n1. Search existing entries in materials databases (Materials Project, ICSD) and record provenance; state assumptions. If oxidation states or target conditions (pressure, temperature) are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Generate candidate structures via ion substitution and known prototypes.\n3. Optimize each with DFT (state functional and convergence criteria).\n4. Evaluate formation energies and thermodynamic stability, propagating method-level uncertainty.\n5. Construct the convex hull and report energy-above-hull for each candidate.\n6. Identify the ground state and low-energy polymorphs; report space groups and lattice parameters. Note that semilocal DFT energies carry systematic error. Record pymatgen/functional versions. Save the hull plot and structures as PNG/structure files, energies as CSV, and a Markdown summary; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "composition",
+        "label": "Chemical composition (e.g., Li2FeSiO4, TiO2)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "phase-diagram-analysis",
+    "name": "Phase Diagram Analysis",
+    "description": "Construct and interpret phase diagrams",
+    "category": "材料科学",
+    "icon": "Hexagon",
+    "prompt": "Construct a phase diagram for the {system} system.\n\nWork in this order:\n1. Collect thermodynamic data from literature and databases (e.g. CALPHAD assessments), recording sources and units. If the composition range, pressure, or relevant phases are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate phase boundaries by minimizing Gibbs energy with stated solution models.\n3. Identify single-phase and multi-phase regions.\n4. Mark invariant reactions (eutectic, peritectic, eutectoid) with their temperatures and compositions.\n5. Overlay experimental data if provided and quantify agreement.\n6. Visualize the complete labeled phase diagram, noting model validity limits. Record pymatgen/package versions. Save the diagram as PNG, boundary/invariant-point data as CSV, and a Markdown write-up; name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "system",
+        "label": "Material system (e.g., Fe-C, Al-Cu, Li-Ni-Mn-Co-O)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "mechanical-property-prediction",
+    "name": "Mechanical Property Prediction",
+    "description": "Predict elastic moduli, hardness, and strength of materials",
+    "category": "材料科学",
+    "icon": "Wrench",
+    "prompt": "Predict the mechanical properties of: {material}.\n\nWork in this order:\n1. State the structure and method (DFT strain-stress or empirical potential), units, and assumptions; if the structure or phase is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate the elastic-constant tensor (C_ij) and verify Born mechanical-stability criteria as a sanity check.\n3. Derive bulk, shear, and Young's moduli (Voigt-Reuss-Hill averages).\n4. Estimate Vickers hardness via an established empirical model.\n5. Analyze elastic anisotropy (Zener ratio, universal anisotropy index).\n6. Assess Pugh's ratio (ductile vs brittle) and compare with known materials of similar composition. Note method-level error. Record pymatgen/package versions. Save anisotropy/property plots as PNG, the C_ij tensor and derived moduli as CSV, and a Markdown summary; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Material (formula or crystal structure file)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "materials-screening",
+    "name": "High-Throughput Materials Screening",
+    "description": "Screen materials databases for target properties",
+    "category": "材料科学",
+    "icon": "Search",
+    "prompt": "Screen materials for: {application}. Target properties: {properties}.\n\nWork in this order:\n1. Query materials databases (Materials Project, AFLOW, OQMD), recording query parameters and provenance; if the property ranges or constraints are ambiguous and would change the shortlist, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Filter by target property ranges with explicit units and thresholds.\n3. Rank candidates by a transparent multi-objective score (state weights or Pareto criterion).\n4. Check stability (formation energy, energy-above-hull) and flag method uncertainty.\n5. Assess synthesizability from literature and known precursors.\n6. Report the top 20 candidates with all relevant properties. Record pymatgen/package versions. Save a ranking plot as PNG, the full candidate table as CSV, and a Markdown summary; name the files and note validity limits and database coverage gaps.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "application",
+        "label": "Target application (e.g., battery cathode, thermoelectric, photocatalyst)",
+        "required": true
+      },
+      {
+        "key": "properties",
+        "label": "Desired properties and ranges",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "defect-analysis",
+    "name": "Defect Analysis",
+    "description": "Analyze point defects, vacancies, and impurities in crystals",
+    "category": "材料科学",
+    "icon": "CircleDot",
+    "prompt": "Analyze defects in: {material}.\n\nWork in this order:\n1. State the host structure, method (DFT with supercell and stated functional), and units; if the relevant chemical environment, charge states, or growth conditions are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate formation energies for common point defects (vacancies, interstitials, antisites), applying finite-size and charged-defect corrections.\n3. Determine charge-state transition levels in the gap.\n4. Compute equilibrium defect concentrations at {temperature} using Boltzmann statistics.\n5. Analyze migration barriers (e.g. NEB) for key defects.\n6. Predict the dominant defect type as a function of chemical potential and Fermi level. Note semilocal-DFT gap error. Record pymatgen/package versions. Save formation-energy and transition-level plots as PNG, energies as CSV, and a Markdown write-up discussing property implications; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Host material",
+        "required": true
+      },
+      {
+        "key": "temperature",
+        "label": "Temperature of interest (K)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "alloy-design",
+    "name": "Alloy Design",
+    "description": "Design alloys with targeted mechanical or functional properties",
+    "category": "材料科学",
+    "icon": "Layers",
+    "prompt": "Design an alloy for: {application}. Requirements: {requirements}.\n\nWork in this order:\n1. Propose candidate composition ranges from CALPHAD and literature, stating units and assumptions; if the requirements lack quantitative targets or service conditions that would change the design, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Predict phase stability and expected microstructure as a function of composition and processing temperature.\n3. Estimate mechanical properties (yield strength, hardness, ductility) via established models, reporting expected uncertainty.\n4. Assess corrosion resistance.\n5. Check processability (castability, weldability, segregation tendency).\n6. Recommend the top 3 compositions for experimental validation, with rationale. Record package/database versions. Save a property-vs-composition plot as PNG, the candidate comparison table as CSV, and a Markdown design report; name the files and note model validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "application",
+        "label": "Application (aerospace, biomedical, automotive, etc.)",
+        "required": true
+      },
+      {
+        "key": "requirements",
+        "label": "Property requirements",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "battery-material-analysis",
+    "name": "Battery Material Analysis",
+    "description": "Evaluate materials for electrochemical energy storage",
+    "category": "材料科学",
+    "icon": "Zap",
+    "prompt": "Evaluate {material} as a {component} for batteries.\n\nWork in this order:\n1. State the working ion, method, and units; if the operating voltage window or counter-electrode is ambiguous and would change conclusions, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate the voltage profile and theoretical gravimetric/volumetric capacity from formation energies of the relevant phases.\n3. Analyze structural stability during (de)intercalation (volume change, phase transitions).\n4. Compute ion-migration barriers (e.g. NEB) and estimate diffusivity.\n5. Assess electronic conductivity (band gap / DOS at the Fermi level).\n6. Compare with state-of-the-art materials and identify likely degradation mechanisms. Report all relevant electrochemical properties with units and method uncertainty. Record pymatgen/package versions. Save voltage-profile and migration plots as PNG, properties as CSV, and a Markdown summary; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Material formula",
+        "required": true
+      },
+      {
+        "key": "component",
+        "label": "Battery component (cathode, anode, electrolyte, solid electrolyte)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "thermal-conductivity-modeling",
+    "name": "Thermal Conductivity Modeling",
+    "description": "Predict thermal transport properties of materials",
+    "category": "材料科学",
+    "icon": "Thermometer",
+    "prompt": "Model the thermal conductivity of: {material}.\n\nWork in this order:\n1. State the structure, method (e.g. DFT phonons via finite displacements or DFPT), and units; if the structure or relevant scattering processes are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate phonon dispersion relations and check for stability (no large imaginary modes) as a sanity check; verify supercell/q-mesh convergence.\n3. Compute the phonon density of states.\n4. Estimate lattice thermal conductivity by solving the Boltzmann transport equation (including anharmonic three-phonon scattering).\n5. Analyze dominant phonon scattering mechanisms.\n6. Predict the temperature dependence from {t_min} to {t_max} K and compare with experimental data if available, noting method uncertainty. Record package versions. Save dispersion and kappa(T) plots as PNG, data as CSV, and a Markdown write-up; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Material",
+        "required": true
+      },
+      {
+        "key": "t_min",
+        "label": "Min temperature K (default: 100)",
+        "required": false
+      },
+      {
+        "key": "t_max",
+        "label": "Max temperature K (default: 1000)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "surface-energy-calculation",
+    "name": "Surface Energy Analysis",
+    "description": "Calculate surface energies and predict crystal morphology",
+    "category": "材料科学",
+    "icon": "Hexagon",
+    "prompt": "Calculate surface energies for: {material}.\n\nWork in this order:\n1. State the bulk structure, method (DFT with stated functional), and units; if the relevant facets or environment are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Identify low-index surfaces.\n3. Construct symmetric surface slab models and verify convergence with respect to slab thickness and vacuum spacing.\n4. Calculate the surface energy of each facet, using consistent bulk references.\n5. Construct the Wulff shape (equilibrium crystal morphology).\n6. Analyze surface terminations and reconstructions, and predict adsorption energies for {adsorbate} if specified, noting coverage assumptions. Record pymatgen/package versions. Save the Wulff shape and surface-energy plots as PNG, energies as CSV, and a Markdown summary; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Material",
+        "required": true
+      },
+      {
+        "key": "adsorbate",
+        "label": "Adsorbate molecule (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "polymer-property-prediction",
+    "name": "Polymer Property Prediction",
+    "description": "Predict thermal, mechanical, and transport properties of polymers",
+    "category": "材料科学",
+    "icon": "Hexagon",
+    "prompt": "Predict properties for the polymer: {polymer}.\n\nWork in this order:\n1. Parse the repeat unit and state the method (group-contribution, QSPR/ML, or simulation) and units; if the molecular weight, tacticity, or processing state is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Calculate the glass-transition temperature (Tg).\n3. Predict the thermal decomposition temperature.\n4. Estimate mechanical properties (modulus, tensile strength).\n5. Predict gas permeability (O2, N2, CO2).\n6. Assess solubility parameters (e.g. Hansen/Hildebrand). For each property, report the model's expected error and compare with experimental data and similar polymers in the literature. Set the seed, record rdkit/deepchem versions. Save a property comparison plot as PNG, the property table as CSV, and a Markdown summary; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "polymer",
+        "label": "Polymer (repeat unit SMILES or name)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "band-structure-calculation",
+    "name": "Electronic Band Structure",
+    "description": "Compute electronic band structure and DOS for materials",
+    "category": "材料科学",
+    "icon": "Waves",
+    "prompt": "Calculate the electronic band structure for: {material}.\n\nWork in this order:\n1. State the structure source, method (DFT with a named functional), and units; if the structure or magnetic state is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool, else state assumptions.\n2. Optimize the crystal structure and verify force/stress convergence.\n3. Compute bands along the standard high-symmetry k-path, checking k-mesh and energy-cutoff convergence.\n4. Calculate the total and projected density of states.\n5. Determine the band gap (direct/indirect), noting that semilocal DFT underestimates gaps and suggesting a correction if accuracy matters.\n6. Analyze orbital character of bands near the Fermi level and compute effective masses if semiconducting. Record pymatgen/functional versions. Save band and PDOS plots as PNG, the data as CSV, and a Markdown write-up; name the files and note validity limits.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "material",
+        "label": "Material (formula or CIF file)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "materials-literature-review",
+    "name": "Materials Science Literature Review",
+    "description": "Survey literature for a materials science topic",
+    "category": "材料科学",
+    "icon": "BookOpen",
+    "prompt": "Conduct a comprehensive literature review on: {topic} in materials science.\n\nWork in this order:\n1. Search peer-reviewed publications from the last {years} years, recording databases, queries, and dates for reproducibility.\n2. Identify key synthesis methods and characterization techniques.\n3. Compile reported property values in a comparison table with units, measurement conditions, and citations.\n4. Identify trends and quantify discrepancies between studies, distinguishing measurement scatter from genuine disagreement.\n5. Highlight open challenges and unresolved questions.\n6. Suggest promising, specific research directions. Note source quality and any coverage gaps. Save the comparison table as CSV, any trend plots as PNG, and the full review with citations as Markdown; name the files and summarize key findings in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Materials topic",
+        "required": true
+      },
+      {
+        "key": "years",
+        "label": "Years to cover (default: 5)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+]
