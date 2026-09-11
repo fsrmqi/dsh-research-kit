@@ -80,7 +80,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 | Resources & Workflows | Discover | Catalog search, parameterized assembly, direct database lookup |
 | Method Workshop | Construct | Method cards + variable fill-in → editable prompt; extract a draft from the current conversation |
 | Research Vault | Deposit | Asset CRUD, version diff, verification tracking; an **Evidence Vault** sub-module saves source metadata and notes per item, project-isolated and de-duplicated |
-| Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources and assets |
+| Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources, assets and saved evidence |
 
 ![The research loop across four sections: discover, construct, deposit, evidence](docs/assets/research-loop.svg)
 
@@ -92,6 +92,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 - **Draft enhancer** — one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original.
 - **Favorites & history** — one-click star on any entry; successful write/send/copy is recorded locally (ID, name, first-line summary, timestamp; 20 entries max).
 - **Evidence vault** — save individual results from public database lookups, each carrying a stable identifier (DOI / PMID / NCT / arXiv) and source link, defaulting to "unverified"; project-isolated de-duplication, JSON export/import and hard delete. **Only source metadata and notes you write are stored — no full text, no query terms, and nothing is saved automatically.**
+- **Evidence graph** — traces relations among this session's resources, workflows, query sources, assets and **saved evidence**; evidence nodes carry only source database / stable identifier / verification status, **never notes or query terms**; arrows show relation direction, with anchors chosen from the two endpoints' actual positions rather than a fixed "always left-to-right".
 - **Multiple prompt exits** — beyond write-to-composer and send, "Copy prompt" works even when host actions are missing.
 - **Launch-time validation** — field-level errors (red border + message) inside the preview dialog; missing required parameters never write the draft.
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
@@ -171,6 +172,7 @@ Plus 8 skills and 55 database entries. Full definitions live in [`catalog/`](cat
 | Current session composer | Writes or submits the final prompt only when you click "Write/Send" | No Enter interception, no auto-send, never touches other sessions' history |
 | `@file` mentions | Only nudges you toward DSH's native mention menu | Never reads, uploads or parses file contents |
 | Browser storage | Favorites, history, method cards and research-vault assets (`localStorage`) | No parameter values, full prompts or file contents; clearing browser data clears them |
+| Browser IndexedDB | Evidence entries: source metadata and notes you wrote yourself | Written **only after you confirm each save**; no full text, query terms or raw responses; per-project isolation, export / import / permanent delete. The evidence graph shows only their source / identifier / verification status, never the notes |
 | Current-page memory | Per-session evidence index (started workflows and direct-query source summaries) | Used only to update the evidence graph across views; cleared on refresh or page close, and never stores query terms, raw files or full results |
 | Network | Direct public-database lookup (only when you trigger it) | Requests go through DSH's controlled web service; the plugin holds no API keys |
 
@@ -188,7 +190,7 @@ The remaining 44 sources are marked `requires-mcp` or `reference-only`, state th
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (128 entries, 128 unique IDs), 121 regression tests, two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching).
+Verified so far: catalog contract validation (128 entries, 128 unique IDs), 122 regression tests, two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -197,7 +199,7 @@ Verified so far: catalog contract validation (128 entries, 128 unique IDs), 121 
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic and contract regression tests (121)
+npm test        # pure-logic and contract regression tests (122)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).

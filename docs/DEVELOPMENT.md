@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（121 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（122 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -52,9 +52,11 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 浮层锚定卡片的可用高度解算（纯函数 + 单测） | 已实现 | `src/lib/overlay-anchor.js` + `test/composer-overlay.test.js` |
 | 槽位注册测试（调用注册表 + 产物包含性检查） | 已实现 | `test/dsh-slots.test.js` |
 | 证据库持久化 / 项目隔离 / 去重 / 备份（跨刷新以最小 IndexedDB 桩断言） | 已实现 | `test/evidence-vault.test.js` + `test/helpers/fake-indexeddb.js` |
+| 证据库写入决策（未选择不注入 / 宿主不支持时降级 / 选择基准） | 已实现（纯逻辑 + 视图接线契约） | `test/evidence-vault.test.js` 的 4c 段 |
+| 证据图谱节点与边（含已保存证据接入、不暴露笔记） | 已实现 | `test/evidence-graph.test.js` |
 | 浏览器 ModuleLoader 构建 | 已实现（CI 校验可复现） | `scripts/build-client.mjs` |
-| 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）** | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
-| 浏览器级交互测试（jsdom） | 未完成 | 见 [ROADMAP](../ROADMAP.md) |
+| 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
+| 浏览器级交互测试（jsdom） | 未完成——**前置障碍是仓库尚无可在 Node 挂载 React 组件的渲染运行时**，需先引入或搭建 harness | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
 
 ## 3. 实现里程碑
@@ -89,7 +91,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 121 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 122 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

@@ -22,7 +22,7 @@ conversation.view            dsh-research-kit-console   科研工作台（统一
 ├── 分区① 资源与工作流      catalog + Prompt 组装 + 公开数据源直查
 ├── 分区② 方法工坊          Method Workshop（vendored 组件 + 宿主装配）
 ├── 分区③ 研究资产库        灵感资产 / 证据库管理
-└── 分区④ 研究证据图谱      本会话资源 / 工作流 / 查询来源 / 资产的关系图
+└── 分区④ 研究证据图谱      本会话资源 / 工作流 / 查询来源 / 资产 / 已保存证据的关系图
 conversation.input.left      dsh-research-kit-launcher          资源 / 工作流程入口
 conversation.input.overlay   dsh-research-kit-overlay           选择器与启动弹窗
 conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器

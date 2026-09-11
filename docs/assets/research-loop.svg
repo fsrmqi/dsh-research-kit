@@ -53,7 +53,7 @@
 <text x="704" y="150" font-size="12" fill="#534AB7" text-anchor="middle">证据层</text>
 <line x1="634" y1="164" x2="774" y2="164" stroke="#EEEDFE" stroke-width="1"/>
 <text x="704" y="190" font-size="13" fill="#3C3489" text-anchor="middle">把关系讲清楚</text>
-<text x="704" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">本会话证据索引</text>
+<text x="704" y="226" font-size="12" fill="#5F5E5A" text-anchor="middle">本会话索引 + 证据库</text>
 <text x="704" y="246" font-size="12" fill="#5F5E5A" text-anchor="middle">只读关系可视化</text>
 <text x="704" y="266" font-size="12" fill="#5F5E5A" text-anchor="middle">不执行、不生成结论</text>
 

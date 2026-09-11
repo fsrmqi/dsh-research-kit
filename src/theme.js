@@ -150,6 +150,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .rk-graph-edge { stroke-linecap: round; opacity: .72 }
 .rk-graph-edge-flow { stroke: var(--rk-teal) !important; stroke-dasharray: 7 11; animation: rk-graph-flow 1.25s linear infinite }
 .rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)) }
+.rk-graph-node { cursor: pointer }
+.rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px rgba(13,148,136,.45)) }
 .rk-pop { animation: rk-pop .18s ease both }
 .rk-fade { animation: rk-fade .16s ease both }
 .rk-scroll::-webkit-scrollbar { width: 8px; height: 8px }
