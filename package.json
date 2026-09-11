@@ -8,8 +8,28 @@
     ".": "./index.js",
     "./client": "./ui/client.js"
   },
-  "files": ["catalog", "src", "ui", "dsh", "vendor", "scripts", "docs", "test", "README.md", "README.en.md", "CONTRIBUTING.md", "SECURITY.md", "CHANGELOG.md", "ROADMAP.md", "NOTICE", "LICENSE", "cordis.patch.yml"],
-  "engines": { "node": ">=22.6" },
+  "files": [
+    "catalog",
+    "src",
+    "ui",
+    "dsh",
+    "vendor",
+    "scripts",
+    "docs",
+    "test",
+    "README.md",
+    "README.en.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "NOTICE",
+    "LICENSE",
+    "cordis.patch.yml"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
   "license": "MIT",
   "author": "cuijiaqi <cjqzazj@gmail.com>",
   "homepage": "https://github.com/fsrmqi/dsh-research-kit#readme",
@@ -36,7 +56,9 @@
     "test": "npm run build && node --test"
   },
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "inject": [
@@ -44,5 +66,9 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
+  },
+  "devDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

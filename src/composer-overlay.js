@@ -2,11 +2,11 @@ import React from 'react'
 import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources } from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
-import { h, C } from './theme.js'
+import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import { POPOVER_GAP, POPOVER_MAX_HEIGHT, overlayMaxHeight, findScrollport } from './lib/overlay-anchor.js'
 import {
-  GlobalStyle, Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Segmented, EmptyState,
+  Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Segmented, EmptyState,
 } from './ui.js'
 import { RESEARCH_COMPOSER_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
 

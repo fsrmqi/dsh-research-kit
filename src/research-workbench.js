@@ -4,10 +4,10 @@ import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { DatabaseQueryPanel } from './database-query-panel.js'
-import { h, C } from './theme.js'
+import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import {
-  GlobalStyle, Page, PageHead, Toolbar, Panel, PanelHead, Card, Button, StarButton,
+  Page, PageHead, Toolbar, Panel, PanelHead, Card, Button, StarButton,
   Badge, Chip, Field, Input, Textarea, Select, Notice, Segmented, GroupLabel, EmptyState, ListRow,
 } from './ui.js'
 

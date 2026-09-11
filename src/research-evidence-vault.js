@@ -1,7 +1,7 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import {
-  Toolbar, Card, Button, Input, Textarea, Field, Badge, Chip,
+  Toolbar, Card, Button, Input, Textarea, Field, Badge, Chip, Select,
   Segmented, EmptyState, Spinner, Notice,
 } from './ui.js'
 import { createEvidenceVaultStore } from './evidence-vault-store.js'

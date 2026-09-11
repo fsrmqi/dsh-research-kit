@@ -1,6 +1,6 @@
 import React from 'react'
-import { h, C } from './theme.js'
-import { GlobalStyle, Page, Segmented } from './ui.js'
+import { h, C, GlobalStyle } from './theme.js'
+import { Page, Segmented } from './ui.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 

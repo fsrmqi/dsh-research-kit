@@ -88,7 +88,7 @@ dsh-research-kit/
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
 │   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
-│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染 + 已保存证据接入 + 方向性锚点
+│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
@@ -117,7 +117,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 122 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
+├── test/                            # 143 项测试（16 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -393,9 +393,12 @@ DSH 加载 ui/client.js
   ├─ 灵感资产（PromptKit asset provider，含派生与关联关系）
   └─ 已保存证据（IndexedDB dsh-research-kit-evidence，只读接入；见 §3.4）
   → buildEvidenceGraph() 纯逻辑产出节点与边（不含检索词、全文、笔记）
-  → 按节点 kind 分列布局，evidence 为最右一列
-  → edgePoints(from, to) 按两端实际水平位置选锚点：正向右缘→左缘，逆向左缘→右缘
+  → layoutEvidenceGraph() 确定性分层布局：按 kind 分列，同列按 id 字典序（新增节点不让已有节点跳位）
+  → routeEvidenceEdges() 端口路由 + 方向性锚点：正向右缘→左缘，逆向左缘→右缘，贝塞尔连线
+  → 视图层只消费布局结果：缩放平移、迷你地图、范围模式、导出均为确定性重算，不持有图算法
 ```
+
+**视图能力（§3.1 Viewer）。** `research-evidence-graph.js` 在纯逻辑之上提供：Ctrl / ⌘ 滚轮缩放（`clampGraphScale` 限幅 0.4–2.5）与拖拽平移（带边界钳制，图拖不丢）；右下角迷你地图点击跳转、视口框实时联动；聚焦 / 上游 / 下游 / 两点路径四种范围模式（`evidenceNeighborhood` BFS、`findEvidencePath` 无向最短路，非范围内节点降透明度而非移除，保留参照系）；`prefers-reduced-motion` 时链路流动动画由全局 CSS 关闭；窄屏（<880px）随统一容器单列收敛，画布不再设固定最小宽度。
 
 | 节点 kind | id 前缀 | 展示 |
 | --- | --- | --- |
@@ -412,7 +415,9 @@ DSH 加载 ui/client.js
 
 **资源集合会被补齐。** 图谱的资源节点不只来自本会话勾选：只要某个已保存证据的来源库在目录中存在，对应的数据库条目也会补进图谱。否则会出现「有证据节点却找不到来源库」的断链，`saved-from` 边也就无从落地。
 
-**隐私边界。** 证据节点只带来源库、稳定标识符与核验状态，**不带笔记、全文或检索词**；图谱对证据库是只读接入（不写入、不修改）。未保存的查询来源与已保存证据是两类不同节点，前者随页面内存消失，后者持久化在 IndexedDB，二者不互相冒充。该边界由 `test/evidence-graph.test.js` 断言（序列化结果不得包含笔记正文）。
+**隐私边界。** 证据节点只带来源库、稳定标识符与核验状态，**不带笔记、全文或检索词**；图谱对证据库是只读接入（不写入、不修改）。未保存的查询来源与已保存证据是两类不同节点，前者随页面内存消失，后者持久化在 IndexedDB，二者不互相冒充。该边界由 `test/evidence-graph.test.js` 断言（序列化结果不得包含笔记正文），并延伸到导出与分享：
+
+**导出与视图链接。** 复制视图链接只编码焦点、范围模式、路径两端与缩放（`encodeGraphView`），**绝不编码证据内容**——链接会被转发，标题与标识符都不该进去。导出快照（SVG / HTML）由用户显式触发，导出弹窗与导出文件正文都写明元数据范围：仅含节点标题、来源库、稳定标识符、核验状态与关系，不含笔记、全文、检索词、附件或输入框草稿；导出物把当前主题解析成真实色值（导出到独立文件后 CSS 变量不再有定义，否则会渲染成黑块）。
 
 ## 4. 目录数据契约
 

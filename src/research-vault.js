@@ -1,8 +1,8 @@
 import React from 'react'
-import { h, C } from './theme.js'
+import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import {
-  GlobalStyle, Page, PageHead, Toolbar, Card, Button, StarButton, Badge, Chip,
+  Page, PageHead, Toolbar, Card, Button, StarButton, Badge, Chip,
   Field, Input, Textarea, Select, Notice, Segmented, EmptyState, Spinner,
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'

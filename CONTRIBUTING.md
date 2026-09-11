@@ -17,7 +17,7 @@ git clone https://github.com/fsrmqi/dsh-research-kit.git
 cd dsh-research-kit
 npm run build   # 生成 ui/client.js（构建产物，提交到仓库，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑与契约回归测试
+npm test        # 纯逻辑、渲染级与契约回归测试（需先 npm install 安装 react/react-dom 开发依赖）
 ```
 
 改动 `catalog/`、`src/`、`dsh/` 或 `scripts/build-client.mjs` 后，统一执行：
@@ -82,7 +82,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 打开界面才 `ReferenceError`，构建却无报错 | 新模块漏登记 `scripts/build-client.mjs` 的 `files` 白名单。产物只是少了一段代码，`node --check` 查不出来 |
 | CI 报构建产物与源码不同步 | 忘了 `npm run build`，或手改了 `ui/client.js` |
 | `npm run check` 报工件 SHA 不匹配 | `vendor/` 下的文件被改动了。工件是 SHA 锁定快照，**不得手改**；更新需同步 `vendor/vendor-manifest.json` |
-| 测试通过但界面真的坏 | 自动化测试全部是纯逻辑断言与源码/产物文本断言，无法覆盖渲染层。请按 [MANUAL-QA.md](docs/MANUAL-QA.md) 在真实 profile 复核 |
+| 测试通过但界面真的坏 | 自动化测试覆盖纯逻辑与渲染级初始状态，但点击/事件交互与宿主 props 形状仍需真实验证。请按 [MANUAL-QA.md](docs/MANUAL-QA.md) 在真实 profile 复核 |
 
 ## 报告问题
 

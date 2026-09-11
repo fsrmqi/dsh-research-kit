@@ -1,6 +1,6 @@
 import React from 'react'
-import { h, C } from './theme.js'
-import { GlobalStyle, Button } from './ui.js'
+import { h, C, GlobalStyle } from './theme.js'
+import { Button } from './ui.js'
 
 export const RESEARCH_COMPOSER_EVENT = 'dsh-research-kit:composer-open'
 export const RESEARCH_RESOURCE_SELECTION_EVENT = 'dsh-research-kit:resource-selection-changed'

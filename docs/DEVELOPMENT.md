@@ -8,7 +8,7 @@
 
 ### 环境
 
-- Node.js `>= 22.6`（本仓库无运行时依赖，不需要 `npm install`）；
+- Node.js `>= 22.6`（运行时零依赖；开发态运行 `npm test` 需先 `npm install` 安装 devDependencies 里的 react / react-dom——渲染级降级测试用真实 react-dom/server 渲染初始状态，不引入 jsdom；CI 已含 `npm ci`）；
 - 可运行的 DSH Web profile —— DSH 是独立开源项目，见 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)；
 - 参照 [dsh-promptkit](https://github.com/fsrmqi/dsh-promptkit) 的 DSH slot 适配方式（同为 DSH 浏览器插件）。
 
@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（122 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、渲染级降级、构建产物、分区契约与 DSH 槽位注册测试（143 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -53,10 +53,11 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 槽位注册测试（调用注册表 + 产物包含性检查） | 已实现 | `test/dsh-slots.test.js` |
 | 证据库持久化 / 项目隔离 / 去重 / 备份（跨刷新以最小 IndexedDB 桩断言） | 已实现 | `test/evidence-vault.test.js` + `test/helpers/fake-indexeddb.js` |
 | 证据库写入决策（未选择不注入 / 宿主不支持时降级 / 选择基准） | 已实现（纯逻辑 + 视图接线契约） | `test/evidence-vault.test.js` 的 4c 段 |
-| 证据图谱节点与边（含已保存证据接入、不暴露笔记） | 已实现 | `test/evidence-graph.test.js` |
+| 证据图谱节点与边（含已保存证据接入、布局稳定性、端口路由、邻域/路径、URL 视图状态、不暴露笔记） | 已实现 | `test/evidence-graph.test.js` |
+| 宿主动作缺失的渲染级降级断言（禁用态 / 提示文案 / 不抛错 / 接线契约） | 已实现（真实 react-dom/server，无 jsdom） | `test/render-smoke.test.js` + `test/helpers/dom-stub.js` |
 | 浏览器 ModuleLoader 构建 | 已实现（CI 校验可复现） | `scripts/build-client.mjs` |
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
-| 浏览器级交互测试（jsdom） | 未完成——**前置障碍是仓库尚无可在 Node 挂载 React 组件的渲染运行时**，需先引入或搭建 harness | 见 [ROADMAP §1](../ROADMAP.md) |
+| 浏览器级交互测试（点击 / 事件 / useLayoutEffect） | 未完成——渲染级已覆盖初始状态（react-dom/server），交互级仍需真实 DOM 事件运行时 | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
 
 ## 3. 实现里程碑
@@ -91,7 +92,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 122 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 143 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
@@ -160,6 +161,13 @@ type InputActions = {
 
 ## 5. 测试策略
 
+当前分层（2026-09-11 起）：
+
+1. **纯逻辑测试**：领域决策（布局、路由、邻域/路径、`planCitationWrite` 等）直接断言输入输出；
+2. **渲染级降级测试**（`test/render-smoke.test.js`）：用真实 `react-dom/server` 渲染初始状态，断言宿主动作缺失时按钮真的带 `disabled`、降级文案真的存在、视图不抛错——**不引入 jsdom**，靠 `test/helpers/dom-stub.js` 补齐 window/localStorage 等 SSR 缺失面。边界（不掩饰）：SSR 不执行事件，所以「点击后是否真的不写入」在这里测不到，由源码接线断言钉住调用关系；
+3. **源码/产物文本断言**：接线契约（守卫必须存在）与构建产物一致性；
+4. **真实 profile 烟测**：props 形状、槽位注册与交互，见 `docs/MANUAL-QA.md`。
+
 ### 5.1 单元测试
 
 优先测试无需 DSH 的确定性行为：
@@ -171,6 +179,8 @@ type InputActions = {
 - Prompt 安全守卫（如有）：禁止弱化“不编造”规则。
 
 ### 5.2 组件测试
+
+新增渲染级断言时（参考 `test/render-smoke.test.js`）：`installDomStub()` + `installFakeIndexedDB()` 后动态 `import` 组件，`renderToStaticMarkup(createElement(Component, props))`，用 `buttonMarkup(html, label)` 取出含特定文案的按钮标签断言 `disabled`；组件内部异步取数（IndexedDB / assetProvider）全部要能接受桩。SSR 覆盖不到的交互（点击、事件、useLayoutEffect）不要伪装测过——要么走源码接线断言，要么留给真实 profile。
 
 使用最小的 `inputActions` fake：
 

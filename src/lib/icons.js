@@ -1,3 +1,4 @@
+import { h } from '../theme.js'
 // 图标 path 与 dsh-promptkit「研究方法工厂对话增强器」同源（ICON_PATHS 逐项复刻），
 // 保证两处图标形状、线宽与视觉重量完全一致；不引入图标库。
 const ICON_PATHS = {
