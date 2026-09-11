@@ -22,10 +22,11 @@
 ### 新增
 
 - 📊 **`docs/assets/` 新增 5 张对外展示用架构图**（SVG 随仓库分发，README 与文档直接引用）：全局架构（宿主 / 插件 / 两条受控路由 / 外部通道）、科研闭环四分区、Prompt 组装五步链路、数据源双路径（11 直查 vs 44 回退）、三方责任边界（插件 / DSH / 研究者）。全部经真实 Chromium 渲染核验排版，无溢出与重叠；README（中英）、`docs/PRODUCT.md`、`docs/ARCHITECTURE.md` 共 8 处引用。
-- 测试扩充至 120 项：新增「目录标注的插件可直查与实现里的适配器完全一致」（先锁住清单提取结果，避免一致性断言空转）、「契约校验能抓住漏标与虚标」，以及 §4c 的 4 项守护——未选择不注入（含空数组 / `null` / 非数组 / 无参调用）、宿主不支持写入时不注入但引用块仍可复制、有选择时写入文本含来源链接与核验边界、视图确实经由 `planCitationWrite` 且 `setDraft` 受 `action === 'write'` 守卫（否则把守卫从视图删掉，纯逻辑测试仍会全绿）。
+- 测试扩充至 121 项：新增「目录标注的插件可直查与实现里的适配器完全一致」（先锁住清单提取结果，避免一致性断言空转）、「契约校验能抓住漏标与虚标」，以及 §4c 的 5 项守护——未选择不注入（含空数组 / `null` / 非数组 / 无参调用）、宿主不支持写入时不注入但引用块仍可复制、有选择时写入文本含来源链接与核验边界、视图确实经由 `planCitationWrite` 且 `setDraft` 受 `action === 'write'` 守卫（否则把守卫从视图删掉，纯逻辑测试仍会全绿）、选择基准必须是全部条目而非当前筛选结果。
 
 ### 修复
 
+- 🎯 修复「勾选后再改筛选，已选条目被静默移出计数」：证据库的选择集原先从**当前筛选结果**（`filtered`）过滤，用户勾选后一旦调整检索词或核验状态筛选，被筛掉的条目就会退出 `写入 Prompt（N）` 的计数与引用块预览——选择是用户明确做出的动作，不应被视图条件变化悄悄撤销。现改为以**全部证据条目**（`entries`）为基准，筛选只影响「看见什么」，不影响「已选择什么」；项目切换仍会清空选择，故不会跨项目带入。空选择提示语相应从「请先勾选当前筛选结果中的证据条目」改为「请先勾选证据条目」，按钮、预览与写入提示继续按实际选中条数计数，并补一项接线契约测试钉住基准来源。
 - 🔬 修复「分区嵌入契约」测试的假阴性：断言写作 `/researchAssetProvider,\s*embedded\s*\}/`，把正则锚在属性对象的结尾 `}` 上；`ResearchVaultHost` 多透传一个 `inputActions` 后即误报失败（缺陷实际不存在）。改为只断言 `h(ResearchVault, { … })` 的 props 里出现 `embedded`，不再耦合属性顺序与对象结尾。
 - 🔁 修复已提交构建产物与源码不同步：`src/research-vault.js` 的 `ResearchVaultHost` 与 `ui/client.js` 中同一处的属性顺序不一致，CI 的「构建后可复现」校验必然失败。已重新构建并提交产物；重复构建零 diff 已实测。
 - 🧯 **修复统一视图与输入框浮层整屏白屏**：`src/research-selection-store.js` 与 `src/evidence-store.js` 各定义了一个顶层 `stateFor`（返回的 state 形状不同——前者有 `ids` 字段，后者是 `queries` / `workflows`）。构建器把模块拼进同一函数作用域时，**后者的声明静默覆盖前者**：`function` 重名不报错、产物照样通过 `node --check`，只在渲染时才炸成 `TypeError: state.ids is not iterable`。受影响的不止「资源与工作流」分区——`composer-overlay` 与 `prompt-enhancer-glue` 复用同一个 store，因此工具行的「资源 / 工作流程」入口与分区切换一并白屏。修法分两步：① 两个 store 的内部函数按职责改名（`evidenceKeyFor` / `evidenceStateFor`），`formatTime` 的三份同名副本也分别改为 `formatWorkbenchTime` / `formatAssetTime` / `formatEvidenceTime`；② 在 `scripts/build-client.mjs` 新增构建期断言 `assertUniqueTopLevelSymbols`——项目模块顶层符号重名直接让 `npm run build` 失败并报出 `文件:行`，把这类「静默覆盖」从"靠人记得扫一遍"变成"不可能漏"。该断言只覆盖项目模块，vendored 工件的内部声明都在 `const PromptKit = (React => {…})` 作用域内。

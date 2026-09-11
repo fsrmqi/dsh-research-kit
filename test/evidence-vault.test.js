@@ -368,3 +368,12 @@ test('4c 写入契约：视图经由纯逻辑决策，且 setDraft 只在 action
   // 视图不得绕过决策内联调用宿主写入：全文件只允许一处 setDraft(。
   assert.equal((view.match(/setDraft\(/g) || []).length, 1, '视图只应有一处 setDraft 调用，且受 action 守卫')
 })
+
+test('4c 选择基准：勾选是跨筛选状态，改筛选不撤销已选择', () => {
+  // 选择集必须以 entries（全部条目）为基准，而不是 filtered（当前筛选结果）。
+  // 否则用户勾选后调整筛选条件，被筛掉的条目会静默退出计数——
+  // 那等于让「看见什么」悄悄改写「已选择什么」，且计数与用户认知不符。
+  const view = readFileSync(new URL('../src/research-evidence-vault.js', import.meta.url), 'utf8')
+  assert.match(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*entries\.filter\(/, '选择集必须以全部证据条目为基准')
+  assert.doesNotMatch(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*filtered\.filter\(/, '选择集不得以筛选结果为基准')
+})

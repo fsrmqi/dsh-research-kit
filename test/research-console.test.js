@@ -89,6 +89,10 @@ test('分区嵌入契约：自带页面外壳的分区必须以 embedded 模式�
     assert.ok(line, `未找到分区映射：${id}`)
     assert.match(line, /embedded:\s*true/, `分区 ${id} 未以 embedded 模式渲染，会与容器形成嵌套页面外壳`)
   }
+  // vault 内的证据库要将勾选来源写入当前会话输入框，必须拿到控制台收到的宿主动作。
+  // 漏传时 UI 只会静默退化成禁用的「写入 Prompt」按钮，直到真实 profile 才容易暴露。
+  const vaultLine = consoleSource.split('\n').find(row => /^\s{2}vault:/.test(row))
+  assert.match(vaultLine, /inputActions:\s*props\.inputActions/, 'vault 分区未向 ResearchVaultHost 透传 inputActions，证据无法写入 Prompt')
   // 宿主必须把 embedded 透传给实际组件，否则上面的开关不生效。
   const vaultSource = readFileSync(new URL('../src/research-vault.js', import.meta.url), 'utf8')
   assert.match(vaultSource, /function ResearchVaultHost\(\{\s*embedded/, 'ResearchVaultHost 未接收 embedded')

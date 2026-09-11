@@ -20,7 +20,7 @@ const SECTION_VIEWS = {
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { embedded: true }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
 }
 

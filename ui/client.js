@@ -5154,7 +5154,7 @@ window.__ModuleLoader__.load({
     function planCitationWrite({ entries, canWrite } = {}) {
       const rows = Array.isArray(entries) ? entries : []
       if (!rows.length) {
-        return { action: 'empty', text: '', notice: '请先勾选当前筛选结果中的证据条目。' }
+        return { action: 'empty', text: '', notice: '请先勾选证据条目。' }
       }
       const text = formatEvidenceCitations(rows)
       if (!canWrite) {
@@ -5646,7 +5646,9 @@ window.__ModuleLoader__.load({
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
-      const selectedEntries = React.useMemo(() => filtered.filter(item => selectedIds.includes(item.id)), [filtered, selectedIds])
+      // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
+      // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
+      const selectedEntries = React.useMemo(() => entries.filter(item => selectedIds.includes(item.id)), [entries, selectedIds])
       const canWrite = typeof inputActions?.setDraft === 'function'
       // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
       // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
@@ -7377,7 +7379,7 @@ window.__ModuleLoader__.load({
       methods: props => h(ResearchPromptStudioHost, props),
       // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
       // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-      vault: props => h(ResearchVaultHost, { embedded: true }),
+      vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, embedded: true }),
       evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
     }
 

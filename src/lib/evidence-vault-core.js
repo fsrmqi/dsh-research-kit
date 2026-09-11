@@ -227,7 +227,7 @@ export function formatEvidenceCitations(entries) {
 export function planCitationWrite({ entries, canWrite } = {}) {
   const rows = Array.isArray(entries) ? entries : []
   if (!rows.length) {
-    return { action: 'empty', text: '', notice: '请先勾选当前筛选结果中的证据条目。' }
+    return { action: 'empty', text: '', notice: '请先勾选证据条目。' }
   }
   const text = formatEvidenceCitations(rows)
   if (!canWrite) {
