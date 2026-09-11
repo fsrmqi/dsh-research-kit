@@ -1,1 +1,236 @@
-[]
+[
+  {
+    "id": "species-distribution-model",
+    "type": "workflow",
+    "name": "物种分布模型",
+    "description": "用出现记录与环境图层预测物种栖息地适宜度与分布范围。",
+    "category": "生态学",
+    "tags": ["物种分布", "SDM", "生态位", "气候情景"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "species", "label": "目标物种", "required": false, "hint": "留空则从出现记录中识别" },
+      { "key": "scenario", "label": "气候情景", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["gbif", "nasa-earthdata", "inaturalist"],
+    "limitations": ["外推区域与未来情景的预测不确定性大，须谨慎解读。"],
+    "prompt": "请基于用户通过 @文件 提供的出现记录为 {species} 建立物种分布模型（气候情景：{scenario}）：说明环境变量来源与分辨率、背景点/伪-absence 生成方式、模型算法与交叉验证、评估指标（AUC/TSS）及对 {scenario} 的投影。须报告记录清洗规则与空间偏差处理；不得编造出现点或评估分数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "biodiversity-assessment",
+    "type": "workflow",
+    "name": "生物多样性评估",
+    "description": "分析物种丰富度、多样性指数与群落组成。",
+    "category": "生态学",
+    "tags": ["生物多样性", "丰富度", "群落组成"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "sites", "label": "样点定义", "required": false, "hint": "留空则按记录中的样点字段分组" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["gbif", "itis", "inaturalist"],
+    "limitations": ["抽样强度差异会强烈影响指数比较。"],
+    "prompt": "请对用户通过 @文件 提供的记录做样点 {sites} 的生物多样性评估：物种累积曲线与抽样充分性、α 多样性指数（Richness/Shannon/Simpson）及置信区间、β 多样性与群落组成排序。须说明抽样标准化方法（如稀疏化）并报告每个样点的记录量；不得编造物种数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "population-dynamics",
+    "type": "workflow",
+    "name": "种群动态建模",
+    "description": "构建种群增长、捕食-被捕食或竞争模型并做情景仿真。",
+    "category": "生态学",
+    "tags": ["种群动态", "Lotka-Volterra", "情景仿真"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "system", "label": "研究系统", "required": false },
+      { "key": "model_type", "label": "模型类型", "required": false },
+      { "key": "scenario", "label": "仿真情景", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模型为简化描述，外推需核验。"],
+    "prompt": "请为 {system} 构建 {model_type} 种群动态模型（情景：{scenario}），数据来自 @文件。须说明模型假设与参数来源或拟合方法、平衡点与稳定性分析、参数敏感性，输出时间序列图与情景对比。参数与初始值必须注明出处，不得编造观测数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "climate-data-analysis",
+    "type": "workflow",
+    "name": "气候数据分析",
+    "description": "分析温度、降水等气候要素的长期趋势与变率。",
+    "category": "生态学",
+    "tags": ["气候趋势", "温度", "降水", "再分析"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "region", "label": "研究区域", "required": true },
+      { "key": "period", "label": "时间范围", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["noaa-cdo", "copernicus-cds", "ncei-data-service", "open-meteo"],
+    "limitations": ["数据集选择与均一化处理会影响趋势结论。"],
+    "prompt": "请分析 {region} 在 {period} 的气候趋势与变率：说明数据集选择与来源（含版本与引用信息）、质量控制与缺测处理、趋势估计方法（含显著性）、距平基准期与季节分解，输出趋势图与极值统计。所有数值须可追溯到输入数据并标注数据集版本；不得编造观测值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "remote-sensing-analysis",
+    "type": "workflow",
+    "name": "遥感分析",
+    "description": "处理卫星影像并计算指数用于环境监测。",
+    "category": "生态学",
+    "tags": ["遥感", "卫星影像", "植被指数", "环境监测"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "sensor", "label": "传感器/数据集", "required": false },
+      { "key": "indices", "label": "遥感指数", "required": false, "hint": "如 NDVI、NDWI、NBR" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": ["sentinel-hub", "nasa-earthdata", "usgs-national-map"],
+    "limitations": ["云覆盖与大气校正质量会限制可用影像。"],
+    "prompt": "请处理用户通过 @文件 提供的 {sensor} 影像并计算 {indices}：说明预处理链（定标、大气校正、云掩膜）、指数公式与波段来源、时序合成方法与研究区统计。须报告每期影像的云量与有效覆盖；不得编造像元值或面积，输出为需人工核验的草案。"
+  },
+  {
+    "id": "phylogeography",
+    "type": "workflow",
+    "name": "系统地理分析",
+    "description": "分析遗传谱系的地理分布格局与历史扩散。",
+    "category": "生态学",
+    "tags": ["系统地理", "谱系", "单倍型网络"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "taxon", "label": "分类群", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["历史推断依赖分子钟与模型假设。"],
+    "prompt": "请对 {taxon} 的用户数据（@文件）做系统地理分析：序列比对与单倍型定义、系统树/网络构建、群体遗传多样性统计、谱系分化的地理格局与扩散推断（注明模型与先验）。须报告取样点位与每群体样本量，分化时间等推断须注明置信区间；不得编造单倍型或分化时间，输出为需人工核验的草案。"
+  },
+  {
+    "id": "ecological-network-analysis",
+    "type": "workflow",
+    "name": "生态网络分析",
+    "description": "分析食物网、互利共生或传粉网络的拓扑与模块结构。",
+    "category": "生态学",
+    "tags": ["生态网络", "食物网", "模块性"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "network_type", "label": "网络类型", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["网络指标对采样完整性敏感。"],
+    "prompt": "请对用户通过 @文件 提供的 {network_type} 交互数据做网络分析：构建邻接矩阵、计算中心性与层级指标、检测模块与嵌套性（说明算法与零模型），输出网络图与指标表。须说明交互记录的抽样方式与缺失处理；不得编造交互对，输出为需人工核验的草案。"
+  },
+  {
+    "id": "conservation-prioritization",
+    "type": "workflow",
+    "name": "保护优先级评估",
+    "description": "识别优先保护区域或物种并做空间规划建议。",
+    "category": "生态学",
+    "tags": ["保护规划", "优先区", "系统保护"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "target", "label": "保护对象", "required": false },
+      { "key": "region", "label": "规划区域", "required": false }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "statistics-review"],
+    "suggestedDatabaseIds": ["iucn-red-list", "gbif"],
+    "limitations": ["输出为规划参考，非保护决策依据。"],
+    "prompt": "请为 {region} 的 {target} 做保护优先级分析：整合物种分布与威胁信息（来源须注明并核对最新版本）、设定保护目标与代价层、运行空间优先排序（说明软件与参数），输出优先区图与代表性统计。评估结论须标注不确定性；不得编造物种受威胁等级，输出为需人工核验的草案。"
+  },
+  {
+    "id": "water-quality-analysis",
+    "type": "workflow",
+    "name": "水质分析",
+    "description": "分析水质化学监测数据并按标准评价。",
+    "category": "生态学",
+    "tags": ["水质", "水环境", "监测数据"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "standards", "label": "评价标准", "required": false, "hint": "如 GB 3838、EPA criteria" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "statistics-review"],
+    "suggestedDatabaseIds": ["water-quality-portal", "usgs-water"],
+    "limitations": ["标准适用范围与水域功能分区须由研究者确认。"],
+    "prompt": "请分析用户通过 @文件 提供的水质监测数据并按 {standards} 评价：说明站点与指标清单、检出限处理、时空趋势与超标统计，输出水质类别评价与趋势图。评价须引用标准条款原文编号；不得编造监测值或超标结论，输出为需人工核验的草案。"
+  },
+  {
+    "id": "carbon-footprint-analysis",
+    "type": "workflow",
+    "name": "碳足迹核算",
+    "description": "核算并分析对象范围内的温室气体排放。",
+    "category": "生态学",
+    "tags": ["碳足迹", "温室气体", "排放清单"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "entity", "label": "核算对象", "required": false }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["核算边界与排放因子选择显著影响结果。"],
+    "prompt": "请对 {entity} 做碳足迹核算（活动数据来自 @文件）：说明核算边界与范围一二三、排放因子来源与适用性（注明版本）、活动数据处理与不确定性，输出按来源分解的排放清单。排放因子与换算必须注明出处；不得编造排放量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "environmental-impact",
+    "type": "workflow",
+    "name": "环境影响评估",
+    "description": "按评价框架识别、预测项目环境影响并提出缓解建议。",
+    "category": "生态学",
+    "tags": ["环境影响评价", "EIA", "缓解措施"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "project", "label": "项目描述", "required": true },
+      { "key": "framework", "label": "评价框架", "required": false }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "scientific-writing"],
+    "suggestedDatabaseIds": ["epa-air-quality", "water-quality-portal"],
+    "limitations": ["输出为评估草案，不替代法定环评程序。"],
+    "prompt": "请按 {framework} 对以下项目做环境影响评估草案：{project}。识别影响源与受体的剂量-路径关系、按重要性矩阵分级、给出可监测的缓解措施与残余影响判断。影响预测须区分定性判断与定量估算并注明依据；不得编造法规条款或监测数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "habitat-suitability",
+    "type": "workflow",
+    "name": "栖息地适宜性分析",
+    "description": "评估目标物种的栖息地质量与关键生境因子。",
+    "category": "生态学",
+    "tags": ["栖息地", "生境评价", "HSI"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "species", "label": "目标物种", "required": true },
+      { "key": "region", "label": "评估区域", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["gbif", "nasa-earthdata"],
+    "limitations": ["适宜度指数不等于实际种群承载力。"],
+    "prompt": "请评估 {species} 在 {region} 的栖息地适宜性：说明生境因子选择依据（含文献）、数据来源与分辨率、适宜度模型或评分体系与验证方式，输出适宜度图与关键因子排序。因子阈值须注明出处；不得编造出现记录或因子得分，输出为需人工核验的草案。"
+  },
+  {
+    "id": "microbial-ecology",
+    "type": "workflow",
+    "name": "微生物群落生态",
+    "description": "分析 16S/ITS 扩增子数据：物种组成、多样性与组间比较。",
+    "category": "生态学",
+    "tags": ["微生物生态", "16S", "扩增子", "群落"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "database", "label": "参考数据库", "required": false, "hint": "如 SILVA、UNITE（注明版本）" },
+      { "key": "comparison", "label": "组间比较", "required": false }
+    ],
+    "suggestedSkillIds": ["bioinformatics-workflow-governance", "statistics-review"],
+    "suggestedDatabaseIds": ["embl-ebi"],
+    "limitations": ["扩增子分析只能反映目标区段多样性。"],
+    "prompt": "请分析用户通过 @文件 提供的扩增子数据（参考数据库：{database}；组间比较：{comparison}）：说明质量控制与去噪（如 DADA2）、ASV/OTU 定义、物种注释版本、α/β 多样性与差异检验及多重比较校正。须报告每样本读数与稀释曲线充分性；不得编造分类单元丰度，输出为需人工核验的草案。"
+  },
+  {
+    "id": "invasive-species-risk",
+    "type": "workflow",
+    "name": "入侵物种风险评估",
+    "description": "评估外来物种入侵风险并给出监测建议。",
+    "category": "生态学",
+    "tags": ["入侵物种", "风险评估", "生物安全"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "species", "label": "目标物种", "required": true },
+      { "key": "region", "label": "评估区域", "required": false }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "citation-hygiene"],
+    "suggestedDatabaseIds": ["gbif", "iucn-red-list"],
+    "limitations": ["风险评估不构成检疫或管制决策。"],
+    "prompt": "请评估 {species} 在 {region} 的入侵风险：整理其原产地与已入侵分布（来源与检索日期须注明）、气候匹配度、繁殖与传播特征、历史入侵记录，按选定的风险评估框架打分并说明依据。每项证据须可追溯到来源；不得编造入侵记录或风险等级，输出为需人工核验的草案。"
+  }
+]

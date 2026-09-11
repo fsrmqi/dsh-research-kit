@@ -1,1 +1,231 @@
-[]
+[
+  {
+    "id": "quantum-circuit-design",
+    "type": "workflow",
+    "name": "量子线路设计",
+    "description": "为 {algorithm} 设计量子线路并分析门数与噪声敏感性。",
+    "category": "物理学",
+    "tags": ["量子计算", "量子线路", "仿真"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "algorithm", "label": "目标算法", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["线路仿真结果不代表真实硬件表现。"],
+    "prompt": "请为 {algorithm} 设计量子线路：给出线路图与门序列、深度与双比特门数统计、仿真验证结果（含理想与含噪声对比），并讨论硬件拓扑适配。参数与初态设置须可复现（记录种子与库版本）；不得编造保真度或仿真输出，输出为需人工核验的草案。"
+  },
+  {
+    "id": "quantum-simulation",
+    "type": "workflow",
+    "name": "量子多体模拟",
+    "description": "模拟量子多体体系并计算目标观测量。",
+    "category": "物理学",
+    "tags": ["量子多体", "哈密顿量", "数值模拟"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "研究体系", "required": true },
+      { "key": "observables", "label": "目标观测量", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["方法适用范围有限，须注明收敛性证据。"],
+    "prompt": "请对 {system} 做量子多体模拟并计算 {observables}：说明哈密顿量构造、方法选择（ED/DMRG/QMC/张量网络）及其适用性、有限尺寸与截断误差控制、收敛性证据。输出观测量随参数变化曲线；所有数值须可由给定参数复现，不得编造能谱或关联函数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "quantum-ml-model",
+    "type": "workflow",
+    "name": "量子机器学习",
+    "description": "构建并评估量子机器学习模型。",
+    "category": "物理学",
+    "tags": ["量子机器学习", "变分线路", "QML"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "学习任务", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["经典基线缺失时无法声称量子优势。"],
+    "prompt": "请为 {task}（数据来自 @文件）构建量子机器学习模型：说明数据编码方式、 Ansatz 与优化器、训练收敛过程，并与经典基线在相同数据划分下对比。须报告交叉验证结果与方差、随机种子与库版本；不得编造准确率或「量子优势」结论，输出为需人工核验的草案。"
+  },
+  {
+    "id": "classical-mechanics-sim",
+    "type": "workflow",
+    "name": "经典力学模拟",
+    "description": "对力学系统做数值积分与运动仿真。",
+    "category": "物理学",
+    "tags": ["经典力学", "数值积分", "动力学"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "力学系统", "required": true },
+      { "key": "conditions", "label": "初始/边界条件", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["数值积分误差需与解析或守恒量对照。"],
+    "prompt": "请模拟 {system}（条件：{conditions}）：给出运动方程与守恒量分析、积分器选择与步长收敛性验证、能量漂移检查，输出轨迹与相图。参数须注明来源或取值理由；不得编造轨迹数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "electromagnetic-simulation",
+    "type": "workflow",
+    "name": "电磁场模拟",
+    "description": "求解电磁场问题并分析场分布与频响特性。",
+    "category": "物理学",
+    "tags": ["电磁场", "Maxwell", "FDTD"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "研究系统", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真结果依赖网格收敛性验证。"],
+    "prompt": "请对 {system} 做电磁场仿真：说明几何与材料参数、边界条件与源设置、数值方法（FEM/FDTD/FMM）与网格收敛性验证，输出场分布与频响/散射特性。材料介电参数须注明出处；不得编造场值或共振频率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "statistical-mechanics",
+    "type": "workflow",
+    "name": "统计力学模拟",
+    "description": "用蒙特卡洛或分子动力学模拟平衡态统计性质。",
+    "category": "物理学",
+    "tags": ["统计力学", "蒙特卡洛", "相变"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "研究体系", "required": true },
+      { "key": "temperature", "label": "温度范围", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["有限尺寸效应需外推分析。"],
+    "prompt": "请在 {temperature} 范围内模拟 {system}：说明系综与算法（MC/MD）、平衡化与自相关时间处理、有限尺寸标度分析，输出热力学量（能量、比热、序参量）随温度曲线及误差估计。随机种子与库版本须记录；不得编造相变温度，输出为需人工核验的草案。"
+  },
+  {
+    "id": "particle-physics-analysis",
+    "type": "workflow",
+    "name": "粒子物理数据分析",
+    "description": "分析高能物理事例数据并做截面或分支比估计。",
+    "category": "物理学",
+    "tags": ["粒子物理", "衰变道", "数据分析"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "channel", "label": "衰变道", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["particle-data-group", "inspirehep"],
+    "limitations": ["分析须对齐实验合作组的公开数据政策。"],
+    "prompt": "请对用户通过 @文件 提供的事例数据分析 {channel}：说明事例选择与判据效率、本底估计方法、系统误差分解与拟合框架，输出分布图与测量值及其误差。粒子性质常数须引用 PDG 并注明版本年份；不得编造事例数或显著性，输出为需人工核验的草案。"
+  },
+  {
+    "id": "condensed-matter-bands",
+    "type": "workflow",
+    "name": "能带结构计算",
+    "description": "计算材料能带与态密度并分析电子结构。",
+    "category": "物理学",
+    "tags": ["能带", "DFT", "态密度", "凝聚态"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "material", "label": "材料体系", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": ["materials-project", "aflow", "mpds"],
+    "limitations": ["泛函近似会影响带隙等定量结果。"],
+    "prompt": "请为 {material} 计算能带结构与态密度：说明晶体结构来源（注明数据库条目）、交换关联泛函与平面波截断、k 网格收敛性验证，输出能带图、DOS 与带隙值。计算设置须可复现；不得编造能级或带隙，输出为需人工核验的草案。"
+  },
+  {
+    "id": "optics-simulation",
+    "type": "workflow",
+    "name": "光学系统模拟",
+    "description": "模拟光学系统传播并评估像质或干涉特性。",
+    "category": "物理学",
+    "tags": ["光学", "衍射", "像质评价"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "光学系统", "required": true },
+      { "key": "metrics", "label": "评价指标", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真不含制造与装调误差，需另行评估。"],
+    "prompt": "请模拟 {system} 的光学传播并按 {metrics} 评价：说明建模方法（几何/波动/傅里叶光学）、孔径与像差设置、采样与能量守恒检查，输出光场分布与指标计算。光学参数须注明来源；不得编造像质指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "thermodynamic-modeling",
+    "type": "workflow",
+    "name": "热力学建模",
+    "description": "构建热力学模型并计算相平衡与状态参量。",
+    "category": "物理学",
+    "tags": ["热力学", "相平衡", "状态方程"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "研究系统", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["nist-webbook"],
+    "limitations": ["外推区间的模型预测需谨慎使用。"],
+    "prompt": "请为 {system} 构建热力学模型：说明状态方程或活度模型选择、参数来源（优先引用 NIST WebBook 等权威数据并注明版本）、适用范围与外推警告，输出相图或热力学量计算结果。物性常数须可溯源；不得编造实验物性数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "gravitational-wave-analysis",
+    "type": "workflow",
+    "name": "引力波数据分析",
+    "description": "对引力波应变数据做匹配滤波与参数估计。",
+    "category": "物理学",
+    "tags": ["引力波", "匹配滤波", "波形模板"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "templates", "label": "波形模板族", "required": false, "hint": "如 IMRPhenomXPHM" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["公开数据使用须遵守合作组数据政策。"],
+    "prompt": "请对用户通过 @文件 提供的应变数据使用 {templates} 做引力波分析：说明数据整理与功率谱估计、匹配滤波信噪比计算与触发判据、参数估计（贝叶斯后验）与证据比较，输出信噪比时序与后验分布。须记录探测器的标定版本；不得编造探测显著性或源参数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "plasma-physics-sim",
+    "type": "workflow",
+    "name": "等离子体模拟",
+    "description": "模拟等离子体行为并分析诊断量。",
+    "category": "物理学",
+    "tags": ["等离子体", "PIC", "磁流体"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "研究体系", "required": true },
+      { "key": "quantities", "label": "诊断量", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["网格与粒子数影响分辨率与噪声。"],
+    "prompt": "请对 {system} 做等离子体模拟并输出 {quantities}：说明模型选择（MHD/PIC/流体）、归一化单位与参数设置、网格与粒子分辨率收敛性检查，输出诊断量时空演化。初始条件须可复现；不得编造诊断数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "quantum-error-correction",
+    "type": "workflow",
+    "name": "量子纠错分析",
+    "description": "评估量子纠错码在给定噪声下的逻辑错误率。",
+    "category": "物理学",
+    "tags": ["量子纠错", "表面码", "阈值"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "noise_model", "label": "噪声模型", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真阈值不直接适用于真实器件。"],
+    "prompt": "请在 {noise_model} 下评估量子纠错方案：说明码与译码器选择、模拟方法与采样量、逻辑错误率随码距与物理错误率曲线及阈值估计，给出置信区间与随机种子。统计须达到足够采样以支撑结论；不得编造错误率或阈值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "nuclear-decay-analysis",
+    "type": "workflow",
+    "name": "核衰变数据分析",
+    "description": "分析核衰变谱数据并提取半衰期或分支比。",
+    "category": "物理学",
+    "tags": ["核物理", "衰变", "谱分析"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "isotope", "label": "目标核素", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["particle-data-group"],
+    "limitations": ["核数据评价以权威数据库为准。"],
+    "prompt": "请对用户通过 @文件 提供的 {isotope} 谱数据做核衰变分析：说明能量刻度与效率校准、峰拟合与本底模型、半衰期或分支比提取及其统计与系统误差，输出拟合图与结果表。核数据引用须注明评价库版本；不得编造活度或分支比，输出为需人工核验的草案。"
+  }
+]

@@ -43,7 +43,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 必填字段阻止发送 | 已实现（工作台与弹窗双处） | `composeWorkflow()` |
 | 附加技能/数据库模块 | 已实现（`extraSkillIds`/`extraDatabaseIds`） | `src/catalog.js` |
 | 目录契约校验器 | 已实现（CLI 与测试共用纯逻辑库） | `scripts/validate-catalog*.mjs` |
-| 科研模式领域预设（基因遗传/临床/通用） | 已实现 | `src/research-workbench.js` |
+| 科研模式任务预设（通用研究/文献与论文/生物信息学/作物遗传育种/临床与人群研究/数据分析与可视化） | 已实现 | `src/research-workbench.js` |
 | 收藏与使用历史（localStorage） | 已实现（`CatalogStorage` 接口） | `src/catalog-storage.js` |
 | 工作台双栏 UI（主题变量/窄屏/aria） | 已实现 | `src/research-workbench.js` + `src/theme.js` |
 | 统一视图容器与四个分区（发现/构造/沉淀/证据） | 已实现 | `src/research-console.js` + `src/lib/console-sections.js` |

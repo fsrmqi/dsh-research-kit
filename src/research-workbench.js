@@ -12,29 +12,54 @@ import {
 } from './ui.js'
 
 const TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
+const WORKBENCH_DEFAULT_WORKFLOW_CATEGORIES = ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种']
+const WORKBENCH_WORKFLOW_CATEGORY_COLORS = {
+  '论文与手稿': C.blue,
+  '文献研究': C.statusPreference,
+  '数据分析': C.statusVerified,
+  '研究设计': C.amber,
+  '基因组学': C.teal,
+  '临床研究': C.red,
+}
+const workbenchFallbackWorkflowColor = C.teal
 const RESEARCH_PLAN_STAGES = {
   '论文与手稿': ['确认材料与研究问题', '双语检索与来源核验', '结构与章节计划', '分段起草或修改', '引文、图表与一致性核对', '作者确认与交付'],
   '文献研究': ['界定问题与范围', '双语检索式', '筛选与证据表', '主题综合与研究空白', '核验引用与待确认项', '输出综述草案'],
   '数据分析': ['确认数据与分析问题', '数据质量检查', '分析计划与前提', '执行与结果核验', '可重复性记录', '输出分析报告'],
 }
-// 科研模式领域预设：一键选择领域后附加对应的技能组合与领域纪律段。
+// 科研模式按当下常见科研任务重组：一键选择后附加对应的技能组合与领域纪律段。
 // 语义是「预设指导组合」而不是能力开关——不会自动执行任何工具。
 const SCIENCE_MODE_BASE = '【科研模式】本次任务按以下纪律执行：区分已提供材料、可验证外部来源与推断；不得编造文献、数据、页码或结论；结论标注为需人工核验的草案。'
-const SCIENCE_MODE_PRESETS = {
-  genetics: {
-    label: '基因遗传',
-    skills: ['scientific-writing', 'statistics-review', 'citation-hygiene', 'reproducibility', 'data-integrity', 'uncertainty-communication'],
-    preamble: '【基因遗传研究模式】在通用科研纪律之上追加：1. 涉及变异解读时注明基因组版本、转录本集与数据库版本（gnomAD/ClinVar/OMIM 等），按 ACMG/AMP 证据规则给出分类建议，并声明这是研究性解读，临床决策须由持证专业人士做出；2. 组学分析报告各步过滤数量，禁止静默丢弃样本或特征；3. 随机种子、软件与数据库版本可追溯；4. 关联结果不等于因果，需功能验证；5. 模式生物结论不得直接当作人类事实。'
+export const SCIENCE_MODE_PRESETS = {
+  general: {
+    label: '通用研究',
+    skills: ['scientific-writing', 'statistics-review', 'citation-hygiene', 'evidence-synthesis', 'reproducibility', 'data-integrity', 'uncertainty-communication'],
+    preamble: '【通用研究模式】在通用科研纪律之上追加：1. 先明确研究问题、研究对象、范围与成功判据；2. 区分探索性与验证性分析，列出关键假设及证据强度；3. 记录检索式、数据版本、软件版本和关键决策；4. 明确局限、替代解释与需要人工确认的事项。'
+  },
+  literature: {
+    label: '文献与论文',
+    skills: ['scientific-writing', 'citation-hygiene', 'evidence-synthesis', 'peer-review-ethics', 'uncertainty-communication'],
+    preamble: '【文献与论文模式】在通用科研纪律之上追加：1. 先界定问题、检索范围、纳入排除标准与检索日期；2. 每条核心论断追溯到可核验的原始来源，区分原始研究、综述与预印本；3. 写作时区分结果、解释与推断，不用引用堆砌替代论证；4. 引用、图表、统计量和作者主张逐项核对，无法核验时明确标记。'
+  },
+  bioinformatics: {
+    label: '生物信息学',
+    skills: ['bioinformatics-workflow-governance', 'statistics-review', 'reproducibility', 'data-integrity', 'uncertainty-communication'],
+    preamble: '【生物信息学模式】在通用科研纪律之上追加：1. 明确参考基因组、注释版本、样本元数据、软件与数据库版本；2. 报告质控、过滤、批次处理和每一步保留数量，禁止静默丢弃样本或特征；3. 记录参数、随机种子、工作流版本与可复现实验环境；4. 将关联、差异和预测与因果结论严格分开，并说明独立验证需求。'
+  },
+  cropBreeding: {
+    label: '作物遗传育种',
+    skills: ['agricultural-experiment-design', 'crop-genomics', 'statistics-review', 'reproducibility', 'data-integrity', 'uncertainty-communication'],
+    preamble: '【作物遗传育种模式】在通用科研纪律之上追加：1. 明确种质、群体结构、试验设计、环境与栽培管理条件；2. 表型、基因型和多环境数据分别质控，并保留缺失、剔除与异常值处理依据；3. 分析群体结构、亲缘关系、基因型×环境互作和选择偏差；4. 将候选位点、遗传效应和育种价值分开表述，候选结果须经独立群体或试验验证。'
   },
   clinical: {
-    label: '临床队列',
+    label: '临床与人群研究',
     skills: ['statistics-review', 'data-integrity', 'uncertainty-communication', 'peer-review-ethics'],
-    preamble: '【临床研究模式】在通用科研纪律之上追加：1. 仅使用已去标识化或获准使用的数据，不在输出中暴露可识别个人身份的信息；2. 不得做出个体层面的诊断、治疗或转诊建议，所有输出标注“研究草案——非临床用途”；3. 预设分析与探索性分析分开呈现，亚组结论须基于正式交互检验；4. 缺失数据处理透明化并做敏感性分析；5. 偏倚来源（选择、回忆、检测、immortal time）逐项讨论方向。'
+    preamble: '【临床与人群研究模式】在通用科研纪律之上追加：1. 仅使用已去标识化或获准使用的数据，不在输出中暴露可识别个人身份的信息；2. 不得做出个体层面的诊断、治疗或转诊建议，所有输出标注“研究草案——非临床用途”；3. 预设分析与探索性分析分开呈现，亚组结论须基于正式交互检验；4. 缺失数据处理透明化并做敏感性分析；5. 偏倚来源（选择、回忆、检测、immortal time）逐项讨论方向。'
   },
-  general: {
-    label: '通用科研',
-    skills: ['scientific-writing', 'statistics-review', 'citation-hygiene', 'uncertainty-communication'],
-    preamble: ''
+  dataVisualization: {
+    label: '数据分析与可视化',
+    skills: ['statistics-review', 'data-integrity', 'reproducibility', 'uncertainty-communication'],
+    preamble: '【数据分析与可视化模式】在通用科研纪律之上追加：1. 先定义分析单位、变量口径、缺失与异常值规则，完成数据质量检查后再解释结果；2. 明确统计模型、前提检验、效应量、置信区间和多重比较处理；3. 主分析、敏感性分析与探索性分析分开呈现；4. 图表应说明单位、样本量、误差含义和分母，避免用截断坐标、颜色或聚合方式夸大差异；5. 保留可复现代码、数据版本与生成图表的参数。'
   }
 }
 
@@ -86,25 +111,77 @@ function MetaRow({ label, children }) {
   ])
 }
 
+function WorkflowCategoryFilter({ categories, value, onChange }) {
+  const quickCategories = WORKBENCH_DEFAULT_WORKFLOW_CATEGORIES.filter(category => categories.includes(category))
+  const additionalCategories = categories.filter(category => !quickCategories.includes(category))
+  const selectIsActive = value === 'all' || additionalCategories.includes(value)
+  return h('div', {
+    role: 'group',
+    'aria-label': '工作流程分类筛选',
+    style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' },
+  }, [
+    h(Select, {
+      key: 'all-categories',
+      value: additionalCategories.includes(value) ? value : 'all',
+      onChange,
+      ariaLabel: '全部工作流程分类',
+      className: 'rk-workflow-category-select',
+      style: {
+        padding: '5px 25px 5px 10px', borderRadius: 999,
+        borderColor: selectIsActive ? C.teal : `${C.teal}40`,
+        background: selectIsActive ? C.teal : 'transparent',
+        color: selectIsActive ? C.onInk : C.teal,
+        fontSize: 12, fontWeight: 700,
+      },
+      options: [
+        { value: 'all', label: '全部' },
+        ...additionalCategories.map(category => ({ value: category, label: category })),
+      ],
+    }),
+    ...quickCategories.map(category => {
+      const color = WORKBENCH_WORKFLOW_CATEGORY_COLORS[category] || workbenchFallbackWorkflowColor
+      const active = value === category
+      return h('button', {
+        key: category,
+        type: 'button',
+        onClick: () => onChange(category),
+        'aria-pressed': active,
+        className: 'rk-btn',
+        style: {
+          padding: '5px 10px', border: `1px solid ${active ? color : `${color}40`}`, borderRadius: 999,
+          whiteSpace: 'nowrap', cursor: 'pointer', background: active ? color : 'transparent',
+          color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
+        },
+      }, category)
+    }),
+  ])
+}
+
+export function filterWorkflowCategory(items, category = 'all') {
+  return category === 'all' ? items : items.filter(item => item.category === category)
+}
+
 export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [query, setQuery] = React.useState('')
   const [type, setType] = React.useState('all')
+  const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [selectedId, setSelectedId] = React.useState('review-paper')
   const [values, setValues] = React.useState({})
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [notice, setNotice] = React.useState('')
   const [attachedSkills, setAttachedSkills] = React.useState([])
-  // 科研模式：null 关闭；值为预设 key（genetics/clinical/general）。
+  // 科研模式：null 关闭；值为当前研究任务预设 key。
   const [scienceMode, setScienceMode] = React.useState(null)
   const [favorites, setFavorites] = React.useState(() => storage.getFavorites())
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
   const [planRows, setPlanRows] = React.useState(() => evidence.get().plans || [])
-  const items = searchCatalog({ query, type })
+  const workflowCategories = [...new Set(catalog.filter(item => item.type === 'workflow').map(item => item.category))]
+  const items = filterWorkflowCategory(searchCatalog({ query, type }), type === 'workflow' ? workflowCategory : 'all')
   // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
   const selected = selectedCatalogItem(items, selectedId)
   const workflow = selected?.type === 'workflow' ? selected : null
@@ -266,7 +343,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
           },
           ariaLabel: '选择科研模式领域预设',
           options: [{ value: '', label: '未启用' }, ...Object.entries(SCIENCE_MODE_PRESETS).map(([key, preset]) => ({ value: key, label: preset.label }))],
-          style: { width: 'auto', padding: '7px 10px', fontSize: 13, borderColor: scienceMode ? C.tealLineStrong : C.line, background: scienceMode ? C.tealTint : C.surface, color: scienceMode ? C.teal : C.ink },
+          className: 'rk-research-mode-select',
+          style: { padding: '7px 10px', fontSize: 13, borderColor: scienceMode ? C.tealLineStrong : C.line, background: scienceMode ? C.tealTint : C.surface, color: scienceMode ? C.teal : C.ink },
         }),
       ]),
       // 检索框的 flex 基准（200px）是按「三者同占一行」倒推的：922px 内容宽下
@@ -278,6 +356,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
         h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索工作流程、技能、数据库……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
       ]),
       h(Segmented, { key: 'tabs', value: type, options: typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }),
+      type === 'workflow' ? h(WorkflowCategoryFilter, {
+        key: 'workflow-categories',
+        categories: workflowCategories,
+        value: workflowCategory,
+        onChange: setWorkflowCategory,
+      }) : null,
     ]),
     h('div', { key: 'layout', className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [
       h(Panel, { key: 'list', 'aria-label': '资源列表', style: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } },

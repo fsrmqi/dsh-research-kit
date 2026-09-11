@@ -1,1 +1,205 @@
-[]
+[
+  {
+    "id": "eeg-analysis",
+    "type": "workflow",
+    "name": "脑电信号分析",
+    "description": "处理并分析脑电（EEG）数据：预处理、分段、时频与统计分析。",
+    "category": "神经科学",
+    "tags": ["EEG", "脑电", "信号处理", "时频分析"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "freq_range", "label": "目标频段", "required": false, "hint": "留空则覆盖常规频段并说明取舍" },
+      { "key": "events", "label": "事件标记方案", "required": false, "hint": "留空则从数据文件中识别" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": ["physionet"],
+    "limitations": ["仅对可访问数据形成分析草案；结论需由研究者核验。"],
+    "prompt": "请处理用户通过 @文件 提供的脑电数据，目标频段：{freq_range}；事件标记：{events}。流程：重参考与滤波等预处理、伪迹剔除（说明方法与剔除比例）、分段与平均或时频分析、组间统计与可视化。须完整报告预处理参数、通道与试次保留情况及统计方法；不得编造通道数、试次数或显著性结果，输出为需人工核验的分析草案。"
+  },
+  {
+    "id": "fmri-analysis",
+    "type": "workflow",
+    "name": "fMRI 分析流程",
+    "description": "构建功能磁共振成像的预处理与一阶统计流程并解读结果。",
+    "category": "神经科学",
+    "tags": ["fMRI", "脑成像", "GLM", "神经科学"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "contrasts", "label": "统计对比", "required": false, "hint": "留空则从设计矩阵推导并说明" },
+      { "key": "fwhm", "label": "平滑核 FWHM", "required": false, "hint": "留空则给出常规建议值并说明理由" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["不构成临床或诊断用途；激活解读需专业核验。"],
+    "prompt": "请为用户通过 @文件 提供的 fMRI 数据制定分析与解读流程：切片时间校正、头动校正、配准与标准化、平滑（FWHM={fwhm}），一阶 GLM 对比设计为 {contrasts}。须报告头动超标被试、设计矩阵与多重比较校正方法；激活解读须区分先验假设与探索性发现，不得编造激活坐标或统计量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "spike-sorting",
+    "type": "workflow",
+    "name": "尖峰分选",
+    "description": "对胞外记录进行尖峰检测、分选与单元质量评估。",
+    "category": "神经科学",
+    "tags": ["尖峰分选", "电生理", "胞外记录"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "recording_type", "label": "记录类型", "required": false, "hint": "如急性/慢性、单通道/阵列" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["分选质量评估不替代人工检查。"],
+    "prompt": "请对用户通过 @文件 提供的 {recording_type} 胞外记录进行尖峰分选：说明检测阈值与滤波、分选方法与参数、单元质量指标（隔离度、ISI 违例、漂移）。须报告各单元质量与被排除单元比例，说明参数选择对结果的影响；不得编造单元数或发放率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "neural-decoding",
+    "type": "workflow",
+    "name": "神经解码",
+    "description": "从神经活动中解码刺激或行为变量，并评估解码性能。",
+    "category": "神经科学",
+    "tags": ["神经解码", "机器学习", "神经科学"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "variable", "label": "解码目标变量", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["解码性能不等于因果解释。"],
+    "prompt": "请从用户通过 @文件 提供的神经数据解码目标变量 {variable}：说明特征提取（发放率/时频/降维）、模型与交叉验证方案、机会水平与统计检验。须报告各时间窗或脑区的解码性能及置信区间，说明如何防止信息泄漏；不得编造准确率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "connectivity-analysis",
+    "type": "workflow",
+    "name": "脑连接分析",
+    "description": "分析功能与结构脑连接：构建矩阵、统计组间差异并可视化。",
+    "category": "神经科学",
+    "tags": ["脑连接", "功能连接", "脑网络"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "modality", "label": "成像模态", "required": false },
+      { "key": "atlas", "label": "脑区图谱", "required": false, "hint": "留空则推荐并说明取舍" },
+      { "key": "groups", "label": "组别设计", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["功能连接不等于解剖连接。"],
+    "prompt": "请对用户通过 @文件 提供的 {modality} 数据按 {atlas} 图谱做脑连接分析，组别设计：{groups}。须说明连接度量选择（相关/偏相关/有效连接）、时间序列清洗（含全局信号回归的取舍）、矩阵构建与组间统计及多重比较校正；解释限制于所测模态，不得编造显著连接，输出为需人工核验的草案。"
+  },
+  {
+    "id": "behavioral-analysis",
+    "type": "workflow",
+    "name": "行为数据分析",
+    "description": "分析行为实验数据：反应时、选择、学习曲线与计算建模。",
+    "category": "神经科学",
+    "tags": ["行为实验", "反应时", "学习曲线"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task_type", "label": "任务类型", "required": false },
+      { "key": "models", "label": "候选模型", "required": false },
+      { "key": "neural_data", "label": "是否含同步神经数据", "required": false, "hint": "留空则按纯行为数据处理" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模型比较结果依赖数据质量与实验设计。"],
+    "prompt": "请分析用户通过 @文件 提供的 {task_type} 行为数据（是否含同步神经数据：{neural_data}）：数据清洗与试次剔除标准、描述统计、条件间比较，必要时用 {models} 做计算建模并报告拟合与模型比较。须报告每位被试的有效试次与异常表现；不得编造效应量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "calcium-imaging-analysis",
+    "type": "workflow",
+    "name": "钙成像分析",
+    "description": "处理钙成像记录：运动校正、ROI 提取、信号去卷积与事件检测。",
+    "category": "神经科学",
+    "tags": ["钙成像", "荧光信号", "神经科学"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "分析目标", "required": false }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["去卷积事件率为估计值，需结合电生理核验。"],
+    "prompt": "请处理用户通过 @文件 提供的钙成像数据，分析目标：{task}。流程：运动校正、ROI 分割与背景校正、ΔF/F 计算与事件去卷积，说明成像频率与指示剂类型对解释的影响。须报告 ROI 数量、信号质量与被排除记录；不得编造神经元数量或事件率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "neuropixels-processing",
+    "type": "workflow",
+    "name": "Neuropixels 数据处理",
+    "description": "处理高密度 Neuropixels 阵列记录：预处理、分选与质量报告。",
+    "category": "神经科学",
+    "tags": ["Neuropixels", "电生理", "高密度阵列"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "events", "label": "事件标记方案", "required": false }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["流水线参数选择会显著影响单元数量。"],
+    "prompt": "请处理用户通过 @文件 提供的 Neuropixels 记录（事件标记：{events}）：说明预处理链（共模噪声去除、漂移校正）、分选流程与单元质量指标（Presence ratio、ISI 违例、幅度衰减），输出按探针深度分布的质量汇总。须报告被剔除通道与单元比例；不得编造单元数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "brain-atlas-mapping",
+    "type": "workflow",
+    "name": "脑图谱映射",
+    "description": "将神经数据映射到标准化脑图谱并做区域化汇总。",
+    "category": "神经科学",
+    "tags": ["脑图谱", "标准化", "区域分析"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "atlas", "label": "脑图谱", "required": false, "hint": "如 AAL、Glasser、Allen" },
+      { "key": "data_type", "label": "数据类型", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["跨图谱结果的对应关系需谨慎解释。"],
+    "prompt": "请将用户通过 @文件 提供的 {data_type} 数据映射到 {atlas} 脑图谱：说明空间配准方式、图谱版本与分辨率、区域化汇总方法（均值/最大值/加权）。须报告配准误差与未覆盖体素比例，并说明图谱选择对结果的影响；不得编造区域标签，输出为需人工核验的草案。"
+  },
+  {
+    "id": "computational-neuron-model",
+    "type": "workflow",
+    "name": "计算神经元模型",
+    "description": "构建并仿真生物物理神经元模型，与实验协议对照验证。",
+    "category": "神经科学",
+    "tags": ["计算神经科学", "HH 模型", "仿真"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "neuron_type", "label": "神经元类型", "required": true },
+      { "key": "species", "label": "物种", "required": false },
+      { "key": "protocol", "label": "刺激协议", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模型为假设性工具，不等于生物学结论。"],
+    "prompt": "请为 {species} 的 {neuron_type} 神经元构建计算模型（刺激协议：{protocol}）：说明模型类型（HH/多室/简化）、通道动力学来源与参数依据、仿真工具与求解设置，并给出验证方案（F-I 曲线、动作电位形态对照）。参数必须注明文献或拟合来源，不得编造电生理常数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "psychophysics-analysis",
+    "type": "workflow",
+    "name": "心理物理学分析",
+    "description": "拟合心理测量函数并分析感知任务的认知参数。",
+    "category": "神经科学",
+    "tags": ["心理物理学", "心理测量函数", "感知"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "任务类型", "required": false },
+      { "key": "conditions", "label": "实验条件", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["拟合参数解释依赖任务设计。"],
+    "prompt": "请分析用户通过 @文件 提供的 {task} 心理物理学数据（条件：{conditions}）：按被试与总体拟合心理测量函数（说明链接函数与拟合方法），报告阈值、斜率及其置信区间，并进行条件间比较。须报告有效试次量与拟合收敛情况；不得编造阈值或显著性，输出为需人工核验的草案。"
+  },
+  {
+    "id": "neural-network-comparison",
+    "type": "workflow",
+    "name": "生物与人工神经网络对比",
+    "description": "比较生物神经表征与深度网络层表征的相似性。",
+    "category": "神经科学",
+    "tags": ["表征相似性", "计算神经科学", "深度学习"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "stimuli", "label": "刺激集", "required": false },
+      { "key": "model", "label": "对照模型", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["表征相似性不证明机制同构。"],
+    "prompt": "请在刺激集 {stimuli} 上比较生物神经数据与 {model} 的层间表征：说明表征相似性方法（RSA/线性映射/CKA）、数据对齐方式与统计检验（置换检验），报告显著层与相似性曲线。须说明模型预训练来源与刺激呈现参数；不得编造相关系数，输出为需人工核验的草案。"
+  }
+]

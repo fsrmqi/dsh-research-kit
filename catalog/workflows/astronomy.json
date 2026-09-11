@@ -1,1 +1,177 @@
-[]
+[
+  {
+    "id": "stellar-classification",
+    "type": "workflow",
+    "name": "恒星光谱分类",
+    "description": "从测光或光谱数据对恒星做光谱型与光度型分类。",
+    "category": "天文与空间科学",
+    "tags": ["恒星", "光谱分类", "赫罗图"],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": ["simbad", "vizier", "nasa-ads"],
+    "limitations": ["分类结果依赖测光系统与消光改正质量。"],
+    "prompt": "请对用户通过 @文件 提供的恒星数据做分类：确认测光系统与波段及消光改正需求；提取测光特征并传播误差，结合视差（注明 Gaia 版本）得到绝对星等并绘制赫罗图，判定光谱型（O–M）与光度级，识别特殊天体，并与标注样本对照报告准确率与混淆矩阵。记录随机种子与库/星表版本；不得编造分类标签，输出为需人工核验的草案。"
+  },
+  {
+    "id": "exoplanet-detection",
+    "type": "workflow",
+    "name": "系外行星探测",
+    "description": "从测光时序中探测并验证系外行星候选体。",
+    "category": "天文与空间科学",
+    "tags": ["系外行星", "凌星", "光变曲线"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "method", "label": "探测方法", "required": false, "hint": "如 BLS、TLS" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": ["nasa-ads", "arcsecond"],
+    "limitations": ["候选体确认需独立观测证据。"],
+    "prompt": "请用 {method} 对用户通过 @文件 提供的测光时序做系外行星探测：说明去趋势与系统误差处理、周期搜索参数、信号注入-回收验证探测完整度、假阳性排查（如伴星蚀、恒星活动），输出候选体周期、深度、半径估计及置信区间。不得编造行星参数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "spectral-analysis-astro",
+    "type": "workflow",
+    "name": "天体光谱分析",
+    "description": "对天体光谱做谱线证认与物理参数拟合。",
+    "category": "天文与空间科学",
+    "tags": ["光谱", "谱线证认", "视向速度"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "object_type", "label": "天体类型", "required": false },
+      { "key": "params", "label": "目标参数", "required": false, "hint": "如 Teff、log g、[Fe/H]" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": ["vizier", "nasa-ads"],
+    "limitations": ["参数拟合依赖大气模型与波长定标质量。"],
+    "prompt": "请分析用户通过 @文件 提供的 {object_type} 光谱：波长定标与改正说明、谱线证认（注明原子/分子数据库版本）、连续谱归一化，拟合 {params} 并报告不确定度与拟合质量，视向速度须给出参照系。不得编造谱线证认或参数值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "galaxy-morphology",
+    "type": "workflow",
+    "name": "星系形态分类",
+    "description": "对星系图像做形态分类并分析统计分布。",
+    "category": "天文与空间科学",
+    "tags": ["星系", "形态分类", "巡天"],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": ["sdss", "vizier"],
+    "limitations": ["形态分类含主观成分，需标注分类一致性。"],
+    "prompt": "请对用户通过 @文件 提供的星系图像做形态分类：说明预处理（去背景、PSF 说明）、分类体系（如 Hubble 序列或定量指标 concentration/asymmetry/Gini-M20）、方法与训练参照（如 Galaxy Zoo 标注，注明版本），输出分类结果、一致性检验与按红移/星等的统计分布。不得编造分类标签，输出为需人工核验的草案。"
+  },
+  {
+    "id": "orbital-mechanics",
+    "type": "workflow",
+    "name": "轨道力学计算",
+    "description": "计算轨道转移、机动与交会问题。",
+    "category": "天文与空间科学",
+    "tags": ["轨道力学", "轨道转移", "机动"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "mission", "label": "任务场景", "required": true },
+      { "key": "transfer_type", "label": "转移类型", "required": false, "hint": "如 Hohmann、双椭圆" }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": ["nasa-horizons", "celestrak", "launch-library-2"],
+    "limitations": ["简化模型不包含摄动与工程约束。"],
+    "prompt": "请为任务场景 {mission} 计算轨道方案（转移类型：{transfer_type}）：说明轨道根数来源（星历须注明数据源与历元）、ΔV 预算与机动时序、摄动因素取舍（J2、大气、第三体），输出轨道演化与转移窗口分析。所有常数与假设须列出；不得编造星历数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "light-curve-analysis",
+    "type": "workflow",
+    "name": "光变曲线分析",
+    "description": "分析天体光变曲线的周期性、变率与事件特征。",
+    "category": "天文与空间科学",
+    "tags": ["光变曲线", "周期分析", "变星"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "object", "label": "目标天体", "required": false },
+      { "key": "var_type", "label": "变率类型", "required": false, "hint": "如周期性、爆发、掩食" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": ["vizier", "nasa-ads"],
+    "limitations": ["周期解存在混叠风险，须检查混淆周期。"],
+    "prompt": "请分析 {object} 的光变曲线（@文件），变率类型：{var_type}：说明去趋势与离群点处理、周期搜索方法（Lomb-Scargle/相位弥散）与虚警控制、振幅与时标测量及误差，输出相位折叠图与参数表。与已知变星表对照时须注明星表版本；不得编造周期或振幅，输出为需人工核验的草案。"
+  },
+  {
+    "id": "radio-astronomy-analysis",
+    "type": "workflow",
+    "name": "射电天文分析",
+    "description": "处理射电观测数据并分析谱线或连续谱辐射。",
+    "category": "天文与空间科学",
+    "tags": ["射电天文", "谱线", "成像"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "observation_type", "label": "观测类型", "required": false },
+      { "key": "lines", "label": "目标谱线", "required": false }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": ["nasa-ads"],
+    "limitations": ["定标误差对流量与谱线参数影响显著。"],
+    "prompt": "请处理用户通过 @文件 提供的 {observation_type} 射电数据（目标谱线：{lines}）：说明定标链（通量/带通/相位）、UV 处理与成像参数、谱线证认与速度结构分析，输出图像、谱线轮廓与流量或柱密度估计。定标误差与束尺寸须报告；不得编造流量密度，输出为需人工核验的草案。"
+  },
+  {
+    "id": "gravitational-lensing",
+    "type": "workflow",
+    "name": "引力透镜分析",
+    "description": "识别并建模引力透镜系统，估计质量分布。",
+    "category": "天文与空间科学",
+    "tags": ["引力透镜", "质量模型", "强透镜"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "lens_type", "label": "透镜类型", "required": false, "hint": "如强透镜、弱透镜、微透镜" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": ["nasa-ads", "sdss"],
+    "limitations": ["质量-光关系假设会影响质量估计。"],
+    "prompt": "请对用户通过 @文件 提供的成像数据做 {lens_type} 引力透镜分析：说明候选体识别判据、像位置与通量测量、质量模型（SIE/NFW 等）拟合与 MCMC 设置、简并与退化讨论，输出模型参数及其后验分布。模型假设须逐条列出；不得编造爱因斯坦半径或质量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "dark-matter-constraints",
+    "type": "workflow",
+    "name": "暗物质约束分析",
+    "description": "用观测数据对暗物质性质给出约束。",
+    "category": "天文与空间科学",
+    "tags": ["暗物质", "约束", "旋转曲线"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "data_type", "label": "数据类型", "required": false, "hint": "如旋转曲线、透镜、CMB" },
+      { "key": "profile", "label": "密度轮廓", "required": false, "hint": "如 NFW、BURKERT" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["nasa-ads", "inspirehep"],
+    "limitations": ["约束依赖天体物理本底模型假设。"],
+    "prompt": "请用 {data_type} 数据（@文件）在 {profile} 假设下做暗物质约束分析：说明质量模型分解（恒星/气体/暗物质）、拟合方法与先验、简并与系统误差讨论，输出约束区间与拟合图。文献引用与参数先验须注明出处；不得编造约束下限，输出为需人工核验的草案。"
+  },
+  {
+    "id": "solar-activity-analysis",
+    "type": "workflow",
+    "name": "太阳活动分析",
+    "description": "分析太阳耀斑、黑子等活动指标及其周期性。",
+    "category": "天文与空间科学",
+    "tags": ["太阳活动", "耀斑", "空间天气"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "flare_class", "label": "耀斑级别筛选", "required": false, "hint": "如 ≥M1" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": ["nasa-apis", "usgs-geomagnetism", "nasa-ads"],
+    "limitations": ["活动预报为统计估计，不构成空间天气预警。"],
+    "prompt": "请分析用户通过 @文件 提供的太阳活动数据（筛选：{flare_class}）：说明事件目录版本与检索日期、活动指标定义、周期性分析（谱分析与方法误差）与事件统计，输出活动时序与周期估计。与地磁指数关联分析须注明所用台站数据版本；不得编造事件数或周期，输出为需人工核验的草案。"
+  },
+  {
+    "id": "cosmic-ray-analysis",
+    "type": "workflow",
+    "name": "宇宙线分析",
+    "description": "分析宇宙线通量、成分与能谱特征。",
+    "category": "天文与空间科学",
+    "tags": ["宇宙线", "能谱", "各向异性"],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["inspirehep", "nasa-ads"],
+    "limitations": ["仪器响应修正对结果影响显著。"],
+    "prompt": "请对用户通过 @文件 提供的宇宙线数据做分析：说明探测器响应与暴露量修正、能量刻度与本底扣除、通量与能谱拟合（注明模型与误差传递）、成分或各向异性统计，输出能谱图与结果表。与文献结果对比须逐条注明出处；不得编造通量或能谱指数，输出为需人工核验的草案。"
+  }
+]

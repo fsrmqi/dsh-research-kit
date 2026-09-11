@@ -150,6 +150,12 @@ body[data-ds-dark-theme] {
   box-sizing: border-box;
   line-height: 1.2;
 }
+.rk-research-mode-select {
+  width: clamp(144px, 19vw, 196px) !important;
+  min-width: 144px !important;
+  max-width: min(100%, 196px) !important;
+  flex: 0 1 auto !important;
+}
 .rk-card { transition: transform .18s ease, box-shadow .18s ease }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
 .rk-row { transition: background .15s ease }

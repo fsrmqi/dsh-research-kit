@@ -191,12 +191,14 @@ export function Textarea({ value, onChange, placeholder, rows = 3, ariaLabel, mo
   })
 }
 
-export function Select({ value, onChange, options, ariaLabel, style }) {
+export function Select({ value, onChange, options, ariaLabel, style, className, ...rest }) {
   return h('select', {
     value,
     onChange: event => onChange(event.target.value),
     'aria-label': ariaLabel,
+    className,
     style: { ...CONTROL_BASE, cursor: 'pointer', ...style },
+    ...rest,
   }, options.map(option => h('option', { key: option.value, value: option.value }, option.label)))
 }
 
