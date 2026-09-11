@@ -224,21 +224,19 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     ...layout.nodes.map(node => {
       const marked = view.focus === node.id || node.id === view.from || node.id === view.to
       const dim = highlighted ? !highlighted.has(node.id) : false
-      return h('g', {
+      return h('a', {
         key: node.id,
+        href: '#research-evidence-graph',
         className: `rk-graph-node${marked ? ' rk-graph-node-focus' : ''}`,
-        transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})`,
-        role: 'button',
-        tabIndex: 0,
         opacity: dim ? 0.25 : 1,
         'aria-label': `聚焦 ${node.label}`,
-        onClick: () => activateNode(node.id),
-        onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activateNode(node.id) } }
-      }, [
+        onClick: event => { event.preventDefault(); activateNode(node.id) }
+      }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
+        h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
         h('rect', { key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface, stroke: graphKindColor(node.kind), strokeWidth: 1.5 }),
         h('text', { key: 'title', x: 10, y: 22, fill: C.ink, fontSize: 12, fontWeight: 700 }, graphLabel(node.label)),
         h('text', { key: 'kind', x: 10, y: 40, fill: graphKindColor(node.kind), fontSize: 10 }, node.kind)
-      ])
+      ]))
     })
   ])
 

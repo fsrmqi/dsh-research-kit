@@ -9,6 +9,7 @@ const QUERY_PATH = '/dsh-research-kit/query'
 export function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }) {
   const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
   const [query, setQuery] = React.useState('')
+  const [englishQuery, setEnglishQuery] = React.useState('')
   const [state, setState] = React.useState({ status: 'idle', result: null, message: '' })
   // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
   const [saveTarget, setSaveTarget] = React.useState('')
@@ -23,8 +24,8 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   }
   const runQuery = async event => {
     event?.preventDefault?.()
-    const text = query.trim()
-    if (!text) return setState({ status: 'error', result: null, message: '请输入检索词。' })
+    const text = [query.trim() && `(${query.trim()})`, englishQuery.trim() && `(${englishQuery.trim()})`].filter(Boolean).join(' OR ')
+    if (!text) return setState({ status: 'error', result: null, message: '请填写中文研究问题或英文检索式。' })
     setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
     try {
       const url = new URL(QUERY_PATH, window.location.origin)
@@ -68,9 +69,13 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
       ]),
       h('p', { key: 'p', style: { margin: '4px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '公开 API 将由插件服务端通过 DSH 受控网络访问；受限来源会转为当前 Agent 查询任务。'),
     ]),
-    h('form', { key: 'form', onSubmit: runQuery, style: { display: 'flex', gap: 8 } }, [
-      h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: `例如：${database.name} 中的检索主题`, ariaLabel: '检索词', style: { flex: 1, minWidth: 0 } }),
-      h(Button, { key: 'go', type: 'submit', variant: 'primary', icon: loading ? undefined : 'search', disabled: loading }, loading ? '查询中…' : '查询'),
+    h('form', { key: 'form', onSubmit: runQuery, style: { display: 'grid', gap: 8 } }, [
+      h(Input, { key: 'zh', value: query, onChange: setQuery, placeholder: '中文研究问题，例如：水稻雄性不育', ariaLabel: '中文研究问题' }),
+      h('div', { key: 'en-row', style: { display: 'flex', gap: 8 } }, [
+        h(Input, { key: 'en', value: englishQuery, onChange: setEnglishQuery, placeholder: 'English query，例如：rice male sterility', ariaLabel: '英文检索式', style: { flex: 1, minWidth: 0 } }),
+        h(Button, { key: 'go', type: 'submit', variant: 'primary', icon: loading ? undefined : 'search', disabled: loading }, loading ? '查询中…' : '查询'),
+      ]),
+      h('span', { key: 'hint', style: { color: C.muted, fontSize: 12 } }, '两栏均填写时按“中文 OR English”查询；术语须人工确认。'),
     ]),
     loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
     state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [

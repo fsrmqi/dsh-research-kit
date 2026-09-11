@@ -6063,6 +6063,7 @@ window.__ModuleLoader__.load({
     function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }) {
       const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
       const [query, setQuery] = React.useState('')
+      const [englishQuery, setEnglishQuery] = React.useState('')
       const [state, setState] = React.useState({ status: 'idle', result: null, message: '' })
       // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
       const [saveTarget, setSaveTarget] = React.useState('')
@@ -6077,8 +6078,8 @@ window.__ModuleLoader__.load({
       }
       const runQuery = async event => {
         event?.preventDefault?.()
-        const text = query.trim()
-        if (!text) return setState({ status: 'error', result: null, message: '请输入检索词。' })
+        const text = [query.trim() && `(${query.trim()})`, englishQuery.trim() && `(${englishQuery.trim()})`].filter(Boolean).join(' OR ')
+        if (!text) return setState({ status: 'error', result: null, message: '请填写中文研究问题或英文检索式。' })
         setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
         try {
           const url = new URL(QUERY_PATH, window.location.origin)
@@ -6122,9 +6123,13 @@ window.__ModuleLoader__.load({
           ]),
           h('p', { key: 'p', style: { margin: '4px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '公开 API 将由插件服务端通过 DSH 受控网络访问；受限来源会转为当前 Agent 查询任务。'),
         ]),
-        h('form', { key: 'form', onSubmit: runQuery, style: { display: 'flex', gap: 8 } }, [
-          h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: `例如：${database.name} 中的检索主题`, ariaLabel: '检索词', style: { flex: 1, minWidth: 0 } }),
-          h(Button, { key: 'go', type: 'submit', variant: 'primary', icon: loading ? undefined : 'search', disabled: loading }, loading ? '查询中…' : '查询'),
+        h('form', { key: 'form', onSubmit: runQuery, style: { display: 'grid', gap: 8 } }, [
+          h(Input, { key: 'zh', value: query, onChange: setQuery, placeholder: '中文研究问题，例如：水稻雄性不育', ariaLabel: '中文研究问题' }),
+          h('div', { key: 'en-row', style: { display: 'flex', gap: 8 } }, [
+            h(Input, { key: 'en', value: englishQuery, onChange: setEnglishQuery, placeholder: 'English query，例如：rice male sterility', ariaLabel: '英文检索式', style: { flex: 1, minWidth: 0 } }),
+            h(Button, { key: 'go', type: 'submit', variant: 'primary', icon: loading ? undefined : 'search', disabled: loading }, loading ? '查询中…' : '查询'),
+          ]),
+          h('span', { key: 'hint', style: { color: C.muted, fontSize: 12 } }, '两栏均填写时按“中文 OR English”查询；术语须人工确认。'),
         ]),
         loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
         state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [
@@ -7111,21 +7116,19 @@ window.__ModuleLoader__.load({
         ...layout.nodes.map(node => {
           const marked = view.focus === node.id || node.id === view.from || node.id === view.to
           const dim = highlighted ? !highlighted.has(node.id) : false
-          return h('g', {
+          return h('a', {
             key: node.id,
+            href: '#research-evidence-graph',
             className: `rk-graph-node${marked ? ' rk-graph-node-focus' : ''}`,
-            transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})`,
-            role: 'button',
-            tabIndex: 0,
             opacity: dim ? 0.25 : 1,
             'aria-label': `聚焦 ${node.label}`,
-            onClick: () => activateNode(node.id),
-            onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activateNode(node.id) } }
-          }, [
+            onClick: event => { event.preventDefault(); activateNode(node.id) }
+          }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
+            h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
             h('rect', { key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface, stroke: graphKindColor(node.kind), strokeWidth: 1.5 }),
             h('text', { key: 'title', x: 10, y: 22, fill: C.ink, fontSize: 12, fontWeight: 700 }, graphLabel(node.label)),
             h('text', { key: 'kind', x: 10, y: 40, fill: graphKindColor(node.kind), fontSize: 10 }, node.kind)
-          ])
+          ]))
         })
       ])
 
