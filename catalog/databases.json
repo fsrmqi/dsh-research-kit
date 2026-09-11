@@ -77,6 +77,266 @@
     "availability": "requires-mcp"
   },
   {
+    "id": "idigbio",
+    "type": "database",
+    "name": "iDigBio",
+    "description": "Digitized biological specimens from museums around the world",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://github.com/idigbio/idigbio-search-api/wiki",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "embl-ebi",
+    "type": "database",
+    "name": "EMBL-EBI APIs",
+    "description": "European bioinformatics — sequence alignment, molecular biology tools",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://www.ebi.ac.uk/Tools/webservices/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "pubmlst",
+    "type": "database",
+    "name": "PubMLST",
+    "description": "Public databases for molecular typing and microbial genome diversity",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://pubmlst.org/api",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ebird",
+    "type": "database",
+    "name": "eBird API",
+    "description": "Real-time bird observation data from citizen scientists worldwide",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://documenter.getpostman.com/view/664302/S1ENwy59",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "iucn-red-list",
+    "type": "database",
+    "name": "IUCN Red List API",
+    "description": "Conservation status and population data for threatened species",
+    "category": "生命科学",
+    "tags": [
+      "Biology & Biodiversity"
+    ],
+    "url": "https://apiv3.iucnredlist.org",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "pubchem-pug",
+    "type": "database",
+    "name": "PubChem PUG REST",
+    "description": "Chemical structures, properties, biological assay data from NCBI",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://pubchem.ncbi.nlm.nih.gov/pug_rest/PUG_REST.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nppes",
+    "type": "database",
+    "name": "NPPES API",
+    "description": "National Plan & Provider Enumeration System — US healthcare providers",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://npiregistry.cms.hhs.gov/search",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "fooddata-central",
+    "type": "database",
+    "name": "FoodData Central (USDA)",
+    "description": "National nutrient database — detailed nutrient data for 300,000+ foods",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://fdc.nal.usda.gov/api-guide.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nutritionix",
+    "type": "database",
+    "name": "Nutritionix API",
+    "description": "World's largest verified nutrition database with NLP food parsing",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://developer.nutritionix.com",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "rxnorm",
+    "type": "database",
+    "name": "RxNorm API (NLM)",
+    "description": "Normalized names for clinical drugs and drug interactions",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://lhncbc.nlm.nih.gov/RxNav/APIs/index.html",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "drugbank",
+    "type": "database",
+    "name": "DrugBank API",
+    "description": "Comprehensive drug information including targets, interactions, pharmacology",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://dev.drugbank.com/guides/api",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "lapis-covid",
+    "type": "database",
+    "name": "LAPIS (SARS-CoV-2)",
+    "description": "SARS-CoV-2 genomic sequences aggregated from public sources",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://lapis.cov-spectrum.org/open/v2/docs/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "open-disease",
+    "type": "database",
+    "name": "Open Disease API",
+    "description": "COVID-19, influenza, and other disease statistics globally",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://disease.sh",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "cms-data",
+    "type": "database",
+    "name": "CMS Open Data API",
+    "description": "US Medicare and Medicaid data — costs, utilization, and quality",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://data.cms.gov",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "nhs-scotland",
+    "type": "database",
+    "name": "Open Data NHS Scotland",
+    "description": "NHS Scotland medical reference data and public health statistics",
+    "category": "生命科学",
+    "tags": [
+      "Biomedical & Health"
+    ],
+    "url": "https://www.opendata.nhs.scot/api/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ieee-xplore",
+    "type": "database",
+    "name": "IEEE Xplore API",
+    "description": "IEEE technical publications — journals, conferences, and standards",
+    "category": "文献研究",
+    "tags": [
+      "Scholarly Publications"
+    ],
+    "url": "https://developer.ieee.org",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "loc-api",
+    "type": "database",
+    "name": "Library of Congress API",
+    "description": "Digital collections — historical newspapers, maps, photos, and manuscripts",
+    "category": "文献研究",
+    "tags": [
+      "Scholarly Publications"
+    ],
+    "url": "https://www.loc.gov/apis/json-and-yaml-apis/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "elsevier-scopus",
+    "type": "database",
+    "name": "Elsevier / Scopus API",
+    "description": "Research metadata — 90M+ records in Scopus abstract database",
+    "category": "文献研究",
+    "tags": [
+      "Scholarly Publications"
+    ],
+    "url": "https://dev.elsevier.com",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "hathitrust",
+    "type": "database",
+    "name": "HathiTrust API",
+    "description": "Digital library — 17M+ volumes with metadata and full-text access",
+    "category": "文献研究",
+    "tags": [
+      "Scholarly Publications"
+    ],
+    "url": "https://www.hathitrust.org/data_api",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "web-of-science",
+    "type": "database",
+    "name": "Web of Science API",
+    "description": "Citation database — research metadata and citation graph",
+    "category": "文献研究",
+    "tags": [
+      "Scholarly Publications"
+    ],
+    "url": "https://developer.clarivate.com/apis",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录来源、版本、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
     "id": "pubmed",
     "type": "database",
     "name": "PubMed",
