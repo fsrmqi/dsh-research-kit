@@ -117,7 +117,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 120 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
+├── test/                            # 121 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json

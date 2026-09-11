@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（120 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（121 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -85,11 +85,11 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 ### Milestone C：真实 DSH 集成 ✅
 
-确认**构建产物**（而不是源码）能在目标 DSH 版本加载。已于 2026-09-10 在真实 DSH Web profile 上完成两轮烟测：F1–F4 快线、R1 发布门槛与 O1–O3 观测项全部通过，期间修复 1 处分区渲染缺陷；仅 R2（宿主动作缺失，无法从外部构造）未覆盖。
+确认**构建产物**（而不是源码）能在目标 DSH 版本加载。已于 2026-09-10 在真实 DSH Web profile 上完成两轮烟测：F1–F4 快线、R1 发布门槛与 O1–O3 观测项全部通过，期间修复 1 处分区渲染缺陷；仅 R2（宿主动作缺失，无法从外部构造）未覆盖。2026-09-11 在同一 profile 上追加验证证据库写入 Prompt 的 W1–W3，全部通过。
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 120 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 121 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
