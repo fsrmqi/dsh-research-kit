@@ -18,6 +18,19 @@
 
 该工件是构建产物，**不得手工编辑**。更新需同步 `vendor/vendor-manifest.json`。
 
+### archify
+
+| 项 | 值 |
+| --- | --- |
+| 文件 | `vendor/archify/template.html`（viewer 运行时模板）、`vendor/archify/i18n.mjs`（i18n 目录）、`vendor/archify/LICENSE`（上游许可证全文） |
+| 来源 | [tt-a1i/archify](https://github.com/tt-a1i/archify)（源文件 `archify/assets/template.html`、`archify/renderers/shared/i18n.mjs`） |
+| 许可证 | MIT（全文见 `vendor/archify/LICENSE`） |
+| 版权 | Copyright (c) 归 archify 作者所有（见上游 LICENSE） |
+| 锁定方式 | 来源 commit 与 SHA-256 记录在 `vendor/vendor-manifest.json`，由 `scripts/check-vendor.mjs` 校验 |
+| 用途 | 「研究结果解释图」与「组装回放弹窗」的交互 viewer 运行时：视觉预设、章节故事、语义透镜、雷达总览、路线动画。本仓库按其 `data-*` 契约与哨兵槽位注入自有 SVG 与配置，未修改 vendored 文件 |
+
+vendored 文件是上游原样快照，**不得手工编辑**。更新需同步 `vendor/vendor-manifest.json`。
+
 ### KaTeX（经上述工件间接引入）
 
 上述工件内含 [KaTeX](https://github.com/KaTeX/KaTeX) 的数学排版代码与字体资源，用于渲染方法卡中的公式。

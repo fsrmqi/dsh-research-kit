@@ -11,7 +11,30 @@
       "sizeBytes": 652057,
       "vendoredAt": "2026-09-10",
       "embeddingProtocol": "Embed Protocol v1",
-      "exports": ["PromptKit.PromptStudio", "PromptKit.QuickEnhancer", "PromptKit.StaticMethodProvider", "PromptKit.StaticAssetProvider", "PromptKit.utils", "PromptKit.builtinMethods"]
+      "exports": [
+        "PromptKit.PromptStudio",
+        "PromptKit.QuickEnhancer",
+        "PromptKit.StaticMethodProvider",
+        "PromptKit.StaticAssetProvider",
+        "PromptKit.utils",
+        "PromptKit.builtinMethods"
+      ]
+    },
+    {
+      "path": "vendor/archify/template.html",
+      "sourceRepo": "archify",
+      "sourceFile": "archify/assets/template.html",
+      "sourceCommit": "8c3af8a11318d3e0f46bb123149c4863d358f830",
+      "sha256": "003f2ddc4ec00ab37bdb0c9351cde73ccd9a82ef193a15adae6179eb4c51a735",
+      "sizeBytes": 774214
+    },
+    {
+      "path": "vendor/archify/i18n.mjs",
+      "sourceRepo": "archify",
+      "sourceFile": "archify/renderers/shared/i18n.mjs",
+      "sourceCommit": "8c3af8a11318d3e0f46bb123149c4863d358f830",
+      "sha256": "0d9e839c3e5346160b0028d07fcf78c86671189e0714ea069dc99913e859fcdb",
+      "sizeBytes": 48475
     }
   ]
 }
