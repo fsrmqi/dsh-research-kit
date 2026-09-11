@@ -121,6 +121,42 @@
     "availability": "prompt-guidance"
   },
   {
+    "id": "agricultural-experiment-design",
+    "type": "skill",
+    "name": "农业试验设计",
+    "description": "约束田间试验的随机化、重复、区组、环境与性状记录。",
+    "category": "农业研究",
+    "tags": ["田间试验", "随机化", "育种"],
+    "guidance": "田间与温室试验须明确试验单位、随机化、区组、重复、环境管理和性状测量时间点。",
+    "promptFragment": "农业试验纪律：区分生物学重复、技术重复和小区重复；报告随机化、区组、试验单位、样本量、缺失小区与环境条件；基因型、环境与管理因素不得混淆；不得把单地点单季结果泛化为稳定品种结论。",
+    "checklist": ["试验单位与重复层级明确", "随机化和区组设计已记录", "性状与环境测量时间点明确", "缺失小区和异常值处理留痕"],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "crop-genomics",
+    "type": "skill",
+    "name": "作物基因组与育种证据",
+    "description": "约束作物遗传、表型和育种推断的版本、群体与验证边界。",
+    "category": "农业研究",
+    "tags": ["作物基因组", "GWAS", "育种"],
+    "guidance": "作物遗传结论需保留参考基因组、群体结构、表型定义与独立验证边界。",
+    "promptFragment": "作物遗传纪律：记录物种/品种、参考基因组与注释版本、群体结构、表型定义和环境条件；关联不等于因果，候选基因与育种价值均需独立群体或实验验证；不得将单个标记直接表述为可推广的育种决策。",
+    "checklist": ["基因组与注释版本明确", "表型和环境定义明确", "群体结构与多重检验已处理", "候选结论有验证计划"],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "bioinformatics-workflow-governance",
+    "type": "skill",
+    "name": "生信流程治理",
+    "description": "约束组学分析的输入、版本、参数、日志和可复现交付。",
+    "category": "生物信息学",
+    "tags": ["生信", "工作流", "版本", "容器"],
+    "guidance": "任何生信结论必须能回溯到输入、参考版本、工具参数和实际运行输出。",
+    "promptFragment": "生信流程纪律：为每一步记录输入文件校验、参考基因组/注释版本、工具与容器版本、参数、随机种子、日志和输出路径；将计划、已运行步骤和失败步骤明确分开；不得把未运行命令、未见日志或未核验结果表述为完成。",
+    "checklist": ["输入与参考版本可追溯", "工具、容器和参数已记录", "运行日志与输出路径明确", "计划和实际运行状态已区分"],
+    "availability": "prompt-guidance"
+  },
+  {
     "id": "uncertainty-communication",
     "type": "skill",
     "name": "不确定性表达",

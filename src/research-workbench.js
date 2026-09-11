@@ -12,6 +12,11 @@ import {
 } from './ui.js'
 
 const TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
+const RESEARCH_PLAN_STAGES = {
+  '论文与手稿': ['确认材料与研究问题', '双语检索与来源核验', '结构与章节计划', '分段起草或修改', '引文、图表与一致性核对', '作者确认与交付'],
+  '文献研究': ['界定问题与范围', '双语检索式', '筛选与证据表', '主题综合与研究空白', '核验引用与待确认项', '输出综述草案'],
+  '数据分析': ['确认数据与分析问题', '数据质量检查', '分析计划与前提', '执行与结果核验', '可重复性记录', '输出分析报告'],
+}
 // 科研模式领域预设：一键选择领域后附加对应的技能组合与领域纪律段。
 // 语义是「预设指导组合」而不是能力开关——不会自动执行任何工具。
 const SCIENCE_MODE_BASE = '【科研模式】本次任务按以下纪律执行：区分已提供材料、可验证外部来源与推断；不得编造文献、数据、页码或结论；结论标注为需人工核验的草案。'
@@ -62,6 +67,11 @@ function databaseAvailabilityLabel(value) {
     'requires-mcp': '需要 MCP 或 Web 能力',
     'reference-only': '仅作研究参考'
   }[value] || '接入状态未知'
+}
+
+function researchPlanFor(workflow) {
+  const stages = RESEARCH_PLAN_STAGES[workflow?.category]
+  return stages ? { stages, deliverables: workflow.category === '论文与手稿' ? ['章节草案', '待作者确认项', '引用/图表核对清单'] : ['检索策略或分析计划', '证据与待核验项', '可编辑草案'] } : null
 }
 
 // 状态色：插件直查与宿主已确认可用都算「现在就能查」，其余为待配置的琥珀色。
@@ -117,6 +127,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const selectedKey = selected?.id || ''
   const requiredFields = workflow ? (workflow.placeholders || []).filter(field => field.required) : []
   const missingNow = requiredFields.filter(field => !String(values[field.key] || '').trim()).map(field => field.label)
+  const taskPlan = researchPlanFor(workflow)
 
   React.useEffect(() => {
     // 切换资源后清空编辑态与勾选，避免把上一个工作流的内容或技能组合带过去。
@@ -149,6 +160,11 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   }
   const clearForm = () => {
     setValues({}); setEditedPrompt(null); setNotice('已清空表单，恢复到模板初始状态。')
+  }
+  const writeTaskPlan = () => {
+    if (!hasDraftAction || !workflow || !taskPlan) return
+    inputActions.setDraft(`请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
+    setNotice('研究与交付计划已写入输入框；确认后可继续执行。')
   }
   const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
   // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
@@ -307,6 +323,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
               workflow.requiresFiles ? h(Badge, { key: 'files', color: C.amber }, '需要材料') : null,
             ]),
             workflow.requiresFiles ? h(Notice, { key: 'files-note', tone: 'warn', icon: 'file' }, '此流程需要研究材料：请先在 DSH 输入框中使用原生 @文件 引用相关文件。') : null,
+            taskPlan ? h(Card, { key: 'task-plan', style: { padding: 14, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
+              h('strong', { key: 'title', style: { fontSize: 14 } }, '研究与交付计划'),
+              h('ol', { key: 'stages', style: { margin: '8px 0', paddingLeft: 20, display: 'grid', gap: 5, fontSize: 13 } }, taskPlan.stages.map(stage => h('li', { key: stage }, stage))),
+              h('div', { key: 'deliverables', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, `预期交付：${taskPlan.deliverables.join('、')}。所有阶段均需人工确认，不代表已执行。`),
+              h(Button, { key: 'plan', size: 'sm', variant: 'soft', icon: 'layers', disabled: !hasDraftAction, onClick: writeTaskPlan, style: { marginTop: 10 } }, '写入研究与交付计划'),
+            ]) : null,
             sessionResources.length ? h(Notice, { key: 'session', tone: 'info', icon: 'layers' }, `本会话已附加资源（${sessionResources.length}）：${sessionResources.map(item => item.name).join('、')}。可在输入框的“资源”入口调整。`) : null,
             ...(workflow.placeholders || []).map(field => h(Field, {
               key: field.key,

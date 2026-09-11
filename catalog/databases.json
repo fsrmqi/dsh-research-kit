@@ -1,5 +1,60 @@
 [
   {
+    "id": "usda-nass",
+    "type": "database",
+    "name": "USDA NASS QuickStats",
+    "description": "美国农业统计：作物产量、畜牧、价格与库存。",
+    "category": "农业研究",
+    "tags": ["农业统计", "产量", "美国"],
+    "url": "https://quickstats.nass.usda.gov/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；查询时记录指标、地区、时间、单位和数据版本。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "fao-faostat",
+    "type": "database",
+    "name": "FAO FAOSTAT",
+    "description": "联合国粮农组织全球农业、粮食与土地利用统计。",
+    "category": "农业研究",
+    "tags": ["农业统计", "粮食", "全球"],
+    "url": "https://www.fao.org/faostat/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；跨国比较须核对指标定义、单位与覆盖年份。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "try-plant-trait",
+    "type": "database",
+    "name": "TRY Plant Trait Database",
+    "description": "全球植物性状数据库，覆盖叶面积、株高、种子质量等。",
+    "category": "农业研究",
+    "tags": ["植物性状", "作物", "生态"],
+    "url": "https://www.try-db.org/",
+    "accessNote": "访问条件与许可须按 TRY 当前政策核验；不可假定数据可直接下载或可再分发。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ensembl-plants",
+    "type": "database",
+    "name": "Ensembl Plants",
+    "description": "植物基因组、基因注释、比较基因组与变异数据浏览。",
+    "category": "作物遗传育种",
+    "tags": ["植物基因组", "注释", "变异"],
+    "url": "https://plants.ensembl.org/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；使用时记录物种、参考版本与注释发布日期。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "gramene",
+    "type": "database",
+    "name": "Gramene",
+    "description": "植物比较基因组、通路、性状和作物遗传资源平台。",
+    "category": "作物遗传育种",
+    "tags": ["作物", "比较基因组", "性状"],
+    "url": "https://gramene.org/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；物种、版本和来源记录须与研究材料核对。",
+    "availability": "requires-mcp"
+  },
+  {
     "id": "pubmed",
     "type": "database",
     "name": "PubMed",
