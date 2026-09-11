@@ -30,7 +30,9 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **新增源码模块必须登记两处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）与 `package.json` 的 `check` 脚本（逐文件 `node --check`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。
 
-> **顶层符号名必须全局唯一，且每次改完源码都要重新 `npm run build`。** 所有模块被拼进同一个函数作用域，因此两个文件各写一个 `const sessions` 会让整个产物 `SyntaxError: Identifier 'sessions' has already been declared`——而这个错误只在**重新构建**时才出现：不 build 就跑 `npm run check`，检查的仍是旧产物，会一直显示为通过。同理，`strip()` 只认识 `export const` / `export function` / `export async function`（后者是单独一条规则，必须排在普通 `export function` 之前）与整行 `export {}`；用了别的导出形式会残留 `export` 关键字，同样是产物级别语法错误。
+> **顶层符号名必须全局唯一，且每次改完源码都要重新 `npm run build`。** 所有模块被拼进同一个函数作用域，因此两个文件各写一个 `const sessions` 会让整个产物 `SyntaxError: Identifier 'sessions' has already been declared`——而这个错误只在**重新构建**时才出现：不 build 就跑 `npm run check`，检查的仍是旧产物，会一直显示为通过。**重名 `function` 比重名 `const` 更阴险**：声明合法、后者静默覆盖前者，产物照样通过 `node --check`，只在运行到调用点才炸（实测：`research-selection-store.js` 与 `evidence-store.js` 各有一个 `stateFor`，形状不同，覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏）。现已由构建期的 `assertUniqueTopLevelSymbols` 硬失败并报出 `文件:行`，不必靠记忆；函数重名按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。
+
+> `strip()` 只认识 `export const` / `export function` / `export async function`（后者是单独一条规则，必须排在普通 `export function` 之前）与整行 `export {}`；用了别的导出形式会残留 `export` 关键字，同样是产物级别语法错误。
 
 ## 2. 当前基线
 

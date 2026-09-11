@@ -56,7 +56,7 @@ export function setActiveProject(project) {
   return next
 }
 
-function formatTime(at) {
+function formatEvidenceTime(at) {
   try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
 
@@ -329,7 +329,7 @@ export function EvidenceVaultPane() {
           item.sourceDatabase ? h(Badge, { key: 'db', color: C.slate }, item.sourceDatabase) : null,
           item.identifier ? h(Badge, { key: 'id', color: C.teal }, `${EVIDENCE_IDENTIFIER_LABELS[item.identifierKind] || '标识符'} ${item.identifier}`) : null,
         ]),
-        h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatTime(item.savedAt)}`),
+        h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatEvidenceTime(item.savedAt)}`),
       ]),
       item.reason || item.note || item.project || (item.tags || []).length
         ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [

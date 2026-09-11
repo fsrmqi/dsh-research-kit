@@ -41,7 +41,7 @@ function uniqueIds(ids = []) {
   return [...new Set(ids)].filter(id => { const item = itemById(id); return item?.type === 'skill' && item.promptFragment })
 }
 
-function formatTime(at) {
+function formatWorkbenchTime(at) {
   try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
 
@@ -271,7 +271,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
                   h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, item.name),
                   h(Badge, { key: 't', color: C.teal }, TYPE_LABELS[item.type]),
                 ]),
-                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatTime(row.at)}）` : item.description),
+                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : item.description),
               ])
             })
           ])))

@@ -76,7 +76,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 | --- | --- | --- |
 | Resources & Workflows | Discover | Catalog search, parameterized assembly, direct database lookup |
 | Method Workshop | Construct | Method cards + variable fill-in → editable prompt; extract a draft from the current conversation |
-| Research Vault | Deposit | Asset CRUD, version diff, verification tracking |
+| Research Vault | Deposit | Asset CRUD, version diff, verification tracking; an **Evidence Vault** sub-module saves source metadata and notes per item, project-isolated and de-duplicated |
 | Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources and assets |
 
 <details>
@@ -86,6 +86,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 - **Composer quick entry** — "Resources / Workflows" buttons on the composer toolbar open an overlay picker without leaving the chat; a selected workflow goes through a preview dialog and writes the draft. **It never auto-sends.**
 - **Draft enhancer** — one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original.
 - **Favorites & history** — one-click star on any entry; successful write/send/copy is recorded locally (ID, name, first-line summary, timestamp; 20 entries max).
+- **Evidence vault** — save individual results from public database lookups, each carrying a stable identifier (DOI / PMID / NCT / arXiv) and source link, defaulting to "unverified"; project-isolated de-duplication, JSON export/import and hard delete. **Only source metadata and notes you write are stored — no full text, no query terms, and nothing is saved automatically.**
 - **Multiple prompt exits** — beyond write-to-composer and send, "Copy prompt" works even when host actions are missing.
 - **Launch-time validation** — field-level errors (red border + message) inside the preview dialog; missing required parameters never write the draft.
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.

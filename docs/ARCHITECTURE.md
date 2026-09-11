@@ -135,8 +135,8 @@ dsh-research-kit/
 | `src/theme.js` | 主题 CSS 变量与 GlobalStyle 注入 | 读取宿主私有主题 API。 |
 | `src/ui.js` | 无业务状态的基础组件与图标 | 持有业务逻辑或读取目录数据。 |
 | `src/research-console.js` | 分区调度、分区导航、两级吸顶偏移实测 | 持有任何分区的业务逻辑，或读写分区的数据。 |
-| `src/research-workbench.js` / `research-vault.js` / `research-evidence-graph.js` | React 状态、渲染、调用注入的宿主动作 | 直接依赖 DSH 私有全局或发网络请求。 |
-| `src/lib/*` | 与 DOM 解耦的纯逻辑（协议解析、布局解算、隐私边界、分区契约） | 触碰 DOM 或宿主 API。 |
+| `src/research-workbench.js` / `research-vault.js` / `research-evidence-graph.js` / `research-evidence-vault.js` | React 状态、渲染、调用注入的宿主动作 | 直接依赖 DSH 私有全局或发网络请求。 |
+| `src/lib/*` | 与 DOM 解耦的纯逻辑（协议解析、布局解算、隐私边界、稳定性标识符识别、备份格式、分区契约） | 触碰 DOM 或宿主 API。 |
 | `src/composer-launcher.js` / `composer-overlay.js` | 输入框入口、overlay 选择器、启动弹窗 | 绕过 `inputActions` 直接发送或读取文件。 |
 | `dsh/standalone-glue.js` | 将 DSH props 映射为组件 props、注册槽位（返回统一释放函数） | 处理领域业务、拼 Prompt。 |
 | `dsh/slot-registry.js` | 槽位 id / order / label 的纯数据声明 | 执行注册本身。 |
@@ -154,7 +154,7 @@ dsh-research-kit/
 | --- | --- | --- | --- | --- |
 | 资源与工作流 | 发现层 | 目录检索、按参数与技能组装 Prompt、公开数据源直查 | 不生产知识、不沉淀资产、不直接出网 | 目录收藏与使用历史 |
 | 方法工坊 | 构造层 | 方法卡库、变量填充生成可编辑 Prompt、从当前对话提取草稿并写回输入框 | 不管理资产正文、不检索项目记忆或最近会话、不替工作流决定领域参数 | 方法卡与工坊资产 |
-| 研究灵感库 | 沉淀层 | 资产增删改、版本派生与对比、验证状态跟进 | 不生成 Prompt、不存原始数据与完整查询结果 | 灵感资产 |
+| 研究灵感库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不自动入库、不静默注入 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
 | 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源与资产之间的关系 | 不执行查询、不生成结论、不保存原始文件与检索词 | 本会话证据索引（`evidence-store`） |
 
 契约由 `src/lib/console-sections.js` 声明、`test/research-console.test.js` 守护：
@@ -205,7 +205,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 | --- | --- | --- |
 | 资源与工作流 | 科研模式 · 检索框 · 类型筛选（全部/工作流程/技能/数据库/收藏/历史） | `Toolbar sticky` |
 | 方法工坊 | 方法检索框 · 分类下拉 | vendored 组件的筛选块（宿主侧解绑，见下） |
-| 研究灵感库 | 检索框 · 状态筛选 · 项目筛选 · 新建资产 | `Toolbar sticky` |
+| 研究灵感库 | 灵感资产：检索框 · 状态筛选 · 项目筛选 · 新建资产；证据库：检索框 · 核验状态筛选 · 项目选择 · 导出 / 导入 / 清空 | 两个子模块各一条 `Toolbar sticky` |
 | 研究证据图谱 | 节点计数 · 关系计数 · 图例 | `Toolbar sticky` |
 
 **操作下沉而非封面吸顶**：`科研模式` 原挂在分区封面右侧、`新建资产` 原挂在封面动作区，都会随页面滚走（实测 `科研模式` 滚 800px 后 top = −555），每次切换都要先回顶部。两者都是常驻控件，因此下沉进二级吸顶带；而导出/恢复备份是一次性维护动作，留在封面即可，不占用常驻高度。
@@ -344,6 +344,28 @@ DSH 加载 ui/client.js
 2. Prompt 明确要求使用用户通过 DSH 原生 `@文件` 引用的材料；
 3. 插件不读取、上传、复制或检查文件内容；
 4. 后续只有在 DSH 提供稳定的草稿提及解析契约时，才可补充“尚未发现 `@` 引用”的软提示；该提示不得阻止写入或发送。
+
+### 3.4 证据保存闭环（分区③「证据库」子模块）
+
+```text
+用户在分区① 直查公开数据源
+  → 结果条目点「保存到证据库」（逐条独立触发，禁止自动入库）
+  → EvidenceSaveForm 展示待保存字段，用户在确认表单里补项目 / 标签 / 保存原因 / 笔记
+  → normalizeEvidenceEntry() 硬校验：既无原始链接又无稳定标识符 → 拒绝入库；
+                                        非 http(s) 协议链接 → 清空而非原样落库
+  → detectIdentifier() 从标题 / 链接 / 元数据补出稳定标识符（DOI / PMID / PMCID / NCT / arXiv）
+  → dedupeKey() 在【同一项目内】比对该标识符
+       ├─ 命中 → 停下，交给用户裁决「覆盖已有 / 仍然另存一份」，不自动合并
+       └─ 未命中 → save() 写入 IndexedDB（库 dsh-research-kit-evidence）
+  → 核验状态默认「未核验」——保存不等于认可；四条状态可逐条推进
+  → 列表按当前项目刷新，关键词检索与状态筛选即时生效
+```
+
+**去重只在同项目内成立**：跨项目不去重——同一篇文献在两个课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。命中重复时不自动合并，覆盖沿用原 `id` 与首次保存时间，避免更新笔记把条目在列表里跳到最前。
+
+**降级不伪装**：宿主不提供 IndexedDB 或 `open` 被拒时，写入退化为页面内存，接口保持 Promise 不变，并通过 `isDegraded()` 在列表上方显式提示「刷新后会丢失」。
+
+**尚未实现（ROADMAP §4c）**：勾选条目后把带来源链接与「仍需逐条核验」边界的引用块写入当前 Prompt。`formatEvidenceCitations()` 纯逻辑已就位并有测试，但**视图中没有任何写入入口**——在 4c 落地前，证据库不会被拼进任何 Prompt，这是有意的顺序：先保证「未选择不注入」成立，再开写入路径。
 
 ## 4. 目录数据契约
 
@@ -511,6 +533,11 @@ npm run build && npm run check && npm test && node --check ui/client.js
 ```
 
 CI 会校验「重新构建后产物无 diff」，忘记重建会直接挂 CI。`scripts/build-client.mjs` 的 `files` 是显式白名单——**新增模块漏登记不会有任何构建报错**，产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。
+
+构建期另有两道硬断言，把「产物级、运行时才炸」的缺陷提前到构建：
+
+- `assertSymbolOrder`：关键符号的定义位置必须早于 `standalone-glue` 使用它们的位置——顺序错位在运行时表现为 `ReferenceError`；
+- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 `ids` 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。vendored 工件不参与该检查：`vendor/promptkit-embed.js` 的内部声明都包在 `const PromptKit = (React => {…})` 作用域内，它唯一外露的符号是 `PromptKit`。
 
 不要手工编辑 `ui/client.js`。如果需要引入依赖，先确认 DSH 浏览器模块是否可通过 `require()` 提供；未经验证不得把 npm 依赖直接留在浏览器源码中。
 

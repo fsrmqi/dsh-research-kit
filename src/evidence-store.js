@@ -5,19 +5,20 @@ const MAX_WORKFLOWS = 30
 // 在刷新或重开页面后残留。按 sessionId 共享 state，保证工作台、查询面板和图谱
 // 各自创建 store 时仍能互相实时通知。
 // 顶层符号名必须全局唯一：构建器把所有模块拼进同一作用域（strip 掉 import，
-// 符号靠拼接顺序可见），重名 const 会让整个产物语法错误。故加 evidence 前缀。
+// 符号靠拼接顺序可见）。重名 const 会让整个产物语法错误，而重名 function 更阴险——
+// 声明合法、静默覆盖，产物照样通过 node --check，直到运行到调用点才炸。
 const evidenceSessions = new Map()
 
-function keyFor(sessionId) { return String(sessionId || 'unscoped') }
+function evidenceKeyFor(sessionId) { return String(sessionId || 'unscoped') }
 
-function stateFor(sessionId) {
-  const key = keyFor(sessionId)
+function evidenceStateFor(sessionId) {
+  const key = evidenceKeyFor(sessionId)
   if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
   return evidenceSessions.get(key)
 }
 
 export function createEvidenceStore(sessionId) {
-  const state = stateFor(sessionId)
+  const state = evidenceStateFor(sessionId)
   const get = () => ({ queries: [...state.queries], workflows: [...state.workflows] })
   const publish = () => {
     const value = get()

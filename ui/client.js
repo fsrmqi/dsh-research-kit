@@ -4105,19 +4105,20 @@ window.__ModuleLoader__.load({
     // 在刷新或重开页面后残留。按 sessionId 共享 state，保证工作台、查询面板和图谱
     // 各自创建 store 时仍能互相实时通知。
     // 顶层符号名必须全局唯一：构建器把所有模块拼进同一作用域（strip 掉 import，
-    // 符号靠拼接顺序可见），重名 const 会让整个产物语法错误。故加 evidence 前缀。
+    // 符号靠拼接顺序可见）。重名 const 会让整个产物语法错误，而重名 function 更阴险——
+    // 声明合法、静默覆盖，产物照样通过 node --check，直到运行到调用点才炸。
     const evidenceSessions = new Map()
 
-    function keyFor(sessionId) { return String(sessionId || 'unscoped') }
+    function evidenceKeyFor(sessionId) { return String(sessionId || 'unscoped') }
 
-    function stateFor(sessionId) {
-      const key = keyFor(sessionId)
+    function evidenceStateFor(sessionId) {
+      const key = evidenceKeyFor(sessionId)
       if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
       return evidenceSessions.get(key)
     }
 
     function createEvidenceStore(sessionId) {
-      const state = stateFor(sessionId)
+      const state = evidenceStateFor(sessionId)
       const get = () => ({ queries: [...state.queries], workflows: [...state.workflows] })
       const publish = () => {
         const value = get()
@@ -5156,9 +5157,9 @@ window.__ModuleLoader__.load({
         id: 'vault',
         label: '研究灵感库',
         position: '沉淀层 · 把产出与结论存成可追溯、可验证的资产',
-        purpose: '灵感资产的增删改查；派生版本与版本对比；验证状态跟进（待验证 / 已证实 / 已被推翻）；收藏；JSON 导出与增量恢复。',
-        boundary: '不生成提示词，只向生成环节提供素材；原始数据、患者信息与完整查询结果不入库；单条正文上限 8000 字符。',
-        ownership: '灵感资产（PromptKit asset provider 命名空间）',
+        purpose: '灵感资产的增删改查；派生版本与版本对比；验证状态跟进（待验证 / 已证实 / 已被推翻）；收藏；JSON 导出与增量恢复。子模块「证据库」逐条保存公开来源的元数据与用户笔记，按项目隔离与去重，支持导出、导入与彻底删除。',
+        boundary: '不生成提示词，只向生成环节提供素材；原始数据、患者信息与完整查询结果不入库；证据条目必须由用户逐条确认，不自动入库、不静默注入提示词；单条灵感资产正文上限 8000 字符。',
+        ownership: '灵感资产（PromptKit asset provider 命名空间）；证据条目（IndexedDB dsh-research-kit-evidence）',
       },
       {
         id: 'evidence',
@@ -5460,7 +5461,7 @@ window.__ModuleLoader__.load({
       return next
     }
 
-    function formatTime(at) {
+    function formatEvidenceTime(at) {
       try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
     }
 
@@ -5733,7 +5734,7 @@ window.__ModuleLoader__.load({
               item.sourceDatabase ? h(Badge, { key: 'db', color: C.slate }, item.sourceDatabase) : null,
               item.identifier ? h(Badge, { key: 'id', color: C.teal }, `${EVIDENCE_IDENTIFIER_LABELS[item.identifierKind] || '标识符'} ${item.identifier}`) : null,
             ]),
-            h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatTime(item.savedAt)}`),
+            h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatEvidenceTime(item.savedAt)}`),
           ]),
           item.reason || item.note || item.project || (item.tags || []).length
             ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
@@ -6315,7 +6316,7 @@ window.__ModuleLoader__.load({
       { value: 'evidence', label: '证据库' },
     ]
 
-    function formatTime(at) {
+    function formatAssetTime(at) {
       try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
     }
 
@@ -6554,7 +6555,7 @@ window.__ModuleLoader__.load({
             (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
           ]) : null,
           h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
-            h('span', { key: 'time' }, `更新于 ${formatTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
+            h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
             h(Button, { key: 'edit', size: 'sm', variant: 'ghost', icon: 'edit', onClick: () => openEdit(item) }, '编辑'),
             h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
             item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
@@ -6676,7 +6677,7 @@ window.__ModuleLoader__.load({
       return [...new Set(ids)].filter(id => { const item = itemById(id); return item?.type === 'skill' && item.promptFragment })
     }
 
-    function formatTime(at) {
+    function formatWorkbenchTime(at) {
       try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
     }
 
@@ -6906,7 +6907,7 @@ window.__ModuleLoader__.load({
                       h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, item.name),
                       h(Badge, { key: 't', color: C.teal }, TYPE_LABELS[item.type]),
                     ]),
-                    h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatTime(row.at)}）` : item.description),
+                    h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : item.description),
                   ])
                 })
               ])))

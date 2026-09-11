@@ -32,7 +32,7 @@ const VAULT_TABS = [
   { value: 'evidence', label: '证据库' },
 ]
 
-function formatTime(at) {
+function formatAssetTime(at) {
   try { return new Date(at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
 
@@ -271,7 +271,7 @@ export function ResearchVault({ assetProvider, embedded = false }) {
         (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
       ]) : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
-        h('span', { key: 'time' }, `更新于 ${formatTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
+        h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
         h(Button, { key: 'edit', size: 'sm', variant: 'ghost', icon: 'edit', onClick: () => openEdit(item) }, '编辑'),
         h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
         item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
