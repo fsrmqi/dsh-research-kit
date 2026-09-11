@@ -58,6 +58,29 @@ test('路由层：相同查询 5 分钟内命中缓存，不再调用公开 API'
   assert.equal(calls, 1, '第二次查询应命中缓存，不重复出网')
 })
 
+test('路由层：规范化等价查询，并合并并发的上游请求', async () => {
+  let calls = 0
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const web = { async fetch() {
+    calls += 1
+    await gate
+    return jsonResult({ message: { items: [{ DOI: '10.2/coalesced', title: ['合并样例'], URL: 'https://doi.org/10.2/coalesced' }] } })
+  } }
+  const route = databaseQueryRoute({ web, databases, logger: null })
+  const first = makeResponse()
+  const second = makeResponse()
+  const a = route.handler(makeRequest(`${DATABASE_QUERY_PATH}?database_id=crossref&q=%20coalesced%20&limit=99`, `coalesce-${Math.random()}`), first)
+  const b = route.handler(makeRequest(`${DATABASE_QUERY_PATH}?database_id=crossref&q=coalesced&limit=10`, `coalesce-${Math.random()}`), second)
+  await Promise.resolve()
+  assert.equal(calls, 1, '同一规范化键的并发请求只能访问一次上游')
+  release()
+  await Promise.all([a, b])
+  assert.equal(first.status, 200)
+  assert.equal(second.status, 200)
+  assert.equal(calls, 1)
+})
+
 test('路由层：同一客户端超出每分钟预算返回 429', async () => {
   const web = { async fetch() { return jsonResult({ message: { items: [] } }) } }
   const route = databaseQueryRoute({ web, databases, logger: null })

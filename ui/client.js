@@ -4063,13 +4063,24 @@ window.__ModuleLoader__.load({
     // 每个 DSH 会话共享的临时资源选择。只驻留在当前页面内存：不写入 localStorage，
     // 不跨会话泄露研究上下文；完整工作台与输入框浮层通过同一个 sessionId 读取它。
     const sessions = new Map()
+    const MAX_SESSION_STORES = 100
 
     function keyFor(sessionId) { return String(sessionId || 'unscoped') }
 
     function stateFor(sessionId) {
       const key = keyFor(sessionId)
       if (!sessions.has(key)) sessions.set(key, { ids: [], listeners: new Set() })
-      return sessions.get(key)
+      const state = sessions.get(key)
+      // Map 无界增长会让长期运行的宿主把已关闭会话永久留在内存里。
+      // 活跃会话有监听器，不参与淘汰；未监听的最久会话可安全丢弃（本来就是会话级临时状态）。
+      sessions.delete(key)
+      sessions.set(key, state)
+      while (sessions.size > MAX_SESSION_STORES) {
+        const oldest = sessions.entries().next().value
+        if (!oldest || oldest[1].listeners.size) break
+        sessions.delete(oldest[0])
+      }
+      return state
     }
 
     function createResearchSelectionStore(sessionId) {
@@ -4108,13 +4119,22 @@ window.__ModuleLoader__.load({
     // 符号靠拼接顺序可见）。重名 const 会让整个产物语法错误，而重名 function 更阴险——
     // 声明合法、静默覆盖，产物照样通过 node --check，直到运行到调用点才炸。
     const evidenceSessions = new Map()
+    const MAX_EVIDENCE_SESSIONS = 100
 
     function evidenceKeyFor(sessionId) { return String(sessionId || 'unscoped') }
 
     function evidenceStateFor(sessionId) {
       const key = evidenceKeyFor(sessionId)
       if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
-      return evidenceSessions.get(key)
+      const state = evidenceSessions.get(key)
+      evidenceSessions.delete(key)
+      evidenceSessions.set(key, state)
+      while (evidenceSessions.size > MAX_EVIDENCE_SESSIONS) {
+        const oldest = evidenceSessions.entries().next().value
+        if (!oldest || oldest[1].listeners.size) break
+        evidenceSessions.delete(oldest[0])
+      }
+      return state
     }
 
     function createEvidenceStore(sessionId) {
@@ -5318,6 +5338,14 @@ window.__ModuleLoader__.load({
         return sortBySavedAt(Array.isArray(rows) ? rows : memory)
       }
 
+      // 项目是最常用的列表边界；不要在 IndexedDB 已建索引的情况下把整库搬到 JS 再过滤。
+      // 降级内存路径仍复用同一契约，便于保持两条路径行为一致。
+      const readProject = async project => {
+        if (typeof project !== 'string') return readAll()
+        const rows = await withStore('readonly', store => requestToPromise(store.index('project').getAll(project)))
+        return sortBySavedAt(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project))
+      }
+
       // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
       const inProject = (rows, project) =>
         (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
@@ -5337,7 +5365,7 @@ window.__ModuleLoader__.load({
         },
 
         async list({ project } = {}) {
-          return inProject(await readAll(), project)
+          return readProject(project)
         },
 
         // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
@@ -5350,7 +5378,7 @@ window.__ModuleLoader__.load({
         async save(input, { onDuplicate = 'reject' } = {}) {
           // 校验先于持久化：非法条目即使在降级模式下也不入库，避免两条路径行为不一致。
           const entry = normalizeEvidenceEntry(input)
-          const existing = await readAll()
+          const existing = await readProject(entry.project)
           const duplicate = findDuplicate(existing, entry)
           if (duplicate && onDuplicate === 'reject') {
             const error = new Error(`该来源已在本项目证据库中：「${duplicate.title}」。`)
@@ -5381,8 +5409,7 @@ window.__ModuleLoader__.load({
 
         // 按项目彻底删除：只删该项目的条目，其余项目不受影响。
         async removeByProject(project) {
-          const rows = await readAll()
-          const doomed = inProject(rows, project).map(item => item.id)
+          const doomed = (await readProject(project)).map(item => item.id)
           const touched = await withStore('readwrite', async store => {
             for (const id of doomed) await requestToPromise(store.delete(String(id)))
             return true
@@ -5575,15 +5602,22 @@ window.__ModuleLoader__.load({
       const [backupOpen, setBackupOpen] = React.useState(false)
       // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
       const [confirmClear, setConfirmClear] = React.useState(false)
+      const refreshVersion = React.useRef(0)
 
       const refresh = React.useCallback(() => {
+        const version = ++refreshVersion.current
         Promise.all([store.list({ project: project || undefined }), store.listProjects()])
           .then(([rows, names]) => {
+            if (version !== refreshVersion.current) return
             setEntries(rows || [])
             setProjects(names || [])
             setLoading(false)
           })
-          .catch(error => { setNotice(`⚠️ 读取证据库失败：${error?.message || error}`); setLoading(false) })
+          .catch(error => {
+            if (version !== refreshVersion.current) return
+            setNotice(`⚠️ 读取证据库失败：${error?.message || error}`)
+            setLoading(false)
+          })
       }, [store, project])
       React.useEffect(() => { refresh() }, [refresh])
       React.useEffect(() => subscribeEvidenceVault(refresh), [refresh])

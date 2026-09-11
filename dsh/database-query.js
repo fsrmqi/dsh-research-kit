@@ -13,14 +13,20 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 12
 
 const queryCache = new Map()
+const inFlightQueries = new Map()
 const rateBuckets = new Map()
 
-function cacheKey(databaseId, query, limit) { return `${databaseId}::${query}::${limit}` }
+function normalizeQueryKey(query) { return String(query || '').trim() }
+function normalizeLimit(limit) { return Math.max(1, Math.min(Number(limit) || 5, MAX_LIMIT)) }
+function cacheKey(databaseId, query, limit) { return `${databaseId}::${normalizeQueryKey(query)}::${normalizeLimit(limit)}` }
 
 function cacheGet(key) {
   const hit = queryCache.get(key)
   if (!hit) return null
   if (Date.now() - hit.at > CACHE_TTL_MS) { queryCache.delete(key); return null }
+  // 命中提升到末尾，淘汰策略才是真正的 LRU 而非插入顺序 FIFO。
+  queryCache.delete(key)
+  queryCache.set(key, hit)
   return hit.result
 }
 
@@ -136,10 +142,10 @@ function shouldFallbackToAgent(error) {
 }
 
 export async function runDatabaseQuery({ web, database, query, limit = 5, signal }) {
-  const normalizedQuery = String(query || '').trim()
+  const normalizedQuery = normalizeQueryKey(query)
   if (!normalizedQuery) throw new Error('请输入检索词。')
   if (normalizedQuery.length > MAX_QUERY_LENGTH) throw new Error(`检索词不能超过 ${MAX_QUERY_LENGTH} 个字符。`)
-  const size = Math.max(1, Math.min(Number(limit) || 5, MAX_LIMIT))
+  const size = normalizeLimit(limit)
   try {
     if (database.id === 'pubmed') {
       return { mode: 'direct', sources: await queryPubMed(web, normalizedQuery, size, signal), query: normalizedQuery }
@@ -181,18 +187,34 @@ export function databaseQueryRoute({ web, databases, logger }) {
         try { logger?.warn?.(`database query rate limited client=${clientKey} id=${database.id}`) } catch {}
         return reply(res, 429, { error: 'rate_limited', message: '查询过于频繁（每分钟 12 次上限）。请稍后再试，或改用「让 Agent 查询」由会话内 Agent 检索。' })
       }
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 15_000)
       try {
-        const result = await runDatabaseQuery({ web, database, query, limit, signal: controller.signal })
-        const payload = { database: { id: database.id, name: database.name }, ...result }
-        cacheSet(key, payload)
+        let pending = inFlightQueries.get(key)
+        if (!pending) {
+          pending = (async () => {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 15_000)
+            try {
+              const result = await runDatabaseQuery({ web, database, query, limit, signal: controller.signal })
+              const payload = { database: { id: database.id, name: database.name }, ...result }
+              cacheSet(key, payload)
+              return payload
+            } catch (error) {
+              if (controller.signal.aborted) throw new Error('查询超时，请缩短检索词或稍后重试。')
+              throw error
+            } finally {
+              clearTimeout(timeout)
+            }
+          })()
+          inFlightQueries.set(key, pending)
+          pending.finally(() => inFlightQueries.delete(key)).catch(() => {})
+        }
+        const payload = await pending
         reply(res, 200, payload)
       } catch (error) {
-        const message = controller.signal.aborted ? '查询超时，请缩短检索词或稍后重试。' : String(error?.message || error)
+        const message = String(error?.message || error)
         try { logger?.warn?.(`database query failed id=${database.id}: ${message}`) } catch {}
-        reply(res, controller.signal.aborted ? 504 : 502, { error: 'database_query_failed', message })
-      } finally { clearTimeout(timeout) }
+        reply(res, /查询超时/.test(message) ? 504 : 502, { error: 'database_query_failed', message })
+      }
     }
   }
 }

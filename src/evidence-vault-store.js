@@ -92,6 +92,14 @@ export function createEvidenceVaultStore() {
     return sortBySavedAt(Array.isArray(rows) ? rows : memory)
   }
 
+  // 项目是最常用的列表边界；不要在 IndexedDB 已建索引的情况下把整库搬到 JS 再过滤。
+  // 降级内存路径仍复用同一契约，便于保持两条路径行为一致。
+  const readProject = async project => {
+    if (typeof project !== 'string') return readAll()
+    const rows = await withStore('readonly', store => requestToPromise(store.index('project').getAll(project)))
+    return sortBySavedAt(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project))
+  }
+
   // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
   const inProject = (rows, project) =>
     (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
@@ -111,7 +119,7 @@ export function createEvidenceVaultStore() {
     },
 
     async list({ project } = {}) {
-      return inProject(await readAll(), project)
+      return readProject(project)
     },
 
     // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
@@ -124,7 +132,7 @@ export function createEvidenceVaultStore() {
     async save(input, { onDuplicate = 'reject' } = {}) {
       // 校验先于持久化：非法条目即使在降级模式下也不入库，避免两条路径行为不一致。
       const entry = normalizeEvidenceEntry(input)
-      const existing = await readAll()
+      const existing = await readProject(entry.project)
       const duplicate = findDuplicate(existing, entry)
       if (duplicate && onDuplicate === 'reject') {
         const error = new Error(`该来源已在本项目证据库中：「${duplicate.title}」。`)
@@ -155,8 +163,7 @@ export function createEvidenceVaultStore() {
 
     // 按项目彻底删除：只删该项目的条目，其余项目不受影响。
     async removeByProject(project) {
-      const rows = await readAll()
-      const doomed = inProject(rows, project).map(item => item.id)
+      const doomed = (await readProject(project)).map(item => item.id)
       const touched = await withStore('readwrite', async store => {
         for (const id of doomed) await requestToPromise(store.delete(String(id)))
         return true

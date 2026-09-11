@@ -8,13 +8,22 @@ const MAX_WORKFLOWS = 30
 // 符号靠拼接顺序可见）。重名 const 会让整个产物语法错误，而重名 function 更阴险——
 // 声明合法、静默覆盖，产物照样通过 node --check，直到运行到调用点才炸。
 const evidenceSessions = new Map()
+const MAX_EVIDENCE_SESSIONS = 100
 
 function evidenceKeyFor(sessionId) { return String(sessionId || 'unscoped') }
 
 function evidenceStateFor(sessionId) {
   const key = evidenceKeyFor(sessionId)
   if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
-  return evidenceSessions.get(key)
+  const state = evidenceSessions.get(key)
+  evidenceSessions.delete(key)
+  evidenceSessions.set(key, state)
+  while (evidenceSessions.size > MAX_EVIDENCE_SESSIONS) {
+    const oldest = evidenceSessions.entries().next().value
+    if (!oldest || oldest[1].listeners.size) break
+    evidenceSessions.delete(oldest[0])
+  }
+  return state
 }
 
 export function createEvidenceStore(sessionId) {

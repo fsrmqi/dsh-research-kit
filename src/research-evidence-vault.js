@@ -170,15 +170,22 @@ export function EvidenceVaultPane() {
   const [backupOpen, setBackupOpen] = React.useState(false)
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
   const [confirmClear, setConfirmClear] = React.useState(false)
+  const refreshVersion = React.useRef(0)
 
   const refresh = React.useCallback(() => {
+    const version = ++refreshVersion.current
     Promise.all([store.list({ project: project || undefined }), store.listProjects()])
       .then(([rows, names]) => {
+        if (version !== refreshVersion.current) return
         setEntries(rows || [])
         setProjects(names || [])
         setLoading(false)
       })
-      .catch(error => { setNotice(`⚠️ 读取证据库失败：${error?.message || error}`); setLoading(false) })
+      .catch(error => {
+        if (version !== refreshVersion.current) return
+        setNotice(`⚠️ 读取证据库失败：${error?.message || error}`)
+        setLoading(false)
+      })
   }, [store, project])
   React.useEffect(() => { refresh() }, [refresh])
   React.useEffect(() => subscribeEvidenceVault(refresh), [refresh])

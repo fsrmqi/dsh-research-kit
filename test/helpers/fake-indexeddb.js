@@ -48,6 +48,9 @@ export function createFakeIndexedDB() {
         return {
           objectStore: () => ({
             getAll: () => makeRequest(tx, request => { request.result = [...rows.values()] }),
+            index: name => ({
+              getAll: key => makeRequest(tx, request => { request.result = [...rows.values()].filter(row => row?.[name] === key) }),
+            }),
             put: value => makeRequest(tx, request => { rows.set(value.id, value); request.result = value.id }),
             delete: key => makeRequest(tx, request => { rows.delete(String(key)) }),
             clear: () => makeRequest(tx, () => { rows.clear() }),
