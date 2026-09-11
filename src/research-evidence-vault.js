@@ -8,7 +8,7 @@ import { createEvidenceVaultStore } from './evidence-vault-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
   statusCounts, filterEvidence, detectIdentifier,
-  serializeEvidenceBackup, parseEvidenceBackup, mergeEntries, formatEvidenceCitations,
+  serializeEvidenceBackup, parseEvidenceBackup, mergeEntries, planCitationWrite,
 } from './lib/evidence-vault-core.js'
 
 // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
@@ -194,8 +194,11 @@ export function EvidenceVaultPane({ inputActions }) {
   const counts = React.useMemo(() => statusCounts(entries), [entries])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
   const selectedEntries = React.useMemo(() => filtered.filter(item => selectedIds.includes(item.id)), [filtered, selectedIds])
-  const citationPreview = React.useMemo(() => formatEvidenceCitations(selectedEntries), [selectedEntries])
   const canWrite = typeof inputActions?.setDraft === 'function'
+  // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
+  // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
+  const writePlan = React.useMemo(() => planCitationWrite({ entries: selectedEntries, canWrite }), [selectedEntries, canWrite])
+  const citationPreview = writePlan.text
   const degraded = store.isDegraded()
 
   const switchProject = value => {
@@ -205,10 +208,8 @@ export function EvidenceVaultPane({ inputActions }) {
     setSelectedIds([])
   }
   const writeSelected = () => {
-    if (!citationPreview) return setNotice('请先勾选当前筛选结果中的证据条目。')
-    if (!canWrite) return setNotice('当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。')
-    inputActions.setDraft(citationPreview)
-    setNotice(`已将 ${selectedEntries.length} 条已勾选证据写入当前会话输入框。`)
+    if (writePlan.action === 'write') inputActions.setDraft(writePlan.text)
+    setNotice(writePlan.notice)
   }
 
   const createProject = () => {

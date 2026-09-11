@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（116 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、存储层、查询、构建产物、分区契约与 DSH 槽位注册测试（120 项）
 ```
 
 每次改动目录或浏览器源码后，统一执行：
@@ -50,7 +50,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 分区契约测试（名称/定位/用途/边界/映射） | 已实现 | `test/research-console.test.js` |
 | 输入框快捷入口与 overlay 选择器 | 已实现 | `src/composer-*.js` + `dsh/standalone-glue.js` |
 | 浮层锚定卡片的可用高度解算（纯函数 + 单测） | 已实现 | `src/lib/overlay-anchor.js` + `test/composer-overlay.test.js` |
-| 槽位注册测试（vm 沙箱跑产物） | 已实现 | `test/dsh-slots.test.js` |
+| 槽位注册测试（调用注册表 + 产物包含性检查） | 已实现 | `test/dsh-slots.test.js` |
 | 证据库持久化 / 项目隔离 / 去重 / 备份（跨刷新以最小 IndexedDB 桩断言） | 已实现 | `test/evidence-vault.test.js` + `test/helpers/fake-indexeddb.js` |
 | 浏览器 ModuleLoader 构建 | 已实现（CI 校验可复现） | `scripts/build-client.mjs` |
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）** | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
@@ -89,7 +89,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 116 项测试全是纯逻辑与 vm 沙箱断言（`test/dsh-slots.test.js` 虽执行构建产物，但 slots 服务是模拟的），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 120 项测试全部是纯逻辑断言与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），只能证明"产物能注册槽位"，不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

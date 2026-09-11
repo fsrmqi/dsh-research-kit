@@ -15,11 +15,14 @@
 - 🗃 **数据源 `availability` 新增 `available-in-plugin` 一档，11 个来源如实标注**：此前 55 个数据源一律标 `requires-mcp`，而其中 11 个（PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist）实际由插件内置适配器直接查询。用户读到「需要 MCP 或 Web 能力」会以为用不了，**少报了 20% 已兑现的能力**。
   - 根因是原字段只表达「宿主能力」，缺「插件能力」这一档。新增值专指实现已兑现的直查能力，与需要宿主探测的 `available-in-host` 分开；工作台详情页的状态色与 `toolHint` 文案同步区分，`accessNote` 逐条改写（GBIF / iNaturalist 保留各自的认证与许可提示）。
   - 🔒 **升级为双向契约**：`scripts/validate-catalog-lib.mjs` 新增 `readDirectQueryIds()`，从 `dsh/database-query.js` 读出适配器清单（10 条 `DIRECT_ADAPTERS` + PubMed 的独立分支），与目录标注双向比对——有适配器却未标、或标了却无适配器，`npm run check` 直接失败。`validate-catalog.mjs` 的通过信息现在会报出直查来源数。
+- ✍️ **证据库「勾选写入 Prompt」（ROADMAP §4c）状态校正：文档说未实现，代码早已实现**。勾选、引用块预览与 `写入 Prompt（N）` 按钮是随证据库一起落地的，但 `docs/ARCHITECTURE.md` 写着「视图中没有任何写入入口」、`docs/PRODUCT.md` 与 `ROADMAP.md` 把 4c 列在未完成——文档落后于代码，用户会以为存进去的证据用不出去。现同步三处状态，并补上 §4c 自身验收条件里缺的那一项。
+  - 🔒 **「未选择不注入」提为可断言的纯逻辑**：该守卫原先只是视图 `writeSelected` 里的一次提前 `return`，纯逻辑测试无法断言「什么都没被注入」。新增 `planCitationWrite({ entries, canWrite })`，返回 `empty / unsupported / write` 三态，**视图只在 `action === 'write'` 时调用 `inputActions.setDraft()`**；同时补源码断言钉住这层调用关系——否则把守卫从视图里删掉，纯逻辑测试仍会全绿（同「目录与实现双向契约」的教训）。宿主未提供输入框操作时按钮禁用，但引用块照常显示供手工复制，降级不等于丢弃。
+  - 顺带修正 `src/lib/evidence-vault-core.js` 中「4c 才会用到，此处先备好」的过时注释：该函数早已被视图调用，注释与代码冲突时以代码为准。
 
 ### 新增
 
 - 📊 **`docs/assets/` 新增 5 张对外展示用架构图**（SVG 随仓库分发，README 与文档直接引用）：全局架构（宿主 / 插件 / 两条受控路由 / 外部通道）、科研闭环四分区、Prompt 组装五步链路、数据源双路径（11 直查 vs 44 回退）、三方责任边界（插件 / DSH / 研究者）。全部经真实 Chromium 渲染核验排版，无溢出与重叠；README（中英）、`docs/PRODUCT.md`、`docs/ARCHITECTURE.md` 共 8 处引用。
-- 测试扩充至 116 项：新增「目录标注的插件可直查与实现里的适配器完全一致」（先锁住清单提取结果，避免一致性断言空转）与「契约校验能抓住漏标与虚标」两项守护。
+- 测试扩充至 120 项：新增「目录标注的插件可直查与实现里的适配器完全一致」（先锁住清单提取结果，避免一致性断言空转）、「契约校验能抓住漏标与虚标」，以及 §4c 的 4 项守护——未选择不注入（含空数组 / `null` / 非数组 / 无参调用）、宿主不支持写入时不注入但引用块仍可复制、有选择时写入文本含来源链接与核验边界、视图确实经由 `planCitationWrite` 且 `setDraft` 受 `action === 'write'` 守卫（否则把守卫从视图删掉，纯逻辑测试仍会全绿）。
 
 ### 修复
 
@@ -94,7 +97,7 @@
 - 启动弹窗必填校验：缺失必填字段时给出字段级错误（红色边框、`aria-invalid`、逐字段说明），不写入草稿；需要材料的工作流在弹窗内展示材料添加方式与流程边界。
 - 输入框快捷入口（`conversation.input.left` + `conversation.input.overlay`）：工具行「资源 / 工作流程」两个紧凑按钮，经自定义事件在输入卡片上方打开弹层选择器；工作流面板按科研场景分类筛选、选择后弹出预览确认弹窗（参数填写、Prompt 预览编辑、「使用工作流程」只写草稿不自动发送）；资源面板在全部/数据库/技能间勾选，选择仅记录于当前会话。
 - 数据库附加语义：`composeWorkflow` 新增 `extraDatabaseIds`，勾选的数据库以「研究资源提示」并入 Prompt，并强制携带"未确认当前会话具备访问能力前，不得声称已检索"的边界声明。
-- 槽位注册测试（`test/dsh-slots.test.js`）：以 vm 沙箱执行构建产物，断言工作台、输入框入口与输入浮层三个槽位全部注册且返回统一释放函数。
+- 槽位注册测试（`test/dsh-slots.test.js`）：直接调用注册表，断言工作台视图、输入框入口、输入浮层与草稿增强器四个槽位全部注册且返回统一释放函数；另对构建产物做包含性检查。该测试的 slots 服务是模拟对象，故只能证明「产物能注册槽位」，不能替代真实 profile 验收。
 - `npm test` 现在先重建浏览器产物再运行测试，保证产物与源码同步后才断言。
 - 首批科研工作流目录：22 条人工审核的工作流（论文与手稿 10、文献研究 5、研究设计 1、数据分析 6），每条含参数化 Prompt、防编造边界与"需人工核验"定位；全部中文撰写并适配 DSH `@文件` 约定。
 - 可组合技能指导模块：8 项技能各带 `promptFragment` 纪律片段与 `checklist` 人工检查清单；`composeWorkflow` 支持 `extraSkillIds`，勾选后以「附加指导」并入 Prompt 末尾，未知或非技能 ID 静默忽略。

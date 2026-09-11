@@ -5132,7 +5132,7 @@ window.__ModuleLoader__.load({
     }
 
     // 写入 Prompt 的引用块：保留来源链接与人工核验责任，绝不写成已证实结论。
-    // 4c 才会用到，此处先备好，避免届时在视图里内联拼接导致文案漂移。
+    // 文案集中在此处，视图只负责渲染与调用，避免内联拼接导致两处漂移。
     function formatEvidenceCitations(entries) {
       const rows = Array.isArray(entries) ? entries : []
       if (!rows.length) return ''
@@ -5145,6 +5145,23 @@ window.__ModuleLoader__.load({
         '以下条目来自本地证据库，**尚未经逐条核验**，请打开来源确认后再引用；不得据此直接断言结论：',
         ...lines,
       ].join('\n')
+    }
+
+    // 4c 的写入决策：把「要不要注入、注入什么」做成纯逻辑。
+    // 「未选择不注入」是 ROADMAP §4c 的验收条件，只有把决策变成可断言的返回值，
+    // 才能真的测到「什么都没被注入」——否则它只是渲染层里的一个副作用。
+    // action 的取值即契约：只有 'write' 允许调用宿主 setDraft。
+    function planCitationWrite({ entries, canWrite } = {}) {
+      const rows = Array.isArray(entries) ? entries : []
+      if (!rows.length) {
+        return { action: 'empty', text: '', notice: '请先勾选当前筛选结果中的证据条目。' }
+      }
+      const text = formatEvidenceCitations(rows)
+      if (!canWrite) {
+        // 降级不是静默丢弃：引用块照常给出来，由用户复制粘贴。
+        return { action: 'unsupported', text, notice: '当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。' }
+      }
+      return { action: 'write', text, notice: `已将 ${rows.length} 条已勾选证据写入当前会话输入框。` }
     }
 
 
@@ -5630,8 +5647,11 @@ window.__ModuleLoader__.load({
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
       const selectedEntries = React.useMemo(() => filtered.filter(item => selectedIds.includes(item.id)), [filtered, selectedIds])
-      const citationPreview = React.useMemo(() => formatEvidenceCitations(selectedEntries), [selectedEntries])
       const canWrite = typeof inputActions?.setDraft === 'function'
+      // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
+      // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
+      const writePlan = React.useMemo(() => planCitationWrite({ entries: selectedEntries, canWrite }), [selectedEntries, canWrite])
+      const citationPreview = writePlan.text
       const degraded = store.isDegraded()
 
       const switchProject = value => {
@@ -5641,10 +5661,8 @@ window.__ModuleLoader__.load({
         setSelectedIds([])
       }
       const writeSelected = () => {
-        if (!citationPreview) return setNotice('请先勾选当前筛选结果中的证据条目。')
-        if (!canWrite) return setNotice('当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。')
-        inputActions.setDraft(citationPreview)
-        setNotice(`已将 ${selectedEntries.length} 条已勾选证据写入当前会话输入框。`)
+        if (writePlan.action === 'write') inputActions.setDraft(writePlan.text)
+        setNotice(writePlan.notice)
       }
 
       const createProject = () => {

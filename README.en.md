@@ -188,7 +188,7 @@ The remaining 44 sources are marked `requires-mcp` or `reference-only`, state th
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (128 entries, 128 unique IDs), 116 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
+Verified so far: catalog contract validation (128 entries, 128 unique IDs), 120 regression tests, and two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -197,7 +197,7 @@ Verified so far: catalog contract validation (128 entries, 128 unique IDs), 116 
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic and contract regression tests (116)
+npm test        # pure-logic and contract regression tests (120)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).

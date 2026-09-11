@@ -82,7 +82,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 打开界面才 `ReferenceError`，构建却无报错 | 新模块漏登记 `scripts/build-client.mjs` 的 `files` 白名单。产物只是少了一段代码，`node --check` 查不出来 |
 | CI 报构建产物与源码不同步 | 忘了 `npm run build`，或手改了 `ui/client.js` |
 | `npm run check` 报工件 SHA 不匹配 | `vendor/` 下的文件被改动了。工件是 SHA 锁定快照，**不得手改**；更新需同步 `vendor/vendor-manifest.json` |
-| 测试通过但界面真的坏 | 自动化测试全部是纯逻辑与 vm 沙箱断言，无法覆盖渲染层。请按 [MANUAL-QA.md](docs/MANUAL-QA.md) 在真实 profile 复核 |
+| 测试通过但界面真的坏 | 自动化测试全部是纯逻辑断言与源码/产物文本断言，无法覆盖渲染层。请按 [MANUAL-QA.md](docs/MANUAL-QA.md) 在真实 profile 复核 |
 
 ## 报告问题
 

@@ -117,7 +117,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 116 项测试（16 个测试文件 + helpers 下的 IndexedDB 桩：纯逻辑 + vm 沙箱断言）
+├── test/                            # 120 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -378,7 +378,9 @@ DSH 加载 ui/client.js
 
 **降级不伪装**：宿主不提供 IndexedDB 或 `open` 被拒时，写入退化为页面内存，接口保持 Promise 不变，并通过 `isDegraded()` 在列表上方显式提示「刷新后会丢失」。
 
-**尚未实现（ROADMAP §4c）**：勾选条目后把带来源链接与「仍需逐条核验」边界的引用块写入当前 Prompt。`formatEvidenceCitations()` 纯逻辑已就位并有测试，但**视图中没有任何写入入口**——在 4c 落地前，证据库不会被拼进任何 Prompt，这是有意的顺序：先保证「未选择不注入」成立，再开写入路径。
+**写入 Prompt（ROADMAP §4c，已实现）**：在「证据库」子模块里勾选条目后，面板给出引用块预览，`写入 Prompt（N）` 按钮把该引用块写进当前会话输入框。引用块由 `formatEvidenceCitations()` 生成，逐条带上稳定标识符与来源链接，并以「**尚未经逐条核验**，请打开来源确认后再引用；不得据此直接断言结论」开头——保存不等于认可，写入也不等于采信。
+
+注入与否由纯函数 `planCitationWrite()` 决策，它返回 `empty / unsupported / write` 三态，**只有 `write` 才允许调用宿主 `inputActions.setDraft()`**。因此「未选择不注入」不是渲染层的巧合，而是有专门回归测试守护的契约：未勾选时写入按钮为禁用态、决策返回空文本；宿主未提供输入框操作时按钮同样禁用，但引用块仍照常显示，用户可自行复制粘贴。写入始终是用户显式动作——草稿增强、工作流启动与 Agent 调用都不会静默注入历史证据。
 
 ## 4. 目录数据契约
 

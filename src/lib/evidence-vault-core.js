@@ -205,7 +205,7 @@ export function mergeEntries(existing = [], incoming = []) {
 }
 
 // 写入 Prompt 的引用块：保留来源链接与人工核验责任，绝不写成已证实结论。
-// 4c 才会用到，此处先备好，避免届时在视图里内联拼接导致文案漂移。
+// 文案集中在此处，视图只负责渲染与调用，避免内联拼接导致两处漂移。
 export function formatEvidenceCitations(entries) {
   const rows = Array.isArray(entries) ? entries : []
   if (!rows.length) return ''
@@ -218,4 +218,21 @@ export function formatEvidenceCitations(entries) {
     '以下条目来自本地证据库，**尚未经逐条核验**，请打开来源确认后再引用；不得据此直接断言结论：',
     ...lines,
   ].join('\n')
+}
+
+// 4c 的写入决策：把「要不要注入、注入什么」做成纯逻辑。
+// 「未选择不注入」是 ROADMAP §4c 的验收条件，只有把决策变成可断言的返回值，
+// 才能真的测到「什么都没被注入」——否则它只是渲染层里的一个副作用。
+// action 的取值即契约：只有 'write' 允许调用宿主 setDraft。
+export function planCitationWrite({ entries, canWrite } = {}) {
+  const rows = Array.isArray(entries) ? entries : []
+  if (!rows.length) {
+    return { action: 'empty', text: '', notice: '请先勾选当前筛选结果中的证据条目。' }
+  }
+  const text = formatEvidenceCitations(rows)
+  if (!canWrite) {
+    // 降级不是静默丢弃：引用块照常给出来，由用户复制粘贴。
+    return { action: 'unsupported', text, notice: '当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。' }
+  }
+  return { action: 'write', text, notice: `已将 ${rows.length} 条已勾选证据写入当前会话输入框。` }
 }

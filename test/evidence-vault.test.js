@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   detectIdentifier, normalizeEvidenceEntry, normalizeTags, statusCounts, filterEvidence,
-  formatEvidenceCitations, EVIDENCE_STATUSES,
+  formatEvidenceCitations, planCitationWrite, EVIDENCE_STATUSES,
   dedupeKey, findDuplicate, serializeEvidenceBackup, parseEvidenceBackup, mergeEntries,
 } from '../src/lib/evidence-vault-core.js'
 import { createEvidenceVaultStore } from '../src/evidence-vault-store.js'
@@ -317,4 +318,53 @@ test('备份恢复不覆盖已有笔记（恢复是补齐，不是回滚）', ()
   const merged = mergeEntries(existing, incoming)
   assert.equal(merged.added, 0)
   assert.equal(merged.rows[0].note, '恢复之后写的新笔记')
+})
+
+// ── 4c 勾选写入 Prompt ────────────────────────────────────────
+//
+// ROADMAP §4c 的验收第一条就是「未选择不注入」。这条不变式原先只存在于视图
+// writeSelected 的提前 return 里，纯逻辑测试测不到「什么都没被注入」；把决策提为
+// planCitationWrite 之后，它才成为一个可断言的返回值。
+
+test('4c 未选择不注入：空选择一律不产出可注入文本', () => {
+  for (const entries of [[], null, undefined, 'not-an-array', 0]) {
+    const plan = planCitationWrite({ entries, canWrite: true })
+    assert.equal(plan.action, 'empty', `entries=${JSON.stringify(entries)} 时不得给出写入动作`)
+    assert.equal(plan.text, '', `entries=${JSON.stringify(entries)} 时不得产出可注入文本`)
+    assert.match(plan.notice, /勾选/, '空选择应提示先勾选，而不是静默无反应')
+  }
+  // 无参调用也必须落到空选择分支，不能抛错（视图可能拿到尚未初始化的选择）。
+  assert.equal(planCitationWrite().action, 'empty')
+})
+
+test('4c 宿主不支持写入时不注入，但引用块仍给出来供手工复制', () => {
+  const entry = normalizeEvidenceEntry({ title: '某队列研究', url: 'https://c.org/9', identifier: '10.1000/nine' })
+  const plan = planCitationWrite({ entries: [entry], canWrite: false })
+  assert.equal(plan.action, 'unsupported', '宿主无 setDraft 时不得走写入动作')
+  assert.match(plan.text, /https:\/\/c\.org\/9/, '降级不是丢弃：引用块仍要能被复制')
+  assert.match(plan.notice, /复制/)
+})
+
+test('4c 有选择时可写入，且文本含来源与核验边界', () => {
+  const rows = [
+    normalizeEvidenceEntry({ title: '甲研究', url: 'https://a.org/1', identifier: '10.1000/one' }),
+    normalizeEvidenceEntry({ title: '乙研究', url: 'https://b.org/2', identifier: '10.1000/two' }),
+  ]
+  const plan = planCitationWrite({ entries: rows, canWrite: true })
+  assert.equal(plan.action, 'write', '有选择且宿主可用时必须给出写入动作')
+  assert.match(plan.notice, /2 条/, '提示语要报出实际条数，便于用户核对注入了几条')
+  assert.match(plan.text, /尚未经逐条核验/)
+  assert.match(plan.text, /不得据此直接断言结论/)
+  for (const row of rows) assert.ok(plan.text.includes(row.url), `「${row.title}」的来源链接必须出现在引用块里`)
+})
+
+test('4c 写入契约：视图经由纯逻辑决策，且 setDraft 只在 action === write 时被调用', () => {
+  // 纯逻辑测试只证明决策本身对，还要钉住视图真的走了这条决策——
+  // 否则把守卫从视图里删掉，上面的测试仍会全绿（同「目录与实现双向契约」那一课的教训）。
+  const view = readFileSync(new URL('../src/research-evidence-vault.js', import.meta.url), 'utf8')
+  assert.match(view, /planCitationWrite\(\{\s*entries:\s*selectedEntries,\s*canWrite\s*\}\)/, '视图未把写入决策交给 planCitationWrite')
+  assert.match(view, /if \(writePlan\.action === 'write'\)\s*inputActions\.setDraft\(writePlan\.text\)/, "setDraft 未被 action === 'write' 守住")
+  assert.match(view, /disabled:\s*!selectedEntries\.length \|\| !canWrite/, '写入按钮在未选择或宿主不支持时未禁用')
+  // 视图不得绕过决策内联调用宿主写入：全文件只允许一处 setDraft(。
+  assert.equal((view.match(/setDraft\(/g) || []).length, 1, '视图只应有一处 setDraft 调用，且受 action 守卫')
 })

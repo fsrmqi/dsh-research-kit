@@ -188,7 +188,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（128 项、128 唯一 ID）、116 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
+已通过的验证：目录契约校验（128 项、128 唯一 ID）、120 项回归测试、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过）。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -197,7 +197,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑与契约回归测试（116 项）
+npm test        # 纯逻辑与契约回归测试（120 项）
 ```
 
 改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。
