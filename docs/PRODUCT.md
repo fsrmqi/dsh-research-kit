@@ -125,8 +125,8 @@ type Workflow = BaseItem & {
 type ResearchSkill = BaseItem & {
   type: 'skill'
   guidance: string
-  promptFragment?: string   // 勾选后以「附加指导」并入 Prompt 末尾
-  checklist?: string[]      // 面向用户的人工检查清单
+  promptFragment?: string   // 勾选后以「附加指导」并入 Prompt 末尾；requires-host-capability 条目不得携带
+  checklist?: string[]      // 指导模块=人工检查清单；需宿主能力=使用前提核验清单
   availability: 'prompt-guidance' | 'requires-host-capability'
 }
 

@@ -51,19 +51,19 @@ npm run build && npm run check && npm test && node --check ui/client.js
 3. Prompt 中的每个 `{placeholder}` 必须在 `placeholders` 中声明，反之亦然；
 4. Prompt 必须包含防编造 / 待核验边界（校验器和测试会强制检查）；
 5. 需要用户材料时设置 `requiresFiles: true`，并提示使用 DSH 原生 `@文件`；
-6. `suggestedSkillIds` 只引用已存在的技能 ID；
+6. `suggestedSkillIds` 只引用已存在的技能 ID；引用需宿主能力条目（`requires-host-capability`）时，相关资源列表会展示其前提说明，但不会并入 Prompt 片段；
 7. 运行 `npm run check && npm test`，全部通过后再提交。
 
 每条工作流至少做一次人工走查：确认模型不会被 Prompt 引导为虚构事实、过度承诺或遗漏不确定性。
 
 ## 新增技能
 
-技能是可组合的指导模块，不是可执行代码。除公共字段外需要：
+技能分两类——**指导模块**（提示词指导）与**能力目录**（需宿主能力）——都不含可执行代码、不假装可用。除公共字段外需要：
 
-- 落位：写入 `catalog/skills/` 下按稳定用途划分的分片（core / crop-breeding / bioinformatics），新分片须在 `catalog/skills/index.js` 登记；
-- `promptFragment`：一段纪律性指导（≥10 字符），启动工作流勾选后并入 Prompt（写入 Prompt，不是自动执行）；
-- `checklist`：面向用户的人工检查清单（≥3 条）；
-- `availability`：当前只允许保守值 `prompt-guidance`；`requires-host-capability` 会失去附加能力。
+- 落位：写入 `catalog/skills/` 下按稳定用途划分的分片（core / crop-breeding / bioinformatics / host-capabilities），新分片须在 `catalog/skills/index.js` 登记；
+- **指导模块（`availability: "prompt-guidance"`）**：`promptFragment` 为一段纪律性指导（≥10 字符），启动工作流勾选后并入 Prompt（写入 Prompt，不是自动执行）；`checklist` 为面向用户的人工检查清单（≥3 条）；
+- **能力目录（`availability: "requires-host-capability"`）**：面向依赖执行侧（Bash/Python 工具链、MCP、API Key、集群算力、自托管实例）的技能的如实说明。**不得携带 `promptFragment`**（校验器强制拒绝）；`guidance` 须写明宿主前提、工具链与数据外发边界（≥20 字符）；`checklist` 为使用前提核验清单（≥3 条）。会话具备相应能力时可让 Agent 参照执行——插件本身不注入提示词、不代为执行；
+- `id` 全目录唯一，与既有工作流撞名时改技能 ID（先例：`literature-review` → `systematic-literature-review`）。
 
 ## 新增数据源
 
