@@ -4,7 +4,7 @@
 [![CI](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-blue.svg)](https://github.com/topics/dsh-plugin)
 [![Node: >=22.6](https://img.shields.io/badge/node-%3E%3D22.6-green.svg)](https://nodejs.org)
-[![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/fsrmqi/dsh-promptkit)
+[![Listed on DSH Hub](https://img.shields.io/badge/DSH%20plugin-listed-2ea44f.svg?labelColor=3d4451)](https://dshhub.org/plugins/fsrmqi/dsh-research-kit)
 
 [English](README.en.md) · [简体中文](README.md)
 
@@ -84,15 +84,19 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 
 ![The research loop across four sections: discover, construct, deposit, evidence](docs/assets/research-loop.svg)
 
+**⏱ Assembly replay: see how the prompt was put together**
+After you launch a workflow, the workbench replays the **actual assembly facts** from `composeWorkflow` segment by segment — workflow → parameters → attached skills → database boundaries → human verification — and every segment can be located as an anchor in the generated prompt text, so the replay and the prose corroborate each other. A compact replay is embedded in the detail pane; "Open replay window" launches the standalone archify interactive viewer (four visual presets, chapter narrative, semantic lens, radar overview). The replay shows **assembly actions that already happened** — it predicts no execution result and means no tool was run. Under `prefers-reduced-motion` it degrades to a static view.
+
 <details>
 <summary><strong>More capabilities</strong> (click to expand)</summary>
 
-- **Science mode presets** — one-click domain presets: **Genetics** (attaches 6 skills; the preamble adds ACMG/AMP interpretation rules, omics filtering accountability, association≠causation, cross-species caveats), **Clinical cohort** (de-identified data only, mandatory "research draft — not for clinical use" framing, bias discussion), **General research**. Presets are guidance bundles, not capability switches — nothing auto-executes.
+- **Science mode presets** — one-click bundles: **General research, Literature & papers, Bioinformatics, Crop breeding, Clinical & population research, Data analysis & visualization**. Each attaches a matching skill set and research discipline (pipeline versioning and QC traceability, agricultural trials and G×E boundaries, privacy and bias, statistical prerequisites and chart interpretability, and so on). Presets are guidance bundles, not capability switches — nothing auto-executes.
 - **Composer quick entry** — "Resources / Workflows" buttons on the composer toolbar open an overlay picker without leaving the chat; a selected workflow goes through a preview dialog and writes the draft. **It never auto-sends.**
 - **Draft enhancer** — one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original.
 - **Favorites & history** — one-click star on any entry; successful write/send/copy is recorded locally (ID, name, first-line summary, timestamp; 20 entries max).
 - **Evidence vault** — save individual results from public database lookups, each carrying a stable identifier (DOI / PMID / NCT / arXiv) and source link, defaulting to "unverified"; project-isolated de-duplication, JSON export/import and hard delete. **Only source metadata and notes you write are stored — no full text, no query terms, and nothing is saved automatically.**
 - **Evidence graph** — traces relations among this session's resources, workflows, query sources, assets and **saved evidence**; evidence nodes carry only source database / stable identifier / verification status, **never notes or query terms**; arrows show relation direction, with anchors chosen from the two endpoints' actual positions rather than a fixed "always left-to-right". Deterministic layered layout with Ctrl / ⌘ wheel zoom, drag panning and reset, a minimap for quick navigation, and four range modes (focus / upstream / downstream / two-point path); you can copy a link that carries view state only, and export desensitized SVG / HTML snapshots (the metadata scope is stated before each export).
+- **Research-result explainer diagrams** — a built-in "research result explainer diagram" workflow turns findings into diagram IR, which `scripts/render-diagrams.mjs --html` renders **deterministically** into single-file interactive HTML (shareable and opens offline); `--from-files` scaffolds IR from files produced in a session. `scripts/validate-diagrams.mjs` gives machine-readable rule diagnostics and is part of `npm run check` (no IR files ship in the repo, so it takes effect when an IR is produced or reviewed).
 - **Multiple prompt exits** — beyond write-to-composer and send, "Copy prompt" works even when host actions are missing.
 - **Launch-time validation** — field-level errors (red border + message) inside the preview dialog; missing required parameters never write the draft.
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
@@ -104,7 +108,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 
 ## Installation
 
-Requires Node `>= 22.6` and a DSH web profile providing the `conversation.view`, `conversation.input.left` and `conversation.input.overlay` slots.
+Requires Node `>= 22.6` and a DSH web profile providing four slots: `conversation.view`, `conversation.input.left`, `conversation.input.overlay` and `conversation.input.right` (the unified view, the composer's left entry, the overlay picker, and the draft enhancer on the composer's right).
 
 **Local directory (currently recommended; not published to npm)**
 
@@ -140,7 +144,7 @@ Two entrances, one set of catalog assets.
 1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 525 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
-4. Toggle skill guidance as needed — the preview updates live;
+4. Toggle skill guidance as needed — the preview updates live; expand the **assembly replay** in the detail pane to verify segment by segment how the prompt was assembled;
 5. "Write to composer" keeps the draft editable, or "Send to session" submits it.
 
 **Option B: composer quick entry**
@@ -210,7 +214,7 @@ The remaining 111 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (525 entries, 525 unique IDs, shards identical to the aggregated entries), 168 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (525 entries, 525 unique IDs, shards identical to the aggregated entries), 173 regression tests in 20 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -219,7 +223,8 @@ Verified so far: catalog contract validation (525 entries, 525 unique IDs, shard
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (152)
+npm test        # pure-logic, contract and render-level regression tests (173 / 20 files)
+npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 
 After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).

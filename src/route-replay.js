@@ -7,7 +7,7 @@
 // - prefers-reduced-motion 或读者切「静态」：整条点亮、序号标注、零动画声明。
 
 import { h, C } from './theme.js'
-import { buildArchifySvg, archifyApplyTemplate } from './lib/archify-adapter.js'
+import { buildArchifySvg, archifyApplyTemplate, archifyLayoutRow } from './lib/archify-adapter.js'
 
 const STEP_MS = 620
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
@@ -186,13 +186,12 @@ export function openReplayWindow(trace, title) {
   const template = typeof window !== 'undefined' ? window.__ARCHIFY_VIEWER_TEMPLATE__ : null
   if (!template) { alert('回放模板未就绪；请重新构建产物（npm run build）。'); return }
   const steps = (trace || [])
-  const nodes = steps.map((step, i) => ({
+  const nodes = archifyLayoutRow(steps.map((step, i) => ({
     id: step.id || `s${i}`,
     kind: step.step === 'guard' ? 'boundary' : step.step === 'workflow' ? 'workflow' : step.step,
     label: step.label,
     note: step.detail,
-    x: 40 + i * 196, y: 60,
-  }))
+  })), { y: 60, gap: 48 })
   const edges = []
   for (let i = 1; i < nodes.length; i++) edges.push({ id: `e${i}`, from: nodes[i - 1].id, to: nodes[i].id })
   const svg = buildArchifySvg({

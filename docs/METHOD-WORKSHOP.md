@@ -31,6 +31,7 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 | 文件 | 职责 |
 | --- | --- |
 | `vendor/promptkit-embed.js` | 方法工坊界面的自包含浏览器工件（SHA-256 锁定，勿手改） |
+| `vendor/archify/template.html` + `i18n.mjs` | 组装回放弹窗与解释图共用的交互 viewer 工件（SHA-256 锁定，勿手改；见 §3） |
 | `vendor/vendor-manifest.json` | 工件的来源 commit 与校验和清单 |
 | `scripts/check-vendor.mjs` | 工件一致性校验（`npm run check` 首步） |
 | `dsh/prompt-studio-glue.js` | 方法工坊的 DSH 宿主装配（provider 实例化 + `.rk-studio-host` 锚点） |
@@ -44,6 +45,8 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 | `scripts/build-client.mjs` | 把 vendored 工件与自有模块拼接为 `ui/client.js`（含工件内旧路径改写） |
 
 ## 3. vendored 工件：为什么要它、怎么维护
+
+> **本仓库现有 3 个 vendored 工件**：`vendor/promptkit-embed.js`、`vendor/archify/template.html`、`vendor/archify/i18n.mjs`。清单与校验方式见 `vendor/vendor-manifest.json` 与 [NOTICE](../NOTICE)，三者由 `scripts/check-vendor.mjs` 统一校验。本节详述其中与方法工坊直接相关的 promptkit 工件；archify 两个工件服务于工作台的组装回放与解释图，锁定与升级规则完全相同。
 
 方法工坊的界面来自另一个 MIT 项目 [dsh-promptkit](https://github.com/fsrmqi/dsh-promptkit)。本仓库不把它作为运行时依赖，而是**把构建好的自包含工件快照进 `vendor/`**，使安装 dsh-research-kit 的用户无需另外安装 dsh-promptkit。
 
@@ -170,7 +173,7 @@ export const inject = ['webServer', 'web', 'llm', 'sessions']
 
 ## 10. 已知风险
 
-- `vendor/promptkit-embed.js` 是生成工件，体积约 640 KB，会进入 bundle；引入新功能前先比较加载体积与 DSH 首屏时间。
+- 构建产物 `ui/client.js` 现为 **2.3 MB**（2,396,255 B），其中 vendored 工件约占 1.36 MB：promptkit 工件 637 KiB + archify 模板 756 KiB（后者整段作为字符串注入，供浏览器侧组装解释图 HTML）。引入新功能前先比较加载体积与 DSH 首屏时间。
 - 工件的全局 CSS 与 `--pk-*` 变量可能与宿主或本仓库的 `--rk-*` 相互影响，改动视觉层时需在真实宿主复核。
 - 两个入口可能同时监听键盘、外部点击与 `storage` 事件；所有新事件必须命名空间化。
 - DSH 的 slot props 与模型路由随版本变化，真实 profile 验证不可省略。

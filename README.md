@@ -4,7 +4,7 @@
 [![CI](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-blue.svg)](https://github.com/topics/dsh-plugin)
 [![Node: >=22.6](https://img.shields.io/badge/node-%3E%3D22.6-green.svg)](https://nodejs.org)
-[![Listed on dsh-plugin.org](https://dsh-plugin.org/badges/listed.svg)](https://dsh-plugin.org/plugins/fsrmqi/dsh-promptkit)
+[![Listed on DSH Hub](https://img.shields.io/badge/DSH%20plugin-listed-2ea44f.svg?labelColor=3d4451)](https://dshhub.org/plugins/fsrmqi/dsh-research-kit)
 
 [简体中文](README.md) · [English](README.en.md)
 
@@ -84,6 +84,9 @@ Research Kit 把这四点做成可复用的资产。
 
 ![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](docs/assets/research-loop.svg)
 
+**⏱ 组装回放：把 Prompt 是怎么拼出来的放给你看**
+启动工作流后，工作台把 `composeWorkflow` 的**真实组装事实**逐段回放——工作流 → 参数 → 附加技能 → 数据源边界 → 人工核验；每一段都能在生成的 Prompt 文本中定位到对应锚点，回放与正文互相印证。详情栏内嵌紧凑回放，「弹出回放窗口」打开独立的 archify 交互 viewer（四种视觉预设、章节叙事、语义透镜、雷达总览）。回放只呈现**已经发生的组装动作**，不预测执行结果，也不代表 Agent 已执行任何工具；`prefers-reduced-motion` 时降级为静态。
+
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
 
@@ -93,6 +96,7 @@ Research Kit 把这四点做成可复用的资产。
 - **收藏与使用历史** — 列表条目一键星标；成功写入/发送/复制自动记入历史（本地仅存 ID、名称、首行摘要与时间，最多 20 条）。
 - **研究证据库** — 公开数据源查询结果可逐条「保存到证据库」，条目带稳定标识符（DOI / PMID / NCT / arXiv）与来源链接，默认「未核验」；按项目隔离去重，可导出 / 导入 JSON 与彻底删除。**只保存来源元数据与你写下的笔记，不保存全文与检索词，也不自动入库。**
 - **研究证据图谱** — 把本会话的资源、工作流、查询来源、灵感资产与**已保存证据**连成可追溯关系；证据节点只带来源库 / 稳定标识符 / 核验状态，**不展示笔记或检索词**；箭头表示关系方向，逆向关系按两端实际位置取锚点而非固定「左进右出」。确定性分层布局，支持 Ctrl / ⌘ 滚轮缩放、拖拽平移与复位，迷你地图快速跳转，聚焦 / 上游 / 下游 / 两点路径四种范围模式；可复制只含视图状态的链接，可导出脱敏 SVG / HTML 快照（导出前明确提示元数据范围）。
+- **研究结果解释图** — 目录内置「研究结果解释图生成」工作流：把研究结果整理成 diagram IR，再由 `scripts/render-diagrams.mjs --html` **确定性**产出单文件交互 HTML（可直接分享、离线打开），`--from-files` 可从会话产出文件生成 IR 脚手架；`scripts/validate-diagrams.mjs` 提供机器可读的规则诊断并已进入 `npm run check`（仓库内不预置 IR 文件，该校验在产出 / 审阅 IR 时生效）。
 - **多种 Prompt 出口** — 写入输入框、发送到会话之外，还有「复制 Prompt」兜底：宿主动作缺失时也能把提示词带去任意会话。
 - **启动前必填校验** — 预览弹窗内字段级错误提示（红框 + 说明）；缺失必填项不会写入草稿。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
@@ -104,7 +108,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.6`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` 槽位的 DSH Web profile。
+要求 Node `>= 22.6`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -140,7 +144,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 1. 在会话中打开「科研工作台」，默认落在「资源与工作流」，搜索或按类型筛选 525 项资源；
 2. 选择工作流，查看目的、所需材料与使用限制；
 3. 填写参数；需要材料的工作流请先在 DSH 输入框用 `@文件` 引用文件；
-4. 按需勾选「附加技能指导」，预览实时更新；
+4. 按需勾选「附加技能指导」，预览实时更新；详情栏可展开**组装回放**，逐段核对 Prompt 是怎么拼出来的；
 5. 点「写入输入框」保留再次编辑的机会，或「发送到当前会话」直接执行。
 
 **方式二：输入框快捷入口**
@@ -210,7 +214,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（525 项、525 唯一 ID，分片与聚合入口逐条一致）、168 项回归测试（含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
+已通过的验证：目录契约校验（525 项、525 唯一 ID，分片与聚合入口逐条一致）、173 项回归测试（20 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -219,7 +223,8 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（152 项）
+npm test        # 纯逻辑、契约与渲染级回归测试（173 项 / 20 个测试文件）
+npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 
 改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。

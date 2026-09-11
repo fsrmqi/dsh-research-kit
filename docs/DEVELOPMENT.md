@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、构建产物、分区契约与 DSH 槽位注册测试（152 项）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（173 项 / 20 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -36,7 +36,7 @@ npm run test:browser            # 加载生成产物，执行真实浏览器交�
 npm run build && npm run check && npm test && node --check ui/client.js
 ```
 
-> **新增源码模块必须登记两处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）与 `package.json` 的 `check` 脚本（逐文件 `node --check`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。
+> **新增源码模块必须登记两处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）与 `package.json` 的 `check` 脚本（逐文件 `node --check`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。两条规则互为补集：`files` 管「有没有拼进产物」，`check` 管「单文件语法是否成立」——**当前 `files` 中每个项目模块都已列入 `check`**（含 `src/catalog-category-filter.js`、`src/lib/archify-adapter.js`）。
 
 > **顶层符号名必须全局唯一，且每次改完源码都要重新 `npm run build`。** 所有模块被拼进同一个函数作用域，因此两个文件各写一个 `const sessions` 会让整个产物 `SyntaxError: Identifier 'sessions' has already been declared`——而这个错误只在**重新构建**时才出现：不 build 就跑 `npm run check`，检查的仍是旧产物，会一直显示为通过。**重名 `function` 比重名 `const` 更阴险**：声明合法、后者静默覆盖前者，产物照样通过 `node --check`，只在运行到调用点才炸（实测：`research-selection-store.js` 与 `evidence-store.js` 各有一个 `stateFor`，形状不同，覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏）。现已由构建期的 `assertUniqueTopLevelSymbols` 硬失败并报出 `文件:行`，不必靠记忆；函数重名按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。
 
@@ -46,7 +46,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 | 项目 | 状态 | 位置 |
 | --- | --- | --- |
-| 目录数据（65 工作流 + 8 技能 + 55 数据源） | 已完成并过契约校验 | `catalog/*.json` |
+| 目录数据（317 工作流 + 86 技能 + 122 数据源，共 525 项） | 已完成并过契约校验 | `catalog/{workflows,skills,resources}/`（分片 + 各自 `index.js` 聚合入口） |
 | 本地搜索与占位符替换 | 已实现（搜索覆盖正文） | `src/catalog.js` |
 | 必填字段阻止发送 | 已实现（工作台与弹窗双处） | `composeWorkflow()` |
 | 附加技能/数据库模块 | 已实现（`extraSkillIds`/`extraDatabaseIds`） | `src/catalog.js` |
@@ -62,10 +62,13 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 证据库持久化 / 项目隔离 / 去重 / 备份（跨刷新以最小 IndexedDB 桩断言） | 已实现 | `test/evidence-vault.test.js` + `test/helpers/fake-indexeddb.js` |
 | 证据库写入决策（未选择不注入 / 宿主不支持时降级 / 选择基准） | 已实现（纯逻辑 + 视图接线契约） | `test/evidence-vault.test.js` 的 4c 段 |
 | 证据图谱节点与边（含已保存证据接入、布局稳定性、端口路由、邻域/路径、URL 视图状态、不暴露笔记） | 已实现 | `test/evidence-graph.test.js` |
+| 组装回放（分区① 内嵌紧凑回放 + 独立 viewer 弹窗） | 已实现 | `src/route-replay.js` + `src/lib/archify-adapter.js` + `test/route-replay.test.js` |
+| 研究结果解释图（diagram IR → 单文件交互 HTML） | 已实现（工具链；仓库内不预置 IR 文件） | `scripts/render-diagrams.mjs` + `scripts/validate-diagrams.mjs` |
+| 浏览器级交互回归（真实 Chromium，加载构建产物） | 已实现 | `scripts/browser-regression.cjs` + `npm run test:browser` |
 | 宿主动作缺失的渲染级降级断言（禁用态 / 提示文案 / 不抛错 / 接线契约） | 已实现（真实 react-dom/server，无 jsdom） | `test/render-smoke.test.js` + `test/helpers/dom-stub.js` |
 | 浏览器 ModuleLoader 构建 | 已实现（CI 校验可复现） | `scripts/build-client.mjs` |
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
-| 浏览器级交互测试（点击 / 事件 / useLayoutEffect） | 未完成——渲染级已覆盖初始状态（react-dom/server），交互级仍需真实 DOM 事件运行时 | 见 [ROADMAP §1](../ROADMAP.md) |
+| 宿主动作缺失降级的**交互级**断言（点击后不写入、不发送） | 未完成——渲染级已覆盖初始状态（react-dom/server），「点击」路径还需一个能构造缺失 `inputActions` 的真实 DOM 事件运行时（jsdom 或等价 harness） | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
 
 ## 3. 实现里程碑
@@ -100,7 +103,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 152 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 173 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
@@ -171,10 +174,11 @@ type InputActions = {
 
 当前分层（2026-09-11 起）：
 
-1. **纯逻辑测试**：领域决策（布局、路由、邻域/路径、`planCitationWrite` 等）直接断言输入输出；
+1. **纯逻辑测试**：领域决策（布局、路由、邻域/路径、`planCitationWrite`、组装回放的 trace 与 archify `data-*` 适配契约等）直接断言输入输出；
 2. **渲染级降级测试**（`test/render-smoke.test.js`）：用真实 `react-dom/server` 渲染初始状态，断言宿主动作缺失时按钮真的带 `disabled`、降级文案真的存在、视图不抛错——**不引入 jsdom**，靠 `test/helpers/dom-stub.js` 补齐 window/localStorage 等 SSR 缺失面。边界（不掩饰）：SSR 不执行事件，所以「点击后是否真的不写入」在这里测不到，由源码接线断言钉住调用关系；
 3. **源码/产物文本断言**：接线契约（守卫必须存在）与构建产物一致性；
-4. **真实 profile 烟测**：props 形状、槽位注册与交互，见 `docs/MANUAL-QA.md`。
+4. **浏览器级交互回归**（`scripts/browser-regression.cjs`，`npm run test:browser`）：真实 Chromium 加载构建产物并挂载四槽位，覆盖资源分类筛选与恢复、弹层分类、收藏与详情、科研模式与手动编辑共存、数据库切换清空结果、窄屏横向溢出；宿主写入/发送用测试替身，不调外部服务；
+5. **真实 profile 烟测**：props 形状、槽位注册与交互，见 `docs/MANUAL-QA.md`。
 
 ### 5.1 单元测试
 

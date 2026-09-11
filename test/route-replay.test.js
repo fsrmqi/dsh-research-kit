@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { traceSegments, buildReplaySvgMarkup } from '../src/route-replay.js'
-import { buildArchifySvg, archifyApplyTemplate } from '../src/lib/archify-adapter.js'
+import { buildArchifySvg, archifyApplyTemplate, archifyNodeSize, archifyLayoutRow } from '../src/lib/archify-adapter.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -92,4 +92,41 @@ test('archify 适配：模板槽位全部替换且注入转义', () => {
   assert.match(html, /archify-guided-views-data/)
   assert.match(html, /只回放真实的组装事实/)
   assert.ok(!html.includes('<script>alert(1)</script>'), '恶意 label 必须被转义')
+})
+
+test('archify 适配：注入运行时 i18n 目录（否则工具栏显示原始 key）', () => {
+  const template = readFileSync(join(root, 'vendor', 'archify', 'template.html'), 'utf8')
+  const svg = buildArchifySvg({ nodes: [{ id: 'a', kind: 'workflow', label: '审阅论文', x: 40, y: 60 }], edges: [], title: 't', locale: 'zh-CN', preset: 'classic', animation: 'trace', metrics: {} })
+  const html = archifyApplyTemplate({ template, title: 't', subtitle: 's', svg, cards: [], locale: 'zh-CN', visualPreset: 'classic', guidedViews: [] })
+  assert.match(html, /"messages":\{/, '缺少运行时文案目录')
+  assert.match(html, /"viewer\.theme\.dark":"深色"/, '运行时文案必须是中文而非原始 key')
+  assert.match(html, /"viewer\.guided\.playStory":"播放故事"/, '章节文案缺失')
+})
+
+test('archify 适配：节点按内容自适应，标签与说明互不重叠且不越出盒子', () => {
+  const rich = archifyNodeSize({ kind: 'skill', label: '科学写作', note: '写作纪律：使用克制、正式的学术表达' })
+  const plain = archifyNodeSize({ kind: 'params', label: '重点审查方向' })
+  assert.ok(rich.h > plain.h, '带说明的节点应高于纯标签节点')
+  const node = { id: 'a', kind: 'skill', label: '科学写作', note: '写作纪律：使用克制、正式的学术表达', x: 40, y: 60 }
+  const svg = buildArchifySvg({ nodes: [node], edges: [], title: 't', metrics: {} })
+  const box = /<rect x="40" y="60" width="(\d+)" height="(\d+)"/.exec(svg)
+  const height = Number(box[2])
+  const labelY = Number(/<text data-node-label=""[^>]*y="(\d+)"/.exec(svg)[1])
+  const noteY = Number(/<text data-detail="context"[^>]*y="(\d+)"/.exec(svg)[1])
+  assert.ok(noteY > labelY + 8, `说明行应在标签行之下（label ${labelY} / note ${noteY}）`)
+  const ys = [...svg.matchAll(/<text[^>]*\sy="(\d+)"/g)].map(m => Number(m[1]))
+  assert.ok(Math.max(...ys) <= 60 + height - 4, '文字不得越出节点盒底边')
+})
+
+test('archify 适配：行布局按实际宽度排布且不重叠', () => {
+  const placed = archifyLayoutRow([
+    { id: 'a', kind: 'workflow', label: '审阅论文' },
+    { id: 'b', kind: 'skill', label: '科学写作', note: '写作纪律：使用克制、正式的学术表达' },
+    { id: 'c', kind: 'boundary', label: '科研边界' },
+  ], { y: 60, gap: 48 })
+  for (let i = 1; i < placed.length; i++) {
+    const prev = placed[i - 1]
+    const prevRight = prev.x + archifyNodeSize(prev).w
+    assert.ok(placed[i].x >= prevRight + 48 - 1, `节点 ${i} 与前一个重叠`)
+  }
 })

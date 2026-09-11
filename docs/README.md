@@ -13,6 +13,7 @@
 | 搭本地开发环境、跑测试 | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | 搞懂模块职责、数据流、目录 schema | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | 改方法工坊或草稿增强器 | [METHOD-WORKSHOP.md](METHOD-WORKSHOP.md) |
+| 做或校验研究结果解释图（diagram IR） | [ARCHITECTURE.md](ARCHITECTURE.md) §7 · `scripts/render-diagrams.mjs` · `scripts/validate-diagrams.mjs` |
 | 确认改动没把界面改坏 | [MANUAL-QA.md](MANUAL-QA.md) |
 | 知道第三方归属与许可 | [../NOTICE](../NOTICE) |
 | 知道接下来打算做什么 | [../ROADMAP.md](../ROADMAP.md) |
@@ -49,10 +50,12 @@
 
 改图时的三条要求：**①** 保持手写 SVG，不引入构建步骤——`ui/client.js` 之外的产物越多，维护面越大；**②** 图里不写会随内容增长的统计数字（条目数、数据源数、直查来源数），一律改用无数量的措辞——图是随仓库分发的静态文件，写死数字后每加一条资源就要回来改图，实际已因此漂移（`architecture.svg` 曾停在 128 项，而当时真实值已是 441 项）。**设计与结构性数字不受此限**（四个分区、五个步骤、两条受控路由），它们描述的是设计不变量，不随目录增长而变；统计数字只写在能被校验的文本文档里（README / PRODUCT / ARCHITECTURE），且必须与实测一致；**③** 改完在真实浏览器里渲染核对一遍排版，确认无文字溢出、无元素重叠——手写坐标最容易在这里出错。
 
+> 别把本节与**交互解释图**混为一谈：本节说的是随仓库分发的**静态**展示图（手写 SVG）。交互解释图是运行期产出物——由 `scripts/render-diagrams.mjs` 从 diagram IR **确定性**生成单文件 HTML（内置 archify viewer 的视觉预设、章节叙事、语义透镜），由用户按需产出与分享，**不进仓库**，因此也不受上述三条约束。工具链与门禁说明见 [ARCHITECTURE.md](ARCHITECTURE.md) §7。
+
 ## 三条最重要的约束
 
 无论你读哪份文档，这三条都是前提：
 
 1. **`ui/client.js` 是构建产物，不得手改。** 改源码后必须 `npm run build` 并提交产物，CI 会校验一致性。
-2. **`vendor/promptkit-embed.js` 是 SHA 锁定的工件，不得手改。** 改动会导致 `npm run check` 失败。
-3. **自动化测试无法替代真实 profile 验收。** 仓库内 152 项测试覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。
+2. **`vendor/` 下的工件均为 SHA 锁定快照，不得手改。** 当前 3 个（`promptkit-embed.js`、`archify/template.html`、`archify/i18n.mjs`），清单与校验方式见 `vendor/vendor-manifest.json` 与 [NOTICE](../NOTICE)；改动任何一个都会让 `npm run check` 失败。
+3. **自动化测试无法替代真实 profile 验收。** 仓库内 173 项测试（20 个测试文件）覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。

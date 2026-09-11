@@ -236,3 +236,56 @@ export function planCitationWrite({ entries, canWrite } = {}) {
   }
   return { action: 'write', text, notice: `已将 ${rows.length} 条已勾选证据写入当前会话输入框。` }
 }
+
+// ── 证据库 → 解释图（研究路线可视化）的素材包 ──────────────────────────────────
+// 把（通常已核验的）证据条目转成 render-diagrams --evidence 可消费的卡片数据。
+// 与图谱同一隐私边界：只携带稳定标识符与公开链接，不携带检索词、Prompt 正文或全文。
+export const EXPLAIN_PACK_FORMAT = 'dsh-research-kit/evidence-explain-pack'
+
+export function buildEvidenceExplainPack(entries, project = '') {
+  const rows = (Array.isArray(entries) ? entries : []).map(entry => ({
+    title: clampText(entry.title, MAX_EVIDENCE_TITLE_CHARS),
+    identifier: clampText(entry.identifier, 120),
+    identifierKind: EVIDENCE_IDENTIFIER_LABELS[entry.identifierKind] ? entry.identifierKind : 'none',
+    url: safeUrl(entry.url),
+    sourceDatabase: clampText(entry.sourceDatabase, 120),
+    status: EVIDENCE_STATUSES.includes(entry.status) ? entry.status : 'unverified',
+    note: clampText(entry.note, MAX_EVIDENCE_NOTE_CHARS),
+    tags: normalizeTags(entry.tags),
+  }))
+  return {
+    format: EXPLAIN_PACK_FORMAT,
+    version: 1,
+    project: clampText(project, 120) || '',
+    entries: rows,
+  }
+}
+
+// 解释图「证据库来源」卡片：按标识符去重、逐条标注核验状态；
+// 全部已核验时卡片标题升级为「已核验证据 · 证据库」，否则如实显示混合状态。
+export function evidenceExplainCard(entries) {
+  const seen = new Set()
+  const rows = []
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || !entry.title) continue
+    const key = `${entry.identifier || ''}|${entry.url || ''}|${entry.title}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push(entry)
+  }
+  if (!rows.length) return null
+  const allVerified = rows.every(entry => entry.status === 'verified')
+  const items = rows.map(entry => {
+    const idLabel = EVIDENCE_IDENTIFIER_LABELS[entry.identifierKind] || ''
+    const raw = String(entry.identifier || '')
+    const needsPrefix = idLabel && idLabel !== '未提供' && !raw.toLowerCase().startsWith(`${idLabel.toLowerCase()}:`)
+    const id = entry.identifier ? (needsPrefix ? `${idLabel}:${raw}` : raw) : (entry.url || '无稳定标识符')
+    const origin = entry.sourceDatabase ? ` · ${entry.sourceDatabase}` : ''
+    return `${entry.title} — ${id}${origin}（${EVIDENCE_STATUS_LABELS[entry.status] || entry.status}）`
+  })
+  return {
+    dot: 'emerald',
+    title: allVerified ? '已核验证据 · 证据库' : '证据库来源（含核验状态）',
+    items,
+  }
+}

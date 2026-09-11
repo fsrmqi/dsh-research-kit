@@ -28,6 +28,8 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 **CI 会校验「重新构建后产物无 diff」**——提交前忘了 `npm run build` 会直接挂 CI。
 
+改动界面（`src/` 下的 React 组件、槽位或浮层）时，另建议运行 `npm run test:browser`——真实 Chromium 加载构建产物做交互回归，首次需 `npx playwright install chromium`。
+
 ## 提交 Pull Request
 
 1. Fork 并新建分支，分支名建议 `feat/…`、`fix/…`、`docs/…`；
@@ -73,7 +75,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 2. `availability` 使用保守值：`reference-only` 或 `requires-mcp`；
 3. **只有实现了对宿主能力的真实探测并覆盖自动化测试后，才允许标记 `available-in-host`**；
 4. `accessNote` 必须如实写出检索前提（是否需要订阅、API Key、机构授权、数据使用协议），不得暗示已经可用；
-5. 若该来源的 API 是公开且无凭据的，可以同步在 `dsh/database-query.js` 增加适配器——此时需要补测试，覆盖正常、空结果、429、401/403、超时与 Agent 回退路径。
+5. 若该来源的 API 是公开且无凭据的，可以同步在 `dsh/database-query.js` 增加适配器——此时需要补测试，覆盖正常、空结果、429、401/403、超时与 Agent 回退路径；**并在同一次提交里把该条目的 `availability` 改为 `available-in-plugin`**。这一步不能省：目录标注与适配器清单由 `scripts/validate-catalog-lib.mjs` 的 `readDirectQueryIds()` 双向比对，**有适配器却未标注会让 `npm run check` 直接失败**（先例：`pubchem`、`gbif`）。
 
 ## 常见坑
 

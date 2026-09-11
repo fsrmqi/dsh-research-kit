@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto'
 import { resolve, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildArchifySvg, archifyApplyTemplate, archifyGuidedViews } from '../src/lib/archify-adapter.js'
+import { evidenceExplainCard } from '../src/lib/evidence-vault-core.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const TEMPLATE_PATH = resolve(HERE, '..', 'vendor', 'archify', 'template.html')
@@ -66,7 +67,7 @@ function scaffold(paths) {
 }
 
 // ---------- --html 渲染 ----------
-function renderHtml(ir) {
+function renderHtml(ir, { evidencePacks = [] } = {}) {
   const metrics = countCatalog()
   const preset = ['classic', 'signal-flow', 'blueprint', 'editorial'].includes(ir.meta?.visual_preset) ? ir.meta.visual_preset : 'classic'
   const animation = ir.meta?.animation === 'none' ? 'none' : 'trace'
@@ -82,6 +83,14 @@ function renderHtml(ir) {
       items: sourced.map(n => `${n.label} ← ${n.source.path}${n.source.anchor ? ' · ' + n.source.anchor : ''}${n.source.sha256 ? ' · ' + String(n.source.sha256).slice(0, 12) : ''}`),
     })
   }
+  // 证据库打通：--evidence 素材包与 IR 内嵌 evidence 条目合并为「证据库来源」卡片；
+  // 未核验条目按原状态如实标注，不冒充已核验。
+  const evidenceEntries = [
+    ...evidencePacks.flatMap(pack => Array.isArray(pack?.entries) ? pack.entries : []),
+    ...(Array.isArray(ir.evidence) ? ir.evidence : []),
+  ]
+  const evidenceCard = evidenceExplainCard(evidenceEntries)
+  if (evidenceCard) cards.push(evidenceCard)
   const noted = nodes.filter(n => n.note)
   if (noted.length) {
     cards.push({ dot: 'emerald', title: '说明卡片', items: noted.map(n => `${n.label} — ${n.note}`) })
@@ -115,14 +124,19 @@ function main() {
     return
   }
   if (mode === '--html') {
-    const file = args[1] && args[1] !== '-o' ? args[1] : null
+    const evidencePaths = []
+    args.forEach((arg, i) => { if (arg === '--evidence' && args[i + 1]) evidencePaths.push(args[i + 1]) })
+    const positional = args.slice(1).filter(arg => arg !== '-o' && arg !== outFile && arg !== '--evidence' && !evidencePaths.includes(arg))
+    const file = positional[0] || null
+    const evidencePacks = evidencePaths.map(path => JSON.parse(readFileSync(path, 'utf8')))
     const ir = JSON.parse(file ? readFileSync(file, 'utf8') : readFileSync(0, 'utf8'))
-    const html = renderHtml(ir)
+    const html = renderHtml(ir, { evidencePacks })
     if (outFile) writeFileSync(outFile, html); else process.stdout.write(html)
-    process.stderr.write(`交互 HTML 已生成（${ir.nodes?.length || 0} 节点 / ${ir.edges?.length || 0} 边 / ${(ir.routes || []).length} 章节，archify viewer）\n`)
+    const packEntries = evidencePacks.reduce((sum, pack) => sum + (Array.isArray(pack?.entries) ? pack.entries.length : 0), 0)
+    process.stderr.write(`交互 HTML 已生成（${ir.nodes?.length || 0} 节点 / ${ir.edges?.length || 0} 边 / ${(ir.routes || []).length} 章节；证据条目 ${packEntries + (Array.isArray(ir.evidence) ? ir.evidence.length : 0)} 条，archify viewer）\n`)
     return
   }
-  process.stderr.write('用法:\n  render-diagrams.mjs --html <diagram.json> [-o out.html]\n  render-diagrams.mjs --from-files <file...> [-o out.json]\n')
+  process.stderr.write('用法:\n  render-diagrams.mjs --html <diagram.json> [--evidence <pack.json>...] [-o out.html]\n  render-diagrams.mjs --from-files <file...> [-o out.json]\n')
   process.exitCode = 2
 }
 

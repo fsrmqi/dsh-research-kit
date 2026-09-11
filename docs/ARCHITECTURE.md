@@ -87,8 +87,10 @@ dsh-research-kit/
 │   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB 最小 schema + 内存降级 + 项目隔离 / 去重 / 备份
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
+│   ├── catalog-category-filter.js   # 工作台与弹层共用的分类筛选组件（快捷分类与颜色集中在此）
 │   ├── research-console.js          # 统一视图容器：分区调度 + 两级吸顶偏移实测
-│   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装
+│   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装 + 内嵌组装回放
+│   ├── route-replay.js              # 组装回放：trace 分段、引用块预览、独立 viewer 弹窗（§3.2）
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
 │   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
 │   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点
@@ -102,7 +104,8 @@ dsh-research-kit/
 │       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据接入）
 │       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
-│       └── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
+│       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
+│       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
 ├── dsh/
 │   ├── standalone-glue.js           # DSH 槽位注册唯一入口（view + input.left + input.overlay + input.right）
 │   ├── slot-registry.js             # 四个槽位的 id/order/label 单一事实源（纯数据）
@@ -115,17 +118,26 @@ dsh-research-kit/
 │   └── client.js                    # 构建生成的 DSH ModuleLoader 产物（勿手改）
 ├── vendor/
 │   ├── promptkit-embed.js           # vendored 界面工件（SHA-256 锁定，勿手改）
-│   └── vendor-manifest.json         # 工件来源 commit 与校验和
+│   ├── archify/
+│   │   ├── template.html            # vendored 交互 viewer 模板（SHA-256 锁定；整段注入为全局字符串）
+│   │   ├── i18n.mjs                 # vendored viewer 文案（SHA-256 锁定；ESM 源码，参与 strip 与拼接）
+│   │   └── LICENSE                  # 上游许可证原文
+│   └── vendor-manifest.json         # 工件来源 commit 与校验和清单（当前 3 个工件）
 ├── scripts/
-│   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
+│   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
-│   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 152 项测试（18 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+│   ├── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
+│   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
+│   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
+│   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
+├── test/                            # 173 项测试（20 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
 └── cordis.patch.yml                 # DSH bundle 注册补丁
 ```
+
+> 本树是**受控清单**：新增模块、脚本或 vendored 工件必须同步登记本节。它与「新增源码模块登记两处」是同一条纪律的三个落点——本树（人读）/ `scripts/build-client.mjs` 的 `files`（产物）/ `package.json` 的 `check`（单文件语法）。目录分片只按目录粒度登记，不逐条列出资源。
 
 ### 2.1 分层规则
 
@@ -142,6 +154,7 @@ dsh-research-kit/
 | `src/research-console.js` | 分区调度、分区导航、两级吸顶偏移实测 | 持有任何分区的业务逻辑，或读写分区的数据。 |
 | `src/research-workbench.js` / `research-vault.js` / `research-evidence-graph.js` / `research-evidence-vault.js` | React 状态、渲染、调用注入的宿主动作 | 直接依赖 DSH 私有全局或发网络请求。 |
 | `src/lib/*` | 与 DOM 解耦的纯逻辑（协议解析、布局解算、隐私边界、稳定性标识符识别、备份格式、分区契约） | 触碰 DOM 或宿主 API。 |
+| `src/route-replay.js` / `src/lib/archify-adapter.js` | 把 `composeWorkflow` 的 `trace` 渲染为可核对的组装回放（详情内嵌 + 独立 viewer 窗口）；IR / trace → archify `data-*` 契约与哨兵槽位替换 | 预测执行结果；改写 vendored 模板；把回放当作执行证据。 |
 | `src/composer-launcher.js` / `composer-overlay.js` | 输入框入口、overlay 选择器、启动弹窗 | 绕过 `inputActions` 直接发送或读取文件。 |
 | `dsh/standalone-glue.js` | 将 DSH props 映射为组件 props、注册槽位（返回统一释放函数） | 处理领域业务、拼 Prompt。 |
 | `dsh/slot-registry.js` | 槽位 id / order / label 的纯数据声明 | 执行注册本身。 |
@@ -263,7 +276,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 ![科学数据源的两条查询路径：插件直查与 Agent 回退](assets/data-source-paths.svg)
 
 - **插件直查**（`available-in-plugin`，11 个）：由插件 Node half 的 `/dsh-research-kit/query` 路由完成，所有网络请求经 DSH `ctx.web.fetch()` 发出，浏览器侧不持有密钥、插件不持有任何 API Key。适配器覆盖 PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist；候选结果带来源链接与稳定标识符，可直接写入输入框。
-- **Agent 回退**（`requires-mcp` / `reference-only`，44 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
+- **Agent 回退**（`requires-mcp` / `reference-only`，111 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
 
 两条路径的目录标注与实现由 `scripts/validate-catalog-lib.mjs` 的**双向契约**守护：实现了适配器就必须标 `available-in-plugin`（否则用户看到「需要 MCP」而实际能查，属于少报能力），标了就必须有适配器（否则是虚假承诺）。**任何一条路径都不得伪造查询结果。**
 
@@ -349,6 +362,17 @@ DSH 加载 ui/client.js
 ```
 
 `finalPrompt` 的优先级是：用户编辑后的 Prompt > 根据当前字段值新组装的 Prompt。手动编辑后，字段和技能勾选的后续变更**不会**自动改写正文；UI 必须显示这一状态，并提供“恢复自动生成”操作。资源切换或当前筛选使所选条目失效时，必须切换到当前结果集的第一项并清空编辑态，避免把上一个工作流的内容错误发送。
+
+**组装事实回放（同一返回值的第二条消费链路）。** `composeWorkflow` 除 Prompt 文本外还返回 `trace`（`src/catalog.js`），它驱动分区①详情里的紧凑回放与「弹出回放窗口」的独立 archify viewer：
+
+```text
+composeWorkflow(workflow, values, …)
+  → { prompt, …, trace }     ← trace 记录本次组装的每一段事实
+      ├─ RouteReplay         ← 详情内嵌紧凑回放，逐段点亮（prefers-reduced-motion 降级为静态）
+      └─ openReplayWindow    ← 独立窗口，经 src/lib/archify-adapter.js 转 data-* 契约
+```
+
+两条硬边界：**①** 回放只呈现**本次已经发生的组装事实**，不预测执行结果、不代表任何工具已执行；**②** 每条 trace 必须能在 Prompt 文本中定位到对应锚点，由 `test/route-replay.test.js` 强制——否则回放会与正文各说各话，变成一段自证的动画。
 
 ### 3.3 文件依赖的工作流
 
@@ -583,7 +607,8 @@ type ResearchDatabase = BaseItem & {
 1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记）；
 2. 将目录数据内联；
 3. 移除源码 ESM import/export；
-4. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的浏览器模块。
+4. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的浏览器模块；
+5. 注入 archify viewer 模板：`window.__ARCHIFY_VIEWER_TEMPLATE__ = <template.html 全文>`（`scripts/build-client.mjs` 末行），供浏览器侧组装解释图 HTML。这是 `files` 白名单之外的**第二条注入通道**——模板不进拼接作用域，只作为一个全局字符串常量存在。
 
 目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、构建产物内联数组与聚合入口逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
 
@@ -595,10 +620,16 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 CI 会校验「重新构建后产物无 diff」，忘记重建会直接挂 CI。`scripts/build-client.mjs` 的 `files` 是显式白名单——**新增模块漏登记不会有任何构建报错**，产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。
 
+该白名单里现在**同时包含项目模块与一个 vendored 模块**，三者的处理方式不同，不要混为一谈：`vendor/promptkit-embed.js` 原样拼接（其内部声明都在 IIFE 内，不参与顶层符号检查）；`vendor/archify/template.html` 原样注入为全局字符串、不进作用域（见上面第 5 步）；`vendor/archify/i18n.mjs` 是 ESM 源码，**会经过 `strip()` 并参与拼接**，因此它虽来自 `vendor/`，也必须在 `files` 中登记并接受与项目模块相同的单文件语法检查；它排在 `src/lib/archify-adapter.js` 之前——适配层要用到它的文案符号。
+
+「`files` 登记」与「`package.json` 的 `check` 登记」是互为补集的两条纪律：前者管「有没有拼进产物」，后者管「单文件语法是否成立」。当前 `files` 中每个项目模块都已列入 `check`。
+
 构建期另有两道硬断言，把「产物级、运行时才炸」的缺陷提前到构建：
 
 - `assertSymbolOrder`：关键符号的定义位置必须早于 `standalone-glue` 使用它们的位置——顺序错位在运行时表现为 `ReferenceError`；
-- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 `ids` 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。vendored 工件不参与该检查：`vendor/promptkit-embed.js` 的内部声明都包在 `const PromptKit = (React => {…})` 作用域内，它唯一外露的符号是 `PromptKit`。
+- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 `ids` 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。vendored 工件的主体不参与该检查：`vendor/promptkit-embed.js` 的内部声明都包在 `const PromptKit = (React => {…})` 作用域内，它唯一外露的符号是 `PromptKit`；`vendor/archify/i18n.mjs` 是例外——它经 `strip()` 直接拼进同一作用域，因此**参与**顶层重名检查。
+
+**图门禁（在 `npm run check` 内，但在仓库内空转）。** `npm run check` 还包含 `node scripts/validate-diagrams.mjs --repo`：它按 10 条规则码校验 diagram IR，并给出 `supportedFixes`（与 `scripts/render-diagrams.mjs` 的产出对应）。**仓库内不预置任何 `*.diagram.json`**，因此该步实测输出 `checked: []`——它守护的是你产出或审阅 IR 的那一刻，不代表仓库里有被守护的图。凡提到这条门禁处都应带上这句限定，否则读者会去找一个并不存在的被守护文件。
 
 不要手工编辑 `ui/client.js`。如果需要引入依赖，先确认 DSH 浏览器模块是否可通过 `require()` 提供；未经验证不得把 npm 依赖直接留在浏览器源码中。
 

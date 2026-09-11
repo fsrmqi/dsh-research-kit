@@ -9,6 +9,7 @@ import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
   statusCounts, filterEvidence, detectIdentifier,
   serializeEvidenceBackup, parseEvidenceBackup, mergeEntries, planCitationWrite,
+  buildEvidenceExplainPack,
 } from './lib/evidence-vault-core.js'
 
 // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
@@ -231,6 +232,17 @@ export function EvidenceVaultPane({ inputActions }) {
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
+  // 解释图素材包：按当前筛选范围导出（通常先筛「已核验」），供 render-diagrams --evidence 并入「证据库来源」卡片。
+  const exportExplainPack = () => {
+    try {
+      if (!filtered.length) return setNotice('当前筛选范围内没有可导出的证据条目。')
+      const text = JSON.stringify(buildEvidenceExplainPack(filtered, project), null, 2) + '\n'
+      const suffix = project || '全部项目'
+      downloadJson(text, `evidence-explain-pack-${suffix}-${stamp()}.json`)
+      setNotice(`已导出 ${filtered.length} 条证据作为解释图素材（按当前筛选范围；渲染时用 --evidence <路径> 并入）。`)
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+  }
+
   const importJson = async () => {
     try {
       const parsed = parseEvidenceBackup(backup)
@@ -305,6 +317,7 @@ export function EvidenceVaultPane({ inputActions }) {
         h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建项目'),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
         h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length }, '导出备份'),
+        h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
         h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
         confirmClear
           ? h(Button, { key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash', onClick: clearScope },

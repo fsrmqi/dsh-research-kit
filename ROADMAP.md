@@ -55,6 +55,8 @@
 
 **剩余验收**：真实 profile 上以至少一条「数据库 → 查询 → 来源 → 已保存证据」的链路完成聚焦、上下游、路径、缩放与迷你地图操作；窄屏可读；导出物脱敏且离线可打开。导出与复制链接时的元数据范围提示已在实现中落地，现场核对即可。该项已登记到 [MANUAL-QA](docs/MANUAL-QA.md) 待验清单（V1–V4）。
 
+**同批交付的另两项可视化能力（不在本节的遗留清单内）**：工作台「组装回放」（`src/route-replay.js` + archify viewer 弹窗）与「研究结果解释图生成」工作流 + 出图工具链（`scripts/render-diagrams.mjs` / `validate-diagrams.mjs`）已随本次交付落地，细节见 [CHANGELOG](CHANGELOG.md)。本节的分区④ Viewer 只覆盖证据图谱，**不是**本仓库可视化能力的全部——按路线图判断可视化进度时不要只看本节。
+
 ## 中期（需要上游支持或较大改动）
 
 ### 4. 研究资产库：本地证据库
@@ -114,17 +116,19 @@
 
 **要做**：向现有类目继续扩充工作流（上游非金融存量中已有类目尚有约 10 条散落缺口，按 id 对账：基金申请 -2 / 基因组学 -3 / 细胞生物学 -4 / 药物发现 -1）。每条新增工作流至少做一次「最小材料」人工走查——检查模型是否被引导为虚构事实、过度承诺或遗漏不确定性。
 
-### 9. 科研模式领域预设
+### 9. 科研模式领域预设（已完成）
 
-**现状**：`src/research-workbench.js` 的 `SCIENCE_MODE_PRESETS` 只有三个预设（基因遗传 / 临床队列 / 通用科研）。
+**已完成。** `src/research-workbench.js` 的 `SCIENCE_MODE_PRESETS` 现有 **6 个**预设：通用研究（general）/ 文献与论文（literature）/ 生物信息学（bioinformatics）/ 作物遗传育种（cropBreeding）/ 临床与人群研究（clinical）/ 数据分析与可视化（dataVisualization），与 [README](README.md)、[架构文档 §3.0b](docs/ARCHITECTURE.md)、[开发指南](docs/DEVELOPMENT.md) 的口径一致。原文称该常量仅有三个预设（基因遗传 / 临床队列 / 通用科研），那是合并前的状态，已失效——按本节判断进度会以为要做的事其实早已做完。
 
-**要做**：新增领域预设只需在该常量中加条目。
+**扩展方式**：新增领域预设仍只需在该常量中加条目（技能组合 + 纪律段 + 标签）。
 
 **注意**：本节与 §8 是不同文件、不同层——工作流是目录资产，领域预设是附加到 Prompt 上的科研纪律段，两者不可互相替代。
 
+> 编号未回填：本节保留原编号与位置，只更新状态（同 §3 的处理）。
+
 ### 10. vendored 工件的可维护化
 
-**现状**：`vendor/promptkit-embed.js` 是 SHA 锁定的生成工件，约 637 KB，已进入 bundle。
+**现状**：`vendor/promptkit-embed.js` 是 SHA 锁定的生成工件，约 637 KB，已进入 bundle。仓库现有 **3 个** vendored 工件——promptkit 工件 + `vendor/archify/template.html`（756 KiB，整段注入为全局字符串）+ `vendor/archify/i18n.mjs`（参与拼接），清单见 `vendor/vendor-manifest.json`；三者合计约占构建产物 2.3 MB 中的 1.36 MB。
 
 **动机**：主要不是体积——对本地插件而言 637 KB 不是主要成本——而是它**不可手改、不可逐行 review，且 SHA 锁定意味着任何升级都只能整体替换**。目标是逐步换成可维护、可审查的源码子模块。
 
