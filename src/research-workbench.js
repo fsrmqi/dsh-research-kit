@@ -1,5 +1,6 @@
 import React from 'react'
 import { catalog, itemById, searchCatalog, selectedCatalogItem, composeWorkflow, databaseMetadata } from './catalog.js'
+import { RouteReplay } from './route-replay.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
@@ -122,6 +123,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
   const [selectedId, setSelectedId] = React.useState('review-paper')
   const [values, setValues] = React.useState({})
+  const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [notice, setNotice] = React.useState('')
@@ -153,7 +155,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     return `${preamble}\n\n${prompt}`
   }
   // 预览阶段保留必填字段的可读占位；写入和发送前才阻止缺失字段。
-  const assembled = workflow ? scienceAssemble(composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }).prompt) : ''
+  const composed = workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null
+  const assembled = composed ? scienceAssemble(composed.prompt) : ''
   const finalPrompt = editedPrompt ?? assembled
   const hasDraftAction = typeof inputActions?.setDraft === 'function'
   const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
@@ -414,7 +417,15 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
                 ]),
               ]))),
             ]) : null,
-            h(Field, { key: 'prompt', label: '提示词预览（可编辑）' },
+            h('div', { key: 'promptHead', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } }, [
+              h('span', { key: 'label', style: { fontSize: 12, fontWeight: 600, color: C.muted } }, '提示词预览（可编辑）'),
+              h('span', { key: 'sp', style: { flex: 1 } }),
+              h(Button, { key: 'replay', variant: 'quiet', size: 'sm', icon: 'gauge', onClick: () => setReplayOpen(open => !open) }, replayOpen ? '收起回放' : '组装回放'),
+            ]),
+            replayOpen && composed?.trace?.length
+              ? h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
+              : null,
+            h(Field, { key: 'prompt', label: '' },
               h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 12, mono: true, ariaLabel: '提示词预览' })),
             editedPrompt !== null ? h(Notice, { key: 'edited', tone: 'warn', icon: 'edit' }, [
               '当前为手动编辑版本；字段和技能变更不会自动改写正文。',

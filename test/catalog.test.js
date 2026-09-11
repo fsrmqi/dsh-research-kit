@@ -212,6 +212,31 @@ test('composeWorkflow 附加勾选技能的指导片段', () => {
   assert.deepEqual(withSkill.attachedSkillIds, ['citation-hygiene', 'scientific-writing'])
 })
 
+test('composeWorkflow trace：只记录已发生的组装事实，且与 Prompt 文本互证', () => {
+  const workflow = itemById('write-introduction')
+  const result = composeWorkflow(workflow, { topic: '单细胞转录组学' }, { extraSkillIds: ['citation-hygiene'], extraDatabaseIds: ['crossref'] })
+  const trace = result.trace
+  assert.ok(Array.isArray(trace) && trace.length >= 4, 'trace 应覆盖工作流/参数/技能/数据源/边界')
+  assert.equal(trace[0].step, 'workflow')
+  assert.equal(trace.at(-1).step, 'guard')
+  for (const step of trace) {
+    if (step.step === 'param' && !step.empty) assert.ok(result.prompt.includes(step.detail), `参数值未出现在 Prompt: ${step.detail}`)
+    if (step.step === 'skill') assert.ok(result.prompt.includes(`【${step.label}】`), `技能未出现在 Prompt: ${step.label}`)
+    if (step.step === 'database') assert.ok(result.prompt.includes(`【${step.label}】`), `数据源未出现在 Prompt: ${step.label}`)
+    if (step.step === 'guard') assert.ok(result.prompt.includes('通用科研边界'))
+  }
+  const anchorable = trace.filter(step => step.step === 'param' && !step.empty).every(step => result.prompt.includes(step.detail))
+  assert.ok(anchorable, '每个已填参数都应能在 Prompt 中定位（回放面板的文本同步依赖此不变式）')
+})
+
+test('composeWorkflow trace：缺失必填参数时空站与 missing 一致', () => {
+  const workflow = itemById('write-introduction')
+  const result = composeWorkflow(workflow, {}, { enforceRequired: false })
+  const emptyParams = result.trace.filter(step => step.step === 'param' && step.empty)
+  assert.equal(emptyParams.length, result.missing.length, '空参数站应与 missing 报告一致')
+  for (const step of emptyParams) assert.ok(result.prompt.includes(`[${step.label}]`), '空参数应以可读占位形式出现在 Prompt')
+})
+
 test('composeWorkflow 忽略未知或非技能的附加 ID', () => {
   const workflow = itemById('write-introduction')
   const result = composeWorkflow(workflow, { topic: 'x' }, { extraSkillIds: ['不存在', 'crossref'] })

@@ -106,10 +106,28 @@ export function composeWorkflow(workflow, values = {}, { enforceRequired = true,
   ].filter(Boolean)
   const guardedPrompt = `${prompt}\n\n通用科研边界：仅基于已提供材料或已核验来源；不得编造数据、图表、引用、结果、完成状态或文件路径；无法确认时明确标记为待核验。`
   const finalPrompt = additions.length ? `${guardedPrompt}\n\n${additions.join('\n\n')}` : guardedPrompt
+  // 组装回放轨迹（增量字段，消费方见 src/route-replay.js）：只记录已发生的组装事实，
+  // 每一条都必须能在 finalPrompt 文本中找到对应内容——回放与文本互证由测试强制。
+  const firstSentence = text => String(text || '').split(/[。；;]/)[0].slice(0, 40)
+  const trace = [
+    { step: 'workflow', id: workflow.id, label: workflow.name, detail: workflow.description || '' },
+    ...(workflow.placeholders || []).map(field => {
+      const value = String(values[field.key] || '').trim()
+      return {
+        step: 'param', id: field.key, label: field.label,
+        detail: value || (field.required ? `[${field.label}]` : '未指定（请按综合方式处理）'),
+        empty: !value,
+      }
+    }),
+    ...attached.map(skill => ({ step: 'skill', id: skill.id, label: skill.name, detail: firstSentence(skill.promptFragment) })),
+    ...attachedDatabases.map(database => ({ step: 'database', id: database.id, label: database.name, detail: firstSentence(database.accessNote) })),
+    { step: 'guard', id: 'generic-guard', label: '科研边界', detail: '不得编造；无法确认时标记为待核验' },
+  ]
   return {
     prompt: finalPrompt,
     missing,
     attachedSkillIds: attached.map(skill => skill.id),
-    attachedDatabaseIds: attachedDatabases.map(database => database.id)
+    attachedDatabaseIds: attachedDatabases.map(database => database.id),
+    trace,
   }
 }
