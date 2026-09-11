@@ -5587,7 +5587,7 @@ window.__ModuleLoader__.load({
     }
 
     // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
-    function EvidenceVaultPane() {
+    function EvidenceVaultPane({ inputActions }) {
       const store = evidenceVaultStore()
       const [entries, setEntries] = React.useState([])
       const [projects, setProjects] = React.useState([])
@@ -5595,6 +5595,7 @@ window.__ModuleLoader__.load({
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
       const [filter, setFilter] = React.useState('all')
+      const [selectedIds, setSelectedIds] = React.useState([])
       const [notice, setNotice] = React.useState('')
       const [newProject, setNewProject] = React.useState('')
       const [newProjectOpen, setNewProjectOpen] = React.useState(false)
@@ -5624,12 +5625,22 @@ window.__ModuleLoader__.load({
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+      const selectedEntries = React.useMemo(() => filtered.filter(item => selectedIds.includes(item.id)), [filtered, selectedIds])
+      const citationPreview = React.useMemo(() => formatEvidenceCitations(selectedEntries), [selectedEntries])
+      const canWrite = typeof inputActions?.setDraft === 'function'
       const degraded = store.isDegraded()
 
       const switchProject = value => {
         setProject(value)
         setActiveProject(value)
         setConfirmClear(false)
+        setSelectedIds([])
+      }
+      const writeSelected = () => {
+        if (!citationPreview) return setNotice('请先勾选当前筛选结果中的证据条目。')
+        if (!canWrite) return setNotice('当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。')
+        inputActions.setDraft(citationPreview)
+        setNotice(`已将 ${selectedEntries.length} 条已勾选证据写入当前会话输入框。`)
       }
 
       const createProject = () => {
@@ -5750,7 +5761,12 @@ window.__ModuleLoader__.load({
             h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
           ]),
           h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
+          h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `写入 Prompt（${selectedEntries.length}）`),
         ]),
+        selectedEntries.length ? h(Card, { key: 'preview', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
+          h('strong', { key: 't', style: { fontSize: 13 } }, `引用块预览（${selectedEntries.length} 条）`),
+          h('pre', { key: 'p', style: { margin: '8px 0 0', whiteSpace: 'pre-wrap', fontFamily: C.fontMono, fontSize: 12, lineHeight: 1.55 } }, citationPreview),
+        ]) : null,
         loading ? h(Spinner, { key: 'loading', text: '正在加载证据条目……' }) : null,
         !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
@@ -5761,6 +5777,7 @@ window.__ModuleLoader__.load({
         h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
           h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
             h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
+              h('input', { key: 'select', type: 'checkbox', checked: selectedIds.includes(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `勾选「${item.title}」写入 Prompt`, style: { accentColor: C.teal } }),
               item.url
                 ? h('a', { key: 'title', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 15, fontWeight: 700, color: C.teal, lineHeight: 1.45 } }, item.title)
                 : h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -6163,6 +6180,17 @@ window.__ModuleLoader__.load({
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [mode, launchWorkflow])
+      // 浮层不是 Modal，没有遮罩层；因此要在文档层判定“点击是否落在整张浮层卡片内”。
+      // 不能绑在内容滚动区，否则标题、筛选栏或卡片边框都会被误判为外部点击。
+      React.useEffect(() => {
+        if (!mode || launchWorkflow) return undefined
+        const onPointerDown = event => {
+          if (popoverRef.current?.contains(event.target)) return
+          setMode(null)
+        }
+        document.addEventListener('pointerdown', onPointerDown)
+        return () => document.removeEventListener('pointerdown', onPointerDown)
+      }, [mode, launchWorkflow])
       if (!mode && !launchWorkflow) return null
       const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
       const rows = searchCatalog({ query, type: listType })
@@ -6360,7 +6388,7 @@ window.__ModuleLoader__.load({
       rationale: '', nextAction: '', verificationStatus: 'pending', verificationEvidence: ''
     }
 
-    function ResearchVault({ assetProvider, embedded = false }) {
+    function ResearchVault({ assetProvider, inputActions, embedded = false }) {
       const [assets, setAssets] = React.useState([])
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
@@ -6551,7 +6579,7 @@ window.__ModuleLoader__.load({
           }) : null,
           h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
         ]) : null,
-        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane' }) : null,
+        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions }) : null,
         tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
         tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
@@ -6622,8 +6650,8 @@ window.__ModuleLoader__.load({
     }
 
     // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-    function ResearchVaultHost({ embedded = false }) {
-      return h(ResearchVault, { assetProvider: researchAssetProvider, embedded })
+    function ResearchVaultHost({ embedded = false, inputActions }) {
+      return h(ResearchVault, { assetProvider: researchAssetProvider, inputActions, embedded })
     }
 
 

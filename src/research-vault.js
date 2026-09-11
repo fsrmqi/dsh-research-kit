@@ -42,7 +42,7 @@ const EMPTY_FORM = {
   rationale: '', nextAction: '', verificationStatus: 'pending', verificationEvidence: ''
 }
 
-export function ResearchVault({ assetProvider, embedded = false }) {
+export function ResearchVault({ assetProvider, inputActions, embedded = false }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -233,7 +233,7 @@ export function ResearchVault({ assetProvider, embedded = false }) {
       }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
-    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane' }) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
@@ -304,6 +304,6 @@ export function ResearchVault({ assetProvider, embedded = false }) {
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-function ResearchVaultHost({ embedded = false }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded })
+function ResearchVaultHost({ embedded = false, inputActions }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions })
 }

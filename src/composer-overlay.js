@@ -191,6 +191,17 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [mode, launchWorkflow])
+  // 浮层不是 Modal，没有遮罩层；因此要在文档层判定“点击是否落在整张浮层卡片内”。
+  // 不能绑在内容滚动区，否则标题、筛选栏或卡片边框都会被误判为外部点击。
+  React.useEffect(() => {
+    if (!mode || launchWorkflow) return undefined
+    const onPointerDown = event => {
+      if (popoverRef.current?.contains(event.target)) return
+      setMode(null)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [mode, launchWorkflow])
   if (!mode && !launchWorkflow) return null
   const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
   const rows = searchCatalog({ query, type: listType })
