@@ -1,1 +1,208 @@
-[]
+[
+  {
+    "id": "cfd-simulation",
+    "type": "workflow",
+    "name": "CFD 流体仿真",
+    "description": "对几何与工况做计算流体力学仿真并分析流场。",
+    "category": "工程学",
+    "tags": ["CFD", "流体力学", "数值仿真"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "geometry", "label": "几何描述", "required": true },
+      { "key": "conditions", "label": "边界条件", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真结果须与网格无关性验证配套才可用。"],
+    "prompt": "请对几何 {geometry} 在条件 {conditions} 下做 CFD 仿真：说明流体物性来源、湍流模型选择与依据、网格划分与无关性验证（至少三套网格）、收敛判据，输出速度/压力场与目标量（阻力、压降等）。仿真设置须可复现；不得编造流场数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "signal-processing",
+    "type": "workflow",
+    "name": "工程信号处理",
+    "description": "对实测信号做滤波、变换与特征提取。",
+    "category": "工程学",
+    "tags": ["信号处理", "滤波", "特征提取"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "filter_spec", "label": "滤波器规格", "required": true },
+      { "key": "features", "label": "提取特征", "required": false, "hint": "如幅值、频率、相位、包络" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["滤波会引入相位与幅值失真，须评估。"],
+    "prompt": "请处理用户通过 @文件 提供的信号（滤波规格：{filter_spec}）：说明采样率与混叠检查、滤波器设计与幅相响应、时频变换选择，按 {features} 提取特征并给出单位与校准说明，输出时域/频域图与特征表。处理链须可复现；不得编造信号特征，输出为需人工核验的草案。"
+  },
+  {
+    "id": "control-system-design",
+    "type": "workflow",
+    "name": "控制系统设计",
+    "description": "设计并仿真满足指标的反馈控制器。",
+    "category": "工程学",
+    "tags": ["控制系统", "PID", "LQR"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "plant", "label": "被控对象", "required": true },
+      { "key": "specs", "label": "性能指标", "required": true },
+      { "key": "controller_type", "label": "控制器类型", "required": false, "hint": "如 PID、LQR、MPC" }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["线性设计在非线性工况下需重新验证。"],
+    "prompt": "请为 {plant} 设计 {controller_type} 控制器（指标：{specs}）：给出被控对象建模与线性化说明、控制器结构与整定过程、时域/频域验证（阶跃响应、稳定裕度）与扰动抑制仿真，输出指标达成情况。模型与参数须注明来源；不得编造响应数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "heat-transfer-analysis",
+    "type": "workflow",
+    "name": "传热分析",
+    "description": "分析传导、对流与辐射耦合的传热问题。",
+    "category": "工程学",
+    "tags": ["传热", "热设计", "对流换热"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "热系统描述", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["nist-webbook"],
+    "limitations": ["经验关联式适用范围须核对。"],
+    "prompt": "请分析 {system} 的传热问题：说明工况与材料物性来源（引用 NIST 等并注明版本）、控制体能量平衡、对流换热关联式选用及适用范围、数值或解析求解与验证，输出温度分布与热流路径。经验公式引用须注明出处；不得编造物性或温度场，输出为需人工核验的草案。"
+  },
+  {
+    "id": "vibration-analysis",
+    "type": "workflow",
+    "name": "振动分析",
+    "description": "分析机械振动数据并做模态与故障判断。",
+    "category": "工程学",
+    "tags": ["振动", "模态分析", "故障诊断"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "system", "label": "机械系统或数据", "required": true },
+      { "key": "standard", "label": "振动标准", "required": false, "hint": "如 ISO 10816、API 670" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["故障判断为参考性结论，需现场复核。"],
+    "prompt": "请对 {system} 的振动数据（@文件）按 {standard} 做分析：说明测点与工况记录、时域统计与频域谱、特征频率与故障特征对照（不平衡/不对中/轴承）、模态参数识别，输出超标判定与可能原因排序。标准条款引用须注明版本；不得编造振级或诊断结论，输出为需人工核验的草案。"
+  },
+  {
+    "id": "process-simulation",
+    "type": "workflow",
+    "name": "过程模拟",
+    "description": "模拟化工或制造过程并按目标优化。",
+    "category": "工程学",
+    "tags": ["过程模拟", "化工流程", "优化"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "process", "label": "过程描述", "required": true },
+      { "key": "objective", "label": "优化目标", "required": false, "hint": "如产率、能耗、成本" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["nist-webbook"],
+    "limitations": ["物性方法选择对结果影响大，须论证。"],
+    "prompt": "请模拟 {process}（优化目标：{objective}）：说明流程结构与关键单元、热力学物性方法选择与依据、操作参数与收敛设置、按目标的敏感性分析，输出物料/能量平衡表与优化建议。平衡结果须闭合核对；不得编造产率或能耗，输出为需人工核验的草案。"
+  },
+  {
+    "id": "reliability-analysis",
+    "type": "workflow",
+    "name": "可靠性分析",
+    "description": "分析系统可靠性、失效率与维修策略。",
+    "category": "工程学",
+    "tags": ["可靠性", "失效率", "维护策略"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "系统或部件", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["可靠性预测对失效数据质量高度敏感。"],
+    "prompt": "请对 {system} 做可靠性分析：说明可靠性框图或故障树、寿命分布与参数估计方法（含数据来源与样本量）、MTBF/可靠度随时间曲线、维修策略对比，输出可靠性与可用度结果。失效数据须注明出处与置信区间；不得编造失效率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "sensor-data-analysis",
+    "type": "workflow",
+    "name": "传感器数据 / IoT 分析",
+    "description": "处理多传感器时序数据并关联事件分析。",
+    "category": "工程学",
+    "tags": ["IoT", "时序数据", "传感器融合"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "sensors", "label": "传感器类型", "required": true },
+      { "key": "events", "label": "关联事件", "required": false }
+    ],
+    "suggestedSkillIds": ["data-integrity", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["传感器漂移与标定误差需先行评估。"],
+    "prompt": "请分析用户通过 @文件 提供的 {sensors} 传感器数据（关联事件：{events}）：说明时间对齐与采样率处理、异常值与漂移检查、多传感器特征提取与事件关联分析（如前后窗口统计），输出时序图与事件关联结论。数据质量评估须先行报告；不得编造读数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "robot-path-planning",
+    "type": "workflow",
+    "name": "机器人路径规划",
+    "description": "为机器人规划无碰撞路径并比较算法性能。",
+    "category": "工程学",
+    "tags": ["路径规划", "RRT", "运动学"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "robot_type", "label": "机器人类型", "required": true },
+      { "key": "algorithm", "label": "规划算法", "required": false, "hint": "如 RRT*、A*、PRM" },
+      { "key": "objective", "label": "规划目标", "required": false, "hint": "如最短、最平滑、最省能" }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真环境与真实场景存在差距。"],
+    "prompt": "请为 {robot_type} 规划路径（算法：{algorithm}；目标：{objective}），环境与地图来自 @文件：说明运动学/动力学约束建模、算法参数与随机种子、成功率的多次重复试验统计、与备选算法的长度-耗时对比，输出路径与性能表。约束模型须显式列出；不得编造成功率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "structural-analysis-eng",
+    "type": "workflow",
+    "name": "结构分析",
+    "description": "分析结构在载荷下的应力与变形并校核安全系数。",
+    "category": "工程学",
+    "tags": ["结构分析", "应力校核", "安全系数"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "structure", "label": "结构描述", "required": true },
+      { "key": "loads", "label": "载荷条件", "required": true },
+      { "key": "sf", "label": "要求安全系数", "required": false, "hint": "默认 2.0" }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["分析结果不替代法定结构审查。"],
+    "prompt": "请对 {structure} 在载荷 {loads} 下做结构分析（要求安全系数 {sf}）：说明简化假设与计算模型、载荷组合与工况、应力与变形计算方法、按材料许用值校核并给出安全系数，输出应力分布与校核表。材料参数与规范引用须注明出处；不得编造强度数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "finite-element-analysis",
+    "type": "workflow",
+    "name": "有限元分析",
+    "description": "建立 FEM 模型分析结构、热或电磁问题。",
+    "category": "工程学",
+    "tags": ["有限元", "FEM", "数值仿真"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "problem", "label": "FEA 问题", "required": true },
+      { "key": "conditions", "label": "边界条件与载荷", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["网格与单元选择需通过收敛性验证支持。"],
+    "prompt": "请对 {problem} 建立有限元模型（条件：{conditions}）：说明几何简化与单元类型选择、网格划分与收敛性研究（至少三档）、边界条件合理性论证、求解与后处理，输出应力/温度/场分布与收敛曲线。求解器设置须可复现；不得编造仿真数值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "circuit-simulation",
+    "type": "workflow",
+    "name": "电路仿真",
+    "description": "仿真电子电路的静态工作点与动态响应。",
+    "category": "工程学",
+    "tags": ["电路仿真", "SPICE", "瞬态分析"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "circuit", "label": "电路描述", "required": true },
+      { "key": "input_signal", "label": "输入信号", "required": false },
+      { "key": "objective", "label": "设计目标", "required": false, "hint": "如带宽、增益、噪声、功耗" }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["器件模型精度决定仿真可信度。"],
+    "prompt": "请对 {circuit} 做仿真（输入信号：{input_signal}；目标：{objective}）：说明器件模型与库版本、直流工作点、按目标的 AC/瞬态/噪声分析设置与结果、容差（Monte Carlo）检查，输出波形与指标达成表。模型来源须注明；不得编造仿真波形或指标，输出为需人工核验的草案。"
+  }
+]

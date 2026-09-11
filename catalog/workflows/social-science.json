@@ -1,1 +1,202 @@
-[]
+[
+  {
+    "id": "survey-analysis",
+    "type": "workflow",
+    "name": "问卷调查分析",
+    "description": "对问卷调查数据做描述、推断与量表信效度分析。",
+    "category": "社会科学",
+    "tags": ["问卷调查", "抽样", "社会统计"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "n", "label": "样本量", "required": false },
+      { "key": "outcome", "label": "关键结局变量", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["抽样偏差与自报告偏误需在解释中讨论。"],
+    "prompt": "请分析用户通过 @文件 提供的问卷调查数据，样本量 {n}，关键结局 {outcome}：说明问卷结构与量表信效度（Cronbach α/因子分析）、缺失与加权处理、描述统计与推断检验及效应量，输出分组比较与可视化。须区分相关与因果解释；不得编造应答数或显著性，输出为需人工核验的草案。"
+  },
+  {
+    "id": "text-mining-social",
+    "type": "workflow",
+    "name": "社会文本挖掘",
+    "description": "从新闻、社交媒体或政策文本中提取主题与模式。",
+    "category": "社会科学",
+    "tags": ["文本挖掘", "主题模型", "语料"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "corpus_type", "label": "语料类型", "required": true },
+      { "key": "n_topics", "label": "主题数", "required": false, "hint": "默认 10，或由一致性指标确定" }
+    ],
+    "suggestedSkillIds": ["data-integrity", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["主题模型结果依赖分词与语料质量。"],
+    "prompt": "请对用户通过 @文件 提供的 {corpus_type} 语料做文本挖掘：说明预处理（清洗、分词、停用词）、主题模型方法与 {n_topics} 的确定依据、主题词与代表性文档、词频或共现网络分析。编码与模型参数须可复现（记录种子）；不得编造主题内容或占比，输出为需人工核验的草案。"
+  },
+  {
+    "id": "demographic-analysis",
+    "type": "workflow",
+    "name": "人口分析",
+    "description": "分析人口结构、趋势并做预测。",
+    "category": "社会科学",
+    "tags": ["人口学", "人口结构", "预测"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "population", "label": "研究人口", "required": true },
+      { "key": "period", "label": "时间范围", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["预测依赖生育、死亡与迁移假设。"],
+    "prompt": "请分析 {population} 在 {period} 的人口结构与趋势：说明数据来源（人口普查/抽样调查，注明数据集与年份）、年龄结构与金字塔、生育/死亡/迁移分量分析、队列效应与人口预测（列出假设情景）。引用统计口径须与来源一致；不得编造人口数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "network-analysis-social",
+    "type": "workflow",
+    "name": "社会网络分析",
+    "description": "分析社会网络的中心性、社区与影响力结构。",
+    "category": "社会科学",
+    "tags": ["社会网络", "中心性", "社区发现"],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["网络边界与关系定义影响全部指标。"],
+    "prompt": "请对用户通过 @文件 提供的关系数据做社会网络分析：说明节点/边的定义与网络规模、中心性指标（度、介数、接近、特征向量）、社区发现算法与模块度、可视化布局，输出指标表与网络图。须讨论数据收集方式与缺失边的影响；不得编造关系数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "sentiment-analysis-social",
+    "type": "workflow",
+    "name": "舆情情感分析",
+    "description": "分析社交媒体文本对 {topic} 的情感倾向与演变。",
+    "category": "社会科学",
+    "tags": ["舆情", "情感分析", "社交媒体"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "topic", "label": "主题或话题标签", "required": true }
+    ],
+    "suggestedSkillIds": ["data-integrity", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["平台抽样与情感模型偏差需说明。"],
+    "prompt": "请分析用户通过 @文件 提供的社交媒体数据中关于 {topic} 的情感：说明数据抽样与清洗规则、情感方法（词典/模型）与验证方式、按时间与子群的趋势演变，输出情感分布、时序与代表性文本。须讨论样本代表性与模型偏差；不得编造情感占比，输出为需人工核验的草案。"
+  },
+  {
+    "id": "policy-evaluation",
+    "type": "workflow",
+    "name": "政策效应评估",
+    "description": "用准实验方法评估 {policy} 对 {outcome} 的因果效应。",
+    "category": "社会科学",
+    "tags": ["政策评估", "因果推断", "双重差分"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "policy", "label": "政策干预", "required": true },
+      { "key": "outcome", "label": "结局变量", "required": true },
+      { "key": "method", "label": "识别方法", "required": false, "hint": "如 DID、RDD、PSM、IV" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["因果解释依赖识别假设的可信度。"],
+    "prompt": "请评估 {policy} 对 {outcome} 的因果效应（方法：{method}），数据来自 @文件 或公开来源：说明识别假设与违反后果、平行趋势/断点/平衡性等检验、估计与稳健性（安慰剂、替换对照），输出效应量及其置信区间。所有假设检验须展示证据；不得编造政策时点或效应值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "education-outcomes",
+    "type": "workflow",
+    "name": "教育结果分析",
+    "description": "分析学生成绩与教育干预效果。",
+    "category": "社会科学",
+    "tags": ["教育测量", "学业成绩", "干预评估"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "groups", "label": "比较分组", "required": true },
+      { "key": "outcome", "label": "结局指标", "required": true },
+      { "key": "intervention", "label": "干预", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["观察性比较不构成因果结论。"],
+    "prompt": "请对用户通过 @文件 提供的教育数据比较 {groups} 的 {outcome}（干预：{intervention}）：说明数据结构与缺失处理、描述统计、多层模型或协变量调整及效应量，输出分组比较与趋势。须讨论选择偏差与协变量充分性；不得编造成绩或升学率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "public-opinion-analysis",
+    "type": "workflow",
+    "name": "民意调查分析",
+    "description": "分析 {topic} 的民意分布、结构差异与趋势。",
+    "category": "社会科学",
+    "tags": ["民意调查", "投票意向", "趋势"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "topic", "label": "议题", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["不同调查的抽样与措辞差异影响可比性。"],
+    "prompt": "请分析用户通过 @文件 提供的 {topic} 民意数据：说明各调查的机构、样本量、时间与加权方法、题干差异对可比性的影响、总体与分群（年龄/教育/地区）分布及趋势，输出结构差异与时间序列。合并多源调查须做口径核对；不得编造支持率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "migration-analysis",
+    "type": "workflow",
+    "name": "人口迁移分析",
+    "description": "分析 {region} 的人口迁移流、模式与决定因素。",
+    "category": "社会科学",
+    "tags": ["人口迁移", "流动", "决定因素"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "region", "label": "研究区域", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["迁移登记的口径差异与漏报需讨论。"],
+    "prompt": "请分析 {region} 的人口迁移（数据来自 @文件 或公开来源）：说明迁移定义与数据来源版本、流量矩阵与净迁移估计、时空模式可视化、决定因素回归（注明变量与模型）。跨境数据须核对来源统计口径；不得编造迁移人数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "inequality-measurement",
+    "type": "workflow",
+    "name": "不平等测量",
+    "description": "测量并分解 {dimension} 维度的不平等程度。",
+    "category": "社会科学",
+    "tags": ["不平等", "基尼系数", "分解"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "dimension", "label": "不平等维度", "required": true },
+      { "key": "subgroups", "label": "分解子群体", "required": false }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": ["us-census"],
+    "limitations": ["收入申报偏差与等值化选择影响测量。"],
+    "prompt": "请对用户通过 @文件 提供的数据测量 {dimension} 不平等：说明指标选择（基尼、泰尔、分位比）与理由、等值化与权重处理、按 {subgroups} 的组内/组间分解、随时间的稳健性检验，输出洛伦兹曲线与指标表。口径处理须与数据来源核对；不得编造指标值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "behavioral-experiment",
+    "type": "workflow",
+    "name": "行为实验分析",
+    "description": "分析心理学或行为经济学实验数据。",
+    "category": "社会科学",
+    "tags": ["行为实验", "实验设计", "混合效应模型"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "design", "label": "实验设计", "required": true },
+      { "key": "analysis_type", "label": "分析类型", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["结果解释受设计功效与 preregistration 状况约束。"],
+    "prompt": "请按 {design} 设计分析用户通过 @文件 提供的行为实验数据（{analysis_type}）：说明被试量与设计核对、数据清洗与排除标准、统计模型与效应量及置信区间、多重比较校正，输出条件均值图与检验表。须报告功效或敏感性分析；不得编造 p 值或效应量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "content-analysis-social",
+    "type": "workflow",
+    "name": "内容分析",
+    "description": "对媒体或文档做系统化编码与类别分析。",
+    "category": "社会科学",
+    "tags": ["内容分析", "编码", "媒体研究"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "categories", "label": "编码类目", "required": true },
+      { "key": "groups", "label": "比较分组或时段", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["编码者信度不足时结果不可用。"],
+    "prompt": "请对用户通过 @文件 提供的材料按 {categories} 做内容分析（比较：{groups}）：给出操作化编码手册（每类目的定义与示例）、抽样框架、编码结果与信度指标（如 Krippendorff α）、按 {groups} 的频率与交叉比较。编码判断须可追溯并标注不确定性；不得编造编码结果，输出为需人工核验的草案。"
+  }
+]

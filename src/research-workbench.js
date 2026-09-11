@@ -12,8 +12,12 @@ import {
 } from './ui.js'
 
 const TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
-const WORKBENCH_DEFAULT_WORKFLOW_CATEGORIES = ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种']
-const WORKBENCH_WORKFLOW_CATEGORY_COLORS = {
+const WORKBENCH_CATEGORY_SHORTCUTS = {
+  workflow: ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种'],
+  skill: ['论文与手稿', '文献研究', '生物信息学', '农业研究'],
+  database: ['文献与引文', '基因组与遗传变异', '组学与表达数据', '临床与公共卫生'],
+}
+const WORKBENCH_CATEGORY_COLORS = {
   '论文与手稿': C.blue,
   '文献研究': C.statusPreference,
   '数据分析': C.statusVerified,
@@ -21,7 +25,7 @@ const WORKBENCH_WORKFLOW_CATEGORY_COLORS = {
   '基因组学': C.teal,
   '临床研究': C.red,
 }
-const workbenchFallbackWorkflowColor = C.teal
+const workbenchFallbackCategoryColor = C.teal
 const RESEARCH_PLAN_STAGES = {
   '论文与手稿': ['确认材料与研究问题', '双语检索与来源核验', '结构与章节计划', '分段起草或修改', '引文、图表与一致性核对', '作者确认与交付'],
   '文献研究': ['界定问题与范围', '双语检索式', '筛选与证据表', '主题综合与研究空白', '核验引用与待确认项', '输出综述草案'],
@@ -111,20 +115,20 @@ function MetaRow({ label, children }) {
   ])
 }
 
-function WorkflowCategoryFilter({ categories, value, onChange }) {
-  const quickCategories = WORKBENCH_DEFAULT_WORKFLOW_CATEGORIES.filter(category => categories.includes(category))
+function CatalogCategoryFilter({ type, categories, value, onChange }) {
+  const quickCategories = (WORKBENCH_CATEGORY_SHORTCUTS[type] || []).filter(category => categories.includes(category))
   const additionalCategories = categories.filter(category => !quickCategories.includes(category))
   const selectIsActive = value === 'all' || additionalCategories.includes(value)
   return h('div', {
     role: 'group',
-    'aria-label': '工作流程分类筛选',
+    'aria-label': `${TYPE_LABELS[type]}分类筛选`,
     style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', width: '100%' },
   }, [
     h(Select, {
       key: 'all-categories',
       value: additionalCategories.includes(value) ? value : 'all',
       onChange,
-      ariaLabel: '全部工作流程分类',
+      ariaLabel: `全部${TYPE_LABELS[type]}分类`,
       className: 'rk-workflow-category-select',
       style: {
         padding: '5px 25px 5px 10px', borderRadius: 999,
@@ -139,7 +143,7 @@ function WorkflowCategoryFilter({ categories, value, onChange }) {
       ],
     }),
     ...quickCategories.map(category => {
-      const color = WORKBENCH_WORKFLOW_CATEGORY_COLORS[category] || workbenchFallbackWorkflowColor
+      const color = WORKBENCH_CATEGORY_COLORS[category] || workbenchFallbackCategoryColor
       const active = value === category
       return h('button', {
         key: category,
@@ -157,8 +161,12 @@ function WorkflowCategoryFilter({ categories, value, onChange }) {
   ])
 }
 
-export function filterWorkflowCategory(items, category = 'all') {
-  return category === 'all' ? items : items.filter(item => item.category === category)
+export function catalogCategory(item, type = item?.type) {
+  return type === 'database' ? databaseMetadata(item).group : item?.category
+}
+
+export function filterCatalogCategory(items, type, category = 'all') {
+  return category === 'all' ? items : items.filter(item => catalogCategory(item, type) === category)
 }
 
 export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded = false }) {
@@ -168,6 +176,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [query, setQuery] = React.useState('')
   const [type, setType] = React.useState('all')
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
+  const [skillCategory, setSkillCategory] = React.useState('all')
+  const [databaseCategory, setDatabaseCategory] = React.useState('all')
   const [selectedId, setSelectedId] = React.useState('review-paper')
   const [values, setValues] = React.useState({})
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
@@ -180,8 +190,11 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
   const [planRows, setPlanRows] = React.useState(() => evidence.get().plans || [])
-  const workflowCategories = [...new Set(catalog.filter(item => item.type === 'workflow').map(item => item.category))]
-  const items = filterWorkflowCategory(searchCatalog({ query, type }), type === 'workflow' ? workflowCategory : 'all')
+  const activeCategory = type === 'workflow' ? workflowCategory : type === 'skill' ? skillCategory : type === 'database' ? databaseCategory : 'all'
+  const categories = type === 'workflow' || type === 'skill' || type === 'database'
+    ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
+    : []
+  const items = filterCatalogCategory(searchCatalog({ query, type }), type, activeCategory)
   // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
   const selected = selectedCatalogItem(items, selectedId)
   const workflow = selected?.type === 'workflow' ? selected : null
@@ -356,11 +369,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
         h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索工作流程、技能、数据库……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
       ]),
       h(Segmented, { key: 'tabs', value: type, options: typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }),
-      type === 'workflow' ? h(WorkflowCategoryFilter, {
-        key: 'workflow-categories',
-        categories: workflowCategories,
-        value: workflowCategory,
-        onChange: setWorkflowCategory,
+      type === 'workflow' || type === 'skill' || type === 'database' ? h(CatalogCategoryFilter, {
+        key: `${type}-categories`,
+        type,
+        categories,
+        value: activeCategory,
+        onChange: type === 'workflow' ? setWorkflowCategory : type === 'skill' ? setSkillCategory : setDatabaseCategory,
       }) : null,
     ]),
     h('div', { key: 'layout', className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [

@@ -1,1 +1,199 @@
-[]
+[
+  {
+    "id": "differential-equations",
+    "type": "workflow",
+    "name": "微分方程求解",
+    "description": "求常微分/偏微分方程的解析与数值解。",
+    "category": "数学",
+    "tags": ["微分方程", "ODE", "PDE", "数值解"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "equation", "label": "微分方程", "required": true },
+      { "key": "conditions", "label": "定解条件", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["数值解精度依赖步长与容差设置。"],
+    "prompt": "请求解 {equation}（定解条件：{conditions}）：先判断可解性并尝试解析解（注明方法），再给出数值解（说明格式、步长/网格与收敛性验证），输出解的表达式或曲线与误差估计。数值设置须可复现；不得编造解析解或数值结果，输出为需人工核验的草案。"
+  },
+  {
+    "id": "optimization-problem",
+    "type": "workflow",
+    "name": "优化问题求解",
+    "description": "求解带约束或无约束的优化问题并验证最优性。",
+    "category": "数学",
+    "tags": ["优化", "线性规划", "凸优化"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "objective", "label": "目标函数", "required": true },
+      { "key": "constraints", "label": "约束条件", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["非凸问题只能保证局部最优。"],
+    "prompt": "请求解优化问题：目标 {objective}，约束 {constraints}。判断问题类型（线性/凸/非凸）、给出求解方法与求解器设置、验证 KKT 条件或最优性界、报告对偶间隙或局部性说明，输出最优解与目标值及灵敏度分析。求解设置须记录；不得编造最优值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "bayesian-inference",
+    "type": "workflow",
+    "name": "贝叶斯推断",
+    "description": "构建贝叶斯模型并计算后验分布。",
+    "category": "数学",
+    "tags": ["贝叶斯", "后验分布", "MCMC"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "model", "label": "模型描述", "required": true },
+      { "key": "priors", "label": "先验假设", "required": false, "hint": "留空则给出弱信息先验并说明" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["后验解释依赖先验与似然设定。"],
+    "prompt": "请为模型 {model} 构建贝叶斯推断（先验：{priors}），数据来自 @文件：写出层级模型与似然、收敛诊断（R-hat、ESS）、后验预测检查，输出参数后验摘要与区间。先验敏感性分析须包含；不得编造后验统计量，输出为需人工核验的草案。"
+  },
+  {
+    "id": "monte-carlo-simulation",
+    "type": "workflow",
+    "name": "蒙特卡洛模拟",
+    "description": "用随机采样估计量的期望、分布或概率。",
+    "category": "数学",
+    "tags": ["蒙特卡洛", "随机模拟", "方差缩减"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "problem", "label": "模拟问题", "required": true },
+      { "key": "n_samples", "label": "样本数", "required": false, "hint": "默认 10000" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["估计误差随样本量收敛，须报告标准误。"],
+    "prompt": "请对问题 {problem} 做蒙特卡洛模拟（样本数 {n_samples}）：说明抽样分布与随机种子、方差缩减技术（如适用）、标准误与置信区间随样本量收敛曲线，输出估计值及其误差。结果必须与理论值（如可得）对照；不得编造估计值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "graph-theory-analysis",
+    "type": "workflow",
+    "name": "图论分析",
+    "description": "分析图结构与经典图算法行为。",
+    "category": "数学",
+    "tags": ["图论", "最短路径", "网络优化"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "algorithms", "label": "运行算法", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["算法输出的最优性依赖输入图的完整性。"],
+    "prompt": "请对用户通过 @文件 提供的图数据运行 {algorithms}：说明图的规模与表示（邻接表/矩阵）、各算法结果（路径、生成树、最大流、着色）及其验证、复杂度与运行时间，输出结果表与可视化。节点与边统计须与输入核对；不得编造图结构，输出为需人工核验的草案。"
+  },
+  {
+    "id": "symbolic-computation",
+    "type": "workflow",
+    "name": "符号计算",
+    "description": "对表达式做精确代数运算、化简与推导。",
+    "category": "数学",
+    "tags": ["符号计算", "代数推导", "化简"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "expression", "label": "表达式或方程", "required": true },
+      { "key": "operations", "label": "运算目标", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["符号结果需人工核对定义域与分支。"],
+    "prompt": "请对 {expression} 执行 {operations}：给出逐步推导（每步注明所用规则）、化简或求解结果、定义域与分支条件检查，并用数值代入抽样验证解析结果。推导须可逐步复核；不得编造推导步骤，输出为需人工核验的草案。"
+  },
+  {
+    "id": "numerical-methods",
+    "type": "workflow",
+    "name": "数值方法实现与比较",
+    "description": "实现多种数值算法并对比精度与效率。",
+    "category": "数学",
+    "tags": ["数值分析", "算法比较", "误差"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "problem", "label": "数值问题", "required": true },
+      { "key": "methods", "label": "待比较方法", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["比较结论限于测试问题与参数设置。"],
+    "prompt": "请针对 {problem} 实现 {methods}：给出各方法的原理与实现要点、收敛阶验证（误差随步长变化）、精度-耗时对比与稳定性讨论，输出误差表与收敛曲线。测试算例与种子须记录；不得编造误差或收敛阶，输出为需人工核验的草案。"
+  },
+  {
+    "id": "stochastic-modeling",
+    "type": "workflow",
+    "name": "随机过程建模",
+    "description": "建模并模拟随机游走、马尔可夫链等随机过程。",
+    "category": "数学",
+    "tags": ["随机过程", "马尔可夫链", "随机微分方程"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "process", "label": "随机过程", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模拟结论依赖过程假设与参数选择。"],
+    "prompt": "请对 {process} 建模并模拟：说明过程定义与参数依据、模拟格式（如 Euler-Maruyama）与步长收敛、平稳性或遍历性检查（如适用）、输出样本路径与统计量分布。随机种子须记录；不得编造分布参数，输出为需人工核验的草案。"
+  },
+  {
+    "id": "game-theory-analysis",
+    "type": "workflow",
+    "name": "博弈论分析",
+    "description": "分析策略互动并求解均衡。",
+    "category": "数学",
+    "tags": ["博弈论", "纳什均衡", "机制设计"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "game", "label": "博弈描述", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["均衡多重性时选择依据需显式说明。"],
+    "prompt": "请分析博弈 {game}：规范化参与人、策略与支付、求解纯/混合策略均衡（注明方法：删除劣策略、支付矩阵、迭代），必要时做最优反应分析或演化稳定讨论，输出均衡集合与支付结果。支付设定须逐条列出；不得编造均衡，输出为需人工核验的草案。"
+  },
+  {
+    "id": "topology-analysis",
+    "type": "workflow",
+    "name": "拓扑数据分析",
+    "description": "用持续同调提取数据的拓扑特征。",
+    "category": "数学",
+    "tags": ["TDA", "持续同调", "形状分析"],
+    "requiresFiles": true,
+    "placeholders": [],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["拓扑特征解释依赖尺度选择与降噪。"],
+    "prompt": "请对用户通过 @文件 提供的数据做拓扑数据分析：说明预处理与度量选择、过滤（Vietoris-Rips 等）与参数、持续图/条码图与持续性统计、显著性检验（置换），输出拓扑特征及其持久区间。计算库版本须记录；不得编造同调维数或持久性，输出为需人工核验的草案。"
+  },
+  {
+    "id": "fourier-analysis",
+    "type": "workflow",
+    "name": "傅里叶分析",
+    "description": "对时序信号做频谱分解与滤波。",
+    "category": "数学",
+    "tags": ["傅里叶", "频谱", "滤波"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "filter_spec", "label": "滤波器规格", "required": false, "hint": "如 low-pass 50 Hz，留空则仅做频谱分析" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["频谱解释受采样率与窗函数影响。"],
+    "prompt": "请对用户通过 @文件 提供的信号做频谱分析（滤波规格：{filter_spec}）：说明采样率与奈奎斯特检查、窗函数与泄漏处理、频谱或功率谱密度估计、（如指定）滤波器设计与幅相响应，输出频谱图与滤波前后对比。滤波参数须可复现；不得编造频率成分，输出为需人工核验的草案。"
+  },
+  {
+    "id": "dynamical-systems",
+    "type": "workflow",
+    "name": "动力系统分析",
+    "description": "分析动力系统的稳定性、分岔与混沌行为。",
+    "category": "数学",
+    "tags": ["动力系统", "分岔", "混沌"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "system", "label": "系统方程", "required": true },
+      { "key": "parameter", "label": "分岔参数", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["数值探测不能穷尽全部初值空间。"],
+    "prompt": "请分析系统 {system}（分岔参数：{parameter}）：求平衡点与雅可比特征值、绘制分岔图与随 {parameter} 的稳定性变化、判别周期轨与混沌（Lyapunov 指数、庞加莱截面），输出相图与分岔图。数值设置须记录；不得编造分岔点或李雅普诺夫指数，输出为需人工核验的草案。"
+  }
+]

@@ -1,1 +1,256 @@
-[]
+[
+  {
+    "id": "classification-model",
+    "type": "workflow",
+    "name": "分类模型构建",
+    "description": "训练分类模型并完成评估、调参与解释。",
+    "category": "机器学习",
+    "tags": ["分类", "机器学习", "模型评估"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "target", "label": "目标类别变量", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模型性能受数据质量与类别不平衡影响。"],
+    "prompt": "请对用户通过 @文件 提供的数据训练分类模型，目标变量 {target}：说明数据划分（分层与随机种子）、类别不平衡处理、候选模型与交叉验证指标（含基线）、混淆矩阵与 ROC/PR 分析，输出评估表与特征重要性。防止信息泄漏的处理须说明；不得编造指标值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "nlp-text-analysis",
+    "type": "workflow",
+    "name": "NLP 文本分析",
+    "description": "用 NLP 方法完成文本分类、抽取、摘要或嵌入分析。",
+    "category": "机器学习",
+    "tags": ["NLP", "文本分类", "命名实体"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "NLP 任务", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["模型输出需抽样人工核对质量。"],
+    "prompt": "请对用户通过 @文件 提供的文本完成 {task}：说明预处理与语言处理选择、方法或模型及版本、评估方式（人工抽样或标注集）与错误分析，输出结果与量化质量报告。须记录模型来源与参数；不得编造抽取结果或指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "image-classification",
+    "type": "workflow",
+    "name": "图像分类",
+    "description": "基于 CNN/Transformer 与迁移学习构建图像分类器。",
+    "category": "机器学习",
+    "tags": ["图像分类", "迁移学习", "深度学习"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "classes", "label": "类别标签", "required": true },
+      { "key": "backbone", "label": "骨干模型", "required": false, "hint": "如 ResNet50、ViT；留空则推荐并说明" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["域偏移会显著降低实际部署性能。"],
+    "prompt": "请对用户通过 @文件 提供的图像构建分类器（类别：{classes}；骨干：{backbone}）：说明数据增强与划分、迁移学习设置（冻结层、学习率）、训练收敛与验证指标、错误样本分析，输出训练曲线与混淆矩阵。预训练权重与种子须记录；不得编造准确率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "anomaly-detection",
+    "type": "workflow",
+    "name": "异常检测",
+    "description": "在数据中检测离群与异常模式。",
+    "category": "机器学习",
+    "tags": ["异常检测", "离群点", "无监督"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "constraint", "label": "业务约束", "required": false, "hint": "如预期异常率、误报容忍度" }
+    ],
+    "suggestedSkillIds": ["statistics-review", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["无标签场景下异常定义含主观性。"],
+    "prompt": "请对用户通过 @文件 提供的数据做异常检测（约束：{constraint}）：说明特征标准化与量纲处理、方法选择（隔离森林/自动编码器/统计检验）与阈值确定依据、检测结果的业务复核抽样，输出异常分数分布与Top 异常清单。阈值选取须可解释；不得编造异常率，输出为需人工核验的草案。"
+  },
+  {
+    "id": "feature-engineering",
+    "type": "workflow",
+    "name": "特征工程",
+    "description": "从原始数据构造信息量高的特征集。",
+    "category": "机器学习",
+    "tags": ["特征工程", "特征选择", "数据变换"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "target", "label": "预测目标", "required": true }
+    ],
+    "suggestedSkillIds": ["data-integrity", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["特征有效性依赖下游模型与数据分布。"],
+    "prompt": "请针对预测目标 {target} 做特征工程（数据来自 @文件）：说明缺失与异常处理、衍生特征的构造逻辑与业务含义、特征筛选方法与稳定性（跨折一致性）、泄漏排查（尤其时间相关数据），输出特征清单与重要性排序。变换统计量只能来自训练折；不得编造重要性，输出为需人工核验的草案。"
+  },
+  {
+    "id": "hyperparameter-tuning",
+    "type": "workflow",
+    "name": "超参数调优",
+    "description": "系统搜索模型超参数并防止过拟合评估。",
+    "category": "机器学习",
+    "tags": ["调参", "Optuna", "交叉验证"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "model", "label": "模型类型", "required": true },
+      { "key": "method", "label": "搜索方法", "required": false, "hint": "如 Optuna 贝叶斯搜索；留空则推荐" },
+      { "key": "n_trials", "label": "试验次数", "required": false, "hint": "默认 100" },
+      { "key": "n_folds", "label": "交叉验证折数", "required": false, "hint": "默认 5" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["最优超参数对数据集敏感，不具普适性。"],
+    "prompt": "请对 {model} 做超参数调优（方法 {method}、{n_trials} 次试验、{n_folds} 折交叉验证），数据来自 @文件：说明搜索空间与理由、划分方式与随机种子、试验记录与最优参数的验证集复核，输出搜索历史与最终指标。调参统计量不得接触测试集；不得编造指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "model-interpretability",
+    "type": "workflow",
+    "name": "模型可解释性分析",
+    "description": "用 SHAP/LIME 等方法解释模型预测。",
+    "category": "机器学习",
+    "tags": ["可解释性", "SHAP", "特征归因"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "n_samples", "label": "局部解释样本数", "required": false, "hint": "默认 10" }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["解释方法是近似归因，非因果关系。"],
+    "prompt": "请解释用户通过 @文件 提供的已训练模型：给出全局特征重要性（SHAP 汇总）与 {n_samples} 个样本的局部解释、交互作用摘要、解释方法的一致性检查与局限说明，输出归因图表。解释须注明方法版本与参考背景数据；不得编造归因值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "transfer-learning",
+    "type": "workflow",
+    "name": "迁移学习",
+    "description": "把预训练模型适配到目标任务或新领域。",
+    "category": "机器学习",
+    "tags": ["迁移学习", "预训练", "领域适配"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "目标任务", "required": true },
+      { "key": "source_model", "label": "源模型", "required": true }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["负迁移风险需用基线对照排除。"],
+    "prompt": "请把 {source_model} 适配到目标任务 {task}（数据来自 @文件）：说明预训练权重版本与许可、适配策略（微调/适配器/冻结）、与从头训练及简单基线的对比，输出训练曲线与指标。层冻结与学习率设置须记录；不得编造性能提升，输出为需人工核验的草案。"
+  },
+  {
+    "id": "graph-neural-network",
+    "type": "workflow",
+    "name": "图神经网络",
+    "description": "构建 GNN 完成节点、边或图级预测任务。",
+    "category": "机器学习",
+    "tags": ["GNN", "图学习", "节点分类"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "task", "label": "任务类型", "required": true },
+      { "key": "metrics", "label": "评估指标", "required": false }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["图任务结果对划分方式（传递/归纳）敏感。"],
+    "prompt": "请对用户通过 @文件 提供的图数据构建 GNN（任务：{task}；指标：{metrics}）：说明图构建与特征、模型架构与层数、划分方式与评估协议（注意图级泄漏）、与 GCN/GAT 等基线对比，输出指标与训练曲线。随机种子与库版本须记录；不得编造指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "generative-model",
+    "type": "workflow",
+    "name": "生成模型构建",
+    "description": "训练 VAE/GAN/扩散模型生成目标数据。",
+    "category": "机器学习",
+    "tags": ["生成模型", "扩散模型", "VAE"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "data_type", "label": "生成数据类型", "required": true },
+      { "key": "architecture", "label": "模型架构", "required": false, "hint": "留空则推荐并说明取舍" },
+      { "key": "n_samples", "label": "生成样本数", "required": false, "hint": "默认 100" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "data-integrity"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["生成内容不保证科学准确性，须人工甄别。"],
+    "prompt": "请为 {data_type} 构建 {architecture} 生成模型并生成 {n_samples} 个样本：说明数据准备与归一化、架构与训练设置、生成质量评估（保真度与多样性指标），输出样本与评估报告。训练种子与超参须记录；不得声称生成内容为真实数据，输出为需人工核验的草案。"
+  },
+  {
+    "id": "reinforcement-learning",
+    "type": "workflow",
+    "name": "强化学习",
+    "description": "训练 RL 智能体完成序贯决策任务。",
+    "category": "机器学习",
+    "tags": ["强化学习", "PPO", "策略训练"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "environment", "label": "环境或任务", "required": true },
+      { "key": "algorithm", "label": "RL 算法", "required": false, "hint": "如 PPO、SAC、DQN；留空则推荐" }
+    ],
+    "suggestedSkillIds": ["reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["仿真策略迁移到真实环境需另行验证。"],
+    "prompt": "请在 {environment} 中用 {algorithm} 训练智能体：说明环境设定与奖励设计、训练设置与超参、多随机种子的学习曲线及方差、评估协议（训练外评估），输出奖励曲线与策略行为示例。环境版本与种子须记录；不得编造回报值，输出为需人工核验的草案。"
+  },
+  {
+    "id": "model-comparison",
+    "type": "workflow",
+    "name": "模型比较与选型",
+    "description": "在统一协议下系统比较候选模型。",
+    "category": "机器学习",
+    "tags": ["模型选择", "基准", "交叉验证"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "target", "label": "目标变量", "required": true },
+      { "key": "models", "label": "候选模型", "required": true }
+    ],
+    "suggestedSkillIds": ["statistics-review", "reproducibility"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["选型结论依赖数据分布与评估协议。"],
+    "prompt": "请对 {models} 在目标 {target} 上做统一比较（数据来自 @文件）：说明统一的数据划分与预处理（管道内拟合防泄漏）、一致的调参预算与随机种子、多折指标均值±方差与统计检验，输出对比表与推荐及理由。比较协议须完全对称；不得编造指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "dataset-bias-audit",
+    "type": "workflow",
+    "name": "数据与模型偏差审计",
+    "description": "审计数据与模型在受保护属性上的公平性。",
+    "category": "机器学习",
+    "tags": ["公平性", "偏差审计", "AI 伦理"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "attributes", "label": "受保护属性", "required": true }
+    ],
+    "suggestedSkillIds": ["uncertainty-communication", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["公平性指标之间存在不可同时满足的权衡。"],
+    "prompt": "请按受保护属性 {attributes} 审计用户通过 @文件 提供的数据与模型：说明数据分布与代表性差异、公平性指标选择（人口平等/机会平等/校准）及不可兼得的权衡、子群性能分解与统计不确定性、缓解方案的利弊，输出审计报告。属性缺失处理须显式说明；不得编造子群指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "recommendation-system",
+    "type": "workflow",
+    "name": "推荐系统构建",
+    "description": "构建协同过滤或内容推荐引擎并离线评估。",
+    "category": "机器学习",
+    "tags": ["推荐系统", "协同过滤", "排序"],
+    "requiresFiles": true,
+    "placeholders": [
+      { "key": "data_type", "label": "数据类型", "required": true },
+      { "key": "approach", "label": "技术路线", "required": false, "hint": "留空则按数据形态推荐" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "statistics-review"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["离线指标与在线效果可能不一致。"],
+    "prompt": "请基于用户通过 @文件 提供的 {data_type} 数据构建 {approach} 推荐系统：说明评分/隐式反馈处理、训练划分（按时间划分防泄漏）、Top-K 指标（Precision/Recall/NDCG）与流行度偏差检查，输出评估表与样例推荐。冷启动策略须说明；不得编造指标，输出为需人工核验的草案。"
+  },
+  {
+    "id": "federated-learning-design",
+    "type": "workflow",
+    "name": "联邦学习设计",
+    "description": "设计隐私保护的分布式联邦学习方案。",
+    "category": "机器学习",
+    "tags": ["联邦学习", "差分隐私", "分布式训练"],
+    "requiresFiles": false,
+    "placeholders": [
+      { "key": "task", "label": "机器学习任务", "required": true },
+      { "key": "partition", "label": "数据划分", "required": false, "hint": "如 non-IID、标签倾斜" },
+      { "key": "epsilon", "label": "隐私预算 ε", "required": false },
+      { "key": "n_clients", "label": "客户端数量", "required": false, "hint": "默认 10" }
+    ],
+    "suggestedSkillIds": ["reproducibility", "uncertainty-communication"],
+    "suggestedDatabaseIds": [],
+    "limitations": ["隐私-效用权衡需实验量化后再决策。"],
+    "prompt": "请为任务 {task} 设计联邦学习方案（{n_clients} 个客户端、划分 {partition}、隐私预算 ε={epsilon}）：说明聚合算法与通信轮次、non-IID 下的性能影响与应对、差分隐私机制与隐私-效用曲线、威胁模型边界，输出方案设计与仿真结果。隐私声明不得超出机制实际保证；不得编造仿真指标，输出为需人工核验的草案。"
+  }
+]
