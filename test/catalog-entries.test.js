@@ -33,7 +33,7 @@ test('登记纯函数：未登记的分片会被点名', () => {
 
 test('聚合入口：数量、类型与分组元数据形状正确', async () => {
   const { workflows, skills, resources, databaseMetadataConfig } = await loadCatalogEntries()
-  assert.equal(workflows.length, 206)
+  assert.equal(workflows.length, 308)
   assert.equal(skills.length, 11)
   assert.equal(resources.length, 122)
   assert.ok(workflows.every(item => item.type === 'workflow'))

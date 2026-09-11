@@ -18,7 +18,7 @@ import cellBiology from './cell-biology.json' with { type: 'json' }
 import chemistry from './chemistry.json' with { type: 'json' }
 import drugDiscovery from './drug-discovery.json' with { type: 'json' }
 import materials from './materials.json' with { type: 'json' }
-// 预留流程族：当前为空分片，迁入条目后自然并入聚合。
+// 迁移补齐的流程族：由 K-Dense 上游条目中文化迁入（见 docs-internal/pending-source-migration.md）。
 import ecology from './ecology.json' with { type: 'json' }
 import neuroscience from './neuroscience.json' with { type: 'json' }
 import physics from './physics.json' with { type: 'json' }

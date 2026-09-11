@@ -10,6 +10,7 @@
 
 ### 变更
 
+- 🧬 **工作流批量迁入 102 条（8 个预留流程族填满）**：对账上游 326 条工作流后，把与预留分片对应的 neuro / ecology / physics / social / math / ml / engineering / astro 八类条目中文化迁入 `catalog/workflows/`，目录工作流 206 → **308** 条、类目 16 → 24 个（总资源 339 → 441）。每条保留上游占位符契约、按目录风格重写中文 Prompt（内置防编造边界与「需人工核验」定位）、`requiresFiles` 与建议技能/数据源对齐本目录（含上一批迁入的 NASA ADS、Copernicus CDS、Materials Project、Particle Data Group 等）。8 个分片此前已在 `index.js` 登记为空分片，本次迁入即自然并入聚合，未改任何入口。
 - 🗄 **数据源批量迁入 40 条（pending-source-migration 台账清零）**：按迁移台账把 K-Dense 上游非金融科研数据源全部迁入 `catalog/resources/general-science.json`，目录规模 82 → **122** 个数据源（总资源 299 → 339）。覆盖天文与空间（NASA ADS / Earthdata / INSPIRE-HEP / Launch Library 2 等 7 条）、化学与材料（Materials Project / ChemSpider / NIST WebBook 等 6 条）、地球气候环境（NOAA CDO / Copernicus CDS / EPA AQS / Sentinel Hub 等 16 条）、地理空间（US Census / OpenCage / ArcGIS REST 等 5 条）与生物多样性、粒子物理、地质样品等 6 条；每条均按迁入门槛完成中文化改写，如实标注访问前提（API Key / 注册 / 订阅 / 许可），未验证直查能力前一律标 `requires-mcp`（仅 GADM 纯下载类标 `reference-only`）。
   - **研究入口分组同步扩充**：新增「材料与物理科学」入口组（Materials Project / MPDS / AFLOW / Particle Data Group），其余 35 条分别归入天文与空间科学、气候/地球/环境、地理空间与社会数据、生物多样性与生态、化学/药物/毒理五个既有入口组；仅 open-food-facts 走「其他研究数据源」兜底组。
   - 台账本身经上游 229 条 id + URL 双重比对核验：原记录「42 条待迁」实为计数失误——41 条清单中有 1 条（`openstreetmap`）早已改名 `openstreetmap-overpass` 迁入，真实待迁为 40 条；台账已标注完结并保留溯源信息。

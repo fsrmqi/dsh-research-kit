@@ -8,7 +8,7 @@
 
 [English](README.en.md) · [简体中文](README.md)
 
-> A catalog and launcher for research workflows in DeepSeek Harness: 206 human-reviewed workflows, 11 skill-guidance modules, 122 scientific data sources.
+> A catalog and launcher for research workflows in DeepSeek Harness: 308 human-reviewed workflows, 11 skill-guidance modules, 122 scientific data sources.
 
 It turns recurring research tasks — peer review, writing an introduction, literature synthesis, planning a statistical analysis — into **parameterized, editable prompts that you review before sending**. The plugin only assembles the task and hands it back to your session; execution stays with your own DSH agent.
 
@@ -42,7 +42,7 @@ Research Kit turns those four into reusable assets.
 ## How it works
 
 ```text
-Research capability catalog (339 entries)
+Research capability catalog (441 entries)
   → pick a workflow
   → fill parameters, reference materials via @file
   → review and edit the final prompt
@@ -60,8 +60,8 @@ Deliberate trade-offs:
 
 ## Capabilities
 
-**🧪 206 human-reviewed research workflows**
-Across sixteen workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research and more — maintained as per-family shards under `catalog/workflows/` (with reserved shards for ecology, neuroscience, physics, astronomy and beyond). Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
+**🧪 308 human-reviewed research workflows**
+Across twenty-four workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
 
 **🧩 11 composable skill-guidance modules**
 Scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication — plus three domain modules: agricultural experiment design, crop genomics & breeding evidence, and bioinformatics workflow governance. Each carries a discipline fragment and a human checklist; toggle them at launch to fold them into the prompt.
@@ -137,7 +137,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 339 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 441 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live;
@@ -174,7 +174,14 @@ Workflows are maintained as per-family shards under `catalog/workflows/` (one JS
 | Chemistry (chemistry) | 18 |
 | Drug discovery (drug-discovery) | 15 |
 | Materials science (materials) | 12 |
-| Reserved families (ecology / neuroscience / physics / astronomy / social-science / mathematics / machine-learning / engineering) | 0 (to be populated) |
+| Neuroscience (neuroscience) | 12 |
+| Ecology (ecology) | 14 |
+| Physics (physics) | 14 |
+| Astronomy & space science (astronomy) | 11 |
+| Social science (social-science) | 12 |
+| Mathematics (mathematics) | 12 |
+| Machine learning (machine-learning) | 15 |
+| Engineering (engineering) | 12 |
 
 Plus 11 skills (`catalog/skills/`: core 8 / crop-breeding 2 / bioinformatics 1) and 122 database entries (`catalog/resources/`: crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
 
@@ -203,7 +210,7 @@ The remaining 111 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (339 entries, 339 unique IDs, shards identical to the aggregated entries), 149 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (441 entries, 441 unique IDs, shards identical to the aggregated entries), 152 regression tests (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
