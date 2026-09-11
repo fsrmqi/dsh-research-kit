@@ -2288,6 +2288,2083 @@
     "prompt": "请基于 @文件 为作物性状或胁迫“{trait}”整合基因表达、变异、表型和环境证据。记录物种、组织/时期、参考版本、表达定量方法、性状术语与环境条件；区分已观测关联、文献支持和待验证推断；提出独立材料、时空重复和功能验证方案。不得编造表达模式、候选基因或育种价值。输出可追溯证据表与育种决策边界。"
   },
   {
+    "id": "graphical-abstract",
+    "name": "Create a Graphical Abstract",
+    "description": "Visual summary of key findings for a paper",
+    "category": "可视化与图表",
+    "icon": "Image",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a graphical abstract that summarizes the key findings of the uploaded paper or data in a single self-contained figure. First extract the actual central message, study system, and main result from the source; never invent data or results. Design a clear reading order (left-to-right or top-to-bottom) with 3-5 visual stages connected by arrows, generous whitespace, and minimal text labels (short phrases, not sentences). Use a colorblind-safe palette, consistent iconography and line weights, and legible fonts (around 14-18 pt equivalent) sized for a journal's typical ~12 x 6 cm abstract panel. Avoid chartjunk and misleading scales. If the key message, target journal, or audience is unclear and would change the design, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the abstract as a high-resolution PNG plus an editable SVG, and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "publication-figure",
+    "name": "Make a Publication Figure",
+    "description": "Publication-quality plots and visualizations from data",
+    "category": "可视化与图表",
+    "icon": "BarChart3",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate publication-quality figures from the uploaded data using only real values present in the data. Inspect the data first, then choose the chart type that fits its structure and the comparison being made (e.g., bars for categorical counts, lines for trends, box/violin or scatter for distributions). Label every axis with units, add legends and clear tick formatting, and use a colorblind-safe palette with honest, non-truncated scales. Apply a clean, consistent style with legible fonts, minimal gridlines, and no chartjunk; show uncertainty (error bars, CI) where relevant. Target standard journal specs: vector-friendly layout, 300+ DPI, and single- or double-column proportions. If figure type, grouping, or target journal is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save each figure as a high-resolution PNG plus an editable source (SVG or PDF) and list the file names in chat. {instructions}\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "instructions",
+        "label": "Specific figure instructions (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "slide-deck",
+    "name": "Build a Slide Deck",
+    "description": "Scientific presentation slides for talks or lab meetings",
+    "category": "可视化与图表",
+    "icon": "Presentation",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a scientific slide deck (PPTX) from the uploaded paper or data for a {context}, tailoring depth, jargon, and pacing to that audience. Build: a title slide, a brief outline, background/motivation, a methods overview, key results with figures, discussion points, and conclusions, plus an acknowledgements/references slide. Use 16:9 widescreen, one core idea per slide, large legible fonts (titles ~32-40 pt, body ~20-24 pt), and concise bullets or visuals over dense text. Apply a consistent template, a colorblind-safe palette, high-contrast text, and reuse the paper's actual figures at high resolution with readable labels; never fabricate results. Add short speaker notes summarizing each slide's takeaway. If talk length or audience expertise is unclear and would change scope, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the deck as a PPTX file and list the file name in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "context",
+        "label": "Presentation context (e.g., conference talk, lab meeting, journal club)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "conference-poster",
+    "name": "Create a Conference Poster",
+    "description": "Scientific poster layout from paper or results",
+    "category": "可视化与图表",
+    "icon": "LayoutGrid",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nDesign a scientific conference poster from the uploaded paper or results. Include title and authors (with affiliations), introduction/background, methods, key results with figures, conclusions/takeaways, and references plus contact/acknowledgements. Organize content in a clear column-based grid with an obvious reading order, a prominent title band, and a one-line take-home message. Use large readable type (title ~72-100 pt, headings ~36-48 pt, body ~24-32 pt), a colorblind-safe palette, strong contrast, generous whitespace, and figures reused from the paper at high resolution with honest scales; never invent data. Default to A0 portrait (841 x 1189 mm) unless told otherwise. If poster size, orientation, or the single key message is unclear and would change the layout, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the poster as a high-resolution PNG plus an editable PPTX (or LaTeX source) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "infographic",
+    "name": "Create an Infographic",
+    "description": "Visual explainer for broader audiences",
+    "category": "可视化与图表",
+    "icon": "PieChart",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate an infographic that explains the key findings from the uploaded paper or data for a broad, non-specialist audience, using only real figures and results from the source; never invent numbers. Tell one clear story with a strong title, a logical top-to-bottom reading flow, and 3-5 sections linked by visual cues. Use simple icons, large readable numbers, and minimal jargon (define unavoidable terms), with simple honest charts and no misleading scales. Apply a colorblind-safe palette, consistent iconography, generous whitespace, legible fonts, and good text/background contrast for accessibility. Default to a vertical portrait layout suitable for web and print unless told otherwise. If the audience or single key message is unclear and would change the design, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the infographic as a high-resolution PNG plus an editable SVG and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-schematic",
+    "name": "Create a Scientific Schematic",
+    "description": "Mechanistic or conceptual diagram of a process",
+    "category": "可视化与图表",
+    "icon": "Palette",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a scientific schematic diagram illustrating: {concept}. Clearly show the key components, their relationships, and the flow of the process using arrows and consistent visual encoding (shape/color = type of entity), following standard conventions for the relevant field. Establish a clear reading order, use clean lines, even spacing, and concise labels with units where applicable; never invent mechanisms or quantities not implied by the concept. Apply a colorblind-safe palette, legible fonts, high contrast, and minimal clutter so it remains readable when scaled to journal column width. Add a short caption stating what the schematic depicts. If important details (scale, level of mechanistic detail, target journal style) are ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the schematic as a high-resolution PNG plus an editable source (SVG or Mermaid file) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "concept",
+        "label": "Process or concept to illustrate",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-flowchart",
+    "name": "Create a Flowchart",
+    "description": "Experimental or analytical workflow diagram",
+    "category": "可视化与图表",
+    "icon": "Network",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a detailed flowchart for: {workflow}. Show all decision points, parallel processes, inputs/outputs, and terminal outcomes, with a clear top-to-bottom or left-to-right reading order and labeled connectors (e.g., yes/no on decision branches). Use standard symbols: rectangles for processes, diamonds for decisions, ovals for start/end, and parallelograms for inputs/outputs. Apply consistent color coding for different phases with a colorblind-safe palette and a small legend, plus legible fonts, even spacing, and minimal crossing lines. Keep labels concise and accurate to the described workflow; do not invent steps. If the workflow has ambiguous branching or scope that would change the diagram, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the flowchart as a high-resolution PNG plus an editable source (Mermaid file or SVG) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "workflow",
+        "label": "Workflow or process to diagram",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-timeline",
+    "name": "Create a Research Timeline",
+    "description": "Visual timeline of project milestones and deliverables",
+    "category": "可视化与图表",
+    "icon": "Timer",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nCreate a visual research timeline for a project on: {project}, spanning {duration}. Lay out key milestones, deliverables, and work packages along a time axis in Gantt-chart style, showing durations, dependencies (linked bars or arrows), and go/no-go decision points as distinct markers. Use color-coded phases with a colorblind-safe palette and a clear legend, a labeled time axis with sensible tick intervals matching {duration}, and legible fonts with even row spacing. Keep the structure realistic and consistent; do not invent milestones beyond what the project implies. Ensure it reads clearly left-to-right and stays legible at report and slide sizes. If the milestone list or phase breakdown is unspecified and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the timeline as a high-resolution PNG plus an editable source (SVG or the plotting script) and list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "Project title or description",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Project duration (e.g., 3 years, 12 months)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-heatmap",
+    "name": "Create a Heatmap",
+    "description": "Heatmap visualization from matrix data",
+    "category": "可视化与图表",
+    "icon": "LayoutGrid",
+    "prompt": "Create a publication-quality heatmap from the uploaded matrix data, using the real values only.\n\nWork in this order:\n1. Apply appropriate clustering (hierarchical or k-means) to rows and columns if it aids interpretation,\n2. choose a perceptually uniform colormap (sequential for one-directional data, diverging centered at a meaningful midpoint for signed data),\n3. add dendrograms when clustered,\n4. label rows, columns, and axes clearly with legible fonts,\n5. include a color bar with units and an honest, non-misleading scale. Consider standardizing or log-transforming only when justified and state it. Use a colorblind-safe palette, annotate cells only if the matrix is small enough to stay readable, and keep it legible at journal column width with no chartjunk. If clustering choice or normalization is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the heatmap as a high-resolution PNG plus an editable source (SVG or PDF) and list the file names in chat. {instructions}\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "instructions",
+        "label": "Additional instructions (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-network-diagram",
+    "name": "Create a Network Diagram",
+    "description": "Network or interaction graph visualization",
+    "category": "可视化与图表",
+    "icon": "Network",
+    "prompt": "Create a network visualization from the uploaded data using only the real nodes and edges present.\n\nWork in this order:\n1. Parse nodes and edges (and edge weights/direction if available),\n2. choose a layout that fits the structure (force-directed, circular, or hierarchical) and avoid excessive overlap,\n3. size nodes by {metric},\n4. color-code by community or cluster using a colorblind-safe palette,\n5. label key nodes legibly without cluttering,\n6. include a clear legend explaining size and color encodings, plus edge weight if shown. Keep fonts legible, reduce hairball density (filter or bundle edges if needed), and avoid chartjunk so it stays readable at journal column width. If node count is large or the sizing/coloring choice is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Make it publication-ready and save it as a high-resolution PNG plus an editable source (SVG or the plotting script), then list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "metric",
+        "label": "Node sizing metric (e.g., degree, betweenness)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-geographic-map",
+    "name": "Create a Geographic Map",
+    "description": "Geographic or spatial data visualization",
+    "category": "可视化与图表",
+    "icon": "Globe",
+    "prompt": "Create a geographic visualization from the uploaded data using only its real coordinates and values.\n\nWork in this order:\n1. Plot points or regions on a map projection appropriate to the extent and purpose (e.g., equal-area for area comparisons),\n2. encode quantitative values with a perceptually uniform color gradient or proportionally sized markers, classifying values honestly (state the binning method),\n3. add a legend, scale bar, and north arrow where relevant,\n4. include supporting geographic features (borders, coastlines, rivers) for context without clutter,\n5. use a colorblind-safe palette, legible labels, and good land/water contrast. Avoid misleading area or color scaling and keep it readable at journal column width. If the projection, value field, or extent is ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Make it publication-ready and save it as a high-resolution PNG plus an editable source (SVG or the plotting script), then list the file names in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "create-dashboard",
+    "name": "Create an Interactive Dashboard",
+    "description": "Interactive multi-panel data dashboard",
+    "category": "可视化与图表",
+    "icon": "Gauge",
+    "prompt": "Create an interactive data dashboard from the uploaded dataset using Plotly, working only from the real data. Include:\n\nWork in this order:\n1. a summary statistics panel,\n2. key distributions as interactive histograms,\n3. correlation scatter plots with hover details,\n4. a filterable data table, and\n5. a time series panel if temporal data exists. Lay out panels in a clear grid with a logical reading order, descriptive titles, axis labels with units, and linked or consistent filters. Use a colorblind-safe palette, legible fonts, honest non-truncated scales, and informative hover tooltips; keep it responsive and uncluttered. Handle missing values and large row counts gracefully (sampling or aggregation) and note any such handling. If essential choices (key variables, grouping, or audience) are ambiguous and would change the result, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save the dashboard as a self-contained HTML file and list the file name in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "plain-language-summary",
+    "name": "Plain Language Summary",
+    "description": "Rewrite for non-specialist audiences or press",
+    "category": "科研传播",
+    "icon": "MessageCircle",
+    "prompt": "Rewrite the uploaded paper or abstract in plain language for a curious non-specialist reader (roughly an 8th-grade reading level), suitable for a press release or public-facing summary.\n\nWork in this order:\n1. Read the source carefully and identify the key findings and their real-world significance.\n2. Convey them accurately in 2-3 paragraphs without distorting or overclaiming.\n3. Replace or briefly define any jargon, and use a concrete everyday analogy where it genuinely aids understanding.\n4. Frame uncertainty and limitations honestly rather than hyping results. If the intended audience or venue is unclear and would materially change the tone, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumption. Save the finished summary as a well-named Markdown file in the sandbox so the user can preview and download it, and give a short recap in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "blog-post",
+    "name": "Write a Blog Post",
+    "description": "Engaging science blog from paper or results",
+    "category": "科研传播",
+    "icon": "Rss",
+    "prompt": "Write an engaging scientific blog post (800-1200 words) based on the uploaded paper or results, for an interested general audience.\n\nWork in this order:\n1. Open with a compelling hook tied to a real problem or surprising fact.\n2. Explain the science clearly using examples and concrete analogies, defining any necessary jargon.\n3. Stay faithful to the source: do not overstate findings, and note limitations and open questions honestly.\n4. Close with why this matters and what comes next. If you add outside context, verify it via web search and cite real, verifiable sources; never fabricate references. If the desired tone, publication, or audience is unclear and would change the piece, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the post as a well-named Markdown file (with any references listed) in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "draft-protocol",
+    "name": "Draft a Protocol",
+    "description": "Step-by-step lab or computational protocol",
+    "category": "科研传播",
+    "icon": "ListChecks",
+    "prompt": "Write a detailed, reproducible step-by-step protocol for: {procedure}. Include:\n\nWork in this order:\n1. Overview and purpose,\n2. Materials and reagents (with catalog numbers, concentrations, and suppliers where applicable),\n3. Equipment needed,\n4. Numbered step-by-step procedure with timing, volumes, temperatures, and critical parameters specified,\n5. Expected results plus a troubleshooting table for common failure modes,\n6. Safety and waste-handling notes. Base any reagent or method specifics on established, verifiable references and cite them; never invent catalog numbers or citations, and flag any step where values must be validated by the user. If the scale, organism/system, or instrument is unclear and would change the steps, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the protocol as a well-named Markdown file in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "procedure",
+        "label": "Procedure or experiment to document",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-press-release",
+    "name": "Write a Press Release",
+    "description": "Institutional press release about a research finding",
+    "category": "科研传播",
+    "icon": "Megaphone",
+    "prompt": "Write an institutional press release about the uploaded research paper or findings, at roughly an 8th-grade reading level. Include:\n\nWork in this order:\n1. An attention-grabbing but accurate headline,\n2. A lead paragraph with the key finding (who, what, why it matters),\n3. Context and significance,\n4. Quotes from researchers clearly marked as placeholders for approval,\n5. Methods in plain language,\n6. Future implications,\n7. A contact information placeholder. Represent the science faithfully, avoid overclaiming, and state limitations honestly; do not invent affiliations, funding, or quotes. Verify any added external facts via web search and cite real sources. If the institution or spokesperson is unclear and would change the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the release as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "social-media-post",
+    "name": "Social Media Post",
+    "description": "Twitter/LinkedIn thread summarizing research",
+    "category": "科研传播",
+    "icon": "Send",
+    "prompt": "Create a social media thread (Twitter/X or LinkedIn) summarizing the uploaded paper or research finding for a general but engaged audience. Write {num_posts} posts that:\n\nWork in this order:\n1. Hook with the key finding,\n2. Explain the context,\n3. Describe the method simply,\n4. Present the main result,\n5. State why it matters,\n6. Include relevant, accurate hashtags. Keep each post under 280 characters for Twitter/X. Stay faithful to the source, avoid hype or overclaiming, define or skip jargon, and note key caveats honestly rather than implying certainty. Do not fabricate stats or quotes; verify any added facts. If the platform or tone is unclear and would change the thread, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the full thread as a well-named Markdown file in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "num_posts",
+        "label": "Number of posts in thread (default: 5-7)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "podcast-script",
+    "name": "Write a Podcast Script",
+    "description": "Script for a science podcast episode",
+    "category": "科研传播",
+    "icon": "Rss",
+    "prompt": "Write a podcast script discussing: {topic}, in conversational but accurate language for a curious lay audience. Structure:\n\nWork in this order:\n1. An engaging introduction with a hook,\n2. Background context,\n3. Main discussion points grounded in recent findings,\n4. Interview-style questions and talking points,\n5. A conclusion with key takeaways. Target roughly {duration} minutes of speaking. Search the web for current, credible sources, prioritize recent and well-cited work, define jargon on first use, and frame uncertainty honestly without overclaiming. Cite real sources in script notes and never fabricate references, quotes, or guest statements. If the show's audience or format is unclear and would change the script, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the script as a well-named Markdown file (with a sources list) in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Topic to discuss",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Episode duration in minutes (default: 20)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "policy-brief",
+    "name": "Write a Policy Brief",
+    "description": "Research-informed policy brief for decision makers",
+    "category": "科研传播",
+    "icon": "Scale",
+    "prompt": "Write a concise policy brief on: {topic} for this audience: {audience}, leading with actionable recommendations. Include:\n\nWork in this order:\n1. Executive summary,\n2. Problem statement with data,\n3. Key research findings,\n4. Policy options with pros and cons,\n5. Recommended actions,\n6. Implementation considerations. Search the literature and authoritative sources across multiple databases, prioritize recent and highly cited work, distinguish primary studies from secondary summaries, and cite every claim with a real, verifiable reference; never fabricate citations or statistics. Report your search scope and date, and surface consensus, controversy, and evidence gaps honestly. Keep to 2-4 pages, in clear non-technical language for decision makers. If the jurisdiction or scope is unclear and would change the recommendations, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the brief as a well-named Markdown file with a references list in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Policy topic",
+        "required": true
+      },
+      {
+        "key": "audience",
+        "label": "Target audience (e.g., legislators, public health officials)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "patient-education",
+    "name": "Patient Education Material",
+    "description": "Patient-friendly health information document",
+    "category": "科研传播",
+    "icon": "Heart",
+    "prompt": "Create general patient education material about {condition} for a broad audience at approximately a sixth-grade reading level. This must remain general information: do not assess an individual, diagnose, recommend a specific treatment, dose a medicine, or replace local clinical advice.\n\nWork in this order:\n1. Define the intended audience, region, care setting, and whether the topic is a condition, test, procedure, or prevention question.\n2. Use current authoritative public-health, professional-society, and government sources. Record publication or review dates and verify every medical claim; do not fabricate citations.\n3. Explain the topic, common causes or risk factors, symptoms or expected experiences, and how qualified professionals generally evaluate it, using plain language and defining unavoidable terms.\n4. Describe treatment or management categories only as source-backed general options, noting that suitability depends on individual evaluation.\n5. Summarize source-backed signs for contacting a qualified professional or local emergency service without triaging the reader or inventing universal thresholds; state when advice is region-specific.\n6. Add practical questions a reader can ask their healthcare professional, a concise FAQ, source dates, limitations, and an explicit general-information notice.\n7. Check readability, respectful language, accessibility, numerical risk framing, and consistency with the cited sources.\n\nSave the document as a clearly named Markdown file with a verified reference list. Summarize the audience, scope, source recency, unresolved localization needs, and saved path in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "condition",
+        "label": "Medical condition or procedure",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-textbook-chapter",
+    "name": "Write a Textbook Chapter",
+    "description": "Comprehensive educational chapter on a topic",
+    "category": "科研传播",
+    "icon": "GraduationCap",
+    "prompt": "Write a textbook chapter on: {topic} for a {level} audience, pitched at the right depth and reading level for that group. Include:\n\nWork in this order:\n1. Learning objectives,\n2. Introduction with historical context,\n3. Core concepts explained progressively,\n4. Worked examples and case studies,\n5. Key equations or formulas with derivations,\n6. Summary and key takeaways,\n7. Review questions. Target length: {length} words. Ground explanations in established, verifiable sources, prioritize authoritative and recent references, define terms on first use, and cite every factual or quantitative claim; never fabricate citations or data. Note any areas of ongoing debate or uncertainty honestly. If the field emphasis or prerequisites are unclear and would change the scope, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the chapter as a well-named Markdown file with a references list in the sandbox for preview and download, and recap it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Chapter topic",
+        "required": true
+      },
+      {
+        "key": "level",
+        "label": "Audience level (undergraduate, graduate, professional)",
+        "required": true
+      },
+      {
+        "key": "length",
+        "label": "Target word count (default: 5000)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "elevator-pitch",
+    "name": "Write an Elevator Pitch",
+    "description": "30-second pitch for a research project",
+    "category": "科研传播",
+    "icon": "Rocket",
+    "prompt": "Write a compelling 30-60 second elevator pitch (roughly 75-150 spoken words) for the research project: {topic}, tailored to a {audience} audience and free of jargon. The pitch should:\n\nWork in this order:\n1. Open with a relatable problem or striking fact,\n2. Explain what you are doing in one clear sentence,\n3. Describe the approach briefly,\n4. State the potential impact,\n5. End with a call to action or next step. Keep claims accurate and grounded in the project as described, avoid hype or overpromising, and do not invent results, funding, or partnerships. If the audience or the project's core goal is unclear and would change the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the pitch as a well-named Markdown file in the sandbox for preview and download, and give a short recap in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research project description",
+        "required": true
+      },
+      {
+        "key": "audience",
+        "label": "Target audience (investors, general public, program officers)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  }
+,
+  {
+    "id": "predictive-model",
+    "name": "Build a Predictive Model",
+    "description": "Train and evaluate ML models on uploaded data",
+    "category": "数据分析",
+    "icon": "Brain",
+    "prompt": "Build a predictive model on the uploaded data. Target variable: {target}. If the task type (regression vs classification) or evaluation metric is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Explore data, check missingness, class balance, and screen for leakage.\n2. Make a train/validation/test split (or nested CV) and fit preprocessing inside the pipeline to prevent leakage.\n3. Establish a simple baseline, then train appropriate models, tuning only on validation/CV.\n4. Evaluate on the held-out test set with task-appropriate metrics (accuracy, AUC, F1, RMSE, MAE) plus uncertainty and calibration where relevant.\n5. Interpret with SHAP/feature importance.\n6. Set and report a random seed and key package versions. Deliverables: save the trained model, predictions CSV, figures PNG, and a Markdown report to the sandbox; summarize in chat, name files, and state limitations.",
+    "placeholders": [
+      {
+        "key": "target",
+        "label": "Target variable to predict",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "dimensionality-reduction",
+    "name": "Dimensionality Reduction",
+    "description": "PCA, t-SNE, UMAP for high-dimensional data visualization",
+    "category": "数据分析",
+    "icon": "Crosshair",
+    "prompt": "Apply dimensionality reduction to the uploaded high-dimensional dataset.\n\nWork in this order:\n1. Inspect schema, missingness, and feature scales; impute and standardize features as needed.\n2. Run PCA and report variance explained per component with a scree plot.\n3. Apply t-SNE and UMAP with documented, tuned parameters (perplexity, n_neighbors, min_dist), noting sensitivity.\n4. Color points by {label} if available.\n5. Compare methods side by side and assess which preserves structure, identifying clusters or outlier groups.\n6. Quantify embedding quality (e.g., trustworthiness or silhouette on clusters). Set and report a random seed and key package versions for reproducibility. Deliverables: save embedding PNGs, reduced coordinates as CSV, and a Markdown report to the sandbox; summarize findings in chat, name files, and state limitations.",
+    "placeholders": [
+      {
+        "key": "label",
+        "label": "Column to color by (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "correlation-network",
+    "name": "Correlation Network",
+    "description": "Build and visualize correlation-based networks",
+    "category": "数据分析",
+    "icon": "Network",
+    "prompt": "Build a correlation network from the uploaded dataset.\n\nWork in this order:\n1. Inspect schema, missingness, and feature scales; choose Pearson, Spearman, or partial correlations with justification.\n2. Compute pairwise correlations with p-values, correct for multiple comparisons (e.g., FDR), and retain edges passing p < {threshold} (default 0.05).\n3. Construct the network graph, optionally weighting edges by correlation strength.\n4. Identify hubs and detect communities (e.g., modularity-based).\n5. Visualize with node sizes proportional to connectivity and edges colored by sign.\n6. Report network statistics (density, modularity, average clustering coefficient, degree distribution). Set and report a random seed and key package versions. Deliverables: save the network PNG, an edge/node table as CSV, and a Markdown report to the sandbox; summarize key hubs and communities in chat, name files, and state limitations.",
+    "placeholders": [
+      {
+        "key": "threshold",
+        "label": "Significance threshold (default: 0.05)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "specific-aim",
+    "name": "Write a Specific Aim",
+    "description": "Draft a grant Specific Aim with significance and approach",
+    "category": "基金申请",
+    "icon": "Target",
+    "prompt": "Draft a one-page Specific Aims page for a grant proposal on: {topic}, targeting {agency} and following that mechanism's conventions and length. Structure it as:\n\nWork in this order:\n1. an opening paragraph establishing significance and the critical knowledge gap;\n2. a statement of the long-term goal, the overall objective of this proposal, and the central hypothesis with its basis;\n3. 2-3 specific aims, each with a brief rationale, the approach, and the expected outcome, written as testable objectives that are related but not mutually dependent;\n4. a closing paragraph on expected impact and how it advances the field. Search the literature to ground motivating claims in real, verifiable sources; never fabricate citations, statistics, or preliminary data, and flag with [VERIFY] anything unconfirmed. If the hypothesis or scope is ambiguous in a way that changes the aims, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Specific Aims page (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic and hypothesis",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency (e.g., NIH R01, NSF CAREER)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "budget-justification",
+    "name": "Draft a Budget Justification",
+    "description": "Budget narrative for a grant proposal",
+    "category": "基金申请",
+    "icon": "DollarSign",
+    "prompt": "Work in this order:\n1. Inspect all supplied files, data, and user inputs; identify the intended audience, destination, and evidence available.\n2. Resolve only ambiguities that materially change the result by asking the minimum set of blocking questions together via the interview tool.\n3. Execute the task-specific requirements below exactly, preserving source meaning, values, units, citations, and uncertainty.\n4. Verify factual accuracy, internal consistency, accessibility, and every claim or design choice against the supplied evidence.\n5. Complete every specified artifact and chat handoff; report limitations and every saved path.\n\nTask-specific requirements:\nDraft a budget justification narrative for a grant proposal on: {topic}, with a total budget target of {budget}. Organize by standard categories: personnel (PI, co-investigators, postdocs, students, staff, with roles, percent effort, and contribution to the work), equipment, supplies/consumables, travel, publication/other direct costs, and a note on indirect costs if relevant. Justify each line item specifically in terms of the proposed research rather than with generic language, and tie effort and purchases to particular aims or tasks. Use realistic, clearly-labeled estimates; never present invented figures as institution-verified, and flag rates, salaries, or quotes that the applicant must confirm with [VERIFY]. Keep totals internally consistent with the target. If essential details (duration, key personnel, or major equipment) are missing or ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the budget justification as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project title / topic",
+        "required": true
+      },
+      {
+        "key": "budget",
+        "label": "Budget target (e.g., $250K/year for 3 years)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-biosketch",
+    "name": "Write a Biosketch",
+    "description": "NIH or NSF-style biosketch for a PI",
+    "category": "基金申请",
+    "icon": "Fingerprint",
+    "prompt": "Draft a biosketch for {name} for a {agency} proposal on {topic}, following the current {agency} biosketch format, structure, and length limits. Include:\n\nWork in this order:\n1. a Personal Statement connecting the candidate's expertise and prior work directly to this project;\n2. Positions, Scientific Appointments, and Honors in reverse-chronological order;\n3. Contributions to Science (up to 5, each a short narrative with up to 4 representative publications);\n4. Research Support, current and completed, if applicable. Use only information the user provides or that is publicly verifiable; never fabricate degrees, positions, honors, publications, or grant numbers, and clearly mark with [PROVIDE] or [VERIFY] any field you cannot fill from given material. Write in a confident, specific tone that frames the candidate as uniquely suited to the work. If essential biographical details are missing, ask the minimum set of blocking questions together via the interview tool; otherwise leave clearly-labeled placeholders. Save the biosketch as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "name",
+        "label": "PI name and current position",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency (NIH, NSF, DOE, etc.)",
+        "required": true
+      },
+      {
+        "key": "topic",
+        "label": "Proposal topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-significance",
+    "name": "Write Significance Section",
+    "description": "Establish the importance and impact of proposed research",
+    "category": "基金申请",
+    "icon": "Sparkles",
+    "prompt": "Write the Significance section for a grant proposal on: {topic}. Build a persuasive, evidence-based case that:\n\nWork in this order:\n1. establishes the scope, burden, or importance of the problem;\n2. reviews what is currently known and pinpoints the critical gap or barrier the field faces;\n3. explains how the proposed research will fill that gap and why it is timely;\n4. describes the expected impact on scientific knowledge, methods, or practice if the work succeeds. Search the literature and cite real, verifiable statistics and prior findings to motivate the work; never fabricate citations or numbers, and flag with [VERIFY] anything you cannot confirm. Write persuasively without overstating certainty, and keep the focus on the gap and payoff. If the scope or intended impact is ambiguous in a way that changes the framing, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Significance section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-innovation",
+    "name": "Write Innovation Section",
+    "description": "Articulate what is novel about the proposed approach",
+    "category": "基金申请",
+    "icon": "Sparkles",
+    "prompt": "Write the Innovation section for a grant proposal on: {topic}. Make a specific, defensible case for novelty by describing:\n\nWork in this order:\n1. how the proposed approach departs from and improves on current practice or the status quo;\n2. the new technologies, methods, models, or reagents being developed or applied;\n3. the novel conceptual framework, hypothesis, or perspective introduced;\n4. why this innovation matters for advancing the field and shifting current paradigms. Be concrete and contrast with existing methods rather than making generic claims like 'first-ever'; where you assert that something is new or better, ground it in real, verifiable literature and flag with [VERIFY] anything unconfirmed. Never fabricate citations or prior-art comparisons. If the distinctive approach is ambiguous in a way that changes the argument, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Innovation section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic and approach",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "write-approach",
+    "name": "Write Research Strategy / Approach",
+    "description": "Detailed experimental plan for a grant proposal",
+    "category": "基金申请",
+    "icon": "Route",
+    "prompt": "Write the Approach/Research Strategy section for a grant on: {topic}, formatted for {agency} conventions and length. For each specific aim, cover:\n\nWork in this order:\n1. rationale and the hypothesis being tested;\n2. preliminary data supporting feasibility (clearly labeled, using only data the user provides; never fabricate results or figures);\n3. detailed experimental design including key variables, controls, sample size/power, and rigor and reproducibility measures;\n4. expected results and how they will be interpreted;\n5. potential pitfalls with concrete alternative approaches;\n6. a timeline with milestones. Ensure aims are logically connected but not fatally dependent on one another. Cite real, verifiable sources for any external claim and flag unconfirmed items with [VERIFY]. If aims, design, or available preliminary data are ambiguous in a way that materially changes the strategy, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the section (with references) as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Research topic with specific aims",
+        "required": true
+      },
+      {
+        "key": "agency",
+        "label": "Funding agency",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "project-timeline",
+    "name": "Create a Project Timeline",
+    "description": "Gantt chart and milestone plan for a grant",
+    "category": "基金申请",
+    "icon": "Timer",
+    "prompt": "Create a detailed project timeline for a {duration} project on: {topic}. Include:\n\nWork in this order:\n1. a Gantt chart laying out all tasks grouped by aim across the full duration;\n2. milestones and deliverables with target dates;\n3. go/no-go decision points;\n4. personnel assignments per task;\n5. dependencies and critical-path relationships between tasks. Render the Gantt chart as an actual figure (e.g., with matplotlib), use realistic, clearly-stated task durations, and note key assumptions and scheduling risks. Base tasks on the proposed work rather than inventing unrelated activities, and flag anything that needs the user's input with [CONFIRM]. If the aims or scope are too vague to schedule meaningfully, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the Gantt chart image plus a written timeline narrative (milestones, decision points, dependencies) together as well-named files in the sandbox for preview and download, and summarize the plan briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Project duration (e.g., 3 years, 5 years)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "broader-impacts",
+    "name": "Write Broader Impacts",
+    "description": "NSF broader impacts or NIH dissemination plan",
+    "category": "基金申请",
+    "icon": "GraduationCap",
+    "prompt": "Write a Broader Impacts section (NSF) or Dissemination Plan for a proposal on: {topic}, following the relevant funder's review criteria. Include concrete, well-justified activities for:\n\nWork in this order:\n1. education and training (students, mentees, curriculum);\n2. broadening participation of groups underrepresented in STEM, with specific recruitment and support mechanisms;\n3. public engagement and outreach;\n4. potential societal, economic, or health benefits tied to the science;\n5. dissemination through open-access publication, data and code sharing, and community resources. Propose realistic, measurable activities with assessment metrics rather than vague aspirations, and tie them to the project's resources and setting. Do not fabricate partnerships, programs, or statistics; flag anything the applicant must confirm with [VERIFY]. If key context (institution programs or target audiences) is missing in a way that changes the plan, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the section as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "risk-mitigation",
+    "name": "Risk Mitigation Plan",
+    "description": "Identify risks and alternative strategies for a project",
+    "category": "基金申请",
+    "icon": "Shield",
+    "prompt": "Create a risk mitigation plan for a research project on: {topic}. For each aim:\n\nWork in this order:\n1. identify the key scientific, technical, and operational risks;\n2. rate each by likelihood and impact (e.g., low/medium/high) with a brief rationale;\n3. describe specific mitigation strategies and credible alternative approaches that keep the project on track;\n4. define early warning indicators and the decision/trigger point for switching to a fallback;\n5. summarize everything in a risk matrix visualization (likelihood vs. impact) rendered as an actual figure. Base risks on the real demands of the proposed work rather than generic boilerplate, and avoid overstating or understating severity. Where a risk rests on an external assumption, state it and flag unverified claims with [VERIFY]. If the aims or scope are too vague to assess risk meaningfully, ask the minimum set of blocking questions together via the interview tool; otherwise state your assumptions. Save the risk matrix image and a written risk register together as well-named files in the sandbox for preview and download, and summarize the top risks in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic and aims",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "facilities-equipment",
+    "name": "Facilities & Equipment",
+    "description": "Describe available resources and infrastructure",
+    "category": "基金申请",
+    "icon": "Wrench",
+    "prompt": "Write a Facilities, Equipment, and Other Resources section for a grant on: {topic} at {institution}, following the conventional funder format (descriptive narrative, no direct cost figures). Describe, with subheadings:\n\nWork in this order:\n1. laboratory space and major equipment relevant to the aims;\n2. computational resources (clusters, storage, software);\n3. core facilities and shared instrumentation;\n4. animal, clinical, or human-subjects facilities if applicable;\n5. institutional support, collaborations, and intellectual environment;\n6. office and meeting space. Frame each resource around how it enables the proposed research. Use only resources the user provides or that are publicly verifiable for that institution; never invent instruments, core facilities, or capabilities, and clearly mark anything to be confirmed with [VERIFY] or [PROVIDE]. If key facility details are missing in a way that materially affects the section, ask the minimum set of blocking questions together via the interview tool; otherwise leave labeled placeholders. Save the section as a well-named Markdown file in the sandbox for preview and download, and summarize it briefly in chat.",
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "Project topic",
+        "required": true
+      },
+      {
+        "key": "institution",
+        "label": "Institution name",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-structure-analysis",
+    "name": "Protein Structure Analysis",
+    "description": "Fetch and analyze PDB structures or AlphaFold predictions",
+    "category": "蛋白组与结构生物学",
+    "icon": "Box",
+    "prompt": "Analyze the protein structure for: {protein}; first resolve it to a definitive identifier (UniProt accession and/or PDB ID), recording the organism and the source/version of the structure used.\n\nWork in this order:\n1. Retrieve the structure from the PDB (note resolution, method, and any missing residues) or from AlphaFold if no experimental structure exists.\n2. Describe the overall fold and domain architecture (cross-reference Pfam/InterPro).\n3. Identify active-site residues and binding pockets, citing known catalytic/functional residues where available.\n4. Analyze secondary-structure composition (DSSP via biopython).\n5. Visualize key structural features (overall fold, pockets, key residues).\n6. Compare with homologous structures via structural search/alignment if relevant. Validate annotations against UniProt feature records. Record database and tool versions. Deliverables: save figures as PNG, a residue/feature summary table as CSV, the retrieved coordinate file, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (resolution, predicted-vs-experimental confidence). If the protein identity or which structure/conformation is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name, UniProt ID, or PDB ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "molecular-docking",
+    "name": "Molecular Docking",
+    "description": "Dock a ligand to a protein target and analyze binding",
+    "category": "蛋白组与结构生物学",
+    "icon": "Crosshair",
+    "prompt": "Perform molecular docking of {ligand} against {target}; first resolve {target} to a definitive structure (PDB ID or AlphaFold model) and {ligand} to a canonical SMILES/structure, recording organism and source versions.\n\nWork in this order:\n1. Retrieve or prepare the protein structure (remove waters, add hydrogens, assign protonation at physiological pH, keep relevant cofactors).\n2. Prepare the ligand (rdkit: sanitize, enumerate tautomers/stereoisomers, generate 3D conformers).\n3. Define the binding site (known pocket residues, co-crystallized ligand, or blind docking) and report the chosen box/region.\n4. Run docking (diffdock or a scoring-function docker) with a fixed seed and multiple poses/replicates.\n5. Analyze binding poses and scores, checking pose plausibility and consistency.\n6. Visualize the best binding mode with key interactions (H-bonds, hydrophobic, salt bridges). Validate by re-docking any known co-crystallized ligand as a positive control. Record tool/version. Deliverables: save pose structures, a ranked pose/score table as CSV, interaction figures as PNG, and a Markdown methods+findings report with pose confidence, docking scores, and caveats; do not present a docking score as binding affinity; summarize in chat and name the files. If target or ligand identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "ligand",
+        "label": "Ligand name, SMILES, or file",
+        "required": true
+      },
+      {
+        "key": "target",
+        "label": "Protein target (name or PDB ID)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "mass-spec-proteomics",
+    "name": "Mass Spectrometry Proteomics",
+    "description": "Analyze LC-MS/MS proteomics data",
+    "category": "蛋白组与结构生物学",
+    "icon": "Scan",
+    "prompt": "Analyze the uploaded LC-MS/MS proteomics data; record the instrument/acquisition type, quantification scheme, and the {database} version used (set seeds where applicable).\n\nWork in this order:\n1. Process raw spectra (peak picking, deconvolution) with pyopenms and report QC (TIC, identification rate, missed cleavages, mass accuracy).\n2. Peptide-spectrum matching against the {database} database with a decoy database for target-decoy validation.\n3. Protein inference with FDR control at the PSM/peptide/protein level (typically 1% FDR).\n4. Label-free or TMT quantification with appropriate normalization and principled handling of missing values.\n5. Differential abundance between {comparison} using a design-matched statsmodels model or a justified permutation test, with BH FDR correction, flagging at FDR<0.05.\n6. Pathway enrichment of significant proteins with FDR correction. Validate with expected housekeeping/spike-in controls and flag batch confounds. Generate a volcano plot and heatmap. Record tool/database versions. Deliverables: save protein/peptide and DE tables as CSV, figures as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations. If the database, quant scheme, or comparison is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "database",
+        "label": "Protein database (UniProt human, mouse, etc.)",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-protein-interaction",
+    "name": "Protein-Protein Interaction Network",
+    "description": "Build and analyze PPI networks",
+    "category": "蛋白组与结构生物学",
+    "icon": "Network",
+    "prompt": "Construct a protein-protein interaction network for: {proteins}; first map inputs to stable identifiers (UniProt/STRING) for the correct organism, recording the STRING version and confidence cutoff used.\n\nWork in this order:\n1. Query the STRING database for known interactions (bioservices), applying a defined confidence score threshold.\n2. Add predicted interactions from co-expression and text-mining channels, distinguishing evidence types.\n3. Build and visualize the network (networkx).\n4. Identify hub proteins (degree/betweenness centrality) and detect clusters/modules (community detection).\n5. Perform GO enrichment on each network module with FDR correction.\n6. Compare with {context} if relevant (context-specific expression/disease genes). Validate that a few well-known interactions appear as a sanity check. Record database and tool versions. Deliverables: save the edge list, node-centrality, and module-enrichment tables as CSV, the network figure as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (text-mining false positives, organism/context specificity). If the organism or which proteins are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "proteins",
+        "label": "Protein list (gene symbols or UniProt IDs)",
+        "required": true
+      },
+      {
+        "key": "context",
+        "label": "Biological context (optional, e.g., disease, tissue)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "alphafold-prediction",
+    "name": "AlphaFold Structure Prediction",
+    "description": "Retrieve or predict protein 3D structure with AlphaFold",
+    "category": "蛋白组与结构生物学",
+    "icon": "Atom",
+    "prompt": "Obtain the AlphaFold-predicted structure for: {protein}; first resolve it to a UniProt accession, recording the organism and AlphaFold DB version.\n\nWork in this order:\n1. Check the AlphaFold database for an existing prediction (bioservices); if absent, note that de novo prediction may be required and fetch the sequence.\n2. Assess per-residue confidence (pLDDT) and, if available, the PAE matrix for inter-domain reliability.\n3. Identify well-predicted (pLDDT>70/90) versus low-confidence/disordered regions.\n4. Compare with experimental structures from the PDB if available (structural superposition, RMSD), noting agreement.\n5. Analyze key structural features (domains, active sites, interfaces), cross-referencing UniProt/Pfam annotations.\n6. Visualize and annotate the structure, coloring by pLDDT. Record database and tool versions. Deliverables: save the coordinate file, a per-region confidence table as CSV, annotated figures (including pLDDT coloring) as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations (single static model, low-confidence/disordered regions, no ligands/multimers unless modeled). If the protein identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Tamarind only when it is configured and the user authorizes remote execution. Otherwise retrieve an existing AlphaFold Database model when available or prepare a validated execution plan; never imply that a de novo prediction was run.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-engineering",
+    "name": "Protein Engineering Design",
+    "description": "Design protein variants for improved function",
+    "category": "蛋白组与结构生物学",
+    "icon": "Wrench",
+    "prompt": "Design protein engineering strategies for: {protein} to improve {property}; first resolve {protein} to a UniProt accession and reference structure, recording organism and source versions.\n\nWork in this order:\n1. Analyze the wild-type structure and active/functional site (retrieve experimental or AlphaFold structure; map known functional residues).\n2. Identify candidate mutagenesis positions using evolutionary conservation (MSA-derived), structural context (proximity to active site, surface vs core), and exclusion of catalytically essential residues for {property}.\n3. Predict mutation effects using computational tools (ESM/inverse-folding likelihoods, stability predictors like FoldX/ddG), reporting uncertainty.\n4. Rank mutations by predicted impact on {property}, separating beneficial from destabilizing.\n5. Suggest a focused, combinatorial library design (positions, allowed substitutions, library size).\n6. Recommend an experimental validation strategy (assay, controls including wild-type and known variants). Record tool/model and reference versions. Deliverables: save a ranked mutation/variant table as CSV, annotated structure figures as PNG, and a Markdown methods+findings report with rationale and caveats; summarize in chat and name the files. If the protein, the target property, or the activity assay is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Tamarind only when it is configured and the user authorizes remote execution. Keep proposed sequences as computational hypotheses; do not imply that cloud-lab expression or assay validation occurred unless the user explicitly requested and authorized that separate operation.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein to engineer",
+        "required": true
+      },
+      {
+        "key": "property",
+        "label": "Property to improve (stability, activity, specificity)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "binding-site-analysis",
+    "name": "Binding Site Analysis",
+    "description": "Characterize ligand binding pockets in a protein",
+    "category": "蛋白组与结构生物学",
+    "icon": "Target",
+    "prompt": "Analyze the binding site(s) of: {protein}; first resolve it to a definitive structure (PDB ID or AlphaFold model), recording organism, resolution/confidence, and source version.\n\nWork in this order:\n1. Identify all binding pockets using geometric and energy-based methods (e.g. fpocket/CASTp), reporting the detection method.\n2. Characterize each pocket (volume, hydrophobicity, polarity, druggability score).\n3. Identify key residues lining each binding site and cross-reference known functional residues from UniProt.\n4. Map known ligands/co-crystallized molecules to the detected pockets as validation.\n5. Compare pocket conservation across homologs (sequence/structure alignment) to flag specificity-determining residues.\n6. Assess druggability and suggest pharmacophore features (H-bond donors/acceptors, hydrophobic anchors). Flag confounds (predicted-structure uncertainty, induced-fit/cryptic pockets). Record tool and database versions. Deliverables: save a pocket-characterization table and residue list as CSV, annotated pocket figures as PNG, the structure file, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations. If the protein identity or which structure to use is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or PDB ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "molecular-dynamics-sim",
+    "name": "Molecular Dynamics Simulation",
+    "description": "Set up and analyze MD simulations of biomolecules",
+    "category": "蛋白组与结构生物学",
+    "icon": "Waves",
+    "prompt": "Set up and analyze a molecular dynamics simulation of: {system}; first record the input structure source/version, force field, water model, and intended {duration}, and set random seeds for reproducibility.\n\nWork in this order:\n1. Prepare the system: clean the structure, assign protonation states at physiological pH, parameterize any ligand, select an appropriate force field, then solvate and neutralize/ionize to physiological salt.\n2. Energy minimization followed by staged NVT/NPT equilibration with position restraints, reporting temperature/pressure/density stability.\n3. Production run setup for {duration} (default a sensible length if unset), noting integrator, timestep, and thermostat/barostat.\n4. Analyze trajectory stability and dynamics: RMSD, per-residue RMSF, radius of gyration, and convergence checks.\n5. Identify key conformational changes (clustering, PCA/essential dynamics).\n6. Calculate binding free energy (MM/PBSA or similar) if a ligand is present, noting method assumptions. Validate equilibration before interpreting production. Record tool/force-field versions and seeds. Deliverables: save analysis plots as PNG, metric time-series tables as CSV, representative structures, and a Markdown methods+findings report; summarize in chat, name the files, and note sampling/timescale limitations. If the system or force field is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nBefore expensive execution, inspect available local resources and required binaries. If the full workload exceeds local capacity, use configured Modal compute only when authorized; otherwise run a bounded pilot or produce a validated execution plan. Never imply that an unexecuted full run completed.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "system",
+        "label": "Molecular system (protein, protein-ligand complex, membrane)",
+        "required": true
+      },
+      {
+        "key": "duration",
+        "label": "Simulation duration (e.g., 100 ns)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "homology-modeling",
+    "name": "Homology Modeling",
+    "description": "Build a 3D model from a homologous template structure",
+    "category": "蛋白组与结构生物学",
+    "icon": "Layers",
+    "prompt": "Build a homology model for: {protein}; first resolve it to a sequence/UniProt accession, recording organism and template database version.\n\nWork in this order:\n1. Search the PDB for suitable template structures (BLAST/HHsearch), selecting templates by sequence identity, coverage, and resolution, and reporting the chosen template(s).\n2. Perform a careful target-template sequence alignment, manually checking conserved motifs and gap placement.\n3. Build the 3D model using comparative modeling (e.g. MODELLER), generating multiple models.\n4. Refine loop regions and side chains, especially low-identity and insertion regions.\n5. Validate the model (Ramachandran plot, ERRAT, ProSA/QMEAN, DOPE score), reporting problematic regions.\n6. Compare with the AlphaFold prediction if available (superposition, RMSD) as an independent check. Record tool and database versions. Deliverables: save the model coordinate file, a validation-metrics table as CSV, validation/structure figures as PNG, and a Markdown methods+findings report stating template identity and confidence; summarize in chat, name the files, and note limitations (low template identity, unreliable loops). If the protein identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein sequence or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "protein-function-prediction",
+    "name": "Protein Function Prediction",
+    "description": "Predict function from sequence and structure",
+    "category": "蛋白组与结构生物学",
+    "icon": "Sparkles",
+    "prompt": "Predict the function of: {protein}; first record the organism (if known), sequence length, and reference database versions.\n\nWork in this order:\n1. Run sequence similarity searches (BLAST against UniProt/NR, HMMer against profile databases), reporting top hits with identity, coverage, and E-values.\n2. Identify conserved domains and families (InterPro, Pfam).\n3. Predict subcellular localization (e.g. DeepLoc/signal-based tools).\n4. Predict Gene Ontology terms (molecular function, biological process, cellular component) from sequence and, if a structure is available, structure-based signals.\n5. Check for signal peptides (SignalP) and transmembrane domains (TMHMM/DeepTMHMM).\n6. Integrate all evidence into a function prediction with explicit confidence scores, flagging conflicting evidence and low-similarity (twilight-zone) cases. Validate against any known annotation for close homologs. Record tool and database versions. Deliverables: save an evidence table (hits, domains, GO terms with scores) as CSV, summary figures (e.g. domain architecture) as PNG, and a Markdown methods+findings report; summarize in chat, name the files, and note limitations of homology-based inference. If the protein identity or organism is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein sequence or accession",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "post-translational-mods",
+    "name": "PTM Analysis",
+    "description": "Predict and analyze post-translational modifications",
+    "category": "蛋白组与结构生物学",
+    "icon": "CircleDot",
+    "prompt": "Analyze post-translational modifications for: {protein}; first resolve it to a UniProt accession, recording organism and database/tool versions.\n\nWork in this order:\n1. Query known PTMs from UniProt and PhosphoSitePlus-style resources, recording evidence type.\n2. Predict phosphorylation, glycosylation (N-/O-linked), ubiquitination, and acetylation sites with established predictors, reporting per-site confidence and distinguishing predicted from experimentally validated.\n3. Map PTM sites onto the 3D structure (experimental or AlphaFold), checking surface accessibility.\n4. Assess the structural and functional impact of each PTM (proximity to active sites, interfaces, disorder).\n5. Check for disease-associated PTM changes (e.g. via variant/PTM databases).\n6. Compare PTM-site conservation across species using an alignment as a sanity check. Record database and tool versions. Deliverables: save a PTM-site table (position, type, evidence, confidence) as CSV, annotated structure/sequence figures as PNG, and a Markdown methods+findings report distinguishing known vs predicted sites; summarize in chat, name the files, and note prediction false-positive caveats. If the protein identity or organism is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "protein",
+        "label": "Protein name or UniProt ID",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "structural-alignment",
+    "name": "Structural Alignment",
+    "description": "Align and compare protein 3D structures",
+    "category": "蛋白组与结构生物学",
+    "icon": "Layers",
+    "prompt": "Perform structural alignment between: {structures}; first resolve each to a definitive PDB ID or model, recording organism, resolution/confidence, and chains/source versions used.\n\nWork in this order:\n1. Superimpose the structures using TM-align (or DALI/CE for distant homologs), reporting the method and reference structure.\n2. Calculate pairwise RMSD over aligned residues and TM-score (length-normalized) to quantify global similarity.\n3. Identify conserved structural cores versus variable/flexible regions.\n4. Map sequence differences onto the structural alignment (sequence vs structure agreement).\n5. Highlight functional-site differences (active sites, binding pockets, interfaces).\n6. Visualize the superposition with color-coded conserved/divergent regions and per-residue deviation. Sanity-check that closely related structures yield high TM-score/low RMSD. Record tool versions. Deliverables: save the superposed coordinates, an alignment-metrics table (RMSD, TM-score, aligned length) as CSV, annotated superposition figures as PNG, and a Markdown methods+findings report interpreting structural relationships; summarize in chat, name the files, and note limitations (chain/conformational-state choice, predicted-model confidence). If which structures/chains to compare is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "structures",
+        "label": "PDB IDs or protein names to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "epitope-prediction",
+    "name": "Epitope Prediction",
+    "description": "Predict B-cell and T-cell epitopes for vaccine design",
+    "category": "蛋白组与结构生物学",
+    "icon": "Shield",
+    "prompt": "Predict epitopes for: {antigen}; first resolve it to a sequence/UniProt accession, recording the organism, sequence source, and tool/database versions.\n\nWork in this order:\n1. Predict linear B-cell epitopes from surface accessibility, hydrophilicity, and flexibility (e.g. BepiPred-style methods).\n2. Predict conformational B-cell epitopes from the 3D structure (experimental or AlphaFold; e.g. DiscoTope), noting structure confidence.\n3. Predict MHC-I (8-11mer) binding peptides for {hla_alleles} (default to a common-allele supertype panel if unspecified) using NetMHCpan-style tools.\n4. Predict MHC-II binding peptides (15mer core).\n5. Rank epitopes by predicted immunogenicity and binding affinity, and flag self-similarity/conservation across strains and potential allergenicity/toxicity as filters.\n6. Map top epitopes onto the protein structure. Validate against any known epitopes (e.g. IEDB) as a positive control. Record tool and database versions. Deliverables: save ranked B-cell and T-cell epitope tables (sequence, position, allele, scores) as CSV, mapped-structure figures as PNG, and a Markdown methods+findings report suggesting prioritized vaccine candidates with caveats; summarize in chat and name the files. If the antigen identity or target HLA alleles are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "antigen",
+        "label": "Antigen protein name or sequence",
+        "required": true
+      },
+      {
+        "key": "hla_alleles",
+        "label": "HLA alleles (e.g., HLA-A*02:01, or 'common alleles')",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "scrnaseq-clustering",
+    "name": "scRNA-seq Clustering",
+    "description": "Identify and characterize cell clusters from scRNA-seq",
+    "category": "细胞生物学",
+    "icon": "CircleDot",
+    "prompt": "Perform clustering on the uploaded scRNA-seq data.\n\nWork in this order:\n1. QC: filter cells/genes on counts, n_genes, and mitochondrial % (default <15-20%, adjust per tissue), flag and remove doublets with Scrublet (Python).\n2. Normalize with a documented Scanpy-compatible method, select HVGs, scale, PCA; correct batch effects across samples (Harmony/scVI) and check the embedding for residual batch.\n3. Run Leiden/Louvain at multiple resolutions; assess cluster stability (e.g., bootstrap/silhouette) and pick an optimal resolution.\n4. Identify marker genes per cluster with the Wilcoxon rank-sum test, reporting effect sizes and BH-adjusted p-values; avoid double-dipping when interpreting.\n5. Annotate clusters using {reference} markers and validate against known biology.\n6. Visualize UMAP, marker expression, and report cluster proportions and distinguishing features. Set a random seed, record package versions. If an essential parameter (e.g., expected cell types or QC cutoffs) is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), marker tables (CSV), the processed .h5ad, and a methods+findings report (Markdown); summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reference",
+        "label": "Reference markers or cell atlas to use",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "flow-cytometry-analysis",
+    "name": "Flow Cytometry Analysis",
+    "description": "Gate, cluster, and quantify flow cytometry data",
+    "category": "细胞生物学",
+    "icon": "Droplet",
+    "prompt": "Analyze the uploaded flow cytometry data (FCS files).\n\nWork in this order:\n1. Apply compensation/spillover correction and QC: remove debris/doublets (FSC-A vs FSC-H), gate on viability, check for time-based acquisition anomalies, and transform fluorescence (arcsinh/logicle).\n2. Reproduce the manual gating strategy or run automated gating: {gating}.\n3. Dimensionality reduction (UMAP) of marker expression.\n4. Cluster with FlowSOM or PhenoGraph and annotate populations by canonical markers.\n5. Quantify cell population frequencies per sample.\n6. Compare populations between {comparison} using appropriate tests for the design (e.g., Mann-Whitney/t-test or mixed models for paired data) with multiple-comparison correction and effect sizes; flag batch/acquisition-day confounds. Set a random seed and record package versions. If the panel-to-marker mapping or comparison design is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Generate publication-quality dot plots and histograms (PNG), frequency tables (CSV), and a methods+findings report (Markdown); summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "gating",
+        "label": "Gating strategy or panel description",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "cell-cell-communication",
+    "name": "Cell-Cell Communication",
+    "description": "Infer intercellular signaling from scRNA-seq",
+    "category": "细胞生物学",
+    "icon": "Network",
+    "prompt": "Infer cell-cell communication networks from the uploaded scRNA-seq data.\n\nWork in this order:\n1. Confirm QC, normalization, and reliable cell-type annotations first, since communication inference is only as good as the labels.\n2. Identify ligand-receptor pairs between cell types and score interaction strength using a Python workflow such as LIANA or CellPhoneDB with permutation-based significance, reporting adjusted p-values.\n3. Identify dominant signaling pathways.\n4. Detect outgoing and incoming signals per cell type.\n5. Visualize communication networks (chord diagrams, dot plots, heatmaps).\n6. Compare signaling between {comparison} if multiple conditions, using differential interaction analysis and accounting for differences in cell-type abundance; flag that inferred interactions are predictions requiring spatial or functional validation. Set a random seed and record package/database versions. If conditions or the cell-type grouping are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), interaction tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions to compare (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "cell-cycle-analysis",
+    "name": "Cell Cycle Analysis",
+    "description": "Score cell cycle phases and regress out cell cycle effects",
+    "category": "细胞生物学",
+    "icon": "RefreshCw",
+    "prompt": "Perform cell cycle analysis on the uploaded scRNA-seq data.\n\nWork in this order:\n1. After normalization, score G1, S, and G2M phases using standard gene sets (e.g., Tirosh S/G2M genes), mapping to the correct species orthologs.\n2. Visualize the cell cycle distribution across clusters and on UMAP.\n3. Test whether cell cycle drives clustering (e.g., compare embeddings/cluster assignments before vs after, association tests).\n4. Regress out or correct cell cycle effects only if it is a confounder, and report the impact; avoid removing biologically meaningful proliferation signal.\n5. Compare cell cycle phase distributions between {comparison} using appropriate proportion tests with multiple-comparison correction and effect sizes.\n6. Identify cell cycle-regulated genes specific to each cell type. Set a random seed and record package versions. If the comparison groups or species are ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), phase/score tables (CSV), the processed .h5ad, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions to compare (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "perturbation-analysis",
+    "name": "Perturbation / CRISPR Screen Analysis",
+    "description": "Analyze Perturb-seq or CRISPR screen data",
+    "category": "细胞生物学",
+    "icon": "Zap",
+    "prompt": "Analyze the uploaded perturbation screen data ({screen_type}).\n\nWork in this order:\n1. QC: assess guide RNA assignment, coverage, and cell numbers per perturbation, filter low-coverage guides, run standard scRNA QC (mito %, doublets), and handle multiplets/multiple-guide cells.\n2. Identify differentially expressed genes per perturbation vs non-targeting controls using a suitable model (e.g., negative-binomial/pseudobulk DE) with BH correction and reported effect sizes; avoid treating each cell as independent when pseudobulk is appropriate.\n3. Score perturbation effects on gene programs/signatures.\n4. Cluster perturbations by transcriptional similarity.\n5. Identify genetic interactions or epistasis where the design supports it.\n6. Prioritize hits for validation with explicit criteria and confidence. Set a random seed and record package versions. If the control definition or replicate structure is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), per-perturbation DE and hit tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "screen_type",
+        "label": "Screen type (Perturb-seq, CRISPRi, CRISPRa, CRISPR KO)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "lineage-tracing",
+    "name": "Lineage Tracing Analysis",
+    "description": "Reconstruct cell lineage trees from barcoding data",
+    "category": "细胞生物学",
+    "icon": "GitBranch",
+    "prompt": "Analyze lineage tracing data from the uploaded dataset.\n\nWork in this order:\n1. Process barcode or mutation data for lineage reconstruction, with QC on barcode detection/dropout and collision filtering.\n2. Build lineage trees using neighbor-joining or Bayesian/maximum-likelihood methods, reporting branch support where available.\n3. Map cell types onto the lineage tree, integrating paired transcriptomic annotations if present.\n4. Identify lineage-biased progenitors.\n5. Quantify fate probabilities for each progenitor class with uncertainty estimates.\n6. Visualize lineage trees annotated with cell types and pseudotime, and check that inferred topology is robust to barcode noise. Set a random seed and record package versions. If the barcode encoding scheme or expected lineage structure is ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures (PNG), tree files and fate-probability tables (CSV), the processed object, and a concise methods+findings report (Markdown); then summarize in chat, name the files, and note limitations including barcode homoplasy and dropout.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spatial-cell-analysis",
+    "name": "Spatial Cell Analysis",
+    "description": "Analyze cell spatial organization and neighborhoods",
+    "category": "细胞生物学",
+    "icon": "Map",
+    "prompt": "Analyze spatial cell organization in the uploaded data ({platform}).\n\nWork in this order:\n1. Segment cells, QC segmentation quality, and quantify marker expression with platform-appropriate normalization (and background/autofluorescence handling for IMC/mIF; transcript QC for MERFISH/Xenium/CosMx).\n2. Classify cell types and validate with canonical markers.\n3. Identify spatial neighborhoods and niches (e.g., neighborhood enrichment, niche clustering).\n4. Compute spatial statistics (co-localization, exclusion, clustering) with permutation-based significance and multiple-comparison correction.\n5. Detect tissue microenvironments.\n6. Correlate spatial patterns with {outcome} if available, using appropriate tests and reporting effect sizes; flag batch/slide and segmentation confounds. Set a random seed and record package versions. If the cell-type scheme or outcome variable is ambiguous and would change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures including spatial overlays (PNG), neighborhood/statistics tables (CSV), the processed object, and a methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "platform",
+        "label": "Platform (MERFISH, Xenium, CosMx, IMC, mIF)",
+        "required": true
+      },
+      {
+        "key": "outcome",
+        "label": "Clinical outcome to correlate with (optional)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolic-modeling",
+    "name": "Metabolic Flux Analysis",
+    "description": "Constraint-based modeling of metabolic networks",
+    "category": "细胞生物学",
+    "icon": "Network",
+    "prompt": "Perform metabolic flux analysis on {organism} using constraint-based modeling.\n\nWork in this order:\n1. Load or construct a genome-scale metabolic model (GEM) from a curated source and validate it (mass/charge balance, blocked reactions, sensible default biomass objective).\n2. Define media conditions: {media}, setting exchange bounds explicitly and recording them.\n3. Run flux balance analysis (FBA) to predict growth rate and fluxes, and sanity-check against known growth phenotypes.\n4. Perform flux variability analysis (FVA) to report flux ranges and identify alternate optima.\n5. Simulate single (and optionally double) gene knockouts and predict essential genes, comparing to known essentiality where available.\n6. Visualize metabolic flux maps on pathway diagrams. Record solver and package versions and the model identifier/version for reproducibility. If the media composition or objective is missing/ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions (e.g., default minimal media). Save flux maps and figures (PNG), flux/FVA/essentiality tables (CSV), the model file, and a concise methods+findings report (Markdown); summarize in chat, name files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "organism",
+        "label": "Organism (E. coli, yeast, human)",
+        "required": true
+      },
+      {
+        "key": "media",
+        "label": "Growth media composition",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "glycan-analysis",
+    "name": "Glycan Engineering & Analysis",
+    "description": "Analyze and engineer glycosylation patterns",
+    "category": "细胞生物学",
+    "icon": "Hexagon",
+    "prompt": "Analyze glycosylation patterns from the uploaded data.\n\nWork in this order:\n1. QC the input (e.g., spectral/intensity quality for MS glycomics) and identify N-linked and O-linked glycan structures with appropriate scoring/false-discovery control.\n2. Quantify glycoform distributions (relative abundances) per sample.\n3. Map glycosylation sites onto the protein sequence/structure.\n4. Compare glycoprofiles between {comparison} using appropriate statistical tests with multiple-comparison correction and effect sizes; flag batch and sample-prep confounds.\n5. Predict the impact of glycosylation on protein function and immunogenicity, citing the basis for each prediction.\n6. Suggest glycoengineering strategies to optimize the glycoprofile, with expected trade-offs. Record database and package versions for reproducibility. If the comparison groups or glycan annotation source are ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Save figures including site maps and glycoform plots (PNG), quantification and statistics tables (CSV), and a concise methods+findings report (Markdown); then summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "comparison",
+        "label": "Conditions or products to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "clinical-trial-analysis",
+    "name": "Clinical Trial Analysis",
+    "description": "Analyze clinical trial data with appropriate endpoints",
+    "category": "临床研究",
+    "icon": "Stethoscope",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded clinical trial data. Pre-specify the primary endpoint and analysis before looking at comparisons; if the population, randomization, or comparator arm is ambiguous and would materially change results, ask the minimum set of blocking questions together via the interview tool, otherwise state your assumptions.\n\nWork in this order:\n1. Describe the study population: demographics and baseline characteristics with a CONSORT participant flow.\n2. Analyze the primary endpoint {endpoint} with effect sizes and 95% confidence intervals, reporting both absolute and relative measures.\n3. Run intention-to-treat (primary) and per-protocol analyses, accounting for missing data.\n4. Generate Kaplan-Meier curves for time-to-event endpoints.\n5. Run pre-specified subgroup analyses with interaction tests, correcting for multiple comparisons.\n6. Tabulate adverse events. Follow CONSORT; set a random seed and record package versions. This is research and decision-support only, not clinical advice. Save KM curves and forest plots as PNG, result tables as CSV, and a findings report as Markdown; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "endpoint",
+        "label": "Primary endpoint",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "survival-analysis-clinical",
+    "name": "Clinical Survival Analysis",
+    "description": "Kaplan-Meier, Cox regression for clinical outcomes",
+    "category": "临床研究",
+    "icon": "HeartPulse",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nPerform survival analysis on the uploaded clinical data. Outcome: {outcome}, follow-up time in {time_unit}. If the event definition, censoring rule, or comparison would materially change results and is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Kaplan-Meier estimates for overall and subgroup survival with 95% CIs and numbers-at-risk.\n2. Log-rank tests comparing {groups}.\n3. Multivariable Cox regression adjusting for {covariates}, reporting hazard ratios with 95% CIs.\n4. Check the proportional-hazards assumption (Schoenfeld residuals) and handle violations.\n5. Generate a forest plot of hazard ratios.\n6. Report median survival and 5-year rates with CIs. Set a random seed, record the scikit-survival version, and address missing data. Research and decision-support only, not clinical advice. Save KM curves and the forest plot as PNG, tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "outcome",
+        "label": "Outcome (OS, PFS, DFS, etc.)",
+        "required": true
+      },
+      {
+        "key": "time_unit",
+        "label": "Time unit (days, months, years)",
+        "required": true
+      },
+      {
+        "key": "groups",
+        "label": "Groups to compare",
+        "required": true
+      },
+      {
+        "key": "covariates",
+        "label": "Covariates for adjustment",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "epidemiological-study",
+    "name": "Epidemiological Study Design",
+    "description": "Design and analyze observational epidemiological studies",
+    "category": "临床研究",
+    "icon": "Users",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nDesign an epidemiological study to investigate: {question}. Study type: {study_type}. If the exposure, outcome, or target population is ambiguous in a way that changes the design, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Define the study population, source, and sampling strategy.\n2. Specify precise exposure and outcome definitions with measurement and validity.\n3. Identify confounders and effect modifiers and a strategy to control them (a DAG helps).\n4. Calculate required sample size and power, stating assumptions.\n5. Plan the statistical analysis with appropriate adjusted measures (OR, RR, hazard ratios) reported with 95% CIs, plus absolute measures, and correction for multiple comparisons.\n6. Describe methods to address selection, information, and confounding bias, and missing-data handling. Follow STROBE for any writeup; pre-specify endpoints. This is research planning, not clinical advice. Save the protocol and analysis plan as Markdown plus any tables as CSV; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "Research question",
+        "required": true
+      },
+      {
+        "key": "study_type",
+        "label": "Study type (cohort, case-control, cross-sectional, ecological)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "medical-image-analysis",
+    "name": "Medical Image Analysis",
+    "description": "Analyze radiological or pathological images",
+    "category": "临床研究",
+    "icon": "Scan",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded {modality} images for research-only quantitative assessment of {target_structure}. Work only with authorized data handled under the user's approved privacy process. DICOM metadata, private tags, overlays, filenames, and pixels may contain identifiers: preflight locally, do not print or export full metadata, preserve originals, and use bounded allowlisted fields. Do not diagnose, classify a person, draft a radiology or pathology report, or claim clinical-grade de-identification or validation.\n\nWork in this order:\n1. Inventory modality, transfer syntax or image format, dimensions, spacing, orientation, frames, and required codecs without echoing identifying values.\n2. Define the research endpoint, reference annotation, independent unit, train/validation/test split, and acceptable segmentation or measurement metrics before modeling.\n3. Apply documented preprocessing without silently changing clinical content. Preserve raw files and record intensity, resampling, registration, artifact-correction, and exclusion steps.\n4. Segment or quantify {target_structure} with reproducible settings. Evaluate against an appropriate reference using confidence intervals and case-level—not slice-level—splits to prevent leakage.\n5. Extract only research features supported by the modality and assess robustness to scanner, site, batch, and preprocessing variation.\n6. If fitting a model, report calibration, discrimination or segmentation quality, subgroup/site performance, uncertainty, external-validation status, and failure cases. Keep all outputs non-diagnostic.\n7. Generate non-identifying overlays and aggregate figures, then state the limits that prevent clinical use.\n\nSave derived non-identifying images and figures as PNG, aggregate feature and result tables as CSV, and a Markdown research report labeled \"RESEARCH DRAFT — NOT FOR CLINICAL USE.\" Summarize methods, validation limits, privacy checks, unresolved inputs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "modality",
+        "label": "Imaging modality (CT, MRI, X-ray, H&E, IHC)",
+        "required": true
+      },
+      {
+        "key": "target_structure",
+        "label": "Structure to segment or analyze",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "treatment-comparison",
+    "name": "Treatment Comparison",
+    "description": "Compare treatment outcomes between groups",
+    "category": "临床研究",
+    "icon": "Scale",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nCompare treatment outcomes between {treatments} using the uploaded clinical data. This is observational unless stated, so address confounding explicitly; if the primary outcome, follow-up window, or comparison is ambiguous, ask the minimum set of blocking questions together via the interview tool, otherwise state assumptions.\n\nWork in this order:\n1. Check baseline balance between groups (standardized mean differences).\n2. Analyze the primary outcome with appropriate tests, reporting absolute and relative effect sizes with 95% CIs.\n3. Adjust for confounders using {method}, checking covariate overlap/positivity.\n4. Calculate number needed to treat with a CI.\n5. Analyze pre-specified secondary outcomes, correcting for multiple comparisons.\n6. Run sensitivity analyses (e.g. alternative adjustment, E-value for unmeasured confounding). Set a random seed and record package versions. Research and decision-support only, not clinical advice. Save forest/figures as PNG, tables as CSV, and a concise Markdown report following STROBE; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "treatments",
+        "label": "Treatments to compare",
+        "required": true
+      },
+      {
+        "key": "method",
+        "label": "Adjustment method (propensity score, regression, matching)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "adverse-event-analysis",
+    "name": "Adverse Event Analysis",
+    "description": "Analyze safety data from clinical studies",
+    "category": "临床研究",
+    "icon": "Shield",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze adverse events from the uploaded clinical safety data. If the safety population, exposure denominator, or treatment-emergent definition is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Tabulate AE frequencies by system organ class and preferred term (counts and patient incidence).\n2. Compare AE rates between {groups} with risk differences and risk ratios, each with 95% confidence intervals; treat these as descriptive/exploratory and avoid over-interpreting many comparisons.\n3. Identify dose-dependent AEs.\n4. Analyze time-to-onset distributions.\n5. Flag serious adverse events (SAEs) and discontinuations.\n6. Generate standardized safety tables and forest plots following ICH E3. Set a random seed and record package versions. Research and decision-support only, not clinical advice. Save forest plots and figures as PNG, safety tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "groups",
+        "label": "Treatment groups to compare",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "cost-effectiveness-analysis",
+    "name": "Cost-Effectiveness Analysis",
+    "description": "Health economics evaluation of interventions",
+    "category": "临床研究",
+    "icon": "DollarSign",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nPerform a cost-effectiveness analysis comparing {interventions} for {condition}. If the perspective, time horizon, or effectiveness source is ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and cite sources.\n\nWork in this order:\n1. Define the model structure (decision tree or Markov) with a stated cycle length and time horizon.\n2. Populate with clinical effectiveness data, applying discounting to costs and outcomes.\n3. Assign costs from the {perspective} perspective.\n4. Calculate incremental cost-effectiveness ratios (ICERs) versus a defined comparator.\n5. Run deterministic one-way and probabilistic sensitivity analysis (1000+ iterations), setting a random seed and recording package versions.\n6. Generate a cost-effectiveness plane and acceptability curves, and report against willingness-to-pay thresholds. This is a research model and decision-support only, not clinical advice. Save figures as PNG, model inputs/results as CSV, and a concise Markdown report following CHEERS; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "interventions",
+        "label": "Interventions to compare",
+        "required": true
+      },
+      {
+        "key": "condition",
+        "label": "Clinical condition",
+        "required": true
+      },
+      {
+        "key": "perspective",
+        "label": "Analysis perspective (payer, societal, hospital)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "systematic-review-clinical",
+    "name": "Clinical Systematic Review",
+    "description": "PRISMA-compliant systematic review of clinical evidence",
+    "category": "临床研究",
+    "icon": "ClipboardCheck",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nConduct a systematic review on: {question}. If the PICO elements are ambiguous in a way that changes eligibility, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and register the scope.\n\nWork in this order:\n1. Define explicit PICO inclusion/exclusion criteria and pre-specify outcomes.\n2. Search PubMed, Cochrane, and Embase with documented, reproducible queries and dates.\n3. Screen titles/abstracts against the criteria, recording counts at each stage.\n4. Extract data from included studies into a structured table.\n5. Assess risk of bias (Cochrane RoB 2.0).\n6. Perform a meta-analysis if appropriate, reporting pooled effect sizes with 95% CIs, heterogeneity (I-squared), and a forest plot; consider publication bias.\n7. Generate a PRISMA flow diagram and evidence summary tables. Set a random seed for any resampling and record package versions. This is research synthesis and decision-support only, not clinical advice. Save the PRISMA diagram and forest plots as PNG, extraction/results tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "question",
+        "label": "Clinical question (PICO format preferred)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "clinical-guideline-summary",
+    "name": "Clinical Guideline Summary",
+    "description": "Summarize and compare clinical practice guidelines",
+    "category": "临床研究",
+    "icon": "BookOpen",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nSummarize clinical practice guidelines for: {condition}. If the scope (patient subgroup, care setting) is ambiguous in a way that changes recommendations, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Identify current guidelines from major societies ({societies}), recording publication year and version.\n2. Compare recommendations across guidelines side by side.\n3. Note the strength of evidence and grading scheme behind each recommendation.\n4. Highlight areas of agreement and disagreement and likely reasons.\n5. Create a quick-reference comparison table.\n6. Identify gaps where evidence is lacking or guidelines conflict. Cite each source with a link or citation and flag any out-of-date guidance. This is a research summary and decision-support only, not clinical advice, and does not replace consulting the primary guidelines or clinical judgement. Save the comparison table as CSV and a concise Markdown summary; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "condition",
+        "label": "Clinical condition",
+        "required": true
+      },
+      {
+        "key": "societies",
+        "label": "Guideline societies (e.g., AHA, NICE, WHO)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "quality-improvement",
+    "name": "Quality Improvement Analysis",
+    "description": "Analyze healthcare quality metrics and improvement initiatives",
+    "category": "临床研究",
+    "icon": "TrendingUp",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze healthcare quality data for: {initiative}. If the metric definition, denominator, or intervention timing is ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions.\n\nWork in this order:\n1. Define quality metrics, operational numerators/denominators, and benchmarks.\n2. Create statistical process control charts to assess process stability, choosing the chart type appropriate to the data.\n3. Identify special-cause variation using standard run rules.\n4. Perform a pre/post intervention comparison with effect sizes and 95% confidence intervals, mindful of secular trends and confounding.\n5. Calculate process capability indices where appropriate.\n6. Recommend next PDSA steps for sustained improvement. Follow the IHI Model for Improvement; set a random seed for any resampling and record package versions. This is research and operational decision-support only, not clinical advice. Save control charts and figures as PNG, metric tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "initiative",
+        "label": "QI initiative or metric to analyze",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "health-equity-analysis",
+    "name": "Health Equity Analysis",
+    "description": "Analyze health disparities across demographic groups",
+    "category": "临床研究",
+    "icon": "Scale",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze health equity in the uploaded data. Outcome: {outcome}. If the comparison groups or outcome definition are ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and handle small-cell privacy.\n\nWork in this order:\n1. Stratify outcomes by {demographics}, reporting group sizes.\n2. Calculate absolute disparities (rate/risk differences) and relative disparities (ratios), each with 95% confidence intervals, plus a summary index where relevant.\n3. Apply decomposition methods (e.g. Oaxaca-Blinder) to identify drivers.\n4. Adjust for socioeconomic confounders while being explicit about which differences are inequities versus case-mix.\n5. Map geographic variations if data permit.\n6. Recommend targeted, evidence-informed interventions. Set a random seed and record package versions; address missing data. This is research and decision-support only, not clinical advice. Save figures/maps as PNG, disparity tables as CSV, and a concise Markdown report following STROBE; summarize in chat, name the files, and note limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "outcome",
+        "label": "Health outcome",
+        "required": true
+      },
+      {
+        "key": "demographics",
+        "label": "Demographic variables (race, ethnicity, income, geography)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "population-health-assessment",
+    "name": "Population Health Assessment",
+    "description": "Assess health status and needs of a population",
+    "category": "临床研究",
+    "icon": "Globe",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nConduct a population health assessment for: {population}. If the geographic boundary, time period, or priority outcomes are ambiguous in a way that changes conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions and cite data sources with years.\n\nWork in this order:\n1. Compile a demographic and socioeconomic profile.\n2. Analyze leading causes of morbidity and mortality, reporting rates with 95% confidence intervals and noting age-adjustment.\n3. Assess healthcare access and utilization.\n4. Identify health risk factors and social determinants.\n5. Compare with state/national benchmarks, distinguishing meaningful from chance differences and respecting small-cell suppression.\n6. Prioritize health needs and recommend evidence-informed interventions. Record data vintages and any package versions used. This is a research assessment and decision-support only, not clinical advice. Save figures/maps as PNG, indicator tables as CSV, and a concise Markdown report; summarize in chat, name the files, and note limitations and data gaps.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "population",
+        "label": "Population (county, city, or demographic group)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "digital-pathology",
+    "name": "Digital Pathology Analysis",
+    "description": "Analyze whole-slide histopathology images",
+    "category": "临床研究",
+    "icon": "Microscope",
+    "prompt": "Proceed only with data the user is authorized to use in this environment and that are synthetic, aggregate, or have been de-identified under the user's approved process. Do not expose direct identifiers or raw clinical records to external services, and do not make patient-specific diagnosis, treatment, triage, eligibility, or deployment decisions. Label every output \"RESEARCH DRAFT — NOT FOR CLINICAL USE\" and require qualified clinical, statistical, privacy, and governance review as applicable.\n\nAnalyze the uploaded whole-slide image ({stain}) for research-only quantification of {metrics}. Work only with authorized data handled under the user's approved privacy process. Whole-slide files, labels, metadata, filenames, and pixels may contain identifiers: keep originals local, avoid echoing metadata, and produce only non-identifying derivatives. Do not diagnose, grade, stage, classify a person, or draft a pathology report.\n\nWork in this order:\n1. Record the stain, scanner, magnification, microns per pixel, file format, reference annotations, and independent unit of analysis without exposing identifiers.\n2. Detect tissue and quantify blur, folds, pen marks, staining variation, and other artifacts. Preserve an auditable exclusion mask and never alter raw pixels silently.\n3. Extract tiles at {magnification}x with documented overlap, normalization, and background rules. Split train, validation, and test data by patient or specimen—not by tile—to prevent leakage.\n4. Segment and classify cells or tissue only for the pre-specified research endpoint, using reproducible parameters and an appropriate reference standard.\n5. Quantify {metrics} with confidence intervals and assess robustness across slides, batches, scanners, sites, and staining conditions.\n6. Perform spatial analysis with pre-specified neighborhoods and validate all derived measurements against held-out annotations or samples.\n7. Generate non-identifying heatmaps and aggregate figures, report failure cases and external-validation status, and state why the outputs are not suitable for clinical use.\n\nSave non-identifying overlays and aggregate figures as PNG, quantitative tables as CSV, and a Markdown research report labeled \"RESEARCH DRAFT — NOT FOR CLINICAL USE.\" Summarize QC, validation limits, privacy checks, unresolved inputs, and saved paths in chat.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "stain",
+        "label": "Stain type (H&E, IHC, IF, special stain)",
+        "required": true
+      },
+      {
+        "key": "magnification",
+        "label": "Analysis magnification (20, 40)",
+        "required": false
+      },
+      {
+        "key": "metrics",
+        "label": "Metrics to quantify (cell counts, tumor %, TIL density)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
+    ]
+  },
+  {
+    "id": "molecular-property-prediction",
+    "name": "Molecular Property Prediction",
+    "description": "Predict physicochemical and biological properties of molecules",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Predict properties of the uploaded molecules (SMILES or SDF). Properties to predict: {properties}. First parse and standardize all structures (RDKit sanitization, salt stripping, charge/tautomer normalization) and drop or flag invalid entries.\n\nWork in this order:\n1. Compute descriptors (MW, LogP, TPSA, HBD/HBA, rotatable bonds, aromatic rings).\n2. Apply validated models for the requested properties, naming each method/tool and version; treat outputs as predictions with uncertainty, not measurements.\n3. Assess drug-likeness (Lipinski, Veber, Ghose).\n4. Note the applicability domain and flag out-of-domain or unusual structures.\n5. Set a random seed for reproducibility. If a requested property is ambiguous or lacks a sound model, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (IDs + SMILES + predictions), per-molecule property dashboards as PNG, and a concise Markdown report. Summarize key findings and outliers in chat, name the files, and state limitations.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "properties",
+        "label": "Properties to predict (e.g., solubility, toxicity, pKa)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "reaction-prediction",
+    "name": "Chemical Reaction Prediction",
+    "description": "Predict products, yields, or conditions for chemical reactions",
+    "category": "化学",
+    "icon": "Sparkles",
+    "prompt": "Predict the products and conditions for the reaction: {reaction}. First parse and standardize reactant SMILES (sanitize, balance atoms, note any ambiguity).\n\nWork in this order:\n1. Identify reaction type and plausible mechanism.\n2. Predict major and minor products with structures.\n3. Estimate regio- and stereoselectivity, stating the basis.\n4. Suggest reaction conditions (solvent, temperature, catalyst, base) with literature precedent where available.\n5. Give an expected yield range, framed as an estimate with uncertainty, not a guarantee.\n6. Flag side reactions and safety/hazard concerns. Name the tools/models and versions used; record a seed if any stochastic step is involved. If the substrate, reagents, or intent are ambiguous enough to change products, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save predicted reaction schemes/structures as PNG, a products table as CSV (SMILES + role + confidence), and a Markdown report. Summarize top products and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Reaction SMILES, description, or uploaded reaction scheme",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "retrosynthesis-planning",
+    "name": "Retrosynthesis Planning",
+    "description": "Plan synthetic routes to a target molecule",
+    "category": "化学",
+    "icon": "GitBranch",
+    "prompt": "Plan a retrosynthetic route to: {target}. First resolve and standardize the target structure (canonical SMILES, sanitization) and confirm stereochemistry.\n\nWork in this order:\n1. Identify strategic disconnections.\n2. Propose 3-5 distinct synthetic routes.\n3. Evaluate each on step count, building-block/reagent availability, expected yields, and convergence.\n4. Check literature/databases for precedent reactions and cite sources.\n5. Rank routes by overall practicality and risk.\n6. Give a detailed forward synthesis for the top route with specific reagents, conditions, and key intermediates. Treat predicted feasibility and yields as hypotheses requiring experimental confirmation; name tools/databases and versions used. If the target identity or constraints (scale, chirality, available starting materials) are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save route schemes as PNG, a route-comparison table as CSV (steps, yield, availability, score), and a Markdown report. Summarize the recommended route and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "target",
+        "label": "Target molecule (SMILES, name, or structure)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "conformer-generation",
+    "name": "Conformer Generation & Analysis",
+    "description": "Generate and analyze 3D molecular conformations",
+    "category": "化学",
+    "icon": "Hexagon",
+    "prompt": "Generate and analyze conformers for: {molecule}. First resolve the structure to canonical SMILES, sanitize, add explicit Hs, and assign stereochemistry.\n\nWork in this order:\n1. Generate a diverse conformer ensemble (ETKDG) with a fixed random seed for reproducibility.\n2. Optimize geometries with a force field (e.g., MMFF94/UFF), noting the method and version.\n3. Rank conformers by energy and deduplicate by RMSD.\n4. Analyze the conformational landscape (key torsions, RMSD clustering, energy spread).\n5. Identify the global minimum and key metastable states, noting that force-field energies are approximate and may need QM refinement.\n6. Visualize low-energy conformers. If the input is ambiguous (protonation/tautomer state, stereochemistry) and would change the ensemble, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save conformers as SDF, ensemble/torsion plots and conformer renders as PNG, an energy-ranking table as CSV, and a Markdown report. Summarize the minimum and accessible states in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "molecule",
+        "label": "Molecule (SMILES or name)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "qsar-modeling",
+    "name": "QSAR Modeling",
+    "description": "Build quantitative structure-activity relationship models",
+    "category": "化学",
+    "icon": "TrendingUp",
+    "prompt": "Build a QSAR model for {target_property} using the uploaded molecular dataset. First standardize all structures (sanitize, strip salts, normalize charges/tautomers), deduplicate, and validate/transform the activity column (e.g., pIC50).\n\nWork in this order:\n1. Compute descriptors and fingerprints.\n2. Split using scaffold (Bemis-Murcko) splits to avoid train/test leakage, with a fixed seed.\n3. Train multiple models (random forest, gradient boosting, neural network).\n4. Evaluate with nested or scaffold cross-validation reporting R2, RMSE, MAE with uncertainty/confidence intervals.\n5. Analyze feature importance and define the applicability domain.\n6. Predict {target_property} for new molecules if provided, flagging out-of-domain predictions as low-confidence. Record package versions and seeds. If the endpoint, units, or activity column are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save predictions/metrics as CSV (IDs + SMILES), performance and importance plots as PNG, and a Markdown report. Summarize best model, metrics, and limitations in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "target_property",
+        "label": "Target property (e.g., IC50, EC50, solubility, permeability)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "chemical-space-exploration",
+    "name": "Chemical Space Exploration",
+    "description": "Visualize and navigate chemical space of a compound library",
+    "category": "化学",
+    "icon": "Map",
+    "prompt": "Explore the chemical space of the uploaded compound library. First standardize structures (sanitize, strip salts, normalize) and deduplicate.\n\nWork in this order:\n1. Compute molecular fingerprints (e.g., ECFP) for all compounds.\n2. Reduce to 2D/3D with t-SNE and UMAP, fixing random seeds and reporting key parameters (perplexity, n_neighbors).\n3. Color by {property} if available.\n4. Identify clusters and outliers.\n5. Compare with an accessible, citable reference compound collection from database-lookup to contextualize coverage; record its version and access date.\n6. Identify underexplored regions.\n7. Report diversity metrics (scaffold diversity, internal similarity, property coverage). Note that embeddings are non-deterministic across parameter choices and are exploratory, not definitive; record package versions. If the library format or the intended {property} coloring is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save embedding and cluster figures as PNG, a per-compound table as CSV (IDs + SMILES + coordinates + cluster), and a Markdown report. Summarize structure, clusters, and gaps in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "property",
+        "label": "Property to color by (optional, e.g., activity, source)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spectral-analysis-nmr",
+    "name": "NMR Spectral Analysis",
+    "description": "Interpret and assign NMR spectra",
+    "category": "化学",
+    "icon": "Waves",
+    "prompt": "Analyze the uploaded NMR spectrum ({nmr_type}) for: {compound}. First confirm the data format, solvent, and reference; if a structure is provided, standardize it (canonical SMILES).\n\nWork in this order:\n1. Identify all peaks and chemical shifts.\n2. Assign peaks to structural features, integrating where applicable.\n3. Analyze multiplicity/coupling (1H) or DEPT editing (13C).\n4. Determine connectivity from 2D experiments if provided (COSY, HSQC, HMBC).\n5. Confirm or propose the molecular structure, noting alternative assignments and ambiguities; predicted shifts (name tool/version) are estimates with error.\n6. Report a complete assignments table. Treat any structure elucidation as a hypothesis needing orthogonal confirmation. If {compound} is unknown or the experiment type/conditions are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save an annotated spectrum as PNG, the assignments table as CSV, and a Markdown report. Summarize the assignment and confidence in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "nmr_type",
+        "label": "NMR type (1H, 13C, 2D COSY, HSQC, HMBC)",
+        "required": true
+      },
+      {
+        "key": "compound",
+        "label": "Expected compound (if known)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "spectral-analysis-ms",
+    "name": "Mass Spectrometry Analysis",
+    "description": "Analyze and interpret mass spectra",
+    "category": "化学",
+    "icon": "BarChart3",
+    "prompt": "Analyze the uploaded mass spectrometry data ({ms_type}). First confirm polarity, mass accuracy/resolution, and calibration.\n\nWork in this order:\n1. Identify the molecular ion/adduct and derive candidate molecular formulae within a stated ppm tolerance.\n2. Interpret the fragmentation pattern and rationalize key losses.\n3. Match fragments and spectra against libraries (e.g., MassBank, mzCloud) with match scores.\n4. Propose structural fragments for unassigned peaks, marked as tentative.\n5. Quantify target compounds if standards/calibration provided, reporting uncertainty.\n6. Generate an annotated spectrum. Treat formula and structure assignments as hypotheses with confidence levels, not certainties; name tools/databases and versions. If adduct, polarity, or instrument details are ambiguous and would change formulae, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the annotated spectrum as PNG, a peak/annotation table as CSV (m/z, intensity, formula, score), and a Markdown report. Summarize identifications and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "ms_type",
+        "label": "MS type (ESI, MALDI, EI, LC-MS/MS, GC-MS)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "thermodynamics-calculation",
+    "name": "Thermodynamics Calculation",
+    "description": "Calculate thermodynamic properties and equilibria",
+    "category": "化学",
+    "icon": "Thermometer",
+    "prompt": "Calculate thermodynamic properties for: {system}. First specify states, phases, stoichiometry, and the data source for thermochemical values (e.g., NIST), citing them.\n\nWork in this order:\n1. Compute standard enthalpies, entropies, and Gibbs free energies of reaction.\n2. Determine equilibrium constants at {temperature} (default 298.15 K).\n3. Generate van't Hoff plots across a sensible temperature range, noting the assumption of temperature-independent dH/dS and its limits.\n4. Assess spontaneity and feasibility.\n5. Estimate activation energy if kinetic data are provided.\n6. Compare with experimental literature values and report discrepancies. Propagate uncertainty from input data and state assumptions; record any package versions and seeds. If the system, phases, or conditions are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save van't Hoff and related plots as PNG, a results table as CSV (quantity, value, uncertainty, source), and a Markdown report. Summarize key thermodynamic conclusions and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "system",
+        "label": "Chemical system or reaction",
+        "required": true
+      },
+      {
+        "key": "temperature",
+        "label": "Temperature (K, default: 298.15)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "pka-prediction",
+    "name": "pKa Prediction",
+    "description": "Predict acid dissociation constants for molecules",
+    "category": "化学",
+    "icon": "Droplet",
+    "prompt": "Predict pKa values for: {molecule}. First resolve and standardize the structure (canonical SMILES, sanitize, neutralize, enumerate relevant tautomers).\n\nWork in this order:\n1. Identify all ionizable groups.\n2. Predict microscopic pKa for each site, naming the method/tool and version and treating values as predictions with error bars.\n3. Determine the dominant protonation/charge state at pH {ph} (default 7.4).\n4. Generate a microspeciation diagram across pH.\n5. Compare with experimental pKa if available and report deviations.\n6. Analyze how pH affects charge state and solubility. Note model applicability limits for unusual scaffolds. If the structure, tautomer, or pH of interest is ambiguous and would change conclusions, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the microspeciation diagram as PNG, a pKa/site table as CSV (site, pKa, type), and a Markdown report. Summarize the dominant species at the target pH and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.\n\nUse Rowan only when credentials are configured and the user authorizes the remote calculation. If unavailable, do not fabricate pKa values: provide a clearly labeled local estimate only when a validated method is available, or return an execution plan.",
+    "placeholders": [
+      {
+        "key": "molecule",
+        "label": "Molecule (SMILES or name)",
+        "required": true
+      },
+      {
+        "key": "ph",
+        "label": "pH of interest (default: 7.4)",
+        "required": false
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "solubility-prediction",
+    "name": "Solubility Prediction",
+    "description": "Predict aqueous solubility and formulation considerations",
+    "category": "化学",
+    "icon": "Droplet",
+    "prompt": "Predict the aqueous solubility of: {molecules}. First parse and standardize all structures (sanitize, strip salts, normalize charges/tautomers) and flag invalid entries.\n\nWork in this order:\n1. Calculate LogS using multiple methods (e.g., ESOL, group contribution, ML), naming each tool/version and treating outputs as predictions with uncertainty, not measurements.\n2. Predict intrinsic and pH-dependent solubility, noting required pKa assumptions.\n3. Analyze structural features driving solubility.\n4. Suggest salt forms or co-crystal strategies to improve solubility where needed.\n5. Compare with experimental data if available and report deviations.\n6. Report BCS classification (with the permeability assumption stated). Note applicability-domain limits and set a seed if models are stochastic. If the input set or pH context is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a results CSV (IDs + SMILES + LogS + method), comparison/feature plots as PNG, and a Markdown report. Summarize key solubility findings and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "molecules",
+        "label": "Molecules (SMILES list or uploaded file)",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "reaction-optimization",
+    "name": "Reaction Optimization",
+    "description": "Design experiments to optimize reaction conditions",
+    "category": "化学",
+    "icon": "Target",
+    "prompt": "Design an optimization campaign for the reaction: {reaction}. First confirm the response/objective metric (yield, selectivity, conversion) and standardize any reactant structures.\n\nWork in this order:\n1. Identify key variables and ranges (temperature, solvent, catalyst loading, concentration, time).\n2. Design a DoE plan (factorial/response-surface) or a Bayesian optimization loop, fixing a random seed and stating priors/factor encodings.\n3. Suggest an initial screening set of experiments.\n4. Define the objective function and constraints (cost, safety, practicality).\n5. Propose an iterative strategy with stopping criteria.\n6. Estimate the number of experiments needed and expected information gain. Treat predicted optima as hypotheses to verify experimentally; name tools and versions. If the objective or controllable variables are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the proposed design matrix as CSV, design-space/response plots as PNG, and a Markdown report. Summarize the recommended plan and assumptions in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Reaction to optimize",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "polymer-design",
+    "name": "Polymer Design & Analysis",
+    "description": "Design polymers with target properties",
+    "category": "化学",
+    "icon": "Hexagon",
+    "prompt": "Design or analyze a polymer for {application}. Target properties: {properties}. First clarify constraints (cost, processing, regulatory, biodegradability) and standardize any monomer structures (canonical SMILES).\n\nWork in this order:\n1. Identify candidate monomer/repeat-unit structures.\n2. Predict key polymer properties (Tg, Tm, mechanical strength, solubility), naming methods/tools and versions and treating values as estimates with uncertainty, not measurements.\n3. Evaluate sustainability and processability.\n4. Compare with existing polymers from the literature, citing sources.\n5. Suggest plausible synthesis/polymerization routes.\n6. Recommend characterization experiments to validate predictions. Note that empirical property models for polymers carry substantial error; set a seed for any stochastic step. If the application or target properties are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save candidate structures/property plots as PNG, a candidate-comparison table as CSV (monomer SMILES + predicted properties), and a Markdown report. Summarize top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "application",
+        "label": "Target application",
+        "required": true
+      },
+      {
+        "key": "properties",
+        "label": "Desired properties",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "catalyst-design",
+    "name": "Catalyst Design",
+    "description": "Design and screen catalysts for chemical reactions",
+    "category": "化学",
+    "icon": "Zap",
+    "prompt": "Design a catalyst for: {reaction}. First standardize reactant/product structures and define the performance metric (activity, selectivity, turnover).\n\nWork in this order:\n1. Analyze the mechanism and identify the rate-determining step.\n2. Propose candidate catalyst classes (metal-organic, enzymatic, organocatalytic) with rationale.\n3. Predict activity/selectivity trends using descriptors or scaling relationships, naming the approach.\n4. Screen candidates computationally, recording method, level of theory/model, and versions.\n5. Compare with known catalysts from the literature, citing sources.\n6. Recommend top candidates for experimental testing. Treat computed activity as a hypothesis with error, not a guarantee, and note scoring/descriptor limitations; set seeds where applicable. If the target reaction, conditions, or selectivity goal are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save candidate structures and trend plots as PNG, a ranking table as CSV (catalyst, descriptor, predicted performance), and a Markdown report. Summarize top candidates and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "reaction",
+        "label": "Target reaction",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "chemical-safety-assessment",
+    "name": "Chemical Safety Assessment",
+    "description": "Evaluate hazards and safety of chemical compounds",
+    "category": "化学",
+    "icon": "Shield",
+    "prompt": "Perform a safety assessment of: {chemicals}. First resolve each input (name/CAS/SMILES) to a standardized structure and confirm identity.\n\nWork in this order:\n1. Look up GHS classification and hazard statements from authoritative sources, citing them.\n2. Predict toxicity endpoints (LD50, LC50, mutagenicity), naming tools/versions and treating predictions as estimates with uncertainty, not regulatory determinations.\n3. Assess environmental fate (biodegradation, bioaccumulation).\n4. Check regulatory status (REACH, TSCA).\n5. Identify incompatibilities and storage/handling requirements.\n6. Compile a safety data summary. Clearly distinguish authoritative/experimental data from in silico predictions; note this is informational and not a substitute for an official SDS or expert review. If a chemical identity is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a structured summary table as CSV (chemical, GHS, predicted endpoints, sources), hazard visuals as PNG, and a Markdown report. Summarize key hazards and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "chemicals",
+        "label": "Chemical names, CAS numbers, or SMILES",
+        "required": true
+      }
+    ],
+    "requiresFiles": false,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolite-identification",
+    "name": "Metabolite Identification",
+    "description": "Identify metabolites from mass spectrometry data",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Identify metabolites from the uploaded {data_type} data. First confirm acquisition mode, mass accuracy, and adduct/ionization assumptions.\n\nWork in this order:\n1. Process and align spectral features (peak picking, deisotoping).\n2. Match against spectral databases (HMDB, MassBank, METLIN) with similarity scores.\n3. Predict identities from accurate mass and fragmentation within a stated tolerance.\n4. Assign confidence levels per the Metabolomics Standards Initiative (identified, putative, unknown).\n5. Map identified metabolites to pathways (e.g., KEGG).\n6. Report a ranked candidate list per feature. Treat putative IDs as hypotheses requiring authentic-standard confirmation; name tools/databases and versions. If the data type, polarity, or adduct context is ambiguous and would change matches, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranked candidate table as CSV (feature, m/z, candidate, score, confidence), annotated spectra/pathway figures as PNG, and a Markdown report. Summarize confident identifications and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "data_type",
+        "label": "Data type (LC-MS, GC-MS, NMR)",
+        "required": true
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "synthetic-accessibility",
+    "name": "Synthetic Accessibility Score",
+    "description": "Evaluate how easy compounds are to synthesize",
+    "category": "化学",
+    "icon": "Gauge",
+    "prompt": "Evaluate the synthetic accessibility of the uploaded molecules. First parse and standardize all structures (sanitize, strip salts, normalize) and flag invalid entries.\n\nWork in this order:\n1. Calculate SA scores (e.g., SAScore) for each compound, naming the method/version.\n2. Identify challenging motifs (strained rings, dense stereocenters, rare functional groups).\n3. Estimate the number of synthetic steps, framed as a rough indicator with uncertainty.\n4. Flag commercially available building blocks where identifiable, citing the source.\n5. Rank compounds by ease of synthesis.\n6. Suggest simplifications for hard-to-make compounds while preserving key features. Note that SA scores are heuristic proxies, not route guarantees, and depend on the scoring model; set a seed if any step is stochastic. If structures are ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save a ranking table as CSV (ID + SMILES + SA score + flags), example structures as PNG, and a Markdown report. Summarize easiest/hardest compounds and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
+    "id": "metabolomics-analysis",
+    "name": "Metabolomics Data Analysis",
+    "description": "Analyze untargeted or targeted metabolomics datasets",
+    "category": "化学",
+    "icon": "FlaskConical",
+    "prompt": "Analyze the uploaded metabolomics dataset ({platform}). First confirm the experimental design, sample/QC layout, and metadata.\n\nWork in this order:\n1. Preprocess: peak picking, alignment, normalization, with transformation noted.\n2. Quality control: QC-sample assessment and batch correction.\n3. Statistical analysis: PCA and PLS-DA between {comparison}, validating PLS-DA by permutation to guard against overfitting and fixing a seed.\n4. Identify significant metabolites (fold change > {fc}, FDR < 0.05), reporting effect sizes.\n5. Pathway enrichment via KEGG/MetaboAnalyst, citing versions.\n6. Generate volcano plot, pathway-impact plot, and metabolite heatmap. Treat annotations as confidence-leveled and findings as associations, not causation; record package versions. If the grouping or design is ambiguous, ask the minimum set of blocking questions together via the interview tool; otherwise state assumptions. Deliverables: save the plots as PNG, a significant-feature table as CSV (feature, FC, p, FDR, annotation), and a Markdown report. Summarize key metabolites, pathways, and caveats in chat and name the files.\n\nSave every deliverable under a clear name in the sandbox. Summarize key results, limitations, unresolved inputs, and every saved path in chat.",
+    "placeholders": [
+      {
+        "key": "platform",
+        "label": "Platform (LC-MS, GC-MS, NMR)",
+        "required": true
+      },
+      {
+        "key": "comparison",
+        "label": "Groups to compare",
+        "required": true
+      },
+      {
+        "key": "fc",
+        "label": "Fold change threshold (default: 1.5)",
+        "required": false
+      }
+    ],
+    "requiresFiles": true,
+    "type": "workflow",
+    "suggestedSkillIds": [],
+    "suggestedDatabaseIds": [],
+    "limitations": [
+      "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
+    ]
+  },
+  {
     "id": "biomarker-discovery",
     "type": "workflow",
     "name": "生物标志物发现",

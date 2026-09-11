@@ -51,7 +51,8 @@ export function recommendedWorkflowsForResources(resourceIds = []) {
 }
 
 function enrichItem(item) {
-  return item.type === 'database' ? { ...item, databaseMeta: databaseMetadata(item) } : item
+  const normalized = Array.isArray(item.tags) && item.tags.length ? item : { ...item, tags: [item.category || '科研'] }
+  return normalized.type === 'database' ? { ...normalized, databaseMeta: databaseMetadata(normalized) } : normalized
 }
 
 // 目录保留多学科能力，避免用户后续需要时丢失既有工作流；
@@ -103,7 +104,8 @@ export function composeWorkflow(workflow, values = {}, { enforceRequired = true,
     attached.length ? `附加技能指导：\n${attached.map(skill => `- 【${skill.name}】${skill.promptFragment}`).join('\n')}` : '',
     attachedDatabases.length ? `研究资源提示：\n${attachedDatabases.map(database => `- 【${database.name}】${database.accessNote}；未确认当前会话具备访问能力前，不得声称已检索。`).join('\n')}` : ''
   ].filter(Boolean)
-  const finalPrompt = additions.length ? `${prompt}\n\n${additions.join('\n\n')}` : prompt
+  const guardedPrompt = `${prompt}\n\n通用科研边界：仅基于已提供材料或已核验来源；不得编造数据、图表、引用、结果、完成状态或文件路径；无法确认时明确标记为待核验。`
+  const finalPrompt = additions.length ? `${guardedPrompt}\n\n${additions.join('\n\n')}` : guardedPrompt
   return {
     prompt: finalPrompt,
     missing,

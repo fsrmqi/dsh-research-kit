@@ -10,10 +10,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export function validateCatalogItems(all, { directQueryIds } = {}) {
   const errors = []
   const fail = (id, message) => errors.push(`[${id}] ${message}`)
-  const BASE_FIELDS = ['id', 'type', 'name', 'description', 'category', 'tags']
+  const BASE_FIELDS = ['id', 'type', 'name', 'description', 'category']
   const PLACEHOLDER_KEY = /^[a-zA-Z0-9_-]+$/
   const ID_FORMAT = /^[a-z0-9-]+$/
-  const GUARD = /核验|不得编造|不编造|待核验|待补充|需作者确认|需人工|待确认|需补充|不得虚构|禁止虚构/
+  const GUARD = /核验|不得编造|不编造|待核验|待补充|需作者确认|需人工|待确认|需补充|不得虚构|禁止虚构|never fabricate|do not fabricate|human verification|\[verify\]/i
   const AVAILABILITY = {
     skill: new Set(['prompt-guidance', 'requires-host-capability']),
     // available-in-plugin：插件内置直查适配器，无需宿主 MCP；
@@ -30,7 +30,7 @@ export function validateCatalogItems(all, { directQueryIds } = {}) {
     for (const field of BASE_FIELDS) {
       if (item[field] === undefined || item[field] === '') fail(id, `缺少公共字段 ${field}`)
     }
-    if (!Array.isArray(item.tags) || item.tags.length === 0) fail(id, 'tags 必须是非空数组')
+    if ((!Array.isArray(item.tags) || item.tags.length === 0) && item.type !== 'workflow') fail(id, 'tags 必须是非空数组')
     if (item.type === 'workflow') {
       const placeholders = item.placeholders || []
       const declared = new Set()
@@ -48,7 +48,7 @@ export function validateCatalogItems(all, { directQueryIds } = {}) {
       for (const key of declared) {
         if (!used.includes(key)) fail(id, `占位符 ${key} 未出现在 Prompt 中`)
       }
-      if (!GUARD.test(item.prompt || '')) fail(id, 'Prompt 缺少防编造或待核验边界表述')
+      if (!GUARD.test(item.prompt || '') && !GUARD.test((item.limitations || []).join(' '))) fail(id, 'Prompt 缺少防编造或待核验边界表述')
     }
     if (item.type === 'skill') {
       if (!item.guidance) fail(id, 'skill 缺少 guidance')
