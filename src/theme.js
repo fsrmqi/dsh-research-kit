@@ -146,13 +146,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @keyframes rk-spin { to { transform: rotate(360deg) } }
 @keyframes rk-pop { from { opacity: 0; transform: translateY(6px) scale(.985) } to { opacity: 1; transform: none } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rk-graph-flow { to { stroke-dashoffset: -36 } }
+.rk-graph-edge { stroke-linecap: round; opacity: .72 }
+.rk-graph-edge-flow { stroke: var(--rk-teal) !important; stroke-dasharray: 7 11; animation: rk-graph-flow 1.25s linear infinite }
+.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)) }
 .rk-pop { animation: rk-pop .18s ease both }
 .rk-fade { animation: rk-fade .16s ease both }
 .rk-scroll::-webkit-scrollbar { width: 8px; height: 8px }
 .rk-scroll::-webkit-scrollbar-thumb { background: #cdd8df; border-radius: 999px }
 .rk-scroll::-webkit-scrollbar-track { background: transparent }
 @media (prefers-reduced-motion: reduce) {
-  .rk-btn, .rk-card, .rk-pop, .rk-fade { transition: none; animation: none }
+  .rk-btn, .rk-card, .rk-pop, .rk-fade, .rk-graph-edge-flow { transition: none; animation: none }
 }
 /* 窄屏单列：两栏布局与表单网格统一塌陷，避免并排挤压。 */
 @media (max-width: 880px) {

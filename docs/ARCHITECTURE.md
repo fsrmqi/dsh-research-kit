@@ -88,7 +88,7 @@ dsh-research-kit/
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
 │   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
-│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染
+│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染 + 已保存证据接入 + 方向性锚点
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
@@ -96,7 +96,7 @@ dsh-research-kit/
 │       ├── icons.js                 # 图标 path
 │       ├── enhance-output.js        # 模型输出协议解析（Node half 与浏览器共用）
 │       ├── vault-core.js            # 灵感资产纯逻辑与隐私边界
-│       ├── evidence-graph-core.js   # 证据图谱布局纯逻辑
+│       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据接入）
 │       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       └── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
@@ -117,7 +117,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   └── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
-├── test/                            # 121 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
+├── test/                            # 122 项测试（15 个测试文件 + helpers 下的 1 个 IndexedDB 桩：纯逻辑 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -150,14 +150,14 @@ dsh-research-kit/
 
 ### 2.2 统一视图的分区契约
 
-三个并列视图（科研工作台 / 研究方法工坊 / 研究灵感库——后者即今天的「研究资产库」）已合并为单一 `conversation.view`（`dsh-research-kit-console`），内部按「发现 → 构造 → 沉淀 → 证据」的科研闭环做四个二级分区。证据图谱是 Research Kit 自有分区，汇总本会话资源、工作流、查询来源与资产关系；其余三个分区组件继续以 `embedded` 模式复用。
+三个并列视图（科研工作台 / 研究方法工坊 / 研究灵感库——后者即今天的「研究资产库」）已合并为单一 `conversation.view`（`dsh-research-kit-console`），内部按「发现 → 构造 → 沉淀 → 证据」的科研闭环做四个二级分区。证据图谱是 Research Kit 自有分区，汇总本会话资源、工作流、查询来源、资产与**已保存证据**的关系；其余三个分区组件继续以 `embedded` 模式复用。
 
 | 分区 | 定位 | 核心用途 | 职责边界 | 独占数据 |
 | --- | --- | --- | --- | --- |
 | 资源与工作流 | 发现层 | 目录检索、按参数与技能组装 Prompt、公开数据源直查 | 不生产知识、不沉淀资产、不直接出网 | 目录收藏与使用历史 |
 | 方法工坊 | 构造层 | 方法卡库、变量填充生成可编辑 Prompt、从当前对话提取草稿并写回输入框 | 不管理资产正文、不检索项目记忆或最近会话、不替工作流决定领域参数 | 方法卡与工坊资产 |
 | 研究资产库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不自动入库、不静默注入 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
-| 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源与资产之间的关系 | 不执行查询、不生成结论、不保存原始文件与检索词 | 本会话证据索引（`evidence-store`） |
+| 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源、资产与已保存证据之间的关系（节点与边见 §3.5） | 不执行查询、不生成结论、不保存原始文件与检索词；对证据库只读接入，不写入、不携带笔记与全文 | 本会话证据索引（`evidence-store`）；对证据库（IndexedDB `dsh-research-kit-evidence`）只读 |
 
 契约由 `src/lib/console-sections.js` 声明、`test/research-console.test.js` 守护：
 
@@ -383,6 +383,36 @@ DSH 加载 ui/client.js
 注入与否由纯函数 `planCitationWrite()` 决策，它返回 `empty / unsupported / write` 三态，**只有 `write` 才允许调用宿主 `inputActions.setDraft()`**。因此「未选择不注入」不是渲染层的巧合，而是有专门回归测试守护的契约：未勾选时写入按钮为禁用态、决策返回空文本；宿主未提供输入框操作时按钮同样禁用，但引用块仍照常显示，用户可自行复制粘贴。写入始终是用户显式动作——草稿增强、工作流启动与 Agent 调用都不会静默注入历史证据。
 
 选择集（`selectedEntries`）以**全部证据条目**（`entries`）为基准，而不是当前筛选结果（`filtered`）：勾选是用户明确做出的跨筛选状态，调整检索词或核验状态筛选只改变「看见什么」，不得悄悄撤销「已选择什么」——否则按钮计数会与用户认知不符。项目切换时选择清空，因此不会跨项目带入。这与工作台资源选择器**有意不同**：那里的选中项是「当前视图下要用于组装 Prompt 的资源」，必须属于当前结果集（见 §3.1），筛选即切换选中项；证据库的勾选是跨筛选累积的引用清单，两者语义不同，不要统一成一种写法。
+
+### 3.5 证据图谱（分区④）
+
+```text
+输入（四个来源，全部只读）
+  ├─ 本会话资源选择（分区① 勾选，存内存 selection store）
+  ├─ 本会话查询记录（工作流启动 / 数据源直查，存内存 evidence store）
+  ├─ 灵感资产（PromptKit asset provider，含派生与关联关系）
+  └─ 已保存证据（IndexedDB dsh-research-kit-evidence，只读接入；见 §3.4）
+  → buildEvidenceGraph() 纯逻辑产出节点与边（不含检索词、全文、笔记）
+  → 按节点 kind 分列布局，evidence 为最右一列
+  → edgePoints(from, to) 按两端实际水平位置选锚点：正向右缘→左缘，逆向左缘→右缘
+```
+
+| 节点 kind | id 前缀 | 展示 |
+| --- | --- | --- |
+| `database` / `skill` | `resource:` | 目录条目名称与描述 |
+| `workflow` | `workflow:` | 工作流名称与启动时间 |
+| `query` / `agent-query` | `query:` | 数据源名称与查询时间 |
+| `source` | `source:` | 候选来源标题与链接 |
+| `asset` | `asset:` | 资产标题与认识状态 |
+| `evidence` | `evidence:` | `来源库 · 稳定标识符 · 核验状态` |
+
+边类型共七种：`workflow → resource`（`uses`）、`query → resource`（`queries`）、`query → source`（`returns`）、`asset → asset`（`derives`，派生自父资产）、`asset → asset | evidence`（`relates`，显式关联）、`evidence → resource`（`saved-from`，按来源库名匹配同库资源）、`evidence → source`（`saved-copy`，按 URL 或稳定标识符匹配本会话查询来源）。两端节点必须都存在，否则该边不产出。
+
+**方向性锚点。** 连线原先固定「左缘连到右缘」，当边方向本身逆向时（如 `workflow → resource`——工作流列在资源列右侧）线段会穿过节点、产生穿越感。现改为按两端 `x` 决定锚点：`from.x <= to.x` 走「右缘 → 左缘」，否则走「左缘 → 右缘」。因为锚点自适应会让「箭头指向谁」不再自明，图谱导语显式写着「箭头表示关系方向」。
+
+**资源集合会被补齐。** 图谱的资源节点不只来自本会话勾选：只要某个已保存证据的来源库在目录中存在，对应的数据库条目也会补进图谱。否则会出现「有证据节点却找不到来源库」的断链，`saved-from` 边也就无从落地。
+
+**隐私边界。** 证据节点只带来源库、稳定标识符与核验状态，**不带笔记、全文或检索词**；图谱对证据库是只读接入（不写入、不修改）。未保存的查询来源与已保存证据是两类不同节点，前者随页面内存消失，后者持久化在 IndexedDB，二者不互相冒充。该边界由 `test/evidence-graph.test.js` 断言（序列化结果不得包含笔记正文）。
 
 ## 4. 目录数据契约
 
