@@ -15,7 +15,7 @@ test('分片枚举：只列 *.json、不含聚合入口、按相对路径确定�
     assert.deepEqual([...files].sort(), files, `${kind} 分片清单未按路径排序`)
   }
   assert.equal(listShardFiles('workflows').length, 24, '工作流分片数应为 24（16 个有内容 + 8 个预留流程族）')
-  assert.deepEqual(listShardFiles('skills'), ['bioinformatics.json', 'core.json', 'crop-breeding.json'])
+  assert.deepEqual(listShardFiles('skills'), ['bioinformatics.json', 'core.json', 'crop-breeding.json', 'host-capabilities.json'])
   assert.deepEqual(listShardFiles('resources'), ['crop-breeding.json', 'general-science.json', 'genomics.json', 'literature.json', 'omics.json'])
   assert.ok(!listShardFiles('resources').includes('database-metadata.json'), '分组元数据不是条目分片，不得参与枚举与登记')
 })
@@ -34,7 +34,7 @@ test('登记纯函数：未登记的分片会被点名', () => {
 test('聚合入口：数量、类型与分组元数据形状正确', async () => {
   const { workflows, skills, resources, databaseMetadataConfig } = await loadCatalogEntries()
   assert.equal(workflows.length, 308)
-  assert.equal(skills.length, 23)
+  assert.equal(skills.length, 86)
   assert.equal(resources.length, 122)
   assert.ok(workflows.every(item => item.type === 'workflow'))
   assert.ok(skills.every(item => item.type === 'skill'))
@@ -48,5 +48,5 @@ test('fs 直读分片与 ESM 聚合入口逐条一致', async () => {
   const { workflows, skills, resources } = await loadCatalogEntries()
   const fromDisk = [...readShardEntries('workflows'), ...readShardEntries('skills'), ...readShardEntries('resources')]
   assert.deepEqual(compareShardsWithEntries(fromDisk, [...workflows, ...skills, ...resources]), [])
-  assert.equal(readShards('skills').length, 3, 'skills 应枚举出 3 个分片')
+  assert.equal(readShards('skills').length, 4, 'skills 应枚举出 4 个分片')
 })

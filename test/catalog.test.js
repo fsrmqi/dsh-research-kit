@@ -180,10 +180,24 @@ test('搜索命中新增工作流的模板正文关键词', () => {
   assert.ok(searchCatalog({ query: '样本量' }).some(item => item.id === 'power-analysis'))
 })
 
-test('每条技能带 promptFragment 与 checklist 模块', () => {
-  for (const skill of catalog.filter(item => item.type === 'skill')) {
+test('prompt-guidance 技能带 promptFragment 与 checklist 模块', () => {
+  for (const skill of catalog.filter(item => item.type === 'skill' && item.availability === 'prompt-guidance')) {
     assert.ok(skill.promptFragment && skill.promptFragment.length >= 10, `${skill.id} 缺少 promptFragment`)
     assert.ok(Array.isArray(skill.checklist) && skill.checklist.length >= 3, `${skill.id} 缺少 checklist`)
+  }
+})
+
+test('requires-host-capability 技能如实声明前提且不携带可注入片段', () => {
+  const hostSkills = catalog.filter(item => item.type === 'skill' && item.availability === 'requires-host-capability')
+  assert.ok(hostSkills.length > 0, '缺少 requires-host-capability 技能')
+  for (const skill of hostSkills) {
+    assert.ok(!skill.promptFragment, `${skill.id} 不得携带 promptFragment（只有 prompt-guidance 技能可注入）`)
+    assert.ok(skill.guidance && skill.guidance.length >= 20, `${skill.id} 缺少 guidance`)
+    assert.ok(Array.isArray(skill.checklist) && skill.checklist.length >= 3, `${skill.id} 缺少 checklist`)
+    assert.ok(
+      /执行|Bash|Python|MCP|API Key|凭据|集群|自托管|工具链|算力|GPU|账号/.test(skill.guidance),
+      `${skill.id} 的 guidance 未显式写明宿主前提`
+    )
   }
 })
 

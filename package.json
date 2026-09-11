@@ -1,7 +1,7 @@
 {
   "name": "dsh-research-kit",
   "version": "0.1.0",
-  "description": "面向 DeepSeek Harness 的科研 Agent 工作台：308 条工作流、23 个技能模块、122 个科学数据源，支持公开 API 直查与 DSH Agent/MCP 查询回退。",
+  "description": "面向 DeepSeek Harness 的科研 Agent 工作台：308 条工作流、86 个技能条目、122 个科学数据源，支持公开 API 直查与 DSH Agent/MCP 查询回退。",
   "type": "module",
   "main": "index.js",
   "exports": {

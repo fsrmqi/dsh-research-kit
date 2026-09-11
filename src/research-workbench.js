@@ -498,6 +498,14 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
             ]) : null,
             h(Notice, { key: 'availability', tone: 'info', icon: 'shield' }, '该技能以提示词指导方式生效：不会自动执行，只在勾选后把指导片段并入相关工作流的提示词。'),
           ]) : null,
+          selected.type === 'skill' && !selected.promptFragment ? h(React.Fragment, { key: 'skill-host' }, [
+            h('p', { key: 'guidance', style: { margin: 0, lineHeight: 1.6, fontSize: 13 } }, selected.guidance),
+            selected.checklist?.length ? h(Card, { key: 'checklist', style: { padding: 14, background: C.surfaceAlt } }, [
+              h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '使用前提与安全核验'),
+              h('ul', { key: 'l', style: { margin: 0, paddingLeft: 20, display: 'grid', gap: 6, fontSize: 13, lineHeight: 1.5 } }, selected.checklist.map((entry, index) => h('li', { key: index }, entry))),
+            ]) : null,
+            h(Notice, { key: 'availability', tone: 'warn', icon: 'shield' }, '该技能依赖宿主执行能力（Bash/Python、工具链、MCP 或平台凭据），本插件只提供能力说明与前提核验：不会注入提示词，也不代为执行。确认会话具备所需能力后，可直接让会话 Agent 参照上述清单执行，结果需人工核验。'),
+          ]) : null,
           selected.type === 'database' ? h('div', { key: 'database', style: { display: 'grid', gap: 12 } }, [
             h('p', { key: 'note', style: { color: C.muted, margin: 0, fontSize: 13, lineHeight: 1.6 } }, selected.description),
             h(Card, { key: 'meta', style: { padding: 14, background: C.surfaceAlt } },
