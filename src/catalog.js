@@ -54,6 +54,8 @@ function enrichItem(item) {
   return item.type === 'database' ? { ...item, databaseMeta: databaseMetadata(item) } : item
 }
 
+// 目录保留多学科能力，避免用户后续需要时丢失既有工作流；
+// 新增与默认推荐则优先服务作物遗传育种、生物信息学、基因组与论文科研链路。
 export const catalog = Object.freeze([...workflows, ...skills, ...databases].map(enrichItem))
 
 export function searchCatalog({ query = '', type = 'all' } = {}) {

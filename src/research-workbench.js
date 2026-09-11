@@ -103,6 +103,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [favorites, setFavorites] = React.useState(() => storage.getFavorites())
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
+  const [planRows, setPlanRows] = React.useState(() => evidence.get().plans || [])
   const items = searchCatalog({ query, type })
   // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
   const selected = selectedCatalogItem(items, selectedId)
@@ -128,6 +129,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const requiredFields = workflow ? (workflow.placeholders || []).filter(field => field.required) : []
   const missingNow = requiredFields.filter(field => !String(values[field.key] || '').trim()).map(field => field.label)
   const taskPlan = researchPlanFor(workflow)
+  const activePlan = workflow ? planRows.find(plan => plan.id === workflow.id) : null
 
   React.useEffect(() => {
     // 切换资源后清空编辑态与勾选，避免把上一个工作流的内容或技能组合带过去。
@@ -143,6 +145,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     return storage.onHistoryChange?.(() => { setHistory(storage.getHistory()); setFavorites(storage.getFavorites()) }) || (() => {})
   }, [storage])
   React.useEffect(() => selection.subscribe(setSessionResourceIds), [selection])
+  React.useEffect(() => evidence.subscribe(value => setPlanRows(value.plans || [])), [evidence])
   const warnManualOverride = () => {
     if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
   }
@@ -163,8 +166,13 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   }
   const writeTaskPlan = () => {
     if (!hasDraftAction || !workflow || !taskPlan) return
+    evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
     inputActions.setDraft(`请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
     setNotice('研究与交付计划已写入输入框；确认后可继续执行。')
+  }
+  const togglePlanStage = index => {
+    if (!workflow || !activePlan) return
+    evidence.togglePlanStage(workflow.id, index)
   }
   const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
   // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
@@ -182,6 +190,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
     setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
+    if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
   }
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
@@ -325,9 +334,15 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
             workflow.requiresFiles ? h(Notice, { key: 'files-note', tone: 'warn', icon: 'file' }, '此流程需要研究材料：请先在 DSH 输入框中使用原生 @文件 引用相关文件。') : null,
             taskPlan ? h(Card, { key: 'task-plan', style: { padding: 14, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
               h('strong', { key: 'title', style: { fontSize: 14 } }, '研究与交付计划'),
-              h('ol', { key: 'stages', style: { margin: '8px 0', paddingLeft: 20, display: 'grid', gap: 5, fontSize: 13 } }, taskPlan.stages.map(stage => h('li', { key: stage }, stage))),
+              h('div', { key: 'stages', style: { margin: '8px 0', display: 'grid', gap: 5, fontSize: 13 } }, taskPlan.stages.map((stage, index) => {
+                const done = Boolean(activePlan?.stages?.[index]?.done)
+                return h('label', { key: stage, style: { display: 'flex', gap: 8, alignItems: 'center', opacity: done ? .72 : 1 } }, [
+                  h('input', { key: 'check', type: 'checkbox', checked: done, disabled: !activePlan, onChange: () => togglePlanStage(index), style: { accentColor: C.teal } }),
+                  h('span', { key: 'label', style: { textDecoration: done ? 'line-through' : 'none' } }, `${index + 1}. ${stage}`),
+                ])
+              })),
               h('div', { key: 'deliverables', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, `预期交付：${taskPlan.deliverables.join('、')}。所有阶段均需人工确认，不代表已执行。`),
-              h(Button, { key: 'plan', size: 'sm', variant: 'soft', icon: 'layers', disabled: !hasDraftAction, onClick: writeTaskPlan, style: { marginTop: 10 } }, '写入研究与交付计划'),
+              h(Button, { key: 'plan', size: 'sm', variant: 'soft', icon: 'layers', disabled: !hasDraftAction, onClick: writeTaskPlan, style: { marginTop: 10 } }, activePlan ? '研究计划已写入' : '写入研究与交付计划'),
             ]) : null,
             sessionResources.length ? h(Notice, { key: 'session', tone: 'info', icon: 'layers' }, `本会话已附加资源（${sessionResources.length}）：${sessionResources.map(item => item.name).join('、')}。可在输入框的“资源”入口调整。`) : null,
             ...(workflow.placeholders || []).map(field => h(Field, {

@@ -110,7 +110,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     const savedDatabases = catalog.filter(item => item.type === 'database' && savedEvidence.some(entry => entry.sourceDatabase === item.name))
     return [...new Map([...resources, ...savedDatabases].map(item => [item.id, item])).values()]
   }, [resources, savedEvidence])
-  const graph = React.useMemo(() => buildEvidenceGraph({ resources: graphResources, workflows: records.workflows, queries: records.queries, assets, savedEvidence }), [graphResources, records, assets, savedEvidence])
+  const graph = React.useMemo(() => buildEvidenceGraph({ resources: graphResources, workflows: records.workflows, queries: records.queries, plans: records.plans, assets, savedEvidence }), [graphResources, records, assets, savedEvidence])
   const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
   const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
 

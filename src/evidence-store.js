@@ -14,7 +14,7 @@ function evidenceKeyFor(sessionId) { return String(sessionId || 'unscoped') }
 
 function evidenceStateFor(sessionId) {
   const key = evidenceKeyFor(sessionId)
-  if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], listeners: new Set() })
+  if (!evidenceSessions.has(key)) evidenceSessions.set(key, { queries: [], workflows: [], plans: [], listeners: new Set() })
   const state = evidenceSessions.get(key)
   evidenceSessions.delete(key)
   evidenceSessions.set(key, state)
@@ -28,7 +28,7 @@ function evidenceStateFor(sessionId) {
 
 export function createEvidenceStore(sessionId) {
   const state = evidenceStateFor(sessionId)
-  const get = () => ({ queries: [...state.queries], workflows: [...state.workflows] })
+  const get = () => ({ queries: [...state.queries], workflows: [...state.workflows], plans: [...state.plans] })
   const publish = () => {
     const value = get()
     for (const listener of state.listeners) { try { listener(value) } catch {} }
@@ -37,6 +37,7 @@ export function createEvidenceStore(sessionId) {
   const save = next => {
     state.queries = Array.isArray(next.queries) ? next.queries : []
     state.workflows = Array.isArray(next.workflows) ? next.workflows : []
+    state.plans = Array.isArray(next.plans) ? next.plans : []
     return publish()
   }
   return {
@@ -51,7 +52,16 @@ export function createEvidenceStore(sessionId) {
       const row = { id, name, resourceIds: [...new Set(resourceIds)], at: Date.now() }
       return save({ ...current, workflows: [row, ...current.workflows.filter(item => item.id !== id)].slice(0, MAX_WORKFLOWS) })
     },
+    recordPlan({ workflowId, name, stages = [] }) {
+      const current = get()
+      const row = { id: workflowId, name, stages: stages.map(label => ({ label, done: false })), at: Date.now() }
+      return save({ ...current, plans: [row, ...current.plans.filter(item => item.id !== workflowId)] })
+    },
+    togglePlanStage(planId, index) {
+      const current = get()
+      return save({ ...current, plans: current.plans.map(plan => plan.id !== planId ? plan : { ...plan, stages: plan.stages.map((stage, i) => i === index ? { ...stage, done: !stage.done } : stage) }) })
+    },
     subscribe(listener) { state.listeners.add(listener); return () => state.listeners.delete(listener) },
-    clear() { return save({ queries: [], workflows: [] }) }
+    clear() { return save({ queries: [], workflows: [], plans: [] }) }
   }
 }

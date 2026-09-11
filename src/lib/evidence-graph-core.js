@@ -1,6 +1,6 @@
 // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [] } = {}) {
+export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [] } = {}) {
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -10,6 +10,16 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
   for (const workflow of workflows) {
     add({ id: `workflow:${workflow.id}`, kind: 'workflow', label: workflow.name || workflow.id, detail: workflow.at ? new Date(workflow.at).toLocaleString('zh-CN') : '' })
     for (const resourceId of workflow.resourceIds || []) link(`workflow:${workflow.id}`, `resource:${resourceId}`, 'uses')
+  }
+  for (const plan of plans) {
+    const planId = `plan:${plan.id}`
+    add({ id: planId, kind: 'plan', label: `${plan.name || plan.id} 计划`, detail: `${(plan.stages || []).filter(stage => stage.done).length}/${(plan.stages || []).length} 阶段已确认` })
+    link(planId, `workflow:${plan.id}`, 'plans')
+    for (const [index, stage] of (plan.stages || []).entries()) {
+      const stageId = `${planId}:stage:${index}`
+      add({ id: stageId, kind: 'stage', label: stage.label, detail: stage.done ? '用户已确认完成' : '待人工确认' })
+      link(stageId, planId, stage.done ? 'confirmed-stage' : 'planned-stage')
+    }
   }
   for (const query of queries) {
     const queryId = `query:${query.id}`
@@ -42,7 +52,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
 }
 
 export const EVIDENCE_NODE_COLORS = {
-  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c'
+  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b'
 }
 
 // ── 布局 ──────────────────────────────────────────────────────────────────────
@@ -50,7 +60,7 @@ export const EVIDENCE_NODE_COLORS = {
 // 不随图的形状变化，否则同一批节点会因新边出现而整体换列。
 export const GRAPH_NODE_WIDTH = 136
 export const GRAPH_NODE_HEIGHT = 54
-const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, workflow: 1, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4 }
+const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4 }
 const GRAPH_COLUMN_GAP = 220
 const GRAPH_ROW_GAP = 82
 const GRAPH_ORIGIN_X = 70
