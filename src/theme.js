@@ -139,6 +139,17 @@ body[data-ds-dark-theme] {
 .rk-btn:hover:not(:disabled) { transform: translateY(-1px) }
 .rk-btn:active:not(:disabled) { transform: translateY(0) scale(.98) }
 .rk-btn:disabled { opacity: .5; cursor: not-allowed }
+/* 宿主的通用 select 样式可能会把控件拉满整行；分类下拉必须按分类栏的紧凑节奏布局。 */
+.rk-workflow-category-select {
+  width: clamp(88px, 10vw, 116px) !important;
+  min-width: 88px !important;
+  max-width: 116px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box;
+  line-height: 1.2;
+}
 .rk-card { transition: transform .18s ease, box-shadow .18s ease }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
 .rk-row { transition: background .15s ease }

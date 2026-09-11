@@ -4327,6 +4327,17 @@ window.__ModuleLoader__.load({
     .rk-btn:hover:not(:disabled) { transform: translateY(-1px) }
     .rk-btn:active:not(:disabled) { transform: translateY(0) scale(.98) }
     .rk-btn:disabled { opacity: .5; cursor: not-allowed }
+    /* 宿主的通用 select 样式可能会把控件拉满整行；分类下拉必须按分类栏的紧凑节奏布局。 */
+    .rk-workflow-category-select {
+      width: clamp(88px, 10vw, 116px) !important;
+      min-width: 88px !important;
+      max-width: 116px !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      flex: 0 0 auto !important;
+      box-sizing: border-box;
+      line-height: 1.2;
+    }
     .rk-card { transition: transform .18s ease, box-shadow .18s ease }
     .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
     .rk-row { transition: background .15s ease }
@@ -6283,6 +6294,8 @@ window.__ModuleLoader__.load({
       '临床研究': C.red,
     }
     const fallbackWorkflowColor = C.teal
+    // 工作流选择器优先呈现科研写作与生命科学常用入口；完整学科目录仍可通过“全部”下拉访问。
+    const DEFAULT_WORKFLOW_CATEGORIES = ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种']
 
     function unique(ids) { return [...new Set(ids)] }
 
@@ -6474,6 +6487,8 @@ window.__ModuleLoader__.load({
       const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
       const recommendedWorkflows = recommendedWorkflowsForResources(resourceIds).slice(0, 4)
       const workflowCategories = unique(catalog.filter(item => item.type === 'workflow').map(item => item.category))
+      const defaultWorkflowCategories = DEFAULT_WORKFLOW_CATEGORIES.filter(category => workflowCategories.includes(category))
+      const additionalWorkflowCategories = workflowCategories.filter(category => !defaultWorkflowCategories.includes(category))
       const resourceTabs = [
         { value: 'all', label: `全部（${catalog.filter(item => item.type !== 'workflow').length}）` },
         { value: 'database', label: `数据库（${catalog.filter(item => item.type === 'database').length}）` },
@@ -6513,25 +6528,42 @@ window.__ModuleLoader__.load({
             }),
             mode === 'resources'
               ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-              : h('div', { key: 'cats', style: { display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 } }, [
-                { value: 'all', label: '全部', color: C.teal },
-                ...workflowCategories.map(item => ({ value: item, label: item, color: WORKFLOW_CATEGORY_COLORS[item] || fallbackWorkflowColor })),
-              ].map(option => {
-                const active = workflowCategory === option.value
-                return h('button', {
-                  key: option.value,
-                  type: 'button',
-                  onClick: () => setWorkflowCategory(option.value),
-                  'aria-pressed': active,
-                  className: 'rk-btn',
+              : h('div', { key: 'cats', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingBottom: 2 } }, [
+                h('select', {
+                  key: 'all-categories',
+                  value: additionalWorkflowCategories.includes(workflowCategory) ? workflowCategory : 'all',
+                  onChange: event => setWorkflowCategory(event.target.value),
+                  'aria-label': '全部工作流程分类',
+                  className: 'rk-btn rk-workflow-category-select',
                   style: {
-                    padding: '5px 10px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer',
-                    border: `1px solid ${active ? option.color : `${option.color}40`}`,
-                    background: active ? option.color : 'transparent',
-                    color: active ? C.onInk : option.color, fontSize: 12, fontWeight: 700,
+                    padding: '5px 25px 5px 10px', borderRadius: 999, cursor: 'pointer',
+                    border: `1px solid ${workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : `${C.teal}40`}`,
+                    background: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.teal : 'transparent',
+                    color: workflowCategory === 'all' || additionalWorkflowCategories.includes(workflowCategory) ? C.onInk : C.teal,
+                    fontSize: 12, fontWeight: 700,
                   },
-                }, option.label)
-              })),
+                }, [
+                  h('option', { key: 'all', value: 'all' }, '全部'),
+                  ...additionalWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
+                ]),
+                ...defaultWorkflowCategories.map(category => {
+                  const color = WORKFLOW_CATEGORY_COLORS[category] || fallbackWorkflowColor
+                  const active = workflowCategory === category
+                  return h('button', {
+                    key: category,
+                    type: 'button',
+                    onClick: () => setWorkflowCategory(category),
+                    'aria-pressed': active,
+                    className: 'rk-btn',
+                    style: {
+                      padding: '5px 10px', borderRadius: 999, whiteSpace: 'nowrap', cursor: 'pointer',
+                      border: `1px solid ${active ? color : `${color}40`}`,
+                      background: active ? color : 'transparent',
+                      color: active ? C.onInk : color, fontSize: 12, fontWeight: 700,
+                    },
+                  }, category)
+                }),
+              ]),
           ]),
           h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
             mode === 'workflows' && rows.length ? h('div', {
