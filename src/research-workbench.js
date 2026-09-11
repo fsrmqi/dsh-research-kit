@@ -126,7 +126,7 @@ function CatalogCategoryFilter({ type, categories, value, onChange }) {
   }, [
     h(Select, {
       key: 'all-categories',
-      value: additionalCategories.includes(value) ? value : 'all',
+      value,
       onChange,
       ariaLabel: `全部${TYPE_LABELS[type]}分类`,
       className: 'rk-workflow-category-select',
@@ -139,6 +139,7 @@ function CatalogCategoryFilter({ type, categories, value, onChange }) {
       },
       options: [
         { value: 'all', label: '全部' },
+        ...quickCategories.map(category => ({ value: category, label: category })),
         ...additionalCategories.map(category => ({ value: category, label: category })),
       ],
     }),
@@ -234,8 +235,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     // 收藏或历史在其他视图（如输入框弹窗）变更时同步刷新本视图。
     return storage.onHistoryChange?.(() => { setHistory(storage.getHistory()); setFavorites(storage.getFavorites()) }) || (() => {})
   }, [storage])
-  React.useEffect(() => selection.subscribe(setSessionResourceIds), [selection])
-  React.useEffect(() => evidence.subscribe(value => setPlanRows(value.plans || [])), [evidence])
+  React.useEffect(() => { setSessionResourceIds(selection.get()); return selection.subscribe(setSessionResourceIds) }, [selection])
+  React.useEffect(() => { setPlanRows(evidence.get().plans || []); return evidence.subscribe(value => setPlanRows(value.plans || [])) }, [evidence])
   const warnManualOverride = () => {
     if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
   }
@@ -267,7 +268,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
   // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
   const specialRows = type === 'favorites'
-    ? favorites.map(itemById).filter(Boolean)
+    ? favorites.map(itemById).filter(Boolean).map(item => ({ item }))
     : type === 'history'
       ? history.map(row => ({ row, item: itemById(row.id) })).filter(entry => entry.item)
       : null
@@ -313,10 +314,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     const item = itemById(row.id)
     if (!item) return
     setType('all')
+    setQuery('')
     setSelectedId(item.id)
   }
   const openFavoriteEntry = item => {
     setType('all')
+    setQuery('')
     setSelectedId(item.id)
   }
   const typeTabs = [
@@ -351,8 +354,9 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
           onChange: next => {
             const value = next || null
             setScienceMode(value)
-            setEditedPrompt(null)
-            setNotice(value ? `已启用“${SCIENCE_MODE_PRESETS[value].label}”预设：自动附加对应指导技能与领域纪律段。` : '已关闭科研模式。')
+            setNotice(editedPrompt !== null
+              ? '科研模式已切换；已保留手动编辑的提示词。点击“恢复自动生成”可应用新预设。'
+              : value ? `已启用“${SCIENCE_MODE_PRESETS[value].label}”预设：自动附加对应指导技能与领域纪律段。` : '已关闭科研模式。')
           },
           ariaLabel: '选择科研模式领域预设',
           options: [{ value: '', label: '未启用' }, ...Object.entries(SCIENCE_MODE_PRESETS).map(([key, preset]) => ({ value: key, label: preset.label }))],
@@ -522,7 +526,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
               h('strong', { key: 'q2' }, '引用/记录：'), databaseMetadata(selected).citationRule, h('br', { key: 'b2' }),
               h('strong', { key: 'q3' }, '接入提示：'), databaseMetadata(selected).toolHint,
             ]),
-            h(DatabaseQueryPanel, { key: 'query-panel', database: selected, sessionId, inputActions, evidenceStore: evidence }),
+            h(DatabaseQueryPanel, { key: `${sessionId}:${selected.id}`, database: selected, sessionId, inputActions, evidenceStore: evidence }),
           ]) : null,
           relatedItems([...(selected.suggestedSkillIds || []), ...(selected.suggestedDatabaseIds || [])]).length ? h('div', { key: 'related' }, [
             h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '建议能力'),

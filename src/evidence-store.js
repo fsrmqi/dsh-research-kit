@@ -54,7 +54,8 @@ export function createEvidenceStore(sessionId) {
     },
     recordPlan({ workflowId, name, stages = [] }) {
       const current = get()
-      const row = { id: workflowId, name, stages: stages.map(label => ({ label, done: false })), at: Date.now() }
+      const previous = current.plans.find(plan => plan.id === workflowId)
+      const row = { id: workflowId, name, stages: stages.map((label, index) => ({ label, done: previous?.stages[index]?.label === label ? previous.stages[index].done : false })), at: Date.now() }
       return save({ ...current, plans: [row, ...current.plans.filter(item => item.id !== workflowId)] })
     },
     togglePlanStage(planId, index) {

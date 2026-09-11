@@ -4174,7 +4174,8 @@ window.__ModuleLoader__.load({
         },
         recordPlan({ workflowId, name, stages = [] }) {
           const current = get()
-          const row = { id: workflowId, name, stages: stages.map(label => ({ label, done: false })), at: Date.now() }
+          const previous = current.plans.find(plan => plan.id === workflowId)
+          const row = { id: workflowId, name, stages: stages.map((label, index) => ({ label, done: previous?.stages[index]?.label === label ? previous.stages[index].done : false })), at: Date.now() }
           return save({ ...current, plans: [row, ...current.plans.filter(item => item.id !== workflowId)] })
         },
         togglePlanStage(planId, index) {
@@ -6104,6 +6105,11 @@ window.__ModuleLoader__.load({
 
     const QUERY_PATH = '/dsh-research-kit/query'
 
+    function databaseSearchText(query, englishQuery) {
+      const terms = [query.trim(), englishQuery.trim()].filter(Boolean)
+      return terms.length > 1 ? terms.map(term => `(${term})`).join(' OR ') : terms[0] || ''
+    }
+
     function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }) {
       const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
       const [query, setQuery] = React.useState('')
@@ -6112,30 +6118,38 @@ window.__ModuleLoader__.load({
       // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
       const [saveTarget, setSaveTarget] = React.useState('')
       const [savedKeys, setSavedKeys] = React.useState([])
+      const requestRef = React.useRef(null)
+      React.useEffect(() => () => requestRef.current?.abort(), [])
       const canWrite = typeof inputActions?.setDraft === 'function'
       const canSubmit = canWrite && typeof inputActions?.submit === 'function'
       const agentTask = sources => {
         const sourceBlock = sources?.length
           ? `\n\n以下是插件直查得到的候选记录，请逐条打开来源核验后再引用：\n${sources.map((item, index) => `${index + 1}. ${item.title}\n${item.url}`).join('\n')}`
           : ''
-        return `请通过当前 DSH Agent 查询「${database.name}」：${query.trim()}。使用当前会话已配置的 Web、MCP 或其他工具；返回实际检索到记录的标题、稳定标识符、来源链接、年份/版本和相关性说明。${sourceBlock}\n\n不得编造文献、DOI、数据集编号或检索结果；不能访问时明确说明原因。`
+        return `请通过当前 DSH Agent 查询「${database.name}」：${state.result?.query || databaseSearchText(query, englishQuery)}。使用当前会话已配置的 Web、MCP 或其他工具；返回实际检索到记录的标题、稳定标识符、来源链接、年份/版本和相关性说明。${sourceBlock}\n\n不得编造文献、DOI、数据集编号或检索结果；不能访问时明确说明原因。`
       }
       const runQuery = async event => {
         event?.preventDefault?.()
-        const text = [query.trim() && `(${query.trim()})`, englishQuery.trim() && `(${englishQuery.trim()})`].filter(Boolean).join(' OR ')
+        const text = databaseSearchText(query, englishQuery)
         if (!text) return setState({ status: 'error', result: null, message: '请填写中文研究问题或英文检索式。' })
+        requestRef.current?.abort()
+        const request = new AbortController()
+        requestRef.current = request
+        setSaveTarget('')
+        setSavedKeys([])
         setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
         try {
           const url = new URL(QUERY_PATH, window.location.origin)
           url.searchParams.set('database_id', database.id)
           url.searchParams.set('q', text)
           url.searchParams.set('limit', '5')
-          const response = await fetch(url)
+          const response = await fetch(url, { signal: request.signal })
           const body = await response.json().catch(() => ({}))
+          if (request.signal.aborted) return
           if (!response.ok) throw new Error(body.message || body.error || `查询失败（HTTP ${response.status}）`)
           evidence.recordQuery({ databaseId: database.id, databaseName: database.name, mode: body.mode === 'agent-fallback' ? 'agent' : 'direct', sources: body.sources || [] })
           setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: body, message: body.reason || '' })
-        } catch (error) { setState({ status: 'error', result: null, message: String(error?.message || error) }) }
+        } catch (error) { if (!request.signal.aborted) setState({ status: 'error', result: null, message: String(error?.message || error) }) }
       }
       const writeAgentFallback = () => {
         const prompt = state.result?.prompt || agentTask()
@@ -6459,7 +6473,7 @@ window.__ModuleLoader__.load({
         window.addEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
         return () => window.removeEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
       }, [])
-      React.useEffect(() => selection.subscribe(setResourceIds), [selection])
+      React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
       React.useEffect(() => {
         window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { count: resourceIds.length } }))
       }, [resourceIds])
@@ -6539,7 +6553,7 @@ window.__ModuleLoader__.load({
               : h('div', { key: 'cats', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingBottom: 2 } }, [
                 h('select', {
                   key: 'all-categories',
-                  value: additionalWorkflowCategories.includes(workflowCategory) ? workflowCategory : 'all',
+                  value: workflowCategory,
                   onChange: event => setWorkflowCategory(event.target.value),
                   'aria-label': '全部工作流程分类',
                   className: 'rk-btn rk-workflow-category-select',
@@ -6552,6 +6566,7 @@ window.__ModuleLoader__.load({
                   },
                 }, [
                   h('option', { key: 'all', value: 'all' }, '全部'),
+                  ...defaultWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
                   ...additionalWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
                 ]),
                 ...defaultWorkflowCategories.map(category => {
@@ -7049,8 +7064,8 @@ window.__ModuleLoader__.load({
       const frameRef = React.useRef(null)
       const dragRef = React.useRef(null)
 
-      React.useEffect(() => selection.subscribe(setResourceIds), [selection])
-      React.useEffect(() => evidence.subscribe(setRecords), [evidence])
+      React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
+      React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
       React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
       React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
       const refreshSavedEvidence = React.useCallback(() => vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([])), [vault])
@@ -7406,7 +7421,7 @@ window.__ModuleLoader__.load({
       }, [
         h(Select, {
           key: 'all-categories',
-          value: additionalCategories.includes(value) ? value : 'all',
+          value,
           onChange,
           ariaLabel: `全部${TYPE_LABELS[type]}分类`,
           className: 'rk-workflow-category-select',
@@ -7419,6 +7434,7 @@ window.__ModuleLoader__.load({
           },
           options: [
             { value: 'all', label: '全部' },
+            ...quickCategories.map(category => ({ value: category, label: category })),
             ...additionalCategories.map(category => ({ value: category, label: category })),
           ],
         }),
@@ -7514,8 +7530,8 @@ window.__ModuleLoader__.load({
         // 收藏或历史在其他视图（如输入框弹窗）变更时同步刷新本视图。
         return storage.onHistoryChange?.(() => { setHistory(storage.getHistory()); setFavorites(storage.getFavorites()) }) || (() => {})
       }, [storage])
-      React.useEffect(() => selection.subscribe(setSessionResourceIds), [selection])
-      React.useEffect(() => evidence.subscribe(value => setPlanRows(value.plans || [])), [evidence])
+      React.useEffect(() => { setSessionResourceIds(selection.get()); return selection.subscribe(setSessionResourceIds) }, [selection])
+      React.useEffect(() => { setPlanRows(evidence.get().plans || []); return evidence.subscribe(value => setPlanRows(value.plans || [])) }, [evidence])
       const warnManualOverride = () => {
         if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
       }
@@ -7547,7 +7563,7 @@ window.__ModuleLoader__.load({
       const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
       // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
       const specialRows = type === 'favorites'
-        ? favorites.map(itemById).filter(Boolean)
+        ? favorites.map(itemById).filter(Boolean).map(item => ({ item }))
         : type === 'history'
           ? history.map(row => ({ row, item: itemById(row.id) })).filter(entry => entry.item)
           : null
@@ -7593,10 +7609,12 @@ window.__ModuleLoader__.load({
         const item = itemById(row.id)
         if (!item) return
         setType('all')
+        setQuery('')
         setSelectedId(item.id)
       }
       const openFavoriteEntry = item => {
         setType('all')
+        setQuery('')
         setSelectedId(item.id)
       }
       const typeTabs = [
@@ -7631,8 +7649,9 @@ window.__ModuleLoader__.load({
               onChange: next => {
                 const value = next || null
                 setScienceMode(value)
-                setEditedPrompt(null)
-                setNotice(value ? `已启用“${SCIENCE_MODE_PRESETS[value].label}”预设：自动附加对应指导技能与领域纪律段。` : '已关闭科研模式。')
+                setNotice(editedPrompt !== null
+                  ? '科研模式已切换；已保留手动编辑的提示词。点击“恢复自动生成”可应用新预设。'
+                  : value ? `已启用“${SCIENCE_MODE_PRESETS[value].label}”预设：自动附加对应指导技能与领域纪律段。` : '已关闭科研模式。')
               },
               ariaLabel: '选择科研模式领域预设',
               options: [{ value: '', label: '未启用' }, ...Object.entries(SCIENCE_MODE_PRESETS).map(([key, preset]) => ({ value: key, label: preset.label }))],
@@ -7802,7 +7821,7 @@ window.__ModuleLoader__.load({
                   h('strong', { key: 'q2' }, '引用/记录：'), databaseMetadata(selected).citationRule, h('br', { key: 'b2' }),
                   h('strong', { key: 'q3' }, '接入提示：'), databaseMetadata(selected).toolHint,
                 ]),
-                h(DatabaseQueryPanel, { key: 'query-panel', database: selected, sessionId, inputActions, evidenceStore: evidence }),
+                h(DatabaseQueryPanel, { key: `${sessionId}:${selected.id}`, database: selected, sessionId, inputActions, evidenceStore: evidence }),
               ]) : null,
               relatedItems([...(selected.suggestedSkillIds || []), ...(selected.suggestedDatabaseIds || [])]).length ? h('div', { key: 'related' }, [
                 h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '建议能力'),

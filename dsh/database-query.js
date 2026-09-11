@@ -102,7 +102,7 @@ const DIRECT_ADAPTERS = {
   },
   pubchem: {
     url: (q, n) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(q)}/property/IUPACName,MolecularFormula,MolecularWeight/JSON`,
-    parse: data => (data.PropertyTable?.Properties || []).slice(0, n).map(item => source(item.CID, item.IUPACName || `PubChem CID ${item.CID}`, `https://pubchem.ncbi.nlm.nih.gov/compound/${item.CID}`, [item.MolecularFormula, item.MolecularWeight ? `${item.MolecularWeight} Da` : ''].filter(Boolean).join(' · ')))
+    parse: (data, n) => (data.PropertyTable?.Properties || []).slice(0, n).map(item => source(item.CID, item.IUPACName || `PubChem CID ${item.CID}`, `https://pubchem.ncbi.nlm.nih.gov/compound/${item.CID}`, [item.MolecularFormula, item.MolecularWeight ? `${item.MolecularWeight} Da` : ''].filter(Boolean).join(' · ')))
   },
   gbif: {
     url: (q, n) => `https://api.gbif.org/v1/occurrence/search?q=${encodeURIComponent(q)}&limit=${n}`,
@@ -153,7 +153,7 @@ export async function runDatabaseQuery({ web, database, query, limit = 5, signal
     const adapter = DIRECT_ADAPTERS[database.id]
     if (adapter) {
       const data = jsonBody(await web.fetch({ url: adapter.url(normalizedQuery, size) }, signal))
-      return { mode: 'direct', sources: adapter.parse(data).slice(0, size), query: normalizedQuery }
+      return { mode: 'direct', sources: adapter.parse(data, size).slice(0, size), query: normalizedQuery }
     }
   } catch (error) {
     if (shouldFallbackToAgent(error)) return agentFallback(database, normalizedQuery, `插件直查暂不可用（${String(error?.message || error)}）；可交给当前 Agent 使用 Web 或 MCP 继续查询。`)

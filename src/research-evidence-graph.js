@@ -92,8 +92,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
 
-  React.useEffect(() => selection.subscribe(setResourceIds), [selection])
-  React.useEffect(() => evidence.subscribe(setRecords), [evidence])
+  React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
+  React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
   React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
   React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
   const refreshSavedEvidence = React.useCallback(() => vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([])), [vault])

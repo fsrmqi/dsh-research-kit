@@ -11,3 +11,6 @@ node_modules/
 !/.github/workflows/
 /.github/workflows/*
 !/.github/workflows/ci.yml
+/AGENTS.md
+/CLAUDE.md
+/.claude/

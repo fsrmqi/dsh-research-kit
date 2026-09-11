@@ -6,6 +6,16 @@ import { runDatabaseQuery, databaseQueryRoute, DATABASE_QUERY_PATH } from '../ds
 const database = id => databases.find(item => item.id === id)
 const jsonResult = value => ({ statusCode: 200, body: { kind: 'text', content: JSON.stringify(value) }, truncated: false })
 
+test('PubChem 成功响应可解析且遵守结果数量上限', async () => {
+  const web = { async fetch() { return jsonResult({ PropertyTable: { Properties: [
+    { CID: 2244, IUPACName: 'aspirin' }, { CID: 2, IUPACName: 'other' },
+  ] } }) } }
+  const result = await runDatabaseQuery({ web, database: database('pubchem'), query: 'aspirin', limit: 1 })
+  assert.equal(result.mode, 'direct')
+  assert.equal(result.sources.length, 1)
+  assert.equal(result.sources[0].url, 'https://pubchem.ncbi.nlm.nih.gov/compound/2244')
+})
+
 test('Crossref 公开查询解析为可引用的结构化记录', async () => {
   const web = { async fetch() { return jsonResult({ message: { items: [{ DOI: '10.1/demo', title: ['研究标题'], URL: 'https://doi.org/10.1/demo', author: [{ family: 'Li' }], 'container-title': ['Journal'], 'published-print': { 'date-parts': [[2026]] } }] } }) } }
   const result = await runDatabaseQuery({ web, database: database('crossref'), query: 'genomics', limit: 3 })

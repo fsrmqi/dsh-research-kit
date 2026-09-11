@@ -178,7 +178,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
     window.addEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
     return () => window.removeEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
   }, [])
-  React.useEffect(() => selection.subscribe(setResourceIds), [selection])
+  React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
   React.useEffect(() => {
     window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { count: resourceIds.length } }))
   }, [resourceIds])
@@ -258,7 +258,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
           : h('div', { key: 'cats', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', paddingBottom: 2 } }, [
             h('select', {
               key: 'all-categories',
-              value: additionalWorkflowCategories.includes(workflowCategory) ? workflowCategory : 'all',
+              value: workflowCategory,
               onChange: event => setWorkflowCategory(event.target.value),
               'aria-label': '全部工作流程分类',
               className: 'rk-btn rk-workflow-category-select',
@@ -271,6 +271,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
               },
             }, [
               h('option', { key: 'all', value: 'all' }, '全部'),
+              ...defaultWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
               ...additionalWorkflowCategories.map(category => h('option', { key: category, value: category }, category)),
             ]),
             ...defaultWorkflowCategories.map(category => {

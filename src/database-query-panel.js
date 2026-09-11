@@ -6,6 +6,11 @@ import { EvidenceSaveForm } from './research-evidence-vault.js'
 
 const QUERY_PATH = '/dsh-research-kit/query'
 
+export function databaseSearchText(query, englishQuery) {
+  const terms = [query.trim(), englishQuery.trim()].filter(Boolean)
+  return terms.length > 1 ? terms.map(term => `(${term})`).join(' OR ') : terms[0] || ''
+}
+
 export function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }) {
   const evidence = React.useMemo(() => evidenceStore || createEvidenceStore(sessionId), [evidenceStore, sessionId])
   const [query, setQuery] = React.useState('')
@@ -14,30 +19,38 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
   const [saveTarget, setSaveTarget] = React.useState('')
   const [savedKeys, setSavedKeys] = React.useState([])
+  const requestRef = React.useRef(null)
+  React.useEffect(() => () => requestRef.current?.abort(), [])
   const canWrite = typeof inputActions?.setDraft === 'function'
   const canSubmit = canWrite && typeof inputActions?.submit === 'function'
   const agentTask = sources => {
     const sourceBlock = sources?.length
       ? `\n\n以下是插件直查得到的候选记录，请逐条打开来源核验后再引用：\n${sources.map((item, index) => `${index + 1}. ${item.title}\n${item.url}`).join('\n')}`
       : ''
-    return `请通过当前 DSH Agent 查询「${database.name}」：${query.trim()}。使用当前会话已配置的 Web、MCP 或其他工具；返回实际检索到记录的标题、稳定标识符、来源链接、年份/版本和相关性说明。${sourceBlock}\n\n不得编造文献、DOI、数据集编号或检索结果；不能访问时明确说明原因。`
+    return `请通过当前 DSH Agent 查询「${database.name}」：${state.result?.query || databaseSearchText(query, englishQuery)}。使用当前会话已配置的 Web、MCP 或其他工具；返回实际检索到记录的标题、稳定标识符、来源链接、年份/版本和相关性说明。${sourceBlock}\n\n不得编造文献、DOI、数据集编号或检索结果；不能访问时明确说明原因。`
   }
   const runQuery = async event => {
     event?.preventDefault?.()
-    const text = [query.trim() && `(${query.trim()})`, englishQuery.trim() && `(${englishQuery.trim()})`].filter(Boolean).join(' OR ')
+    const text = databaseSearchText(query, englishQuery)
     if (!text) return setState({ status: 'error', result: null, message: '请填写中文研究问题或英文检索式。' })
+    requestRef.current?.abort()
+    const request = new AbortController()
+    requestRef.current = request
+    setSaveTarget('')
+    setSavedKeys([])
     setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
     try {
       const url = new URL(QUERY_PATH, window.location.origin)
       url.searchParams.set('database_id', database.id)
       url.searchParams.set('q', text)
       url.searchParams.set('limit', '5')
-      const response = await fetch(url)
+      const response = await fetch(url, { signal: request.signal })
       const body = await response.json().catch(() => ({}))
+      if (request.signal.aborted) return
       if (!response.ok) throw new Error(body.message || body.error || `查询失败（HTTP ${response.status}）`)
       evidence.recordQuery({ databaseId: database.id, databaseName: database.name, mode: body.mode === 'agent-fallback' ? 'agent' : 'direct', sources: body.sources || [] })
       setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: body, message: body.reason || '' })
-    } catch (error) { setState({ status: 'error', result: null, message: String(error?.message || error) }) }
+    } catch (error) { if (!request.signal.aborted) setState({ status: 'error', result: null, message: String(error?.message || error) }) }
   }
   const writeAgentFallback = () => {
     const prompt = state.result?.prompt || agentTask()
