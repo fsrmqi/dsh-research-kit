@@ -55,6 +55,28 @@
     "availability": "requires-mcp"
   },
   {
+    "id": "crop-ontology",
+    "type": "database",
+    "name": "Crop Ontology",
+    "description": "作物性状、方法、规模与变量定义的标准术语资源。",
+    "category": "作物遗传育种",
+    "tags": ["作物性状", "本体", "表型标准"],
+    "url": "https://cropontology.org/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；记录性状术语、作物和版本，避免混用不同定义。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "genesys-pgr",
+    "type": "database",
+    "name": "Genesys PGR",
+    "description": "全球植物遗传资源与种质收集信息门户。",
+    "category": "作物遗传育种",
+    "tags": ["种质资源", "遗传资源", "作物"],
+    "url": "https://www.genesys-pgr.org/",
+    "accessNote": "需要当前 DSH 会话具备 Web 或对应 MCP；材料获取、使用许可和检疫要求必须向保藏机构确认。",
+    "availability": "requires-mcp"
+  },
+  {
     "id": "pubmed",
     "type": "database",
     "name": "PubMed",

@@ -1134,7 +1134,7 @@
     "type": "workflow",
     "name": "bulk RNA-seq 差异表达",
     "description": "从计数矩阵到差异表达与功能富集的标准分析。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "RNA-seq",
       "差异表达",
@@ -1167,7 +1167,7 @@
     "type": "workflow",
     "name": "单细胞 RNA-seq 全流程",
     "description": "从原始计数到细胞类型注释的 scRNA-seq 标准管线。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "单细胞",
       "scRNA-seq",
@@ -1198,7 +1198,7 @@
     "type": "workflow",
     "name": "变异检测与注释",
     "description": "从测序数据到变异检测、过滤与注释的标准流程。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "变异检测",
       "WES",
@@ -1472,7 +1472,7 @@
     "type": "workflow",
     "name": "DNA 甲基化分析",
     "description": "芯片或亚硫酸盐数据的甲基化差异分析。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "甲基化",
       "表观遗传",
@@ -1502,7 +1502,7 @@
     "type": "workflow",
     "name": "ATAC-seq 染色质可及性",
     "description": "从读段到可及性峰与差异分析的标准管线。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "ATAC-seq",
       "染色质",
@@ -1532,7 +1532,7 @@
     "type": "workflow",
     "name": "ChIP-seq 峰分析",
     "description": "转录因子或组蛋白修饰的峰calling与注释。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "ChIP-seq",
       "峰calling",
@@ -1626,7 +1626,7 @@
     "type": "workflow",
     "name": "空间转录组分析",
     "description": "Visium 或单细胞分辨率空间数据的分析管线。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "空间转录组",
       "Visium",
@@ -1716,7 +1716,7 @@
     "type": "workflow",
     "name": "多组学整合",
     "description": "跨转录组、表观、蛋白层的联合分析。",
-    "category": "基因组学",
+    "category": "生物信息学",
     "tags": [
       "多组学",
       "整合",
@@ -2272,6 +2272,20 @@
     "suggestedDatabaseIds": ["geo"],
     "limitations": ["跨组学关联不等于机制因果；样本对齐和批次结构必须先核验。"],
     "prompt": "请基于 @文件 为“{layers}”多组学数据制定整合与批次效应分析计划。核对样本身份、配对关系、测量层级、缺失、批次与混杂；选择适合的归一化、批次处理、整合模型和交叉验证，并报告每步版本、参数和对结论的敏感性。不得编造组学关联、潜在因子或机制结论；输出可复现流程与独立验证需求。"
+  },
+  {
+    "id": "crop-expression-evidence",
+    "type": "workflow",
+    "name": "作物基因表达与育种证据整合",
+    "description": "整合表达、性状、变异与环境信息，形成待验证的育种候选证据链。",
+    "category": "作物遗传育种",
+    "tags": ["基因表达", "作物", "育种", "候选基因"],
+    "requiresFiles": true,
+    "placeholders": [{ "key": "trait", "label": "目标性状或胁迫", "required": true }],
+    "suggestedSkillIds": ["crop-genomics", "bioinformatics-workflow-governance", "uncertainty-communication"],
+    "suggestedDatabaseIds": ["ensembl-plants", "gramene", "crop-ontology"],
+    "limitations": ["表达关联和候选排序不等于调控因果或可直接推广的育种结论。"],
+    "prompt": "请基于 @文件 为作物性状或胁迫“{trait}”整合基因表达、变异、表型和环境证据。记录物种、组织/时期、参考版本、表达定量方法、性状术语与环境条件；区分已观测关联、文献支持和待验证推断；提出独立材料、时空重复和功能验证方案。不得编造表达模式、候选基因或育种价值。输出可追溯证据表与育种决策边界。"
   },
   {
     "id": "biomarker-discovery",
