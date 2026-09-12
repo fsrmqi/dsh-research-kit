@@ -46,7 +46,7 @@ test('探测：services 报装配事实，MCP 从工具注册表解析并排序�
     web: { search: () => {}, fetch: () => {} },
     shell: { run: () => {} },
     fs: { readText: () => {}, listDir: () => {} },
-    llm: { prepare: () => {} },
+    llm: { stream: () => {} },
     now: 12345,
   })
   assert.equal(capabilities.probedAt, 12345)

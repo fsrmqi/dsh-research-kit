@@ -38,7 +38,7 @@ export function probeHostCapabilities({ tools, web, shell, fs, llm, now = Date.n
       web: servicePresent(web, ['search', 'fetch']),
       shell: servicePresent(shell, ['run']),
       fs: servicePresent(fs, ['readText', 'listDir']),
-      llm: servicePresent(llm, ['prepare']),
+      llm: servicePresent(llm, ['stream']), // 生产代码实际消费 llm.stream（semantic-enhance），以此为准。
     },
     mcpServers: [],
     builtinToolCount: 0,

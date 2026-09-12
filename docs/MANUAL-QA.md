@@ -237,7 +237,7 @@ dsh plugin --profile web add <path-to-this-repo>   # 3) 重装
 | # | 检查项 | 预期 | 结果 |
 | --- | --- | --- | --- |
 | H1 | 工作台点开任一直查数据源详情 | 「宿主能力」行显示部署级事实摘要（已装配 Web/Shell/… 与已连接 MCP 名单）；**不改变**该条目「当前状态」的颜色与文案；未连接 MCP 时如实显示「MCP：未连接任何服务器」 | |
-| M1 | 增强面板勾选「项目记忆」 | 宿主接入 Memory Center MCP 时：来源区出现「Memory Center · …」标签，注入内容含记忆摘要；未接入时只有会话资源摘要，增强照常工作不报错。**默认不勾选时不发生任何检索注入** | |
+| M1 | 增强面板勾选「项目记忆」 | 宿主接入 Memory Center MCP 时：来源区出现「Memory Center · …」标签，注入内容含记忆摘要；未接入时只有会话资源摘要，增强照常工作不报错。**默认不勾选时不发生任何检索注入**。若检索工具是多动作门面（如本部署的 `personal-assistant-wiki/assistant_knowledge`，必填 `action`），需在浏览器控制台设置一次参数模板再勾选：`localStorage.setItem('dsh-research-kit.memory-search.template', JSON.stringify({action:'search',query:'{query}',limit:5}))` | |
 
 ### 动线整合 · 资产-证据互链（P5，3 项）
 

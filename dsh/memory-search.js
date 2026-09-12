@@ -72,6 +72,22 @@ export function memoryTextOf(result) {
   return text.length > MAX_TEXT_CHARS ? `${text.slice(0, MAX_TEXT_CHARS)}…（已截断）` : text
 }
 
+// ── 显式参数模板（escape hatch）──────────────────────────────────────────────
+// 多动作门面工具（如 assistant_knowledge 的必填 action）无法从检索词合成全部参数。
+// 调用方可显式提供 args 模板：字符串值中的 {query} / {limit} 占位符会被替换，
+// 其余值原样传递。模板是调用方对工具契约的显式声明，不是路由的猜测。
+export function applyArgsTemplate(template, { query, limit = 8 } = {}) {
+  const q = String(query ?? '')
+  const n = String(Number(limit) || 8)
+  const walk = value => {
+    if (typeof value === 'string') return value.replaceAll('{query}', q).replaceAll('{limit}', n)
+    if (Array.isArray(value)) return value.map(walk)
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, walk(item)]))
+    return value
+  }
+  return walk(template)
+}
+
 function reply(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
   res.end(JSON.stringify(body))
@@ -132,12 +148,22 @@ export function memorySearchRoute({ tools, logger } = {}) {
           servers: [...new Set(schemas.map(schema => parseServerOf(schema?.name)).filter(Boolean))].slice(0, MAX_SERVERS),
         })
       }
-      const planned = buildMemoryToolArgs(tool.parameters, { query, limit })
+      // 参数来源二选一：请求带显式 args 模板（调用方声明契约，占位符替换）时优先；
+      // 否则按工具自身 Schema 合成（合成不了如实拒绝，绝不猜）。
+      let planned
+      if (body.args !== undefined) {
+        if (!body.args || typeof body.args !== 'object' || Array.isArray(body.args)) {
+          return reply(res, 400, { ok: false, error: 'invalid_args_template' })
+        }
+        planned = { ok: true, args: applyArgsTemplate(body.args, { query, limit }) }
+      } else {
+        planned = buildMemoryToolArgs(tool.parameters, { query, limit })
+      }
       if (!planned.ok) {
         return reply(res, 200, {
           ok: true, available: false, reason: 'args-unfillable', tool: tool.name,
           missing: planned.missing,
-          message: `检索工具 ${tool.name} 的必填参数无法从检索词合成（${planned.missing.join('、')}）；请在请求里显式指定合适的 server/tool。`,
+          message: `检索工具 ${tool.name} 的必填参数无法从检索词合成（${planned.missing.join('、')}）；请在请求里显式指定 server/tool 或提供 args 模板。`,
         })
       }
       const controller = new AbortController()

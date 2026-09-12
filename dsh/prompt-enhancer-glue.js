@@ -150,11 +150,16 @@ function ResearchDraftEnhancerHost(props) {
     // Memory Center MCP；结果只作为候选上下文返回，由 QuickEnhancer 的「项目记忆」
     // 开关显式勾选后才进入增强（检索 → 来源预览 → 用户选择 → 组装，禁止静默注入）。
     // 检索失败或部署未接入 Memory Center 时如实回落：只用研究上下文，不阻断增强。
+    // 可选模板：检索工具若是多动作门面（如必填 action），可在 localStorage 设置
+    // dsh-research-kit.memory-search.template 为 JSON 模板（{query}/{limit} 占位符），
+    // 例：{"action":"search","query":"{query}","limit":5}——这是对工具契约的显式声明。
     try {
+      let args
+      try { args = JSON.parse(window.localStorage.getItem('dsh-research-kit.memory-search.template') || 'null') || undefined } catch { args = undefined }
       const response = await fetch(`/dsh-research-kit/memory-search?session_id=${encodeURIComponent(sessionId || '')}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, ...(args ? { args } : {}) }),
       })
       if (response.ok) {
         const body = await response.json().catch(() => null)

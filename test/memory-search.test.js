@@ -6,6 +6,7 @@ import {
   DEFAULT_MEMORY_SERVER,
   pickMemoryTool,
   buildMemoryToolArgs,
+  applyArgsTemplate,
   memoryTextOf,
   memorySearchRoute,
 } from '../dsh/memory-search.js'
@@ -91,6 +92,35 @@ test('memoryTextOf：取文本块拼接并截断；非文本结果为空', () =>
   assert.equal(memoryTextOf(null), '')
   const long = memoryTextOf({ content: [{ type: 'text', text: 'x'.repeat(5000) }] })
   assert.ok(long.includes('已截断'))
+})
+
+test('args 模板：占位符替换（含嵌套与数组），非字符串原样传递——调用方显式声明契约，不是路由猜测', () => {
+  const template = { action: 'search', query: '{query}', filter: { text: '{query}', max: '{limit}' }, tags: ['{query}', 3], count: 5, flag: true }
+  const args = applyArgsTemplate(template, { query: '大麦 耐盐', limit: 5 })
+  assert.deepEqual(args, { action: 'search', query: '大麦 耐盐', filter: { text: '大麦 耐盐', max: '5' }, tags: ['大麦 耐盐', 3], count: 5, flag: true })
+  // 多动作门面工具：Schema 合成会因必填 action 拒绝，模板则直接可用。
+  assert.equal(buildMemoryToolArgs({ type: 'object', properties: { action: { type: 'string' }, query: { type: 'string' } }, required: ['action'] }, { query: 'q' }).ok, false)
+  assert.equal(applyArgsTemplate({ action: 'search' }, { query: 'q' }).action, 'search')
+})
+
+test('路由带显式 args 模板：绕过 Schema 合成直连执行；非法模板 400', async () => {
+  // 该工具的必填 action 无法从检索词合成——显式模板是让它可用的正道。
+  const schemas = [{ name: 'mcp__memory-center__mc_search', parameters: { type: 'object', properties: { action: { type: 'string' }, query: { type: 'string' } }, required: ['action', 'query'] } }]
+  let captured = null
+  const tools = {
+    schemas: () => schemas,
+    async execute(input) { captured = input.arguments; return { content: [{ type: 'text', text: '记忆命中' }], isError: false } },
+  }
+  const route = memorySearchRoute({ tools })
+  let run = post(route, { query: '水稻', args: { action: 'search', query: '{query}' } })
+  await run.done
+  const ok = await run.done
+  assert.equal(ok.body.available, true)
+  assert.match(ok.body.text, /记忆命中/)
+  assert.deepEqual(captured, { action: 'search', query: '水稻' })
+  run = post(route, { query: 'x', args: 'not-an-object' })
+  await run.done
+  assert.equal((await run.done).status, 400)
 })
 
 test('路由：正常检索、无服务器、参数不可合成、工具报错，全部结构化如实返回', async () => {
