@@ -4,6 +4,7 @@ import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import { createKnowledgeStore, knowledgeStore } from '../src/knowledge-store.js'
 import {
   depositAssistantMessage, attachKnowledgeDeposition,
+  depositLatestAssistantMessage, latestDepositableMessage,
   isAutoDepositEnabled, setAutoDepositEnabled,
   readDepositionCursor, writeDepositionCursor, depositionCursorKey,
 } from '../src/knowledge-deposition.js'
@@ -43,13 +44,18 @@ function makeAssetProviderStub() {
 function makeEventSource() {
   const listeners = new Set()
   let snapshot = { entries: [], revision: 0 }
+  const notifyAll = () => { for (const listener of [...listeners]) listener() }
   return {
     getSnapshot: () => snapshot,
     subscribe: fn => { listeners.add(fn); return () => listeners.delete(fn) },
     push(event) {
       snapshot = { ...snapshot, entries: [...snapshot.entries, event], revision: snapshot.revision + 1 }
-      for (const listener of [...listeners]) listener()
+      notifyAll()
     },
+    // 只通知不追加：模拟宿主「每次会话活动都触发订阅回调」的行为（增量扫描的关键场景）。
+    notify: notifyAll,
+    // 整体替换窗口（不通知）：模拟宿主裁剪/重放历史。
+    replaceEntries(entries) { snapshot = { ...snapshot, entries: [...entries] } },
   }
 }
 
@@ -232,4 +238,139 @@ test('project 传递：知识节点带当前项目，资产去重按（标题+�
   const third = await depositAssistantMessage({ text, sessionId: 's-proj', seq: 3, assetProvider, store, saveEvidence: async () => { const error = new Error('dup'); error.code = 'DUPLICATE'; throw error }, activeProject: '项目A' })
   assert.equal(third.savedAssets, 0)
   assert.ok(third.skippedAssets >= 1)
+})
+
+test('事件接线增量扫描：穿插非回答事件不漏沉淀；重复通知与窗口替换不重复入库', async () => {
+  const storage = installFakeLocalStorage()
+  try {
+    setAutoDepositEnabled(true)
+    const eventSource = makeEventSource()
+    const assetProvider = makeAssetProviderStub()
+    const sessions = makeSessionHarness('sess-incr', eventSource)
+    const dispose = attachKnowledgeDeposition({ sessions }, { assetProvider })
+    // 穿插：assistant → tool → assistant。两条回答都要被处理，非回答事件只推进扫描位。
+    eventSource.push({ type: 'assistant/message', seq: 5, data: { message: { content: [{ type: 'text', text: '研究表明，Ghd7 促进水稻耐盐性。' }] } } })
+    eventSource.push({ type: 'tool/call', seq: 6, data: {} })
+    eventSource.push({ type: 'assistant/message', seq: 7, data: { message: { content: [{ type: 'text', text: '研究表明，OsNAC3 抑制水稻耐盐性。' }] } } })
+    await sleep(30)
+    assert.equal(readDepositionCursor('sess-incr'), 7, '水位线应推进到最后一条 assistant/message')
+    const assetsAfterPushes = assetProvider.assets.length
+    assert.ok(assetsAfterPushes >= 2, '两条回答都应创建灵感资产')
+    const nodesAfterPushes = (await knowledgeStore().listNodes()).length
+    // 同一窗口反复通知（宿主每次会话活动都回调订阅）——增量扫描后不得重复入库。
+    eventSource.notify()
+    eventSource.notify()
+    await sleep(30)
+    assert.equal(assetProvider.assets.length, assetsAfterPushes, '重复通知不得重复建资产')
+    assert.equal((await knowledgeStore().listNodes()).length, nodesAfterPushes, '重复通知不得重复入库知识')
+    // 窗口被整体替换成只剩最后一条（模拟宿主裁剪/重放）——同样不得重复。
+    eventSource.replaceEntries([eventSource.getSnapshot().entries.at(-1)])
+    eventSource.notify()
+    await sleep(30)
+    assert.equal((await knowledgeStore().listNodes()).length, nodesAfterPushes, '窗口替换后旧消息不得重复入库')
+    // 裁剪后的窗口继续追加：新回答照常沉淀。
+    eventSource.push({ type: 'assistant/message', seq: 8, data: { message: { content: [{ type: 'text', text: '研究表明，OsWRKY71 可能影响水稻耐盐性。' }] } } })
+    await sleep(30)
+    assert.ok((await knowledgeStore().listNodes()).length > nodesAfterPushes, '裁剪后的窗口上追加新回答仍能沉淀')
+    assert.equal(readDepositionCursor('sess-incr'), 8)
+    dispose()
+  } finally {
+    storage.restore()
+  }
+})
+
+test('事件接线重挂：水位线已推进的会话不回溯重复沉淀，新回答照常处理', async () => {
+  const storage = installFakeLocalStorage()
+  try {
+    setAutoDepositEnabled(true)
+    const eventSource = makeEventSource()
+    eventSource.push({ type: 'assistant/message', seq: 5, data: { message: { content: [{ type: 'text', text: '研究表明，Ghd7 促进水稻耐盐性。' }] } } })
+    const sessions = makeSessionHarness('sess-reattach', eventSource)
+    const assetProvider = makeAssetProviderStub()
+    const first = attachKnowledgeDeposition({ sessions }, { assetProvider })
+    await sleep(30)
+    const assetsAfterFirst = assetProvider.assets.length
+    assert.ok(assetsAfterFirst >= 1)
+    assert.equal(readDepositionCursor('sess-reattach'), 5)
+    first()
+    // 卸载后重挂：水位线已到 5，重放窗口里的同一条消息不得再入库。
+    const second = attachKnowledgeDeposition({ sessions }, { assetProvider })
+    eventSource.notify()
+    eventSource.push({ type: 'tool/call', seq: 6, data: {} })
+    await sleep(30)
+    assert.equal(assetProvider.assets.length, assetsAfterFirst, '重挂后重放历史不得重复建资产')
+    assert.equal(readDepositionCursor('sess-reattach'), 5, '非回答事件不推进处理水位线')
+    eventSource.push({ type: 'assistant/message', seq: 7, data: { message: { content: [{ type: 'text', text: '研究表明，SD7 促进水稻耐盐性。' }] } } })
+    await sleep(30)
+    assert.ok(assetProvider.assets.length > assetsAfterFirst, '重挂后的新回答应正常沉淀')
+    assert.equal(readDepositionCursor('sess-reattach'), 7)
+    second()
+  } finally {
+    storage.restore()
+  }
+})
+
+test('手动沉淀：latestDepositableMessage 挑最近一条有正文的回答，无正文不算可沉淀', () => {
+  const entries = [
+    { type: 'user/message', seq: 1, data: {} },
+    { type: 'assistant/message', seq: 2, data: { message: { content: [{ type: 'text', text: '' }] } } },
+    { type: 'tool/call', seq: 3, data: {} },
+    { type: 'assistant/message', seq: 4, time: 555, data: { interrupted: true, turn: 2, message: { content: [{ type: 'text', text: 'Ghd7 可能影响水稻耐盐性' }] } } },
+  ]
+  const found = latestDepositableMessage(entries)
+  assert.equal(found.seq, 4, '应挑最近一条有正文的助手回答')
+  assert.equal(found.interrupted, true, '被中断的半截回答要如实标注，交由调用方提示')
+  assert.equal(found.turn, 2)
+  assert.equal(found.at, 555)
+  assert.equal(latestDepositableMessage([]), null)
+  assert.equal(latestDepositableMessage(undefined), null)
+  assert.equal(latestDepositableMessage([{ type: 'assistant/message', seq: 9, data: { message: { content: [] } } }]), null, '无正文不算可沉淀')
+})
+
+test('手动沉淀：注入 entries 直接入库；无会话服务 / 无当前会话 / 无回答分别给出可判定错误', async () => {
+  const store = createKnowledgeStore()
+  const result = await depositLatestAssistantMessage({
+    entries: [{ type: 'assistant/message', seq: 3, data: { message: { content: [{ type: 'text', text: '研究表明，OsWRKY71 可能影响水稻耐盐性。' }] } } }],
+    sessionId: 's-manual', store, saveEvidence: async () => ({ entry: { id: 'ev-m1' } }), activeProject: '项目M',
+  })
+  assert.equal(result.error, undefined)
+  assert.equal(result.seq, 3)
+  assert.equal(result.summary.extracted, true)
+  assert.ok(result.summary.addedNodes + result.summary.mergedNodes >= 3, '手动沉淀应入库知识节点（新库为新增，共享库为合并）')
+  const gene = (await store.listNodes()).find(node => node.label === 'OsWRKY71')
+  assert.equal(gene.project, '项目M', '手动沉淀同样记录当前项目')
+
+  assert.deepEqual(await depositLatestAssistantMessage({ entries: [], sessions: null }), { error: 'empty' }, '空窗口 → empty')
+  assert.deepEqual(await depositLatestAssistantMessage({ sessions: null }), { error: 'no-sessions' }, '无会话服务 → no-sessions')
+  const emptyCurrentHarness = { list: { getSnapshot: () => ({ current: '' }), subscribe: () => () => {} }, binding: () => null }
+  assert.deepEqual(await depositLatestAssistantMessage({ sessions: emptyCurrentHarness }), { error: 'no-session' }, '无当前会话 → no-session')
+})
+
+test('手动沉淀：不开自动开关也能经挂接登记的会话服务入库最近一条回答', async () => {
+  const storage = installFakeLocalStorage()
+  try {
+    setAutoDepositEnabled(false)
+    const eventSource = makeEventSource()
+    eventSource.push({ type: 'assistant/message', seq: 12, data: { message: { content: [{ type: 'text', text: '研究表明，SD7 促进水稻耐盐性。' }] } } })
+    const sessions = makeSessionHarness('sess-manual', eventSource)
+    const assetProvider = makeAssetProviderStub()
+    const dispose = attachKnowledgeDeposition({ sessions }, { assetProvider })
+    await sleep(30)
+    assert.equal(assetProvider.assets.length, 0, '开关关闭：挂接本身不沉淀')
+    assert.equal(readDepositionCursor('sess-manual'), 12, '水位线在挂接期间照常推进')
+    const result = await depositLatestAssistantMessage({ assetProvider })
+    assert.equal(result.error, undefined)
+    assert.equal(result.seq, 12)
+    assert.equal(result.summary.extracted, true, '手动入口不受开关限制')
+    assert.ok(result.summary.savedAssets >= 1, '手动沉淀同样联动灵感资产')
+    const finding = (await knowledgeStore().listNodes()).find(node => node.label.includes('SD7'))
+    assert.ok(finding, '手动沉淀的知识节点应可从共享库读回')
+    assert.ok((finding.sources || []).some(source => source.sessionId === 'sess-manual' && source.seq === 12), '来源消息应记录会话与 seq')
+    dispose()
+    // 卸载后模块登记已清除：不传 sessions 时不再能读到会话。
+    const afterDispose = await depositLatestAssistantMessage({ assetProvider })
+    assert.deepEqual(afterDispose, { error: 'no-sessions' }, '卸载后手动入口必须失效')
+  } finally {
+    storage.restore()
+  }
 })

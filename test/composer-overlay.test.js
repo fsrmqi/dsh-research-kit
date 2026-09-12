@@ -72,3 +72,21 @@ test('浮层锚点：测量挂到卡片上并随布局变化重算', () => {
   // 锚点缺失时必须放弃测量：否则会以浮层自身的矩形当锚点，形成自反馈的高度抖动。
   assert.match(source, /const anchor = node\?\.closest\('\[data-composer-card\]'\)\n {4}if \(!anchor\) return/, '锚点缺失时未放弃测量')
 })
+
+test('弹层与工作台同口径记录工作流使用：写入与复制都经同一个 recordUse 记「历史 + 会话轨迹」', () => {
+  const source = readFileSync(new URL('../src/composer-overlay.js', import.meta.url), 'utf8')
+  assert.match(source, /import \{ createEvidenceStore \} from '\.\/evidence-store\.js'/, '弹层未接入会话工作流轨迹存储')
+  // recordUse 单一出口：使用历史 + 会话工作流轨迹（与工作台 recordUse 的两笔记录对齐）。
+  // 「历史只记录工作流身份和时间，绝不提取 Prompt 内容」的隐私边界必须仍然成立。
+  const recordUse = /const recordUse = \(\) => \{[\s\S]*?\n {2}\}/.exec(source)
+  assert.ok(recordUse, '未找到 recordUse 出口')
+  assert.match(recordUse[0], /catalogStorage\?\.recordHistory\?\.\(\{ id: workflow\.id, name: workflow\.name \}\)/, 'recordUse 未记录使用历史')
+  assert.match(recordUse[0], /evidence\.recordWorkflow\(\{ id: workflow\.id, name: workflow\.name, resourceIds: \[\.\.\.resourceIds, \.\.\.skillIds\] \}\)/, 'recordUse 未记录会话工作流轨迹')
+  assert.doesNotMatch(recordUse[0], /finalPrompt/, '记录只能含工作流身份与资源 id，不得携带 Prompt 片段或参数')
+  // 两个成功出口都必须走 recordUse，不得只记其一。
+  assert.match(source, /inputActions\.setDraft\(finalPrompt\)\n {6}recordUse\(\)/, '「使用工作流程」出口未记录')
+  assert.match(source, /await navigator\.clipboard\.writeText\(finalPrompt\)\n {6}recordUse\(\)/, '「复制 Prompt」出口未记录')
+  // 会话轨迹按当前会话隔离：store 取自 sessionId，且弹窗确实接到了它。
+  assert.match(source, /createEvidenceStore\(sessionId\)/)
+  assert.match(source, /catalogStorage: storage, sessionId, onClose/, '弹窗未接收 sessionId')
+})

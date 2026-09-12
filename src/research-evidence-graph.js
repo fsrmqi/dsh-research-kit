@@ -17,7 +17,7 @@ import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,
 } from './knowledge-store.js'
-import { isAutoDepositEnabled, setAutoDepositEnabled, onAutoDepositChange, lastDepositionSummary } from './knowledge-deposition.js'
+import { isAutoDepositEnabled, setAutoDepositEnabled, onAutoDepositChange, lastDepositionSummary, depositLatestAssistantMessage } from './knowledge-deposition.js'
 import {
   KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUSES, KNOWLEDGE_STATUS_LABELS,
   KNOWLEDGE_POLARITY_LABELS, CLAIM_RELATION_LABELS,
@@ -133,6 +133,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [scope, setScope] = React.useState('all')
   const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
   const [lastDeposition, setLastDeposition] = React.useState(() => lastDepositionSummary())
+  // 手动沉淀：不开自动开关也能把最近一条助手回答显式入库；请求期间禁用按钮防重复点击。
+  const [depositing, setDepositing] = React.useState(false)
   // 知识库备份（导出直接下载；恢复用两段式文本框，与证据库备份同一交互模式）。
   const [knowledgeBackupOpen, setKnowledgeBackupOpen] = React.useState(false)
   const [knowledgeBackupText, setKnowledgeBackupText] = React.useState('')
@@ -416,6 +418,29 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       .catch(() => setNotice('复制失败，可手动复制地址栏。'))
   }
 
+  // ── 手动沉淀 ────────────────────────────────────────────────────────────────
+  // 与自动沉淀同一套提取与入库链路（同一 store、同一「待核验」起点、同一去重口径），
+  // 区别只在触发方式：显式点击、只处理最近一条、不要求开启开关。
+  const depositLatest = async () => {
+    if (depositing) return
+    setDepositing(true)
+    try {
+      const result = await depositLatestAssistantMessage({ assetProvider })
+      if (result?.error === 'no-sessions') { setNotice('当前环境未提供会话服务，无法读取会话回答。'); return }
+      if (result?.error === 'no-session') { setNotice('没有可读取的当前会话；请先打开一个会话再回来。'); return }
+      if (result?.error === 'empty') { setNotice('当前会话没有可沉淀的助手回答。'); return }
+      const summary = result.summary
+      setNotice(!summary?.extracted
+        ? '已检查最近一条回答：未提取出研究内容（无研究问题、发现、假设、方法或引用来源），未入库。'
+        : `已沉淀最近一条回答（消息 #${result.seq ?? '?'}）：+${summary.addedNodes} 节点 · +${summary.addedClaims} 关系 · 证据 ${summary.savedEvidence} · 资产 ${summary.savedAssets}`
+          + `${result.interrupted ? '；注意该回答曾被中断，内容可能不完整' : ''}。全部以待核验状态入库。`)
+    } catch (error) {
+      setNotice(`沉淀失败：${error?.message || error}`)
+    } finally {
+      setDepositing(false)
+    }
+  }
+
   // ── 知识库备份 ────────────────────────────────────────────────────────────────
   const exportKnowledgeBackup = () => {
     try {
@@ -462,6 +487,11 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
               : '已关闭自动沉淀：已保存的知识、证据与灵感资产全部保留，可继续手动操作。')
           },
         }, autoDeposit ? '自动沉淀 · 已开启' : '自动沉淀 · 已关闭'),
+        h(Button, {
+          key: 'deposit-latest', variant: 'ghost', size: 'sm', icon: 'sparkles', disabled: depositing,
+          title: '不开自动开关时，可手动把当前会话最近一条助手回答提取入库（本地完成，待核验起步）',
+          onClick: depositLatest,
+        }, depositing ? '正在沉淀…' : '沉淀最近回答'),
         h(Button, {
           key: 'knowledge-export', variant: 'ghost', size: 'sm', icon: 'download',
           disabled: !knowledgeNodes.length,
@@ -528,7 +558,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
           : '尚无可绘制的证据关系',
         hint: (scope !== 'all' || projectFilter)
           ? '调整上方的节点范围或项目筛选；「本会话」只含刷新即消失的记录，「持久沉淀」含证据、灵感资产与自动沉淀知识。'
-          : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」，让图谱随科研对话积累。',
+          : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」让图谱随科研对话积累，或点「沉淀最近回答」手动提取当前会话最近一条回答。',
       }),
     // 结论追溯面板：点开知识节点后展示关系、关联证据、沉淀资产与来源消息摘录。
     selectedKnowledge ? h(Card, { key: 'knowledge-detail', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [

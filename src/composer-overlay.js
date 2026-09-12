@@ -1,6 +1,7 @@
 import React from 'react'
 import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources } from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
+import { createEvidenceStore } from './evidence-store.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
@@ -26,7 +27,7 @@ function SearchInput({ value, onChange, placeholder, ariaLabel }) {
   ])
 }
 
-function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, onClose }) {
+function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, onClose }) {
   const [values, setValues] = React.useState({})
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [missing, setMissing] = React.useState([])
@@ -35,6 +36,15 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   const suggestedSkills = (workflow.suggestedSkillIds || []).map(itemById).filter(Boolean)
   const skillIds = unique([...resourceItems.filter(item => item.type === 'skill').map(item => item.id), ...suggestedSkills.filter(item => item.type === 'skill').map(item => item.id)])
   const databaseIds = resourceItems.filter(item => item.type === 'database').map(item => item.id)
+  // 与工作台 recordUse 同一口径：使用/复制即同时记「使用历史」与「本会话工作流轨迹」，
+  // 保证图谱「本会话」范围不因入口不同而漏记。历史只记录工作流身份和时间，
+  // 绝不从最终 Prompt 中提取用户参数或材料摘要；计划记录不在这里代写——
+  // 阶段勾选界面只在工作台存在，弹层不静默标记用户看不到的计划状态。
+  const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
+  const recordUse = () => {
+    catalogStorage?.recordHistory?.({ id: workflow.id, name: workflow.name })
+    evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...resourceIds, ...skillIds] })
+  }
   const assembled = composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: skillIds, extraDatabaseIds: databaseIds }).prompt
   const finalPrompt = editedPrompt ?? assembled
   const hasDraftAction = typeof inputActions?.setDraft === 'function'
@@ -46,9 +56,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     try {
       composeWorkflow(workflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
       inputActions.setDraft(finalPrompt)
-      // 使用即记录历史，供「历史」分组快速回到高频工作流。
-      // 历史只记录工作流身份和时间，绝不从最终 Prompt 中提取用户参数或材料摘要。
-      catalogStorage?.recordHistory?.({ id: workflow.id, name: workflow.name })
+      recordUse()
       onClose()
     } catch (error) { setMissing([]); setNotice(error.message) }
   }
@@ -56,7 +64,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
     try {
       await navigator.clipboard.writeText(finalPrompt)
-      catalogStorage?.recordHistory?.({ id: workflow.id, name: workflow.name })
+      recordUse()
       setNotice('已复制提示词到剪贴板；可粘贴到任意会话使用。')
     } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
   }
@@ -332,6 +340,6 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
         ]
         : [h('span', { key: 'c' }, `${catalog.filter(item => item.type === 'workflow').length} 个工作流程中的 ${rows.length} 个`), h('span', { key: 't' }, '点击使用')]),
     ]) : null,
-    launchWorkflow ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow, resourceIds, inputActions, catalogStorage: storage, onClose: () => setLaunchWorkflow(null) }) : null,
+    launchWorkflow ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
   ])
 }

@@ -205,22 +205,46 @@ function depositionTextOf(data) {
 
 // 挂到 DSH 会话服务上：
 //   - 跟随 sessions.list 的当前会话切换，逐会话订阅事件流（eventSource）；
-//   - 每次事件流通知都扫一遍新 assistant/message（seq 大于水位线），
-//     串行排队沉淀，失败不重试、不打断宿主；
-//   - 宿主未提供 sessions 服务（单测/独立页）时返回空操作，绝不抛错。
+//   - 事件窗口是追加式的（seq 单调递增），每次通知只从尾部增量扫描上次扫过之后的新增段，
+//     不再全量重扫整段历史（长会话下每次事件通知都是 O(窗口全长) 的纯浪费）；
+//     重复入库的正确性不依赖这条优化——始终由 localStorage 水位线兜底；
+//   - 命中的回答串行排队沉淀，失败不重试、不打断宿主；
+//   - 宿主未提供 sessions 服务（单测/独立页）时返回空操作，绝不抛错；
+//   - 挂接期间把 sessions 服务登记给「手动沉淀入口」（见 depositLatestAssistantMessage）。
 // 返回卸载函数：插件卸载时解除全部订阅。
 export function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
   const sessions = ctx?.sessions
   if (!sessions?.list || typeof sessions?.binding !== 'function') return () => {}
+  registerDepositionSessions(sessions)
   let disposeFeed = () => {}
   let boundSessionId = ''
   let queue = Promise.resolve()
+  // 本侧已扫过的事件 seq 高位（内存内，随会话绑定重置）：增量扫描的起点。
+  // 它只是省扫描的性能水位，不是去重依据——去重唯一依据是 localStorage 处理水位线。
+  let scannedSeq = 0
 
   const drain = eventSource => {
     const windowArg = eventSource.getSnapshot()
     const entries = Array.isArray(windowArg?.entries) ? windowArg.entries : []
+    if (!entries.length) return
+    // 从尾部向前收集 seq 大于已扫高位的条目，碰到已扫过的就停：
+    // 稳定追加流下常见成本是 O(新增条数)，而不是 O(窗口全长)。
+    // 若宿主窗口违反「追加且 seq 单调」的约定（整体重放/替换），最坏结果是本侧少扫一段，
+    // 而水位线语义与旧的全量扫描完全一致，不会重复入库。
+    const fresh = []
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const seq = Number(entries[index]?.seq)
+      if (Number.isFinite(seq) && seq <= scannedSeq) break
+      fresh.push(entries[index])
+    }
+    if (!fresh.length) return
+    for (const event of fresh) {
+      const seq = Number(event?.seq)
+      if (Number.isFinite(seq) && seq > scannedSeq) scannedSeq = seq
+    }
+    fresh.reverse()
     let cursor = readDepositionCursor(boundSessionId)
-    for (const event of entries) {
+    for (const event of fresh) {
       if (!event || event.type !== 'assistant/message') continue
       const seq = Number(event.seq)
       if (!Number.isFinite(seq) || seq <= cursor) continue
@@ -241,6 +265,9 @@ export function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
     try { disposeFeed() } catch { /* 旧订阅已失效也继续 */ }
     disposeFeed = () => {}
     boundSessionId = sessionId ? String(sessionId) : ''
+    // 换会话后扫描高位从该会话的处理水位线起步：窗口里 seq ≤ 水位线的段落本就不会处理，
+    // 不值得为它们付一次全量扫描。
+    scannedSeq = readDepositionCursor(boundSessionId)
     if (!boundSessionId) return
     let binding = null
     try { binding = sessions.binding(boundSessionId) } catch { return }
@@ -261,7 +288,85 @@ export function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
   try { disposeList = sessions.list.subscribe(followCurrentSession) } catch { disposeList = () => {} }
   followCurrentSession()
   return () => {
+    registerDepositionSessions(null)
     try { disposeList() } catch { /* 已失效 */ }
     try { disposeFeed() } catch { /* 已失效 */ }
   }
+}
+
+// ── 手动沉淀入口 ──────────────────────────────────────────────────────────────
+// 图谱页的「沉淀最近回答」：不开自动开关，也能把当前会话最近一条助手回答显式入库。
+// attachKnowledgeDeposition 挂接期间登记 sessions 服务、卸载时清除；测试与独立页
+// 可通过参数直接注入 sessions 或 entries，不依赖模块状态。
+
+let depositionSessions = null
+
+function registerDepositionSessions(sessions) {
+  depositionSessions = sessions?.list && typeof sessions?.binding === 'function' ? sessions : null
+}
+
+// 从事件窗口挑出最近一条有正文的助手回答。手动入口不做长度与 interrupted 过滤：
+// 用户点名要这条就原样提取（被中断的半截回答由调用方在结果里如实标注）。
+// 返回 { text, seq, turn, at, interrupted } 或 null（窗口里没有可沉淀的回答）。
+export function latestDepositableMessage(entries) {
+  const list = Array.isArray(entries) ? entries : []
+  for (let index = list.length - 1; index >= 0; index--) {
+    const event = list[index]
+    if (!event || event.type !== 'assistant/message') continue
+    const data = event.data || {}
+    const text = depositionTextOf(data)
+    if (!String(text).trim()) continue
+    const seq = Number(event.seq)
+    return {
+      text,
+      seq: Number.isFinite(seq) ? seq : null,
+      turn: Number(data.turn) || null,
+      at: Number(event.time) || 0,
+      interrupted: Boolean(data.interrupted),
+    }
+  }
+  return null
+}
+
+// 沉淀最近一条助手回答。返回：
+//   { error: 'no-sessions' | 'no-session' | 'empty' } — 无法沉淀，视图据此给出提示；
+//   { summary, seq, interrupted }                     — 已提交沉淀（summary 见 depositAssistantMessage）。
+// 重复点击是安全的：相同内容按稳定 id 走合并路径，来源消息按（会话 + seq）去重，不会翻倍。
+export async function depositLatestAssistantMessage({
+  entries = null,
+  sessions,
+  sessionId = '',
+  store,
+  saveEvidence,
+  activeProject,
+  assetProvider,
+} = {}) {
+  let windowEntries = entries
+  let sid = String(sessionId || '')
+  if (!Array.isArray(windowEntries)) {
+    const source = sessions !== undefined ? sessions : depositionSessions
+    if (!source?.list || typeof source?.binding !== 'function') return { error: 'no-sessions' }
+    let current = ''
+    try { current = source.list.getSnapshot()?.current || '' } catch { current = '' }
+    if (!current) return { error: 'no-session' }
+    let eventSource = null
+    try { eventSource = source.binding(String(current))?.eventSource || null } catch { eventSource = null }
+    const snapshot = typeof eventSource?.getSnapshot === 'function' ? eventSource.getSnapshot() : null
+    windowEntries = Array.isArray(snapshot?.entries) ? snapshot.entries : []
+    sid = String(current)
+  }
+  const found = latestDepositableMessage(windowEntries)
+  if (!found) return { error: 'empty' }
+  const summary = await depositAssistantMessage({
+    text: found.text,
+    sessionId: sid,
+    seq: found.seq,
+    turn: found.turn,
+    at: found.at,
+    assetProvider,
+    store,
+    saveEvidence,
+    activeProject,
+  })
+  return { summary, seq: found.seq, interrupted: found.interrupted }
 }
