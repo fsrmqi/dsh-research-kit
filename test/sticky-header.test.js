@@ -26,7 +26,8 @@ const callBlock = (source, name) => {
 // 结尾兼容 `]),` 与 `]) : null,`：吸顶带可能被三元条件包裹（例如沉淀层的
 // 灵感资产 / 证据库子模块切换），只要调用本身仍是 sticky:true 的 Toolbar，契约就成立。
 const toolbarBlock = (source, key) => {
-  const match = new RegExp(`h\\(Toolbar,\\s*\\{\\s*key:\\s*'${key}',\\s*sticky:\\s*true\\s*\\},[\\s\\S]*?\\n {4}\\](?:\\),|\\)\\s*:\\s*null,)`).exec(source)
+  // key 与 sticky 之间允许出现其他 props（如测量用的 innerRef），但 sticky: true 必须在同一个调用里。
+  const match = new RegExp(`h\\(Toolbar,\\s*\\{\\s*key:\\s*'${key}',[\\s\\S]{0,80}?sticky:\\s*true[\\s\\S]*?\\n {4}\\](?:\\),|\\)\\s*:\\s*null,)`).exec(source)
   assert.ok(match, `未找到 key: '${key}' 的二级吸顶带调用块`)
   return match[0]
 }
@@ -66,7 +67,7 @@ test('二级吸顶：操作行的偏移取实测变量，且不得退回视口�
 test('四个分区都接入二级吸顶，吸顶态由 Toolbar 统一挂锚点', () => {
   for (const file of ['research-workbench.js', 'research-vault.js', 'research-evidence-graph.js']) {
     const source = read(`src/${file}`)
-    assert.match(source, /h\(Toolbar,\s*\{\s*key:\s*'[a-z]+',\s*sticky:\s*true\s*\}/, `${file} 的操作行未接入二级吸顶`)
+    assert.match(source, /h\(Toolbar,\s*\{\s*key:\s*'[a-z]+',[\s\S]{0,80}?sticky:\s*true/, `${file} 的操作行未接入二级吸顶`)
   }
   const ui = read('src/ui.js')
   assert.match(ui, /sticky\s*=\s*false/, 'Toolbar 未提供 sticky 开关')
@@ -145,4 +146,25 @@ test('构建产物确实带上了二级吸顶的锚点与规则', () => {
   assert.ok(client.includes('--rk-console-nav-h'), '构建产物缺少偏移量变量')
   assert.ok(client.includes('.rk-studio-host aside'), '构建产物缺少方法工坊吸顶带的解绑规则')
   assert.equal(client.includes('formerLabel'), false, '构建产物仍残留已移除的 formerLabel 契约字段')
+})
+
+test('工作台左列 sticky（ROADMAP §2）：偏移取两段实测变量，视口内高度约束，不写死像素', () => {
+  // 右列详情可达约 1044px，左列原来随页面滚走——滚到详情底部出口按钮时列表已滑出视口。
+  const source = read('src/research-workbench.js')
+  const listBlock = /key: 'list'[\s\S]*?style: \{([\s\S]*?)\n {8}\},\n {6}\},/.exec(source)
+  assert.ok(listBlock, '未定位到左列列表的样式块')
+  const style = listBlock[1]
+  assert.match(style, /position: 'sticky'/, '左列未吸顶')
+  // 偏移 = 一级导航 + 二级吸顶带，都是实测变量；任何一段写死像素都会在折行/窄屏错位。
+  assert.match(style, /top: 'calc\(var\(--rk-console-nav-h, 0px\) \+ var\(--rk-workbench-toolbar-h, 76px\)\)'/, '吸顶偏移必须引用两段实测变量')
+  assert.match(style, /maxHeight: 'calc\(100vh - var\(--rk-console-nav-h, 0px\) - var\(--rk-workbench-toolbar-h, 76px\)/, '列表必须有视口内高度约束，否则 sticky 无滑动余量')
+  assert.match(style, /overflowY: 'auto'/, '列表需内部滚动')
+  assert.doesNotMatch(style, /top: '\d+px'/, '吸顶偏移不得退回写死像素')
+  // 带高实测与统一容器测一级导航同一模式：border-box 观察 + 挂载先写一次 + 清理。
+  assert.match(source, /innerRef: toolbarRef/, '二级吸顶带未挂测量 ref')
+  assert.match(source, /observe\(band, \{ box: 'border-box' \}\)/, '必须显式观察 border-box，否则内边距变化不触发重算')
+  assert.match(source, /removeProperty\('--rk-workbench-toolbar-h'\)/, '卸载未清理测量变量')
+  // ui.js 的 Toolbar 必须真的把 ref 挂到 DOM 节点上。
+  const ui = read('src/ui.js')
+  assert.match(ui, /ref: innerRef/, 'Toolbar 未透传 innerRef')
 })

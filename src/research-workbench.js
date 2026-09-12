@@ -134,6 +134,26 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
   const [planRows, setPlanRows] = React.useState(() => evidence.get().plans || [])
+  // 左列 sticky 的偏移量来源：二级吸顶带的实测高度（带高随折行变化：单行 76px、双行 126px）。
+  const layoutRef = React.useRef(null)
+  const toolbarRef = React.useRef(null)
+  React.useEffect(() => {
+    // 与统一容器测一级导航同一模式：observe border-box（内边距/边框变化也要触发）、
+    // 挂载先写一次、窗口变化补测、卸载清理并移除变量。写在本分区栅格容器上，随分区卸载一并消失。
+    const host = layoutRef.current
+    const band = toolbarRef.current
+    if (!host || !band) return undefined
+    const apply = () => host.style.setProperty('--rk-workbench-toolbar-h', `${Math.ceil(band.getBoundingClientRect().height)}px`)
+    apply()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(apply) : null
+    observer?.observe(band, { box: 'border-box' })
+    window.addEventListener('resize', apply)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', apply)
+      host.style.removeProperty('--rk-workbench-toolbar-h')
+    }
+  }, [])
   const activeCategory = type === 'workflow' ? workflowCategory : type === 'skill' ? skillCategory : type === 'database' ? databaseCategory : 'all'
   const categories = type === 'workflow' || type === 'skill' || type === 'database'
     ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
@@ -285,7 +305,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     // 「科研模式」原先挂在分区封面右侧，会随页面一起滚走（实测滚 800px 后 top=-555），
     // 每次确认或切换预设都得先滚回顶部；它是常驻的「模式」控件，不是一次性页面动作，
     // 因此下沉到吸顶带。封面上只留读一次即可的标题与导语（分层原则见 docs/ARCHITECTURE.md §2.3）。
-    h(Toolbar, { key: 'toolbar', sticky: true }, [
+    h(Toolbar, { key: 'toolbar', sticky: true, innerRef: toolbarRef }, [
       // 顺序有意为「模式 → 检索 → 筛选」：三者放不下一行时按 DOM 顺序折行，
       // 把最宽的筛选项留在最后折行才能占满整行；若把「科研模式」放末尾，
       // 被挤到第二行的是它一个窄控件，会留下一整行空白（实测 1180px 窗口即触发）。
@@ -325,8 +345,20 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
         onChange: type === 'workflow' ? setWorkflowCategory : type === 'skill' ? setSkillCategory : setDatabaseCategory,
       }) : null,
     ]),
-    h('div', { key: 'layout', className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [
-      h(Panel, { key: 'list', 'aria-label': '资源列表', style: { maxHeight: 'calc(100vh - 220px)', overflowY: 'auto' } },
+    h('div', { key: 'layout', ref: layoutRef, className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [
+      // 左列 sticky（ROADMAP §2）：右列详情可达约 1044px，列表原来会滚出视口。
+      // 偏移 = 一级导航 + 二级吸顶带两段实测变量（都不写死：两者高度都随折行变化），
+      // maxHeight 约束在视口内、内部自行滚动，保证 sticky 有滑动余量且出口按钮可见时列表仍在。
+      h(Panel, {
+        key: 'list',
+        'aria-label': '资源列表',
+        style: {
+          position: 'sticky',
+          top: 'calc(var(--rk-console-nav-h, 0px) + var(--rk-workbench-toolbar-h, 76px))',
+          maxHeight: 'calc(100vh - var(--rk-console-nav-h, 0px) - var(--rk-workbench-toolbar-h, 76px) - 28px)',
+          overflowY: 'auto',
+        },
+      },
         listEntries.length
           ? h('div', { key: 'groups', className: 'rk-scroll' }, listGroups.map(group => h('div', { key: group.category }, [
             h(GroupLabel, { key: 'g', count: group.rows.length }, group.category),

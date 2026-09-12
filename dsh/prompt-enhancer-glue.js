@@ -9,6 +9,7 @@
 import { itemById } from '../src/catalog.js'
 import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
+import { ResearchDepositButton } from '../src/composer-deposit-button.js'
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
 const ENHANCE_STREAM_PATH = '/dsh-research-kit/semantic-enhance/stream'
@@ -148,15 +149,20 @@ function ResearchDraftEnhancerHost(props) {
   }, [sessionId])
   React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
   // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-  return React.createElement(PromptKit.QuickEnhancer, {
-    methodProvider: researchMethodProvider,
-    assetProvider: researchAssetProvider,
-    composer,
-    enhancer,
-    messages,
-    searchMemory,
-    storagePrefix: 'dsh-research-kit.promptkit.',
-  })
+  // 手动沉淀伴生钮与 vendored 触发钮并排（固定定位互不影响布局）：
+  // 「沉淀最近回答」贴在增强器按钮上方，随其拖拽位置与窗口变化重算（见 composer-deposit-button.js）。
+  return React.createElement(React.Fragment, null, [
+    React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
+    React.createElement(PromptKit.QuickEnhancer, {
+      methodProvider: researchMethodProvider,
+      assetProvider: researchAssetProvider,
+      composer,
+      enhancer,
+      messages,
+      searchMemory,
+      storagePrefix: 'dsh-research-kit.promptkit.',
+    }),
+  ])
 }
 
 // 由 standalone-glue 统一注册为 conversation.input.right（顺序见 slot-registry.js）。

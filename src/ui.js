@@ -358,8 +358,10 @@ export function PageHead({ kicker, title, lead, actions }) {
 // 吸顶偏移量取容器实测写入的 --rk-console-nav-h，不写死像素。
 // 吸顶态下外边距交由 .rk-sticky-toolbar 的内边距承接：外边距区域不参与背景绘制，
 // 直接吸顶会让滚动内容从边距缝隙里透出来。
-export function Toolbar({ children, style, sticky = false }) {
+export function Toolbar({ children, style, sticky = false, innerRef }) {
+  // innerRef：供分区实测二级吸顶带高度（左列 sticky 的偏移量来源），不参与样式。
   return h('div', {
+    ref: innerRef,
     className: sticky ? 'rk-sticky-toolbar' : undefined,
     style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: sticky ? 0 : '18px 0 14px', ...style },
   }, children)
