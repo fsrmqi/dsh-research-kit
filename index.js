@@ -1,6 +1,8 @@
 import resources from './catalog/resources/index.js'
 import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
+import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
+import { memorySearchRoute } from './dsh/memory-search.js'
 
 // 科研插件的唯一 Node half。公开数据源查询只经 DSH 的受控 web 服务出网；
 // 语义增强复用当前会话已建立的路由（sessionId → provider/model），浏览器端永不持有 API Key。
@@ -58,4 +60,12 @@ export function apply(ctx) {
   }, 'dsh-research-kit session model routes')
   ctx.effect(() => ctx.webServer.register(semanticEnhanceRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit semantic enhancement')
   ctx.effect(() => ctx.webServer.register(semanticEnhanceStreamRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit semantic enhancement (stream)')
+  // 宿主能力探测（ROADMAP §6）：只报装配与 MCP 连接事实，不改写目录标注。
+  // 全部软依赖：宿主未提供对应服务时按「未知/未连接」如实呈现，探测不抛错。
+  ctx.effect(() => ctx.webServer.register(hostCapabilitiesRoute({
+    tools: ctx.get?.('tools'), web: ctx.web, shell: ctx.get?.('shell'), fs: ctx.get?.('fs'), llm: ctx.llm, logger,
+  })), 'dsh-research-kit host capabilities')
+  // Memory Center 项目记忆检索（ROADMAP §5）：只代为执行 mcp__ 前缀的检索工具，
+  // 结果交浏览器端预览；是否进入 Prompt 由用户在增强面板显式勾选（禁止静默注入）。
+  ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger })), 'dsh-research-kit memory search')
 }

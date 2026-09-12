@@ -6193,6 +6193,67 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 宿主能力探测的浏览器端消费：拉取 Node half 的 /dsh-research-kit/host-capabilities，
+    // 把探测结果汇总成一行事实摘要（装配了哪些服务、连了哪些 MCP 服务器）。
+    //
+    // 边界（ROADMAP §6）：摘要只陈述部署级事实，绝不推断「某个数据库可用」；
+    // 目录条目的可用性标注（requires-mcp 等）不由本模块改写。
+
+    const CACHE_TTL_MS = 5 * 60_000
+    const MAX_LISTED_SERVERS = 4
+
+    // 纯摘要（单测覆盖）：探测成功 → 事实行；探测失败/缺数据 → 空串（视图不渲染该行）。
+    function summarizeHostCapabilities(capabilities) {
+      if (!capabilities || typeof capabilities !== 'object') return ''
+      const parts = []
+      const services = capabilities.services || {}
+      const flags = [
+        ['Web', services.web], ['Shell', services.shell], ['文件系统', services.fs], ['模型路由', services.llm],
+      ].filter(([, on]) => on === true).map(([label]) => label)
+      if (flags.length) parts.push(`已装配：${flags.join('、')}`)
+      const servers = Array.isArray(capabilities.mcpServers) ? capabilities.mcpServers : []
+      if (servers.length) {
+        const names = servers.slice(0, MAX_LISTED_SERVERS).map(server => server.server)
+        const more = servers.length > MAX_LISTED_SERVERS ? ` 等 ${servers.length} 台` : ''
+        parts.push(`MCP 已连接：${names.join('、')}${more}`)
+      } else if (capabilities.toolProbeAvailable) {
+        parts.push('MCP：未连接任何服务器')
+      }
+      if (!parts.length) return ''
+      return parts.join('；')
+    }
+
+    // 进程级缓存：工作台与查询面板共享同一探测结果，5 分钟内不重复请求。
+    let cache = { at: 0, summary: '', promise: null }
+
+    function resetHostCapabilitiesCache() {
+      cache = { at: 0, summary: '', promise: null }
+    }
+
+    async function fetchHostCapabilitiesSummary({ fetcher, now = Date.now() } = {}) {
+      const doFetch = fetcher || (typeof globalThis.fetch === 'function' ? globalThis.fetch.bind(globalThis) : null)
+      if (!doFetch) return ''
+      if (cache.summary && now() - cache.at < CACHE_TTL_MS) return cache.summary
+      if (!cache.promise) {
+        cache.promise = (async () => {
+          const response = await doFetch('/dsh-research-kit/host-capabilities')
+          if (!response.ok) return ''
+          const body = await response.json().catch(() => null)
+          return body?.ok ? summarizeHostCapabilities(body.capabilities) : ''
+        })()
+      }
+      try {
+        const summary = await cache.promise
+        if (summary) cache = { at: now(), summary, promise: null }
+        else cache.promise = null
+        return summary
+      } catch {
+        cache.promise = null
+        return ''
+      }
+    }
+
+
     const SUPPORTED_LOCALES = ['en', 'zh-CN'];
     const DEFAULT_LOCALE = 'en';
 
@@ -10473,6 +10534,14 @@ window.__ModuleLoader__.load({
       }, [storage])
       React.useEffect(() => { setSessionResourceIds(selection.get()); return selection.subscribe(setSessionResourceIds) }, [selection])
       React.useEffect(() => { setPlanRows(evidence.get().plans || []); return evidence.subscribe(value => setPlanRows(value.plans || [])) }, [evidence])
+      // 宿主能力探测（ROADMAP §6）：部署级事实摘要（装配的服务 + 已连接 MCP），5 分钟缓存。
+      // 只在数据源详情展示一行事实，不据此改写目录 availability、不推断某数据库可用。
+      const [hostCapabilitySummary, setHostCapabilitySummary] = React.useState('')
+      React.useEffect(() => {
+        let alive = true
+        fetchHostCapabilitiesSummary().then(summary => { if (alive && summary) setHostCapabilitySummary(summary) }).catch(() => {})
+        return () => { alive = false }
+      }, [])
       const warnManualOverride = () => {
         if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
       }
@@ -10778,6 +10847,8 @@ window.__ModuleLoader__.load({
                     h(MetaRow, { key: 'id', label: '标识符' }, h('span', { style: { fontFamily: C.fontMono, fontSize: 12 } }, selected.id)),
                     h(MetaRow, { key: 'status', label: '当前状态' }, h('span', { style: { color: isDatabaseReady(selected.availability) ? C.statusVerified : C.amber, fontWeight: 700 } }, databaseAvailabilityLabel(selected.availability))),
                     h(MetaRow, { key: 'access', label: '访问方式' }, databaseMetadata(selected).accessMode),
+                    hostCapabilitySummary ? h(MetaRow, { key: 'hostcap', label: '宿主能力' },
+                      h('span', { title: '宿主部署的实测能力摘要；只陈述事实，不代表本数据源可直接查询（访问前提见「访问方式」与「接入提示」）' }, hostCapabilitySummary)) : null,
                   ])),
                 h(Notice, { key: 'usage', tone: 'warn', icon: 'database' }, [
                   h('strong', { key: 'q1' }, '适合查询：'), databaseMetadata(selected).queryExample, h('br', { key: 'b1' }),
@@ -11022,10 +11093,29 @@ window.__ModuleLoader__.load({
         return () => window.removeEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onChange)
       }, [])
       const searchMemory = React.useCallback(async query => {
-        // 研究上下文桥接：检索 → 摘要预览 → 用户选择 → 组装（QuickEnhancer 的记忆面板自带预览与确认）。
-        // 这里只提供检索源；不注入任何未经预览的内容。
+        // 研究上下文桥接（既有）：当前会话已选科研资源的只读摘要。
         const context = researchContextSummary(sessionId)
-        return { text: context, sources: context ? [{ kind: 'research-selection', label: '当前会话已选科研资源' }] : [] }
+        const sources = context ? [{ kind: 'research-selection', label: '当前会话已选科研资源' }] : []
+        let text = context
+        // Memory Center 项目记忆检索（ROADMAP §5）：经 Node half 路由代查宿主已连接的
+        // Memory Center MCP；结果只作为候选上下文返回，由 QuickEnhancer 的「项目记忆」
+        // 开关显式勾选后才进入增强（检索 → 来源预览 → 用户选择 → 组装，禁止静默注入）。
+        // 检索失败或部署未接入 Memory Center 时如实回落：只用研究上下文，不阻断增强。
+        try {
+          const response = await fetch(`/dsh-research-kit/memory-search?session_id=${encodeURIComponent(sessionId || '')}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ query }),
+          })
+          if (response.ok) {
+            const body = await response.json().catch(() => null)
+            if (body?.ok && body?.available && body?.text) {
+              text = [context, body.text].filter(Boolean).join('\n\n')
+              sources.push(...(body.sources || []).filter(source => source?.label).slice(0, 4))
+            }
+          }
+        } catch { /* 记忆检索不可用不是增强的失败条件 */ }
+        return { text, sources }
       }, [sessionId])
       React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
       // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。

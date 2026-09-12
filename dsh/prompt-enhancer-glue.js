@@ -142,10 +142,29 @@ function ResearchDraftEnhancerHost(props) {
     return () => window.removeEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onChange)
   }, [])
   const searchMemory = React.useCallback(async query => {
-    // 研究上下文桥接：检索 → 摘要预览 → 用户选择 → 组装（QuickEnhancer 的记忆面板自带预览与确认）。
-    // 这里只提供检索源；不注入任何未经预览的内容。
+    // 研究上下文桥接（既有）：当前会话已选科研资源的只读摘要。
     const context = researchContextSummary(sessionId)
-    return { text: context, sources: context ? [{ kind: 'research-selection', label: '当前会话已选科研资源' }] : [] }
+    const sources = context ? [{ kind: 'research-selection', label: '当前会话已选科研资源' }] : []
+    let text = context
+    // Memory Center 项目记忆检索（ROADMAP §5）：经 Node half 路由代查宿主已连接的
+    // Memory Center MCP；结果只作为候选上下文返回，由 QuickEnhancer 的「项目记忆」
+    // 开关显式勾选后才进入增强（检索 → 来源预览 → 用户选择 → 组装，禁止静默注入）。
+    // 检索失败或部署未接入 Memory Center 时如实回落：只用研究上下文，不阻断增强。
+    try {
+      const response = await fetch(`/dsh-research-kit/memory-search?session_id=${encodeURIComponent(sessionId || '')}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ query }),
+      })
+      if (response.ok) {
+        const body = await response.json().catch(() => null)
+        if (body?.ok && body?.available && body?.text) {
+          text = [context, body.text].filter(Boolean).join('\n\n')
+          sources.push(...(body.sources || []).filter(source => source?.label).slice(0, 4))
+        }
+      }
+    } catch { /* 记忆检索不可用不是增强的失败条件 */ }
+    return { text, sources }
   }, [sessionId])
   React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
   // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。

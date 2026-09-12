@@ -30,8 +30,9 @@
 │                                                                     │
 │  所有分区共享同一出口：setDraft() / submit()，缺失时降级为复制 Prompt │
 └───────▲─────────────────────────────────────────────────────────────┘
-        │  仅两条受控路由（index.js，Node half）
-        │  /query（公开数据源直查，经 ctx.web.fetch） · /semantic-enhance*
+        │  仅四条受控路由（index.js，Node half）
+        │  /query（公开数据源直查，经 ctx.web.fetch） · /semantic-enhance*（草稿增强）
+        │  /host-capabilities（装配与 MCP 连接事实） · /memory-search（Memory Center 检索）
 └───────┴──── DSH 受控 web 服务 / 当前会话模型路由
 ```
 
@@ -41,12 +42,14 @@
 
 第一期不需要沙箱、数据库代理或任务队列。它们会重复 DSH 已经承担的能力，并带来权限、保密、成本和状态同步问题。
 
-**例外：Node half 只保留两条无法在浏览器侧完成的受控路由**（`index.js`，见 §2.1）：
+**例外：Node half 只保留四条无法在浏览器侧完成的受控路由**（`index.js`，见 §2.1）：
 
 1. `/dsh-research-kit/query` —— 公开数据源直查。浏览器无法直接跨域访问这些 API，且需要进程内缓存与限流；出网一律经 DSH `ctx.web.fetch()`，插件自身不持有凭据。
 2. `/dsh-research-kit/semantic-enhance`（含 `/stream`）—— 草稿语义增强。复用当前会话已建立的模型路由（`sessionId → provider/model`），不持有任何 API Key。
+3. `/dsh-research-kit/host-capabilities` —— 宿主能力探测（ROADMAP §6）。从工具注册表解析 `mcp__<server>__<tool>` 得到「已连接 MCP 服务器」事实，并报告 Web/Shell/文件系统/模型路由装配事实；只读、无副作用、不改写目录标注。
+4. `/dsh-research-kit/memory-search` —— Memory Center 项目记忆检索（ROADMAP §5）。按已连接 MCP 的工具 Schema 合成参数后代为执行 `mcp__` 前缀检索工具；无法可靠合成参数时明确拒绝。结果只作增强候选上下文，是否注入由用户在面板显式勾选。
 
-两者都不构成"插件自己的后端"：无独立进程状态可持久化、无凭据、无模型选择权，宿主卸载插件后不残留。除此之外的一切仍在浏览器侧完成。
+四条都不构成"插件自己的后端"：无独立进程状态可持久化、无凭据、无模型选择权，宿主卸载插件后不残留。除此之外的一切仍在浏览器侧完成。
 
 | 能力 | 所有者 | 本插件职责 |
 | --- | --- | --- |
@@ -99,6 +102,8 @@ dsh-research-kit/
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
+│   ├── composer-deposit-button.js   # 手动沉淀伴生钮：贴靠增强器浮动按钮、位置解算（纯函数）与临时状态条
+│   ├── host-capabilities-client.js  # 宿主能力摘要：事实汇总（纯函数）+ 进程级 5 分钟缓存取数
 │   └── lib/
 │       ├── icons.js                 # 图标 path
 │       ├── enhance-output.js        # 模型输出协议解析（Node half 与浏览器共用）
@@ -115,7 +120,9 @@ dsh-research-kit/
 │   ├── prompt-studio-glue.js        # 分区②「方法工坊」宿主与 provider 实例化
 │   ├── prompt-enhancer-glue.js      # 草稿增强器宿主：研究上下文桥接 + SSE 客户端
 │   ├── database-query.js            # 公开数据源直查适配器、缓存与限流（Node half）
-│   └── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
+│   ├── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
+│   ├── host-capabilities.js         # 宿主能力探测：装配事实 + MCP 连接清单（Node half，只读）
+│   └── memory-search.js             # Memory Center 检索：工具挑选、Schema 参数合成、代执行 mcp__ 工具（Node half）
 ├── ui/
 │   ├── package.json                 # 浏览器子包元数据
 │   └── client.js                    # 构建生成的 DSH ModuleLoader 产物（勿手改）
@@ -133,7 +140,7 @@ dsh-research-kit/
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
-├── test/                            # 219 项测试（24 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 236 项测试（27 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -153,7 +160,7 @@ dsh-research-kit/
 | `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
 | `src/evidence-vault-store.js` | 证据库持久化：IndexedDB 最小 schema、按项目隔离与去重、备份序列化，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目。 |
 | `src/knowledge-store.js` | 自动沉淀知识库持久化：节点/关系双 store、稳定 id 去重合并、冲突并列保留，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；改写用户推进过的核验状态。 |
-| `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与处理水位线、**增量扫描** DSH 会话事件流（`sessions.binding().eventSource`，每次通知只扫上次扫过的尾部之后的新增段）、调用提取器并联动三个库；另提供手动沉淀入口（沉淀当前会话最近一条回答） | 在开关关闭时自动提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
+| `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与处理水位线、**增量扫描** DSH 会话事件流（`sessions.binding().eventSource`，每次通知只扫上次扫过的尾部之后的新增段）、调用提取器并联动三个库；另提供手动沉淀入口（沉淀当前会话最近一条回答，图谱页与增强器伴生钮共用） | 在开关关闭时自动提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
 | `src/lib/knowledge-extract.js` | 规则化结构提取：知识节点/关系/引用来源，确定性与有界性输出 | 访问 DOM、网络或存储；把无法核验的提取结果标为已核验。 |
 | `src/theme.js` | 主题 CSS 变量与 GlobalStyle 注入 | 读取宿主私有主题 API。 |
 | `src/ui.js` | 无业务状态的基础组件与图标 | 持有业务逻辑或读取目录数据。 |
@@ -165,7 +172,7 @@ dsh-research-kit/
 | `dsh/standalone-glue.js` | 将 DSH props 映射为组件 props、注册槽位（返回统一释放函数） | 处理领域业务、拼 Prompt。 |
 | `dsh/slot-registry.js` | 槽位 id / order / label 的纯数据声明 | 执行注册本身。 |
 | `dsh/prompt-studio-glue.js` / `prompt-enhancer-glue.js` | 为 vendored 组件与增强器提供宿主装配 | 修改 vendored 工件本身。 |
-| `dsh/database-query.js` / `semantic-enhance.js` | Node half 的两条受控路由 | 持久化状态、持有凭据、自行选择模型。 |
+| `dsh/database-query.js` / `semantic-enhance.js` / `host-capabilities.js` / `memory-search.js` | Node half 的四条受控路由 | 持久化状态、持有凭据、自行选择模型、代执行 `mcp__` 前缀之外的原生工具。 |
 | `vendor/` | 存放经审查、SHA 锁定的工件快照 | 手工编辑；运行时从相邻目录加载。 |
 | `ui/client.js` | 仅为构建产物 | 手工编辑。 |
 | `index.js` | 保持插件 Node half 可被加载；仅注册 §1.2 的两条受控路由 | 持久化状态、持有凭据、自行选择模型或注册未经需求确认的路由。 |
@@ -473,7 +480,7 @@ composeWorkflow(workflow, values, …)
 
 **项目归属与图谱治理。** 沉淀入库时记录当前项目（`project` 字段，已有项目的记录不被后续空项目覆盖）；图谱工具栏提供两类筛选——「节点生命周期范围」（全部 / 本会话 / 持久沉淀：两类节点生命周期不同，混在一幅图里曾是最常见的困惑）与「按项目筛选」（选项取自证据、资产、知识三处并集，默认跟随证据库当前项目）。筛选在进 `buildEvidenceGraph` 前收敛输入，关系只保留两端可见者；筛选生效但图被筛空时工具栏保留，避免被困在筛选里。灵感资产侧的去重与证据库同口径按（标题 + 项目）隔离。知识沉淀支持 JSON 备份导出 / 恢复（`serializeKnowledgeBackup` / `parseKnowledgeBackup` / `mergeKnowledgeBackup`：按 key 身份增量合并、不覆盖现有核验状态、端点缺失拒收），IndexedDB 不可用时图谱页显式警告降级状态。
 
-**开关与水位线。** 默认关闭，只能在图谱页显式开启（不静默读取会话内容）；关闭期间水位线照常前进——重新开启后只处理新回答，不回溯补提取历史消息，也不会把开启前的旧对话重复入库。页面刷新后事件窗口会重放全部历史事件，水位线（按会话记录已处理 seq）保证不重复沉淀。事件接线对窗口做**增量扫描**：窗口是追加式（seq 单调递增），每次通知只从尾部扫上次扫过之后的新增段，扫描位随会话绑定从该会话的水位线起步；重复入库的正确性不依赖这条优化，始终由水位线兜底。单条消息沉淀失败只计数、不重试、绝不打断宿主页面。图谱页另有「沉淀最近回答」**手动入口**：不开自动开关也能把当前会话最近一条助手回答显式入库（同一提取链路、同一「待核验」起点；被中断的半截回答如实标注；重复点击按稳定 id 合并不会翻倍）。
+**开关与水位线。** 默认关闭，只能在图谱页显式开启（不静默读取会话内容）；关闭期间水位线照常前进——重新开启后只处理新回答，不回溯补提取历史消息，也不会把开启前的旧对话重复入库。页面刷新后事件窗口会重放全部历史事件，水位线（按会话记录已处理 seq）保证不重复沉淀。事件接线对窗口做**增量扫描**：窗口是追加式（seq 单调递增），每次通知只从尾部扫上次扫过之后的新增段，扫描位随会话绑定从该会话的水位线起步；重复入库的正确性不依赖这条优化，始终由水位线兜底。单条消息沉淀失败只计数、不重试、绝不打断宿主页面。图谱页另有「沉淀最近回答」**手动入口**：不开自动开关也能把当前会话最近一条助手回答显式入库（同一提取链路、同一「待核验」起点；被中断的半截回答如实标注；重复点击按稳定 id 合并不会翻倍）。同一入口经 `composer-deposit-button.js` 贴靠在输入框对话增强器的浮动按钮旁（共享其存储位置，拖拽结束与窗口变化重算），聊天中随手可用。
 
 **结论追溯面板。** 点击图谱中的知识节点展开：知识关系（含方向与极性）、关联证据条目（含核验状态）、沉淀到的灵感资产，以及来源消息摘录（会话 · 消息 seq · 摘录原文）；面板内可直接推进核验状态。图谱页另提供动态图例（只列图上实际出现的节点类型）。「清空本会话临时记录」（原「清空本会话查询记录」）只清本会话的查询、工作流与计划记录，**不触及**已保存证据、灵感资产与自动沉淀知识；自动沉淀知识另有独立的清空入口（`knowledge-store.clear()`），两者边界互补。
 

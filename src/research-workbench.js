@@ -4,6 +4,7 @@ import { RouteReplay } from './route-replay.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
+import { fetchHostCapabilitiesSummary } from './host-capabilities-client.js'
 import { DatabaseQueryPanel } from './database-query-panel.js'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
@@ -201,6 +202,14 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   }, [storage])
   React.useEffect(() => { setSessionResourceIds(selection.get()); return selection.subscribe(setSessionResourceIds) }, [selection])
   React.useEffect(() => { setPlanRows(evidence.get().plans || []); return evidence.subscribe(value => setPlanRows(value.plans || [])) }, [evidence])
+  // 宿主能力探测（ROADMAP §6）：部署级事实摘要（装配的服务 + 已连接 MCP），5 分钟缓存。
+  // 只在数据源详情展示一行事实，不据此改写目录 availability、不推断某数据库可用。
+  const [hostCapabilitySummary, setHostCapabilitySummary] = React.useState('')
+  React.useEffect(() => {
+    let alive = true
+    fetchHostCapabilitiesSummary().then(summary => { if (alive && summary) setHostCapabilitySummary(summary) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
   const warnManualOverride = () => {
     if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
   }
@@ -506,6 +515,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
                 h(MetaRow, { key: 'id', label: '标识符' }, h('span', { style: { fontFamily: C.fontMono, fontSize: 12 } }, selected.id)),
                 h(MetaRow, { key: 'status', label: '当前状态' }, h('span', { style: { color: isDatabaseReady(selected.availability) ? C.statusVerified : C.amber, fontWeight: 700 } }, databaseAvailabilityLabel(selected.availability))),
                 h(MetaRow, { key: 'access', label: '访问方式' }, databaseMetadata(selected).accessMode),
+                hostCapabilitySummary ? h(MetaRow, { key: 'hostcap', label: '宿主能力' },
+                  h('span', { title: '宿主部署的实测能力摘要；只陈述事实，不代表本数据源可直接查询（访问前提见「访问方式」与「接入提示」）' }, hostCapabilitySummary)) : null,
               ])),
             h(Notice, { key: 'usage', tone: 'warn', icon: 'database' }, [
               h('strong', { key: 'q1' }, '适合查询：'), databaseMetadata(selected).queryExample, h('br', { key: 'b1' }),

@@ -10,6 +10,14 @@
 
 ### 变更
 
+- 🧭 **遗留工程项集中办结（手动沉淀入口扩展 / 左列 sticky / 宿主能力探测 / Memory 检索 / 目录对账）**：本轮五项（对应 ROADMAP §2 / §5 / §6 / §8 与上一轮小账）。
+  - 🧲 **手动沉淀入口扩展到输入框**：新增 `src/composer-deposit-button.js` 伴生钮——读 vendored QuickEnhancer 触发钮的同一存储位置（`quick-action.position.v1`），停在正上方（贴顶翻正下方）、共享中轴，拖拽结束（pointerup）与窗口变化重算；点击即显式沉淀当前会话最近一条助手回答，结果以临时状态条反馈并自动消失，绝不注入输入框。与图谱页「沉淀最近回答」同一入口函数、同一去重口径。位置解算为纯函数并有单测（默认位 / 翻转边界 / 钳制 / 非法输入）。
+  - 📌 **工作台左列 sticky（ROADMAP §2）**：左列列表 `position: sticky`，偏移 = 一级导航（`--rk-console-nav-h`）+ 二级吸顶带（新增 `--rk-workbench-toolbar-h`，`ResizeObserver` border-box 实测、随折行变化，不写死像素），列表以视口内 `maxHeight` 约束并内部滚动——滚到右列详情底部出口按钮时列表仍在视口内。`ui.js` Toolbar 透传 `innerRef` 供测量。
+  - 🔎 **宿主能力探测落地（ROADMAP §6 部署级）**：Node half 新增 `dsh/host-capabilities.js`（`GET /dsh-research-kit/host-capabilities`）——从工具注册表解析 `mcp__<server>__<tool>` 命名得到「已连接 MCP 服务器」事实清单（排序 / 去重 / 有界截断），并报告 Web / Shell / 文件系统 / 模型路由四项装配事实；任何一步失败退化为「未知」，探测不抛错。浏览器端 `src/host-capabilities-client.js` 汇总为事实摘要（5 分钟进程缓存），在工作台数据源详情「宿主能力」行展示。**不根据资源名称推断数据库可用、不改写目录标注**（消费端由测试断言钉住）；条目级 `requires-mcp → available-in-host` 升级仍按 §6 门槛另行执行。
+  - 🧠 **Memory Center 项目记忆检索落地（ROADMAP §5）**：Node half 新增 `dsh/memory-search.js`（`POST /dsh-research-kit/memory-search`）——从工具注册表探测宿主已连接的 Memory Center MCP（默认 `memory-center`，可显式指定 server/tool），按目标工具自己的 JSON Schema 合成参数；枚举 / 标识类 / 复杂结构的必填参数无法可靠合成时明确拒绝并给诊断，**绝不拿猜的参数打 MCP、绝不代打 `mcp__` 之外的原生工具**。增强器 `searchMemory` 合并「会话已选资源摘要 + Memory 结果」并带来源标签；是否注入仍由面板「项目记忆」显式开关控制（检索 → 来源预览 → 用户选择 → 组装，禁止静默注入，源码断言钉住）；未接入时如实回落、增强不报错。**归属判据定死**：有外部稳定标识符 → 证据库；项目内部决策与上下文 → Memory Center，且 Memory 结果永不写入三库。
+  - 🗂 **目录工作流上游对账办结（ROADMAP §8，记账修正）**：以 k-dense-byok 本地快照对上游 326 条工作流做 id 级全量比对——非金融 285 条**缺口为 0**（仅 2 条同义改名：`write-paper` → `write-full-manuscript`、`systematic-review` → `systematic-review-protocol`）。此前「约 10 条散落缺口（-2/-3/-4/-1）」经复核为记账错误：那是分片条数与上游类目条数的差值，实际是既定跨类归置（管线类归生物信息学、单细胞方法归基因组学等），服务检索直觉、不回改。ROADMAP §8 与 `docs-internal/pending-source-migration.md` 已同步改写为对账结论。
+  - 测试 219 → **236 项**（新增 17：伴生钮位置与接线 4、左列 sticky 守护 1、能力探测 5、Memory 检索 6、路由清单更新 1）。新增 Node half 模块与浏览器模块均按纪律登记 `check` / 构建清单。
+
 - ⚡ **自动沉淀事件接线改为增量扫描 + 图谱页新增「沉淀最近回答」手动入口（上一轮小账两项办结）**：① 事件窗口是追加式的（seq 单调递增），此前每次事件通知都全量重扫整段窗口、靠 localStorage 水位线去重——长会话下每次通知都是 O(窗口全长) 的重复劳动。现改为**从尾部增量扫描**：扫描位（内存内，随会话绑定从该会话水位线起步）只收集上次扫过之后的新增段，重复入库的正确性不依赖这条优化、始终由水位线兜底；窗口被裁剪或整体重放时行为与旧实现一致（测试用「重复通知」「窗口替换」「卸载重挂」三个场景钉住）。② **手动沉淀入口**：不开自动开关也能在图谱页点「沉淀最近回答」，把当前会话最近一条助手回答显式入库（`depositLatestAssistantMessage` / `latestDepositableMessage`：与自动沉淀同一提取链路、同一「待核验」起点、同一去重口径；被中断的半截回答如实标注；重复点击按稳定 id 走合并路径、来源按「会话 + seq」去重不会翻倍）。无会话服务 / 无当前会话 / 无可沉淀回答分别给出明确提示而非静默失败。测试 213 → **219 项**（新增 6 项）。
 - 🧩 **弹层与工作台的工作流记录统一（上一轮遗留办结）**：输入框弹层的「使用工作流程」与「复制 Prompt」此前只记 `recordHistory`（使用历史），而工作台同名出口还记 `evidence.recordWorkflow`（本会话工作流轨迹）——从弹层使用工作流时，图谱「本会话」范围会漏掉工作流节点。现弹层经同一个 `recordUse` 出口记两笔，与工作台口径一致（会话轨迹按 `sessionId` 隔离；`resourceIds` = 会话选择 + 建议技能）。**计划记录不在弹层代写**：阶段勾选界面只在工作台存在，弹层不静默标记用户看不到的计划状态。接线由源码断言钉住（`recordUse` 单一出口 + 写入/复制两处调用点 + 记录不得携带 Prompt 片段或参数）。
 
