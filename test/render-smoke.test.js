@@ -64,6 +64,8 @@ test('证据库：宿主不支持写入时「写入 Prompt」按钮为禁用态'
 test('灵感库与数据库面板：宿主未提供 inputActions 时仍能完整渲染，不抛错', () => {
   const vaultHtml = render(ResearchVault, { assetProvider: assetProviderStub, embedded: true })
   assert.ok(vaultHtml.length > 0, '灵感库应渲染出内容')
+  // SSR 空库没有卡片，删除按钮不存在；「确认删除？」只能由点击点亮，初始渲染不得出现。
+  assert.doesNotMatch(vaultHtml, /确认删除？/, '初始渲染不得处于删除确认态')
   const panelHtml = render(DatabaseQueryPanel, { database: { id: 'pubmed', name: 'PubMed' }, sessionId: 'r2' })
   assert.ok(panelHtml.length > 0, '数据库面板应渲染出内容')
 })

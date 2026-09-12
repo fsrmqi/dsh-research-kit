@@ -4829,7 +4829,9 @@ window.__ModuleLoader__.load({
           h('h1', { key: 't', style: { margin: kicker ? '8px 0 0' : 0, fontSize: 27, letterSpacing: '-.035em', fontWeight: 760, lineHeight: 1.2 } }, title),
           lead ? h('p', { key: 'l', style: { margin: '8px 0 0', color: C.muted, fontSize: 14, lineHeight: 1.55 } }, lead) : null,
         ]),
-        actions ? h('div', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 } }, actions) : null,
+        // actions 容器必须允许收缩到视口宽（maxWidth），否则窄屏下整体被撑宽、
+        // 内部的 flexWrap 永远不触发——390px 实测曾把 8 个按钮铺到 968px。
+        actions ? h('div', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 1, flexBasis: 'auto', maxWidth: '100%', minWidth: 0, justifyContent: 'flex-end' } }, actions) : null,
       ])
     }
 
@@ -8132,6 +8134,8 @@ window.__ModuleLoader__.load({
       const [links, setLinks] = React.useState([])
       // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
       const [confirmClear, setConfirmClear] = React.useState(false)
+      // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式。
+      const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
       const refreshVersion = React.useRef(0)
 
       const refresh = React.useCallback(() => {
@@ -8179,6 +8183,7 @@ window.__ModuleLoader__.load({
         setProject(value)
         setActiveProject(value)
         setConfirmClear(false)
+        setConfirmDeleteId('')
         setSelectedIds([])
       }
       const writeSelected = () => {
@@ -8235,7 +8240,7 @@ window.__ModuleLoader__.load({
           await store.remove(item.id)
           publishEvidenceVault()
           setNotice(`已删除「${item.title}」。`)
-        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) } finally { setConfirmDeleteId('') }
       }
 
       const changeStatus = async (item, status) => {
@@ -8369,7 +8374,9 @@ window.__ModuleLoader__.load({
               style: { width: 'auto', minWidth: 96 },
             }),
             h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-            h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => removeEntry(item) }, '删除'),
+            confirmDeleteId === item.id
+              ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
+              : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
           ]),
         ]))),
       ])
@@ -8959,6 +8966,8 @@ window.__ModuleLoader__.load({
       const [backupOpen, setBackupOpen] = React.useState(false)
       const [notice, setNotice] = React.useState('')
       const [tab, setTab] = React.useState('assets')
+      // 删除是不可逆的：与「清空项目」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）。
+      const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
       const setError = message => setNotice(`⚠️ ${message}`)
       // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
       // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
@@ -8991,7 +9000,7 @@ window.__ModuleLoader__.load({
       const filtered = React.useMemo(() => filterAssets(assets, { query, filter }), [assets, query, filter])
       const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
-      const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId('') }
+      const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
       const openEdit = item => {
         setForm({
           id: item.id, title: item.title || '', body: item.body || '', tags: (item.tags || []).join(', '),
@@ -9004,7 +9013,7 @@ window.__ModuleLoader__.load({
       }
       const derive = item => {
         setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: (item.tags || []).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
-        setFormOpen(true); setCompareId(item.id)
+        setFormOpen(true); setCompareId(item.id); setConfirmDeleteId('')
         setNotice(`已载入「${item.title}」作为派生版本；保存后保留来源关系，可做版本对比。`)
       }
       const save = async () => {
@@ -9038,9 +9047,11 @@ window.__ModuleLoader__.load({
           // 本视图能钩到的资产删除：联动解除以其为一端的 link。
           // vendored 面板（增强器知识区等）的删除钩不到——图谱与列表对悬空端点优雅兜底。
           await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
-          setNotice(`已删除「${item.title}」。`)
-        } catch (error) { setError(error?.message || error) }
+          setNotice(`已删除「${item.title}」，其证据关联已一并解除。`)
+        } catch (error) { setError(error?.message || error) } finally { setConfirmDeleteId('') }
       }
+      // 两段式的第一步：只点亮确认态，不删任何东西；第二步由按钮渲染层接 remove(item)。
+      const requestRemove = item => setConfirmDeleteId(current => current === item.id ? '' : item.id)
 
       // ── 关联证据（入口 A）─────────────────────────────────────────────────────
       const linksForAsset = React.useCallback(
@@ -9250,7 +9261,9 @@ window.__ModuleLoader__.load({
               onClick: () => setLinkAssetId(current => current === item.id ? '' : item.id),
             }, `关联证据（${linksForAsset(item.id).length}）`),
             h(Button, { key: 'copy', size: 'sm', variant: 'ghost', icon: 'copy', onClick: () => copyBody(item) }, '复制'),
-            h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => remove(item) }, '删除'),
+            confirmDeleteId === item.id
+              ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；同时解除该资产的全部证据关联', onClick: () => remove(item) }, '确认删除？')
+              : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复；将同时解除该资产的全部证据关联', onClick: () => requestRemove(item) }, '删除'),
           ]),
           compareId === item.id && compareItem ? h('div', { key: 'diff', className: 'rk-diff', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
             h('div', { key: 'old' }, [

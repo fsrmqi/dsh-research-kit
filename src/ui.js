@@ -350,7 +350,9 @@ export function PageHead({ kicker, title, lead, actions }) {
       h('h1', { key: 't', style: { margin: kicker ? '8px 0 0' : 0, fontSize: 27, letterSpacing: '-.035em', fontWeight: 760, lineHeight: 1.2 } }, title),
       lead ? h('p', { key: 'l', style: { margin: '8px 0 0', color: C.muted, fontSize: 14, lineHeight: 1.55 } }, lead) : null,
     ]),
-    actions ? h('div', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 } }, actions) : null,
+    // actions 容器必须允许收缩到视口宽（maxWidth），否则窄屏下整体被撑宽、
+    // 内部的 flexWrap 永远不触发——390px 实测曾把 8 个按钮铺到 968px。
+    actions ? h('div', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 1, flexBasis: 'auto', maxWidth: '100%', minWidth: 0, justifyContent: 'flex-end' } }, actions) : null,
   ])
 }
 

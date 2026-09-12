@@ -377,3 +377,27 @@ test('4c 选择基准：勾选是跨筛选状态，改筛选不撤销已选择',
   assert.match(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*entries\.filter\(/, '选择集必须以全部证据条目为基准')
   assert.doesNotMatch(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*filtered\.filter\(/, '选择集不得以筛选结果为基准')
 })
+
+test('4d 删除守卫：单条删除必须是两段式确认（与「清空项目」同款安全模型）', () => {
+  // 单击直删曾让一条误触就丢掉条目并联动解除互链——与「清空需两段确认」的
+  // 现有模式不一致。这里钉住：首次点击只点亮确认态，真正的删除函数只接在
+  // 「确认删除？」按钮上；切换项目必须复位确认态，避免跨项目误确认。
+  const view = readFileSync(new URL('../src/research-evidence-vault.js', import.meta.url), 'utf8')
+  assert.match(view, /const \[confirmDeleteId, setConfirmDeleteId\] = React\.useState\(''\)/, '缺少单条删除确认态')
+  assert.match(view, /confirmDeleteId === item\.id\s*\?\s*h\(Button[\s\S]{0,400}?确认删除？/, '确认删除按钮缺失或未按确认态切换')
+  assert.doesNotMatch(view, /onClick:\s*\(\)\s*=>\s*removeEntry\(item\)[^}]*\}\s*,\s*'删除'/, '删除按钮不得再单击直删')
+  assert.match(view, /setConfirmDeleteId\(''\)/, '确认态必须有复位路径（切换项目/删除完成后）')
+  // 资产卡同理：删除带级联解链，更不允许单击直删。
+  const vault = readFileSync(new URL('../src/research-vault.js', import.meta.url), 'utf8')
+  assert.match(vault, /const \[confirmDeleteId, setConfirmDeleteId\] = React\.useState\(''\)/, '资产卡缺少单条删除确认态')
+  assert.match(vault, /const requestRemove = item => setConfirmDeleteId\(/, '资产卡缺少两段式第一步（只点亮确认态）')
+  assert.match(vault, /confirmDeleteId === item\.id\s*\?\s*h\(Button[\s\S]{0,400}?确认删除？/, '资产卡确认删除按钮缺失或未按确认态切换')
+  assert.doesNotMatch(vault, /onClick:\s*\(\)\s*=>\s*remove\(item\)[^}]*\}\s*,\s*'删除'/, '资产删除按钮不得再单击直删')
+})
+
+test('4d 窄屏守卫：PageHead 操作行必须允许收缩换行（flexShrink:0 曾撑到 968px）', () => {
+  const ui = readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8')
+  const head = ui.slice(ui.indexOf('export function PageHead'), ui.indexOf('export function Toolbar'))
+  assert.doesNotMatch(head, /flexShrink:\s*0/, 'actions 容器不得禁止收缩')
+  assert.match(head, /maxWidth:\s*'100%'/, 'actions 容器必须允许收缩到视口宽')
+})

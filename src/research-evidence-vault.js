@@ -194,6 +194,8 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
   const [confirmClear, setConfirmClear] = React.useState(false)
+  // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式。
+  const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const refreshVersion = React.useRef(0)
 
   const refresh = React.useCallback(() => {
@@ -241,6 +243,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
     setProject(value)
     setActiveProject(value)
     setConfirmClear(false)
+    setConfirmDeleteId('')
     setSelectedIds([])
   }
   const writeSelected = () => {
@@ -297,7 +300,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       await store.remove(item.id)
       publishEvidenceVault()
       setNotice(`已删除「${item.title}」。`)
-    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) } finally { setConfirmDeleteId('') }
   }
 
   const changeStatus = async (item, status) => {
@@ -431,7 +434,9 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
           style: { width: 'auto', minWidth: 96 },
         }),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => removeEntry(item) }, '删除'),
+        confirmDeleteId === item.id
+          ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
+          : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
       ]),
     ]))),
   ])
