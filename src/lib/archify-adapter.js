@@ -106,7 +106,7 @@ export function archifyEdgeGeometry(nodes, edges) {
   const byId = new Map(nodes.map(n => [n.id, n]))
   const sizeOf = n => {
     const size = archifyNodeSize(n)
-    return [Number(n.w) || size.w, Number(n.h) || size.h]
+    return [size.w, size.h]
   }
   return edges.map((edge, index) => {
     const a = byId.get(edge.from), b = byId.get(edge.to)
@@ -114,13 +114,13 @@ export function archifyEdgeGeometry(nodes, edges) {
     const [aw, ah] = sizeOf(a), [bw, bh] = sizeOf(b)
     const acx = a.x + aw / 2, acy = a.y + ah / 2, bcx = b.x + bw / 2, bcy = b.y + bh / 2
     const dx = bcx - acx, dy = bcy - acy
-    const clamp = (cx, cy, hw, hh) => {
+    const clamp = (cx, cy, hw, hh, direction = 1) => {
       if (dx === 0 && dy === 0) return [cx, cy]
       const t = Math.min(dx !== 0 ? hw / Math.abs(dx) : Infinity, dy !== 0 ? hh / Math.abs(dy) : Infinity)
-      return [cx + dx * t, cy + dy * t]
+      return [cx + direction * dx * t, cy + direction * dy * t]
     }
     const [x1, y1] = clamp(acx, acy, aw / 2 + 4, ah / 2 + 4)
-    const [x2, y2] = clamp(bcx, bcy, bw / 2 + 7, bh / 2 + 7)
+    const [x2, y2] = clamp(bcx, bcy, bw / 2 + 7, bh / 2 + 7, -1)
     const mx1 = x1 + (x2 - x1) * 0.42, my1 = y1 + (y2 - y1) * 0.08
     const mx2 = x1 + (x2 - x1) * 0.58, my2 = y1 + (y2 - y1) * 0.92
     return {

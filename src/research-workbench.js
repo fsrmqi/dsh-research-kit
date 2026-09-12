@@ -423,7 +423,9 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
               h(Button, { key: 'replay', variant: 'quiet', size: 'sm', icon: 'gauge', onClick: () => setReplayOpen(open => !open) }, replayOpen ? '收起回放' : '组装回放'),
             ]),
             replayOpen && composed?.trace?.length
-              ? h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
+              ? editedPrompt !== null
+                ? h(Notice, { key: 'replay-edited', tone: 'warn' }, '提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。')
+                : h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
               : null,
             h(Field, { key: 'prompt', label: '' },
               h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 12, mono: true, ariaLabel: '提示词预览' })),

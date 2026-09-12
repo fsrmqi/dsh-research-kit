@@ -4,9 +4,30 @@ import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { traceSegments, buildReplaySvgMarkup } from '../src/route-replay.js'
-import { buildArchifySvg, archifyApplyTemplate, archifyNodeSize, archifyLayoutRow } from '../src/lib/archify-adapter.js'
+import { buildArchifySvg, archifyApplyTemplate, archifyNodeSize, archifyLayoutRow, archifyEdgeGeometry } from '../src/lib/archify-adapter.js'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+test('连线终点位于目标迎向来源的一侧，正向与反向均不穿过目标节点', () => {
+  const nodes = [{ id: 'a', x: 0, y: 0, label: 'A' }, { id: 'b', x: 300, y: 0, label: 'B' }]
+  const [forward, reverse] = archifyEdgeGeometry(nodes, [{ from: 'a', to: 'b' }, { from: 'b', to: 'a' }])
+  const endX = edge => Number(edge.d.split(' ').at(-2))
+  assert.ok(endX(forward) < 300)
+  assert.ok(endX(reverse) > archifyNodeSize(nodes[0]).w)
+})
+
+test('回放能定位可选空值与重复参数，并分别高亮各自出现位置', () => {
+  const repeated = [
+    { step: 'param', label: '范围', detail: '未指定（请按综合方式处理）', empty: true },
+    { step: 'param', label: '甲', detail: '水稻' },
+    { step: 'param', label: '乙', detail: '水稻' },
+  ]
+  const { steps, segments } = traceSegments(repeated, '未指定（请按综合方式处理）：水稻与水稻')
+  assert.ok(steps.every(step => step.found))
+  assert.notEqual(steps[1].anchorStart, steps[2].anchorStart)
+  assert.equal(segments.filter(segment => segment.stepIndex === 1).map(segment => segment.text).join(''), '水稻')
+  assert.equal(segments.filter(segment => segment.stepIndex === 2).map(segment => segment.text).join(''), '水稻')
+})
 
 // 回放面板的纯函数契约：锚点定位、文本互证、SVG markup 的动画锚点与转义。
 // 组件的 React 部分由渲染级测试与 MANUAL-QA O6 覆盖。

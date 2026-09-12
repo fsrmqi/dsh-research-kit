@@ -43,7 +43,28 @@ const server = http.createServer((req,res)=>{
   assert.ok(await page.getByLabel('资源列表').getByText('审阅论文',{exact:true}).count());
   await page.getByLabel('资源列表').getByText('审阅论文',{exact:true}).click();
   console.log('分类切回全部、收藏列表及打开详情：通过');
+  await page.getByRole('button',{name:'组装回放',exact:true}).click();
+  await page.waitForFunction(()=>{
+    const nodes=document.querySelectorAll('.rk-replay-node');
+    return nodes.length>0 && [...nodes].every(node=>node.classList.contains('lit'));
+  });
+  await page.getByRole('button',{name:'切到静态',exact:true}).click();
+  assert.equal(await page.locator('.rk-replay-comet').count(),0);
+  const popupPromise=page.waitForEvent('popup');
+  await page.getByRole('button',{name:'弹出回放窗口',exact:true}).click();
+  const popup=await popupPromise;
+  await popup.waitForLoadState();
+  const ids=await popup.locator('g[data-node-id]').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-node-id')));
+  assert.ok(ids.length>0);
+  assert.equal(new Set(ids).size,ids.length);
+  await popup.close();
+  await page.getByRole('button',{name:'收起回放',exact:true}).click();
+  console.log('回放自动完成、静态模式和独立窗口：通过');
   await page.getByLabel('提示词预览',{exact:true}).fill('手动编辑内容必须保留');
+  await page.getByRole('button',{name:'组装回放',exact:true}).click();
+  await page.getByText('提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。',{exact:true}).waitFor();
+  assert.equal(await page.locator('.rk-replay-node').count(),0);
+  await page.getByRole('button',{name:'收起回放',exact:true}).click();
   await page.getByLabel('选择科研模式领域预设').selectOption('bioinformatics');
   assert.equal(await page.getByLabel('提示词预览',{exact:true}).inputValue(),'手动编辑内容必须保留');
   console.log('切换科研模式保留手动编辑：通过');

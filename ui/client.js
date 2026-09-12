@@ -6370,7 +6370,7 @@ window.__ModuleLoader__.load({
       const byId = new Map(nodes.map(n => [n.id, n]))
       const sizeOf = n => {
         const size = archifyNodeSize(n)
-        return [Number(n.w) || size.w, Number(n.h) || size.h]
+        return [size.w, size.h]
       }
       return edges.map((edge, index) => {
         const a = byId.get(edge.from), b = byId.get(edge.to)
@@ -6378,13 +6378,13 @@ window.__ModuleLoader__.load({
         const [aw, ah] = sizeOf(a), [bw, bh] = sizeOf(b)
         const acx = a.x + aw / 2, acy = a.y + ah / 2, bcx = b.x + bw / 2, bcy = b.y + bh / 2
         const dx = bcx - acx, dy = bcy - acy
-        const clamp = (cx, cy, hw, hh) => {
+        const clamp = (cx, cy, hw, hh, direction = 1) => {
           if (dx === 0 && dy === 0) return [cx, cy]
           const t = Math.min(dx !== 0 ? hw / Math.abs(dx) : Infinity, dy !== 0 ? hh / Math.abs(dy) : Infinity)
-          return [cx + dx * t, cy + dy * t]
+          return [cx + direction * dx * t, cy + direction * dy * t]
         }
         const [x1, y1] = clamp(acx, acy, aw / 2 + 4, ah / 2 + 4)
-        const [x2, y2] = clamp(bcx, bcy, bw / 2 + 7, bh / 2 + 7)
+        const [x2, y2] = clamp(bcx, bcy, bw / 2 + 7, bh / 2 + 7, -1)
         const mx1 = x1 + (x2 - x1) * 0.42, my1 = y1 + (y2 - y1) * 0.08
         const mx2 = x1 + (x2 - x1) * 0.58, my2 = y1 + (y2 - y1) * 0.92
         return {
@@ -8292,13 +8292,15 @@ window.__ModuleLoader__.load({
     // 每个 trace 步骤在 prompt 中的锚点（用于「动画点亮 ↔ 文本高亮」互证）。
     function traceSegments(trace, prompt) {
       const text = String(prompt || '')
+      const nextOccurrence = new Map()
       const anchors = (trace || []).map(step => {
         let needle = null
         if (step.step === 'workflow') return { ...step, anchorStart: 0, anchorEnd: 0, found: true }
         if (step.step === 'guard') needle = '通用科研边界'
-        else if (step.step === 'param') needle = step.empty ? `[${step.label}]` : String(step.detail || '').slice(0, 16)
+        else if (step.step === 'param') needle = String(step.detail || (step.empty ? `[${step.label}]` : '')).slice(0, 16)
         else needle = `【${step.label}】`
-        const start = needle ? text.indexOf(needle) : -1
+        const start = needle ? text.indexOf(needle, nextOccurrence.get(needle) || 0) : -1
+        if (start >= 0) nextOccurrence.set(needle, start + needle.length)
         return { ...step, anchorStart: start, anchorEnd: start >= 0 ? start + needle.length : -1, found: start >= 0 }
       })
       const cuts = [0, ...anchors.filter(a => a.found && a.anchorEnd > 0).flatMap(a => [a.anchorStart, a.anchorEnd]).filter(cut => cut > 0 && cut < text.length).sort((a, b) => a - b)]
@@ -8306,22 +8308,17 @@ window.__ModuleLoader__.load({
       const segments = []
       for (let i = 0; i < points.length; i++) {
         const end = i + 1 < points.length ? points[i + 1] : text.length
-        if (end > points[i]) segments.push({ text: text.slice(points[i], end), stepIndex: -1 })
+        if (end > points[i]) segments.push({ text: text.slice(points[i], end), stepIndex: anchors.findIndex(step => step.found && step.anchorStart <= points[i] && step.anchorEnd >= end && step.anchorEnd > step.anchorStart) })
       }
-      anchors.forEach((step, index) => {
-        if (!step.found) return
-        const target = segments.find(seg => seg.text.length && seg.text.includes(text.slice(step.anchorStart, step.anchorEnd).slice(0, Math.min(16, step.anchorEnd - step.anchorStart)) || step.detail))
-        if (target) target.stepIndex = index
-      })
       return { segments, steps: anchors }
     }
 
     const STATION_GLYPH = { workflow: '▶', param: '✎', skill: '✦', database: '⛁', boundary: '⚑', guard: '⚑', step: '·', file: '▤', finding: '✳' }
 
-    function buildReplaySvgMarkup(trace, theme, { lit = 0, reduced = false } = {}) {
+    function buildReplaySvgMarkup(trace = [], theme, { lit = 0, reduced = false } = {}) {
       const gap = 40
       const W = 104, H = 54
-      const width = trace.length * W + (trace.length - 1) * gap + 8
+      const width = Math.max(W + 8, trace.length * W + (trace.length - 1) * gap + 8)
       const height = 108
       const stationY = 24
       const css = reduced
@@ -8351,7 +8348,7 @@ window.__ModuleLoader__.load({
           const linkClass = linkLit ? (reduced ? 'rk-replay-link lit-static' : 'rk-replay-link lit') : 'rk-replay-link'
           const linkStroke = linkLit && reduced ? theme.teal : theme.line
           parts.push(`<path class="${linkClass}" data-step="${i}" d="M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y1}, ${x2} ${y1}" stroke="${linkStroke}" stroke-width="1.8" fill="none" pathLength="1"/>`)
-          if (lit && !reduced) {
+          if (linkLit && !reduced) {
             parts.push(`<path class="rk-replay-ambient" d="M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y1}, ${x2} ${y1}" stroke="${theme.teal}" stroke-width="2.2" fill="none" pathLength="1" opacity="0.85"/>`)
           }
           if (lit - 1 === i && !reduced) {
@@ -8386,14 +8383,15 @@ window.__ModuleLoader__.load({
       const [lit, setLit] = React.useState(0)
       const theme = readTheme()
       const total = (trace || []).length
-      React.useEffect(() => { setLit(still || reducedInitial ? total : 0) }, [trace, still])
-      const play = () => { setLit(1) }
+      React.useEffect(() => { setLit(still ? total : Math.min(1, total)) }, [trace, still, total])
+      React.useEffect(() => {
+        if (still || lit === 0 || lit >= total) return
+        const timer = setTimeout(() => setLit(current => Math.min(total, current + 1)), STEP_MS)
+        return () => clearTimeout(timer)
+      }, [lit, still, total])
+      const play = () => { setLit(0); requestAnimationFrame(() => setLit(Math.min(1, total))) }
       const { segments } = React.useMemo(() => traceSegments(trace, prompt), [trace, prompt])
       const { markup, caption } = buildReplaySvgMarkup(trace, theme, { lit, reduced: still })
-      const advance = event => {
-        const done = Number(event.target?.dataset?.step || 0)
-        setLit(current => Math.max(current, done + 2))
-      }
       const exportSnapshot = () => {
         const { markup: full } = buildReplaySvgMarkup(trace, theme, { lit: total, reduced: true })
         const html = `<!doctype html><meta charset="utf-8"><title>组装回放快照</title><style>body{margin:0;padding:24px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:16px;margin:0 0 6px}p{margin:0 0 14px;color:${theme.muted};font-size:12px}</style><h1>组装回放快照</h1><p>本快照只记录一次真实的 Prompt 组装事实（工作流、参数、附加技能、数据源边界），不表示工作流已被执行；结果需人工核验。</p>${full}`
@@ -8402,6 +8400,7 @@ window.__ModuleLoader__.load({
         a.href = URL.createObjectURL(blob)
         a.download = 'route-replay-snapshot.html'
         a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000)
       }
       const litSet = new Set(Array.from({ length: lit }, (_, i) => i))
       return h('div', { className: 'rk-replay', style: { border: `1px solid ${C.line}`, borderRadius: 12, padding: 12, background: C.surface, display: 'grid', gap: 10 } }, [
@@ -8414,7 +8413,7 @@ window.__ModuleLoader__.load({
           !still ? h('button', { key: 'play', type: 'button', onClick: play, style: buttonStyle(C) }, '重新播放') : null,
           h('button', { key: 'export', type: 'button', onClick: exportSnapshot, style: buttonStyle(C) }, '导出快照'),
         ]),
-        h('div', { key: 'svg', style: { overflowX: 'auto' }, onAnimationEnd: advance, dangerouslySetInnerHTML: { __html: markup } }),
+        h('div', { key: 'svg', style: { overflowX: 'auto' }, dangerouslySetInnerHTML: { __html: markup } }),
         caption ? h('div', { key: 'caption', style: { fontSize: 12, color: C.teal, fontWeight: 600 } }, caption) : null,
         h('div', { key: 'prompt', style: { maxHeight: 200, overflow: 'auto', border: `1px solid ${C.line}`, borderRadius: 10, padding: 10, fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontFamily: 'ui-monospace, monospace' } },
           segments.map((seg, i) => h('span', {
@@ -8441,7 +8440,7 @@ window.__ModuleLoader__.load({
       if (!template) { alert('回放模板未就绪；请重新构建产物（npm run build）。'); return }
       const steps = (trace || [])
       const nodes = archifyLayoutRow(steps.map((step, i) => ({
-        id: step.id || `s${i}`,
+        id: `s${i}`,
         kind: step.step === 'guard' ? 'boundary' : step.step === 'workflow' ? 'workflow' : step.step,
         label: step.label,
         note: step.detail,
@@ -8886,7 +8885,9 @@ window.__ModuleLoader__.load({
                   h(Button, { key: 'replay', variant: 'quiet', size: 'sm', icon: 'gauge', onClick: () => setReplayOpen(open => !open) }, replayOpen ? '收起回放' : '组装回放'),
                 ]),
                 replayOpen && composed?.trace?.length
-                  ? h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
+                  ? editedPrompt !== null
+                    ? h(Notice, { key: 'replay-edited', tone: 'warn' }, '提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。')
+                    : h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
                   : null,
                 h(Field, { key: 'prompt', label: '' },
                   h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 12, mono: true, ariaLabel: '提示词预览' })),
