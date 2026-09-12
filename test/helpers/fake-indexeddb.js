@@ -68,15 +68,24 @@ export function createFakeIndexedDB() {
   }
 
   return {
-    open(name) {
+    open(name, version) {
       return makeRequest(null, request => {
         if (!databases.has(name)) {
-          databases.set(name, { stores: new Map() })
+          databases.set(name, { stores: new Map(), version: version || 1 })
           request.result = publicDb(name)
           // 与真实 IndexedDB 一致：建库时先在 onupgradeneeded 里建表，再 onsuccess。
           request.onupgradeneeded?.({})
         } else {
-          request.result = publicDb(name)
+          const data = databases.get(name)
+          const target = version || data.version || 1
+          if (target > (data.version || 1)) {
+            // 与真实 IndexedDB 一致：带更高版本号打开 → 触发 onupgradeneeded（升级路径可测）。
+            data.version = target
+            request.result = publicDb(name)
+            request.onupgradeneeded?.({})
+          } else {
+            request.result = publicDb(name)
+          }
         }
       })
     },

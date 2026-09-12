@@ -1,7 +1,8 @@
 // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
 import { KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUS_LABELS } from './knowledge-extract.js'
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] } } = {}) {
+import { assetEvidenceGraphEdges } from './asset-evidence-links.js'
+export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [] } = {}) {
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -73,6 +74,9 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
     if (!claim?.from || !claim?.to) continue
     link(claim.from, claim.to, claim.relation || 'relates')
   }
+  // ── 资产-证据互链（ROADMAP §11 P5）：用户显式确认的「资产 → 支撑证据」边。
+  // 端点不存在的 link（资产/证据已被删）由末尾的边过滤自然剔除，不悬挂。
+  for (const edge of assetEvidenceGraphEdges(assetEvidenceLinks)) link(edge.from, edge.to, edge.kind)
   return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
 }
 

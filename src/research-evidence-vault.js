@@ -45,6 +45,24 @@ export async function saveEvidenceEntry(input, options) {
   return result
 }
 
+// ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────────────
+// 建立与解除都经这里发布变更，工作台资产卡、图谱各自订阅刷新。
+export async function linkAssetToEvidence({ assetId, evidenceId, project } = {}) {
+  const result = await evidenceVaultStore().linkAssetEvidence({ assetId, evidenceId, project })
+  publishEvidenceVault()
+  return result
+}
+
+export async function removeAssetEvidenceLinkEntry(id) {
+  const removed = await evidenceVaultStore().removeAssetEvidenceLink(id)
+  publishEvidenceVault()
+  return removed
+}
+
+export function listAssetEvidenceLinks(filter) {
+  return evidenceVaultStore().listAssetEvidenceLinks(filter)
+}
+
 // 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
 // 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
 export function getActiveProject() {
@@ -156,7 +174,9 @@ export function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onS
 }
 
 // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
-export function EvidenceVaultPane({ inputActions }) {
+// assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
+// 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
+export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
   const [projects, setProjects] = React.useState([])
@@ -170,17 +190,20 @@ export function EvidenceVaultPane({ inputActions }) {
   const [newProjectOpen, setNewProjectOpen] = React.useState(false)
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
+  // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
+  const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
   const [confirmClear, setConfirmClear] = React.useState(false)
   const refreshVersion = React.useRef(0)
 
   const refresh = React.useCallback(() => {
     const version = ++refreshVersion.current
-    Promise.all([store.list({ project: project || undefined }), store.listProjects()])
-      .then(([rows, names]) => {
+    Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks()])
+      .then(([rows, names, links]) => {
         if (version !== refreshVersion.current) return
         setEntries(rows || [])
         setProjects(names || [])
+        setLinks(Array.isArray(links) ? links : [])
         setLoading(false)
       })
       .catch(error => {
@@ -194,6 +217,16 @@ export function EvidenceVaultPane({ inputActions }) {
 
   const counts = React.useMemo(() => statusCounts(entries), [entries])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+  // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
+  const citedByIndex = React.useMemo(() => {
+    const index = new Map()
+    for (const link of links) {
+      if (!index.has(link.evidenceId)) index.set(link.evidenceId, [])
+      const title = assetTitlesById?.[link.assetId]
+      index.get(link.evidenceId).push(title || `（资产 ${String(link.assetId).slice(0, 12)}… 不在当前列表）`)
+    }
+    return index
+  }, [links, assetTitlesById])
   // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
   // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
   const selectedEntries = React.useMemo(() => entries.filter(item => selectedIds.includes(item.id)), [entries, selectedIds])
@@ -228,7 +261,7 @@ export function EvidenceVaultPane({ inputActions }) {
       const text = serializeEvidenceBackup({ entries, project })
       const suffix = project || '全部项目'
       downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
-      setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。`)
+      setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。注意：资产-证据关联关系不在备份内（首版边界，见 ROADMAP §11）。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
@@ -378,6 +411,13 @@ export function EvidenceVaultPane({ inputActions }) {
           item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
           (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
             item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+        ])
+        : null,
+      // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
+      citedByIndex.get(item.id)?.length
+        ? h('div', { key: 'cited-by', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } }, [
+          h('span', { key: 'l', style: { color: C.teal, fontWeight: 650 } }, '被引用于：'),
+          ...citedByIndex.get(item.id).map((title, index) => h('span', { key: `${title}:${index}` }, index === 0 ? title : `、${title}`)),
         ])
         : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 } }, [

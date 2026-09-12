@@ -87,7 +87,7 @@ dsh-research-kit/
 │   ├── catalog-storage.js           # 收藏与使用历史的 CatalogStorage 接口
 │   ├── research-selection-store.js  # 会话级资源选择（仅存于当前会话）
 │   ├── evidence-store.js            # 本会话证据索引（只读汇总）
-│   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB 最小 schema + 内存降级 + 项目隔离 / 去重 / 备份
+│   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB schema v2（entries + 资产-证据 link 表，守卫式升级）+ 内存降级 + 项目隔离 / 去重 / 备份
 │   ├── knowledge-store.js           # 自动沉淀知识库持久化：节点/关系双 store，稳定 id 去重合并、冲突并列（IndexedDB + 内存降级）
 │   ├── knowledge-deposition.js      # 自动沉淀编排：开关、assistant/message 事件接线、水位线、联动灵感资产与证据库
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
@@ -111,6 +111,7 @@ dsh-research-kit/
 │       ├── knowledge-extract.js     # 自动沉淀结构化提取器（纯逻辑）：知识节点/关系/引用来源，确定性与有界性契约
 │       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据与自动沉淀知识接入）
 │       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
+│       ├── asset-evidence-links.js  # 资产-证据互链纯逻辑：稳定 link id、候选推导（项目/标签/知识链种子）、图谱边转换
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
@@ -140,7 +141,7 @@ dsh-research-kit/
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
-├── test/                            # 236 项测试（27 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 242 项测试（28 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -158,7 +159,8 @@ dsh-research-kit/
 | `src/catalog-storage.js` | 收藏/历史读写、变更通知，隔离 localStorage | 存参数值或完整 Prompt；网络访问。 |
 | `src/research-selection-store.js` | 会话级资源选择的读写与广播 | 跨会话持久化。 |
 | `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
-| `src/evidence-vault-store.js` | 证据库持久化：IndexedDB 最小 schema、按项目隔离与去重、备份序列化，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目。 |
+| `src/evidence-vault-store.js` | 证据库持久化：IndexedDB schema v2（条目 + 资产-证据 link 表，守卫式升级）、按项目隔离与去重、备份序列化，并提供内存降级；link 的建立/解除/端点删除联动 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目或自动建立 link。 |
+| `src/lib/asset-evidence-links.js` | 资产-证据互链纯逻辑：稳定 link id、候选推导（同项目 / 共同标签 / 知识链种子）、图谱边转换 | 自动建立 link；把候选当成已确认事实；在候选里携带笔记或全文。 |
 | `src/knowledge-store.js` | 自动沉淀知识库持久化：节点/关系双 store、稳定 id 去重合并、冲突并列保留，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；改写用户推进过的核验状态。 |
 | `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与处理水位线、**增量扫描** DSH 会话事件流（`sessions.binding().eventSource`，每次通知只扫上次扫过的尾部之后的新增段）、调用提取器并联动三个库；另提供手动沉淀入口（沉淀当前会话最近一条回答，图谱页与增强器伴生钮共用） | 在开关关闭时自动提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
 | `src/lib/knowledge-extract.js` | 规则化结构提取：知识节点/关系/引用来源，确定性与有界性输出 | 访问 DOM、网络或存储；把无法核验的提取结果标为已核验。 |
@@ -451,7 +453,7 @@ composeWorkflow(workflow, values, …)
 | `evidence` | `evidence:` | `来源库 · 稳定标识符 · 核验状态` |
 | `message` / `question` / `entity` / `finding` / `hypothesis` / `method` | `message:` / `kn-` | 自动沉淀知识（类型 · 实体子类 · 核验状态），见 §3.6 |
 
-自动沉淀相关的边：`message → 知识节点`（`records`，摘自哪条会话消息）、知识关系本体（`may-affect` / `promotes` / `inhibits` / `causes` / `correlates` / `research-subject` / `about`）、`evidence → 知识节点`（`supports`，关联证据支持该结论）、`知识节点 → asset`（`deposited`，已沉淀为灵感资产）。此前七种会话/沉淀边保持不变：`uses`、`queries`、`returns`、`derives`、`relates`、`saved-from`、`saved-copy`。两端节点必须都存在，否则该边不产出。
+自动沉淀相关的边：`message → 知识节点`（`records`，摘自哪条会话消息）、知识关系本体（`may-affect` / `promotes` / `inhibits` / `causes` / `correlates` / `research-subject` / `about`）、`evidence → 知识节点`（`supports`，关联证据支持该结论）、`知识节点 → asset`（`deposited`，已沉淀为灵感资产）。**用户显式互链**：`asset → evidence`（`supports`，ROADMAP §11 P5「资产-证据互链」——证据库侧 link 表驱动，仅在「持久沉淀」范围显示，两端不可见或已删除时自然剔除）。此前七种会话/沉淀边保持不变：`uses`、`queries`、`returns`、`derives`、`relates`、`saved-from`、`saved-copy`。两端节点必须都存在，否则该边不产出。
 
 **方向性锚点。** 连线原先固定「左缘连到右缘」，当边方向本身逆向时（如 `workflow → resource`——工作流列在资源列右侧）线段会穿过节点、产生穿越感。现改为按两端 `x` 决定锚点：`from.x <= to.x` 走「右缘 → 左缘」，否则走「左缘 → 右缘」。因为锚点自适应会让「箭头指向谁」不再自明，图谱导语显式写着「箭头表示关系方向」。
 

@@ -12,7 +12,7 @@ import {
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { catalog, itemById } from './catalog.js'
-import { evidenceVaultStore, subscribeEvidenceVault, getActiveProject } from './research-evidence-vault.js'
+import { evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks } from './research-evidence-vault.js'
 import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,
@@ -133,6 +133,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [scope, setScope] = React.useState('all')
   const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
   const [lastDeposition, setLastDeposition] = React.useState(() => lastDepositionSummary())
+  // 资产-证据互链（ROADMAP §11 P5 出口）：用户显式确认的「资产 → 支撑证据」边。
+  const [assetEvidenceLinks, setAssetEvidenceLinks] = React.useState([])
   // 手动沉淀：不开自动开关也能把最近一条助手回答显式入库；请求期间禁用按钮防重复点击。
   const [depositing, setDepositing] = React.useState(false)
   // 知识库备份（导出直接下载；恢复用两段式文本框，与证据库备份同一交互模式）。
@@ -150,7 +152,10 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
   React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
   React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
-  const refreshSavedEvidence = React.useCallback(() => vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([])), [vault])
+  const refreshSavedEvidence = React.useCallback(() => {
+    vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
+    listAssetEvidenceLinks().then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
+  }, [vault])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
   const refreshKnowledge = React.useCallback(() => {
     const store = knowledgeStore()
@@ -214,7 +219,9 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     assets: includePersistent ? visibleAssets : [],
     savedEvidence: includePersistent ? visibleSavedEvidence : [],
     knowledge: includePersistent ? knowledgeInput : { nodes: [], claims: [] },
-  }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput])
+    // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
+    assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
+  }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
   const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
   const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
 

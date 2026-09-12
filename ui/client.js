@@ -5513,9 +5513,102 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 资产-证据互链（ROADMAP §11 动线整合第一切片 / P5）：纯逻辑层。
+    //
+    // link 是「用户显式确认」的支撑关系（灵感资产 ↔ 证据条目），与自动沉淀的机器链
+    // （knowledge-store 节点上的 assetId / evidenceIds）语义分层：机器链是提取事实，
+    // 这里的 link 是用户所有的持久关联。数据落证据库侧的 IndexedDB link 表
+    // （见 evidence-vault-store），不扩展 vendored asset provider 契约。
+    //
+    // 硬纪律：候选只推导、不自动建边——所有建立动作都由用户勾选确认。
+
+    // 稳定 id：同一对端点天然去重（重复建立返回既有记录而不是第二行）。
+    function assetEvidenceLinkId(assetId, evidenceId) {
+      return `asset-evidence:${String(assetId || '')}::${String(evidenceId || '')}`
+    }
+
+    // 规范化 + 校验：端点缺失直接抛错（调用方不得入库悬空 link）。
+    // 有意不存标题：标题随两端数据源实时解析，避免改名后的陈旧副本。
+    function normalizeAssetEvidenceLink({ assetId, evidenceId, project = '', createdAt = 0 } = {}) {
+      const aid = String(assetId || '').trim()
+      const eid = String(evidenceId || '').trim()
+      if (!aid) throw new Error('assetId 不能为空')
+      if (!eid) throw new Error('evidenceId 不能为空')
+      return {
+        id: assetEvidenceLinkId(aid, eid),
+        assetId: aid,
+        evidenceId: eid,
+        project: String(project || ''),
+        createdAt: Number(createdAt) || 0,
+      }
+    }
+
+    // 图谱边：只输出形状合法的 link；端点不存在的边由 buildEvidenceGraph 末尾的
+    // 边过滤自然剔除（两处各自兜底，语义一致）。属性名随图谱核心约定为 kind。
+    function assetEvidenceGraphEdges(links = []) {
+      const rows = Array.isArray(links) ? links : []
+      const edges = []
+      for (const row of rows) {
+        if (!row?.assetId || !row?.evidenceId) continue
+        edges.push({ from: `asset:${row.assetId}`, to: `evidence:${row.evidenceId}`, kind: 'supports' })
+      }
+      return edges
+    }
+
+    // 候选推导（入口 A 的数据源）：三个信号源，分数排序、确定性输出、有界截断。
+    //   A. 知识链种子（分数 6）：自动沉淀把同一条知识同时关联了本资产与某证据——
+    //      同节点上的 (assetId, evidenceId) 配对是最强信号，权重压过同项目+标签的叠加
+    //      （2+2+共享数），跨项目也成立（研究跨项目）；
+    //   B. 同项目（分数 2）：证据与资产同属当前项目；
+    //   C. 标签重合（分数 2 + 每个共同标签 +1）：仅同项目内参与。
+    // 已建立关联的端点、无 id 的条目一律排除。
+    function deriveAssetEvidenceCandidates({ asset, evidenceEntries = [], knowledgeNodes = [], existingLinks = [], limit = 8 } = {}) {
+      const aid = String(asset?.id || '').trim()
+      if (!aid) return []
+      const assetTags = new Set((Array.isArray(asset?.tags) ? asset.tags : []).map(tag => String(tag)))
+      const linkedEvidenceIds = new Set(
+        (Array.isArray(existingLinks) ? existingLinks : [])
+          .filter(row => row?.assetId === aid)
+          .map(row => String(row.evidenceId)),
+      )
+      // 知识链种子：node.assetId 指向本资产的节点上，全部 evidenceIds。
+      const seededEvidenceIds = new Set()
+      for (const node of Array.isArray(knowledgeNodes) ? knowledgeNodes : []) {
+        if (String(node?.assetId || '') !== aid) continue
+        for (const evidenceId of Array.isArray(node?.evidenceIds) ? node.evidenceIds : []) {
+          if (evidenceId) seededEvidenceIds.add(String(evidenceId))
+        }
+      }
+      const candidates = new Map()
+      const push = (entry, score, reason) => {
+        const id = String(entry?.id || '')
+        if (!id || linkedEvidenceIds.has(id)) return
+        const current = candidates.get(id) || { evidenceId: id, title: entry.title || '未命名证据', status: entry.status || 'unverified', project: entry.project || '', score: 0, reasons: [] }
+        current.score += score
+        if (reason) current.reasons.push(reason)
+        candidates.set(id, current)
+      }
+      for (const entry of Array.isArray(evidenceEntries) ? evidenceEntries : []) {
+        const id = String(entry?.id || '')
+        if (!id) continue
+        const sameProject = asset?.project && String(entry.project || '') === String(asset.project)
+        if (seededEvidenceIds.has(id)) push(entry, 6, '知识链同源（自动沉淀已同时关联）')
+        if (sameProject) push(entry, 2, '同项目')
+        if (sameProject && assetTags.size) {
+          const shared = (Array.isArray(entry.tags) ? entry.tags : []).map(String).filter(tag => assetTags.has(tag))
+          if (shared.length) push(entry, 2 + shared.length, `共同标签：${shared.join('、')}`)
+        }
+      }
+      return [...candidates.values()]
+        .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title, 'zh-CN'))
+        .slice(0, Math.max(1, Number(limit) || 8))
+        .map(row => ({ ...row, reasons: [...new Set(row.reasons)] }))
+    }
+
+
     // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
     // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] } } = {}) {
+    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [] } = {}) {
       const nodes = new Map()
       const edges = []
       const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -5587,6 +5680,9 @@ window.__ModuleLoader__.load({
         if (!claim?.from || !claim?.to) continue
         link(claim.from, claim.to, claim.relation || 'relates')
       }
+      // ── 资产-证据互链（ROADMAP §11 P5）：用户显式确认的「资产 → 支撑证据」边。
+      // 端点不存在的 link（资产/证据已被删）由末尾的边过滤自然剔除，不悬挂。
+      for (const edge of assetEvidenceGraphEdges(assetEvidenceLinks)) link(edge.from, edge.to, edge.kind)
       return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
     }
 
@@ -7116,8 +7212,13 @@ window.__ModuleLoader__.load({
     // 视图照常可用，只是刷新后清空，并通过 isDegraded() 显式告知用户，绝不静默伪装成已持久化。
 
     const DB_NAME = 'dsh-research-kit-evidence'
-    const DB_VERSION = 1
+    // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
+    // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
+    const DB_VERSION = 2
     const STORE = 'evidence'
+    const LINKS_STORE = 'assetEvidenceLinks'
+    // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
+    const MAX_LINKS = 500
     const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
     // indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
@@ -7167,11 +7268,18 @@ window.__ModuleLoader__.load({
           try { request = factory.open(DB_NAME, DB_VERSION) } catch { degraded = true; resolve(null); return }
           request.onupgradeneeded = () => {
             const db = request.result
+            // 两个 store 都按 contains 守卫：v1 老库升 v2 时 evidence 已存在，只补建 links。
             if (!db.objectStoreNames.contains(STORE)) {
               const store = db.createObjectStore(STORE, { keyPath: 'id' })
               store.createIndex('savedAt', 'savedAt')
               store.createIndex('project', 'project')
               store.createIndex('status', 'status')
+            }
+            if (!db.objectStoreNames.contains(LINKS_STORE)) {
+              const links = db.createObjectStore(LINKS_STORE, { keyPath: 'id' })
+              links.createIndex('assetId', 'assetId')
+              links.createIndex('evidenceId', 'evidenceId')
+              links.createIndex('project', 'project')
             }
           }
           request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
@@ -7182,11 +7290,11 @@ window.__ModuleLoader__.load({
       }
 
       // 返回 undefined 表示「没有可用的 IndexedDB」，调用方据此走内存分支。
-      const withStore = async (mode, run) => {
+      const withStore = async (mode, run, storeName = STORE) => {
         const db = await connect()
         if (!db) return undefined
-        const tx = db.transaction(STORE, mode)
-        const value = await run(tx.objectStore(STORE))
+        const tx = db.transaction(storeName, mode)
+        const value = await run(tx.objectStore(storeName))
         await new Promise((resolve, reject) => {
           tx.oncomplete = () => resolve()
           tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
@@ -7194,6 +7302,9 @@ window.__ModuleLoader__.load({
         })
         return value
       }
+
+      // 内存降级路径的 link 存储：与 IndexedDB 路径行为一致（去重按稳定 id）。
+      let memoryLinks = []
 
       const readAll = async () => {
         const rows = await withStore('readonly', store => requestToPromise(store.getAll()))
@@ -7261,11 +7372,14 @@ window.__ModuleLoader__.load({
         },
 
         async remove(id) {
+          const key = String(id)
           const touched = await withStore('readwrite', async store => {
-            await requestToPromise(store.delete(String(id)))
+            await requestToPromise(store.delete(key))
             return true
           })
-          if (!touched) memory = memory.filter(item => item.id !== String(id))
+          if (!touched) memory = memory.filter(item => item.id !== key)
+          // 证据端点消失：同步清理以其为一端的 link（资产端悬空由视图优雅兜底，见 assetEvidenceGraphEdges）。
+          await this.removeAssetEvidenceLinks({ evidenceId: key })
           return true
         },
 
@@ -7277,6 +7391,7 @@ window.__ModuleLoader__.load({
             return true
           })
           if (!touched) memory = memory.filter(item => !doomed.includes(item.id))
+          for (const id of doomed) await this.removeAssetEvidenceLinks({ evidenceId: id })
           return doomed.length
         },
 
@@ -7286,7 +7401,62 @@ window.__ModuleLoader__.load({
             return true
           })
           if (!touched) memory = []
+          await this.removeAssetEvidenceLinks({})
           return true
+        },
+
+        // ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────
+        // link 是用户显式确认的支撑关系；建立走 normalize 校验，同一对端点按稳定 id 去重。
+
+        async linkAssetEvidence({ assetId, evidenceId, project = '', createdAt = Date.now() } = {}) {
+          const link = normalizeAssetEvidenceLink({ assetId, evidenceId, project, createdAt })
+          const existing = await this.listAssetEvidenceLinks({ assetId: link.assetId, evidenceId: link.evidenceId })
+          if (existing.length) return { link: existing[0], created: false }
+          const all = await this.listAssetEvidenceLinks()
+          if (all.length >= MAX_LINKS) {
+            const error = new Error(`关联关系已达上限（${MAX_LINKS} 条）；请先清理不再需要的关联。`)
+            error.code = 'LINK_LIMIT'
+            throw error
+          }
+          const touched = await withStore('readwrite', async store => {
+            await requestToPromise(store.put(link))
+            return true
+          }, LINKS_STORE)
+          if (!touched) memoryLinks = [link, ...memoryLinks.filter(row => row.id !== link.id)]
+          return { link, created: true }
+        },
+
+        // 过滤参数全部可选：不传返回全部（有界，见 MAX_LINKS）。
+        async listAssetEvidenceLinks({ assetId, evidenceId, project } = {}) {
+          const rows = await withStore('readonly', store => requestToPromise(store.getAll()), LINKS_STORE)
+          const list = Array.isArray(rows) ? rows : memoryLinks
+          return list
+            .filter(row => (assetId === undefined || String(row.assetId) === String(assetId))
+              && (evidenceId === undefined || String(row.evidenceId) === String(evidenceId))
+              && (project === undefined || String(row.project || '') === String(project)))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        },
+
+        async removeAssetEvidenceLink(id) {
+          const key = String(id)
+          const touched = await withStore('readwrite', async store => {
+            await requestToPromise(store.delete(key))
+            return true
+          }, LINKS_STORE)
+          if (!touched) memoryLinks = memoryLinks.filter(row => row.id !== key)
+          return true
+        },
+
+        // 批量解除：按任一端点过滤（证据删除 / 资产删除 / 清空时的联动清理）。
+        async removeAssetEvidenceLinks({ assetId, evidenceId } = {}) {
+          const doomed = (await this.listAssetEvidenceLinks({ assetId, evidenceId })).map(row => row.id)
+          if (!doomed.length) return 0
+          const touched = await withStore('readwrite', async store => {
+            for (const id of doomed) await requestToPromise(store.delete(id))
+            return true
+          }, LINKS_STORE)
+          if (!touched) memoryLinks = memoryLinks.filter(row => !doomed.includes(row.id))
+          return doomed.length
         },
 
         // 批量写回（导入用）：一次事务写完，避免逐条 put 之间被中断留下半份数据。
@@ -7813,6 +7983,24 @@ window.__ModuleLoader__.load({
       return result
     }
 
+    // ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────────────
+    // 建立与解除都经这里发布变更，工作台资产卡、图谱各自订阅刷新。
+    async function linkAssetToEvidence({ assetId, evidenceId, project } = {}) {
+      const result = await evidenceVaultStore().linkAssetEvidence({ assetId, evidenceId, project })
+      publishEvidenceVault()
+      return result
+    }
+
+    async function removeAssetEvidenceLinkEntry(id) {
+      const removed = await evidenceVaultStore().removeAssetEvidenceLink(id)
+      publishEvidenceVault()
+      return removed
+    }
+
+    function listAssetEvidenceLinks(filter) {
+      return evidenceVaultStore().listAssetEvidenceLinks(filter)
+    }
+
     // 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
     // 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
     function getActiveProject() {
@@ -7924,7 +8112,9 @@ window.__ModuleLoader__.load({
     }
 
     // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
-    function EvidenceVaultPane({ inputActions }) {
+    // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
+    // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
+    function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       const store = evidenceVaultStore()
       const [entries, setEntries] = React.useState([])
       const [projects, setProjects] = React.useState([])
@@ -7938,17 +8128,20 @@ window.__ModuleLoader__.load({
       const [newProjectOpen, setNewProjectOpen] = React.useState(false)
       const [backup, setBackup] = React.useState('')
       const [backupOpen, setBackupOpen] = React.useState(false)
+      // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
+      const [links, setLinks] = React.useState([])
       // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
       const [confirmClear, setConfirmClear] = React.useState(false)
       const refreshVersion = React.useRef(0)
 
       const refresh = React.useCallback(() => {
         const version = ++refreshVersion.current
-        Promise.all([store.list({ project: project || undefined }), store.listProjects()])
-          .then(([rows, names]) => {
+        Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks()])
+          .then(([rows, names, links]) => {
             if (version !== refreshVersion.current) return
             setEntries(rows || [])
             setProjects(names || [])
+            setLinks(Array.isArray(links) ? links : [])
             setLoading(false)
           })
           .catch(error => {
@@ -7962,6 +8155,16 @@ window.__ModuleLoader__.load({
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+      // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
+      const citedByIndex = React.useMemo(() => {
+        const index = new Map()
+        for (const link of links) {
+          if (!index.has(link.evidenceId)) index.set(link.evidenceId, [])
+          const title = assetTitlesById?.[link.assetId]
+          index.get(link.evidenceId).push(title || `（资产 ${String(link.assetId).slice(0, 12)}… 不在当前列表）`)
+        }
+        return index
+      }, [links, assetTitlesById])
       // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
       // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
       const selectedEntries = React.useMemo(() => entries.filter(item => selectedIds.includes(item.id)), [entries, selectedIds])
@@ -7996,7 +8199,7 @@ window.__ModuleLoader__.load({
           const text = serializeEvidenceBackup({ entries, project })
           const suffix = project || '全部项目'
           downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
-          setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。`)
+          setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。注意：资产-证据关联关系不在备份内（首版边界，见 ROADMAP §11）。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
@@ -8146,6 +8349,13 @@ window.__ModuleLoader__.load({
               item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
               (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
                 item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+            ])
+            : null,
+          // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
+          citedByIndex.get(item.id)?.length
+            ? h('div', { key: 'cited-by', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } }, [
+              h('span', { key: 'l', style: { color: C.teal, fontWeight: 650 } }, '被引用于：'),
+              ...citedByIndex.get(item.id).map((title, index) => h('span', { key: `${title}:${index}` }, index === 0 ? title : `、${title}`)),
             ])
             : null,
           h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 } }, [
@@ -8750,6 +8960,24 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState('')
       const [tab, setTab] = React.useState('assets')
       const setError = message => setNotice(`⚠️ ${message}`)
+      // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
+      // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
+      const [linkAssetId, setLinkAssetId] = React.useState('')
+      const [evidenceEntries, setEvidenceEntries] = React.useState([])
+      const [assetLinks, setAssetLinks] = React.useState([])
+      const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
+      const [checkedCandidates, setCheckedCandidates] = React.useState({})
+      const [linkBusy, setLinkBusy] = React.useState(false)
+
+      const refreshLinks = React.useCallback(() => {
+        evidenceVaultStore().list().then(rows => setEvidenceEntries(rows || [])).catch(() => setEvidenceEntries([]))
+        evidenceVaultStore().listAssetEvidenceLinks().then(rows => setAssetLinks(rows || [])).catch(() => setAssetLinks([]))
+        knowledgeStore().listNodes().then(rows => setKnowledgeNodes(rows || [])).catch(() => setKnowledgeNodes([]))
+      }, [])
+      React.useEffect(() => { refreshLinks() }, [refreshLinks])
+      React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
+
+      const assetsById = React.useMemo(() => Object.fromEntries(assets.map(item => [item.id, item.title || '未命名资产'])), [assets])
 
       const refresh = React.useCallback(() => {
         if (!assetProvider?.list) { setLoading(false); return }
@@ -8805,7 +9033,53 @@ window.__ModuleLoader__.load({
       }
       const remove = async item => {
         if (!assetProvider?.remove) return
-        try { await assetProvider.remove(item.id); setNotice(`已删除「${item.title}」。`) } catch (error) { setError(error?.message || error) }
+        try {
+          await assetProvider.remove(item.id)
+          // 本视图能钩到的资产删除：联动解除以其为一端的 link。
+          // vendored 面板（增强器知识区等）的删除钩不到——图谱与列表对悬空端点优雅兜底。
+          await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
+          setNotice(`已删除「${item.title}」。`)
+        } catch (error) { setError(error?.message || error) }
+      }
+
+      // ── 关联证据（入口 A）─────────────────────────────────────────────────────
+      const linksForAsset = React.useCallback(
+        assetId => assetLinks.filter(row => row.assetId === assetId),
+        [assetLinks],
+      )
+      const candidatesForAsset = React.useCallback(
+        item => deriveAssetEvidenceCandidates({
+          asset: item, evidenceEntries, knowledgeNodes, existingLinks: linksForAsset(item.id),
+        }),
+        [evidenceEntries, knowledgeNodes, linksForAsset],
+      )
+      const evidenceById = React.useMemo(() => new Map(evidenceEntries.map(entry => [entry.id, entry])), [evidenceEntries])
+      const toggleCandidate = (assetId, evidenceId) => {
+        setCheckedCandidates(current => {
+          const set = new Set(current[assetId] || [])
+          if (set.has(evidenceId)) set.delete(evidenceId); else set.add(evidenceId)
+          return { ...current, [assetId]: set }
+        })
+      }
+      const createLinks = async item => {
+        const picked = [...(checkedCandidates[item.id] || [])]
+        if (!picked.length || linkBusy) return
+        setLinkBusy(true)
+        try {
+          let created = 0
+          for (const evidenceId of picked) {
+            const result = await linkAssetToEvidence({ assetId: item.id, evidenceId, project: item.project || '' })
+            if (result?.created) created++
+          }
+          setCheckedCandidates(current => ({ ...current, [item.id]: new Set() }))
+          setNotice(created ? `已建立 ${created} 条关联；可在证据条目与图谱中看到。` : '所选关联均已存在。')
+        } catch (error) { setError(error?.message || error) } finally { setLinkBusy(false) }
+      }
+      const unlink = async link => {
+        try {
+          await removeAssetEvidenceLinkEntry(link.id)
+          setNotice('已解除关联。')
+        } catch (error) { setError(error?.message || error) }
       }
       const toggleFavorite = async item => {
         if (!assetProvider?.toggleFavorite) return
@@ -8928,7 +9202,7 @@ window.__ModuleLoader__.load({
           }) : null,
           h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
         ]) : null,
-        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions }) : null,
+        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, assetTitlesById: assetsById }) : null,
         tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
         tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
@@ -8971,6 +9245,10 @@ window.__ModuleLoader__.load({
             h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
             item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
             item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
+            h(Button, {
+              key: 'links', size: 'sm', variant: linkAssetId === item.id ? 'soft' : 'ghost', icon: 'link',
+              onClick: () => setLinkAssetId(current => current === item.id ? '' : item.id),
+            }, `关联证据（${linksForAsset(item.id).length}）`),
             h(Button, { key: 'copy', size: 'sm', variant: 'ghost', icon: 'copy', onClick: () => copyBody(item) }, '复制'),
             h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => remove(item) }, '删除'),
           ]),
@@ -8984,6 +9262,56 @@ window.__ModuleLoader__.load({
               h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 9, background: C.tealTint, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, item.body),
             ]),
           ]) : null,
+          // 入口 A（主）：关联证据。候选按项目/标签/知识链种子推导，用户勾选确认后建立——
+          // 推导≠建边，绝不自动建立（全仓库「检索 → 预览 → 确认」纪律的落点）。
+          linkAssetId === item.id ? h('div', { key: 'asset-links', style: { display: 'grid', gap: 10, padding: 12, border: `1px solid ${C.tealLine}`, borderRadius: 10, background: C.surfaceAlt } }, (() => {
+            const current = linksForAsset(item.id)
+            const candidates = candidatesForAsset(item)
+            const picked = checkedCandidates[item.id] || new Set()
+            return [
+              h('strong', { key: 't', style: { fontSize: 13 } }, '关联证据'),
+              h('div', { key: 'hint', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } },
+                '把这条灵感资产与支撑它的证据显式挂链（可在图谱中看到「资产 → 支撑证据」）。候选按同项目、共同标签与自动沉淀的知识链推导；建立需要你在下方勾选确认，不会自动发生。'),
+              current.length ? h('div', { key: 'current', style: { display: 'grid', gap: 6 } }, current.map(link => {
+                const entry = evidenceById.get(link.evidenceId)
+                return h('div', { key: link.id, style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, [
+                  h(Badge, { key: 's', color: entry?.status === 'verified' ? C.statusVerified : C.statusToVerify }, entry?.status === 'verified' ? '已核验' : '未核验'),
+                  h('span', { key: 'title', style: { fontSize: 12 } }, entry?.title || `（证据 ${String(link.evidenceId).slice(0, 12)}… 不在当前列表）`),
+                  h('span', { key: 'spacer', style: { flex: 1 } }),
+                  h(Button, { key: 'unlink', size: 'sm', variant: 'ghost', onClick: () => unlink(link) }, '解除'),
+                ])
+              })) : h('div', { key: 'none', style: { fontSize: 12, color: C.muted } }, '还没有关联的证据。'),
+              candidates.length ? h('div', { key: 'candidates', style: { display: 'grid', gap: 6 } }, [
+                h('strong', { key: 'ct', style: { fontSize: 12, color: C.muted } }, `候选证据（${candidates.length}）`),
+                ...candidates.map(candidate => {
+                  const entry = evidenceById.get(candidate.evidenceId)
+                  return h('label', { key: candidate.evidenceId, style: { display: 'grid', gridTemplateColumns: '18px 1fr', gap: 8, alignItems: 'start', cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: `1px solid ${picked.has(candidate.evidenceId) ? C.tealLineStrong : C.line}`, background: picked.has(candidate.evidenceId) ? C.tealTint : C.surface } }, [
+                    h('input', {
+                      key: 'box', type: 'checkbox', checked: picked.has(candidate.evidenceId),
+                      onChange: () => toggleCandidate(item.id, candidate.evidenceId),
+                      style: { marginTop: 2, accentColor: C.teal },
+                      'aria-label': `关联证据「${candidate.title}」`,
+                    }),
+                    h('span', { key: 'text' }, [
+                      h('span', { key: 'row', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } }, [
+                        h('strong', { key: 'title', style: { fontSize: 12 } }, candidate.title),
+                        entry?.url ? h('a', { key: 'u', href: entry.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 11, color: C.teal } }, '打开来源') : null,
+                      ]),
+                      h('span', { key: 'why', style: { display: 'block', marginTop: 2, fontSize: 11, color: C.muted, lineHeight: 1.45 } },
+                        `${candidate.reasons.join('；') || '手动选择'}${entry?.identifier ? ` · ${entry.identifier}` : ''}`),
+                    ]),
+                  ])
+                }),
+                h('div', { key: 'go', style: { display: 'flex', gap: 8 } }, [
+                  h(Button, {
+                    key: 'apply', size: 'sm', variant: 'primary', icon: 'link', disabled: !picked.size || linkBusy,
+                    onClick: () => createLinks(item),
+                  }, linkBusy ? '建立中…' : `建立关联（${picked.size}）`),
+                ]),
+              ]) : h('div', { key: 'no-candidates', style: { fontSize: 12, color: C.muted } },
+                '没有推导出候选证据；可在「证据库」子模块保存来源后回来关联（同项目或知识链同源的条目会出现在这里）。'),
+            ]
+          })()) : null,
         ]))) : null,
         tab === 'assets' && notice ? h(Notice, {
           key: 'notice',
@@ -9115,6 +9443,8 @@ window.__ModuleLoader__.load({
       const [scope, setScope] = React.useState('all')
       const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
       const [lastDeposition, setLastDeposition] = React.useState(() => lastDepositionSummary())
+      // 资产-证据互链（ROADMAP §11 P5 出口）：用户显式确认的「资产 → 支撑证据」边。
+      const [assetEvidenceLinks, setAssetEvidenceLinks] = React.useState([])
       // 手动沉淀：不开自动开关也能把最近一条助手回答显式入库；请求期间禁用按钮防重复点击。
       const [depositing, setDepositing] = React.useState(false)
       // 知识库备份（导出直接下载；恢复用两段式文本框，与证据库备份同一交互模式）。
@@ -9132,7 +9462,10 @@ window.__ModuleLoader__.load({
       React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
       React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
       React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
-      const refreshSavedEvidence = React.useCallback(() => vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([])), [vault])
+      const refreshSavedEvidence = React.useCallback(() => {
+        vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
+        listAssetEvidenceLinks().then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
+      }, [vault])
       React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
       const refreshKnowledge = React.useCallback(() => {
         const store = knowledgeStore()
@@ -9196,7 +9529,9 @@ window.__ModuleLoader__.load({
         assets: includePersistent ? visibleAssets : [],
         savedEvidence: includePersistent ? visibleSavedEvidence : [],
         knowledge: includePersistent ? knowledgeInput : { nodes: [], claims: [] },
-      }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput])
+        // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
+        assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
+      }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
       const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
       const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
 

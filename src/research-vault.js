@@ -6,7 +6,12 @@ import {
   Field, Input, Textarea, Select, Notice, Segmented, EmptyState, Spinner,
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'
-import { EvidenceVaultPane } from './research-evidence-vault.js'
+import { deriveAssetEvidenceCandidates } from './lib/asset-evidence-links.js'
+import {
+  EvidenceVaultPane, evidenceVaultStore, subscribeEvidenceVault,
+  linkAssetToEvidence, removeAssetEvidenceLinkEntry,
+} from './research-evidence-vault.js'
+import { knowledgeStore } from './knowledge-store.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
 // StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
@@ -55,6 +60,24 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   const [notice, setNotice] = React.useState('')
   const [tab, setTab] = React.useState('assets')
   const setError = message => setNotice(`⚠️ ${message}`)
+  // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
+  // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
+  const [linkAssetId, setLinkAssetId] = React.useState('')
+  const [evidenceEntries, setEvidenceEntries] = React.useState([])
+  const [assetLinks, setAssetLinks] = React.useState([])
+  const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
+  const [checkedCandidates, setCheckedCandidates] = React.useState({})
+  const [linkBusy, setLinkBusy] = React.useState(false)
+
+  const refreshLinks = React.useCallback(() => {
+    evidenceVaultStore().list().then(rows => setEvidenceEntries(rows || [])).catch(() => setEvidenceEntries([]))
+    evidenceVaultStore().listAssetEvidenceLinks().then(rows => setAssetLinks(rows || [])).catch(() => setAssetLinks([]))
+    knowledgeStore().listNodes().then(rows => setKnowledgeNodes(rows || [])).catch(() => setKnowledgeNodes([]))
+  }, [])
+  React.useEffect(() => { refreshLinks() }, [refreshLinks])
+  React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
+
+  const assetsById = React.useMemo(() => Object.fromEntries(assets.map(item => [item.id, item.title || '未命名资产'])), [assets])
 
   const refresh = React.useCallback(() => {
     if (!assetProvider?.list) { setLoading(false); return }
@@ -110,7 +133,53 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   }
   const remove = async item => {
     if (!assetProvider?.remove) return
-    try { await assetProvider.remove(item.id); setNotice(`已删除「${item.title}」。`) } catch (error) { setError(error?.message || error) }
+    try {
+      await assetProvider.remove(item.id)
+      // 本视图能钩到的资产删除：联动解除以其为一端的 link。
+      // vendored 面板（增强器知识区等）的删除钩不到——图谱与列表对悬空端点优雅兜底。
+      await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
+      setNotice(`已删除「${item.title}」。`)
+    } catch (error) { setError(error?.message || error) }
+  }
+
+  // ── 关联证据（入口 A）─────────────────────────────────────────────────────
+  const linksForAsset = React.useCallback(
+    assetId => assetLinks.filter(row => row.assetId === assetId),
+    [assetLinks],
+  )
+  const candidatesForAsset = React.useCallback(
+    item => deriveAssetEvidenceCandidates({
+      asset: item, evidenceEntries, knowledgeNodes, existingLinks: linksForAsset(item.id),
+    }),
+    [evidenceEntries, knowledgeNodes, linksForAsset],
+  )
+  const evidenceById = React.useMemo(() => new Map(evidenceEntries.map(entry => [entry.id, entry])), [evidenceEntries])
+  const toggleCandidate = (assetId, evidenceId) => {
+    setCheckedCandidates(current => {
+      const set = new Set(current[assetId] || [])
+      if (set.has(evidenceId)) set.delete(evidenceId); else set.add(evidenceId)
+      return { ...current, [assetId]: set }
+    })
+  }
+  const createLinks = async item => {
+    const picked = [...(checkedCandidates[item.id] || [])]
+    if (!picked.length || linkBusy) return
+    setLinkBusy(true)
+    try {
+      let created = 0
+      for (const evidenceId of picked) {
+        const result = await linkAssetToEvidence({ assetId: item.id, evidenceId, project: item.project || '' })
+        if (result?.created) created++
+      }
+      setCheckedCandidates(current => ({ ...current, [item.id]: new Set() }))
+      setNotice(created ? `已建立 ${created} 条关联；可在证据条目与图谱中看到。` : '所选关联均已存在。')
+    } catch (error) { setError(error?.message || error) } finally { setLinkBusy(false) }
+  }
+  const unlink = async link => {
+    try {
+      await removeAssetEvidenceLinkEntry(link.id)
+      setNotice('已解除关联。')
+    } catch (error) { setError(error?.message || error) }
   }
   const toggleFavorite = async item => {
     if (!assetProvider?.toggleFavorite) return
@@ -233,7 +302,7 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
       }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
-    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions }) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, assetTitlesById: assetsById }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
@@ -276,6 +345,10 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
         h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
         item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
         item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
+        h(Button, {
+          key: 'links', size: 'sm', variant: linkAssetId === item.id ? 'soft' : 'ghost', icon: 'link',
+          onClick: () => setLinkAssetId(current => current === item.id ? '' : item.id),
+        }, `关联证据（${linksForAsset(item.id).length}）`),
         h(Button, { key: 'copy', size: 'sm', variant: 'ghost', icon: 'copy', onClick: () => copyBody(item) }, '复制'),
         h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', onClick: () => remove(item) }, '删除'),
       ]),
@@ -289,6 +362,56 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
           h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 9, background: C.tealTint, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, item.body),
         ]),
       ]) : null,
+      // 入口 A（主）：关联证据。候选按项目/标签/知识链种子推导，用户勾选确认后建立——
+      // 推导≠建边，绝不自动建立（全仓库「检索 → 预览 → 确认」纪律的落点）。
+      linkAssetId === item.id ? h('div', { key: 'asset-links', style: { display: 'grid', gap: 10, padding: 12, border: `1px solid ${C.tealLine}`, borderRadius: 10, background: C.surfaceAlt } }, (() => {
+        const current = linksForAsset(item.id)
+        const candidates = candidatesForAsset(item)
+        const picked = checkedCandidates[item.id] || new Set()
+        return [
+          h('strong', { key: 't', style: { fontSize: 13 } }, '关联证据'),
+          h('div', { key: 'hint', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } },
+            '把这条灵感资产与支撑它的证据显式挂链（可在图谱中看到「资产 → 支撑证据」）。候选按同项目、共同标签与自动沉淀的知识链推导；建立需要你在下方勾选确认，不会自动发生。'),
+          current.length ? h('div', { key: 'current', style: { display: 'grid', gap: 6 } }, current.map(link => {
+            const entry = evidenceById.get(link.evidenceId)
+            return h('div', { key: link.id, style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, [
+              h(Badge, { key: 's', color: entry?.status === 'verified' ? C.statusVerified : C.statusToVerify }, entry?.status === 'verified' ? '已核验' : '未核验'),
+              h('span', { key: 'title', style: { fontSize: 12 } }, entry?.title || `（证据 ${String(link.evidenceId).slice(0, 12)}… 不在当前列表）`),
+              h('span', { key: 'spacer', style: { flex: 1 } }),
+              h(Button, { key: 'unlink', size: 'sm', variant: 'ghost', onClick: () => unlink(link) }, '解除'),
+            ])
+          })) : h('div', { key: 'none', style: { fontSize: 12, color: C.muted } }, '还没有关联的证据。'),
+          candidates.length ? h('div', { key: 'candidates', style: { display: 'grid', gap: 6 } }, [
+            h('strong', { key: 'ct', style: { fontSize: 12, color: C.muted } }, `候选证据（${candidates.length}）`),
+            ...candidates.map(candidate => {
+              const entry = evidenceById.get(candidate.evidenceId)
+              return h('label', { key: candidate.evidenceId, style: { display: 'grid', gridTemplateColumns: '18px 1fr', gap: 8, alignItems: 'start', cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: `1px solid ${picked.has(candidate.evidenceId) ? C.tealLineStrong : C.line}`, background: picked.has(candidate.evidenceId) ? C.tealTint : C.surface } }, [
+                h('input', {
+                  key: 'box', type: 'checkbox', checked: picked.has(candidate.evidenceId),
+                  onChange: () => toggleCandidate(item.id, candidate.evidenceId),
+                  style: { marginTop: 2, accentColor: C.teal },
+                  'aria-label': `关联证据「${candidate.title}」`,
+                }),
+                h('span', { key: 'text' }, [
+                  h('span', { key: 'row', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' } }, [
+                    h('strong', { key: 'title', style: { fontSize: 12 } }, candidate.title),
+                    entry?.url ? h('a', { key: 'u', href: entry.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 11, color: C.teal } }, '打开来源') : null,
+                  ]),
+                  h('span', { key: 'why', style: { display: 'block', marginTop: 2, fontSize: 11, color: C.muted, lineHeight: 1.45 } },
+                    `${candidate.reasons.join('；') || '手动选择'}${entry?.identifier ? ` · ${entry.identifier}` : ''}`),
+                ]),
+              ])
+            }),
+            h('div', { key: 'go', style: { display: 'flex', gap: 8 } }, [
+              h(Button, {
+                key: 'apply', size: 'sm', variant: 'primary', icon: 'link', disabled: !picked.size || linkBusy,
+                onClick: () => createLinks(item),
+              }, linkBusy ? '建立中…' : `建立关联（${picked.size}）`),
+            ]),
+          ]) : h('div', { key: 'no-candidates', style: { fontSize: 12, color: C.muted } },
+            '没有推导出候选证据；可在「证据库」子模块保存来源后回来关联（同项目或知识链同源的条目会出现在这里）。'),
+        ]
+      })()) : null,
     ]))) : null,
     tab === 'assets' && notice ? h(Notice, {
       key: 'notice',

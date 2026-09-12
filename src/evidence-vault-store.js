@@ -1,4 +1,5 @@
 import { normalizeEvidenceEntry, findDuplicate } from './lib/evidence-vault-core.js'
+import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
 
 // 证据库持久化：IndexedDB 最小 schema。
 //
@@ -10,8 +11,13 @@ import { normalizeEvidenceEntry, findDuplicate } from './lib/evidence-vault-core
 // 视图照常可用，只是刷新后清空，并通过 isDegraded() 显式告知用户，绝不静默伪装成已持久化。
 
 const DB_NAME = 'dsh-research-kit-evidence'
-const DB_VERSION = 1
+// v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
+// 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
+const DB_VERSION = 2
 const STORE = 'evidence'
+const LINKS_STORE = 'assetEvidenceLinks'
+// link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
+const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
 // indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
@@ -61,11 +67,18 @@ export function createEvidenceVaultStore() {
       try { request = factory.open(DB_NAME, DB_VERSION) } catch { degraded = true; resolve(null); return }
       request.onupgradeneeded = () => {
         const db = request.result
+        // 两个 store 都按 contains 守卫：v1 老库升 v2 时 evidence 已存在，只补建 links。
         if (!db.objectStoreNames.contains(STORE)) {
           const store = db.createObjectStore(STORE, { keyPath: 'id' })
           store.createIndex('savedAt', 'savedAt')
           store.createIndex('project', 'project')
           store.createIndex('status', 'status')
+        }
+        if (!db.objectStoreNames.contains(LINKS_STORE)) {
+          const links = db.createObjectStore(LINKS_STORE, { keyPath: 'id' })
+          links.createIndex('assetId', 'assetId')
+          links.createIndex('evidenceId', 'evidenceId')
+          links.createIndex('project', 'project')
         }
       }
       request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
@@ -76,11 +89,11 @@ export function createEvidenceVaultStore() {
   }
 
   // 返回 undefined 表示「没有可用的 IndexedDB」，调用方据此走内存分支。
-  const withStore = async (mode, run) => {
+  const withStore = async (mode, run, storeName = STORE) => {
     const db = await connect()
     if (!db) return undefined
-    const tx = db.transaction(STORE, mode)
-    const value = await run(tx.objectStore(STORE))
+    const tx = db.transaction(storeName, mode)
+    const value = await run(tx.objectStore(storeName))
     await new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
@@ -88,6 +101,9 @@ export function createEvidenceVaultStore() {
     })
     return value
   }
+
+  // 内存降级路径的 link 存储：与 IndexedDB 路径行为一致（去重按稳定 id）。
+  let memoryLinks = []
 
   const readAll = async () => {
     const rows = await withStore('readonly', store => requestToPromise(store.getAll()))
@@ -155,11 +171,14 @@ export function createEvidenceVaultStore() {
     },
 
     async remove(id) {
+      const key = String(id)
       const touched = await withStore('readwrite', async store => {
-        await requestToPromise(store.delete(String(id)))
+        await requestToPromise(store.delete(key))
         return true
       })
-      if (!touched) memory = memory.filter(item => item.id !== String(id))
+      if (!touched) memory = memory.filter(item => item.id !== key)
+      // 证据端点消失：同步清理以其为一端的 link（资产端悬空由视图优雅兜底，见 assetEvidenceGraphEdges）。
+      await this.removeAssetEvidenceLinks({ evidenceId: key })
       return true
     },
 
@@ -171,6 +190,7 @@ export function createEvidenceVaultStore() {
         return true
       })
       if (!touched) memory = memory.filter(item => !doomed.includes(item.id))
+      for (const id of doomed) await this.removeAssetEvidenceLinks({ evidenceId: id })
       return doomed.length
     },
 
@@ -180,7 +200,62 @@ export function createEvidenceVaultStore() {
         return true
       })
       if (!touched) memory = []
+      await this.removeAssetEvidenceLinks({})
       return true
+    },
+
+    // ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────
+    // link 是用户显式确认的支撑关系；建立走 normalize 校验，同一对端点按稳定 id 去重。
+
+    async linkAssetEvidence({ assetId, evidenceId, project = '', createdAt = Date.now() } = {}) {
+      const link = normalizeAssetEvidenceLink({ assetId, evidenceId, project, createdAt })
+      const existing = await this.listAssetEvidenceLinks({ assetId: link.assetId, evidenceId: link.evidenceId })
+      if (existing.length) return { link: existing[0], created: false }
+      const all = await this.listAssetEvidenceLinks()
+      if (all.length >= MAX_LINKS) {
+        const error = new Error(`关联关系已达上限（${MAX_LINKS} 条）；请先清理不再需要的关联。`)
+        error.code = 'LINK_LIMIT'
+        throw error
+      }
+      const touched = await withStore('readwrite', async store => {
+        await requestToPromise(store.put(link))
+        return true
+      }, LINKS_STORE)
+      if (!touched) memoryLinks = [link, ...memoryLinks.filter(row => row.id !== link.id)]
+      return { link, created: true }
+    },
+
+    // 过滤参数全部可选：不传返回全部（有界，见 MAX_LINKS）。
+    async listAssetEvidenceLinks({ assetId, evidenceId, project } = {}) {
+      const rows = await withStore('readonly', store => requestToPromise(store.getAll()), LINKS_STORE)
+      const list = Array.isArray(rows) ? rows : memoryLinks
+      return list
+        .filter(row => (assetId === undefined || String(row.assetId) === String(assetId))
+          && (evidenceId === undefined || String(row.evidenceId) === String(evidenceId))
+          && (project === undefined || String(row.project || '') === String(project)))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    },
+
+    async removeAssetEvidenceLink(id) {
+      const key = String(id)
+      const touched = await withStore('readwrite', async store => {
+        await requestToPromise(store.delete(key))
+        return true
+      }, LINKS_STORE)
+      if (!touched) memoryLinks = memoryLinks.filter(row => row.id !== key)
+      return true
+    },
+
+    // 批量解除：按任一端点过滤（证据删除 / 资产删除 / 清空时的联动清理）。
+    async removeAssetEvidenceLinks({ assetId, evidenceId } = {}) {
+      const doomed = (await this.listAssetEvidenceLinks({ assetId, evidenceId })).map(row => row.id)
+      if (!doomed.length) return 0
+      const touched = await withStore('readwrite', async store => {
+        for (const id of doomed) await requestToPromise(store.delete(id))
+        return true
+      }, LINKS_STORE)
+      if (!touched) memoryLinks = memoryLinks.filter(row => !doomed.includes(row.id))
+      return doomed.length
     },
 
     // 批量写回（导入用）：一次事务写完，避免逐条 put 之间被中断留下半份数据。
