@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { loadCatalogEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/route-replay.js', 'src/research-workbench.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/research-console.js', 'dsh/standalone-glue.js']
+const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/route-replay.js', 'src/research-workbench.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/research-console.js', 'dsh/standalone-glue.js']
 // 目录数据从三个聚合入口（catalog/*/index.js）加载后内联：浏览器产物始终包含完整目录，
 // 不增加任何动态文件请求。分片与入口的一致性由 scripts/lib/catalog-entries.mjs 的
 // 登记检查与校验器/测试的「分片总数 == 聚合总数」断言守护。
@@ -54,10 +54,12 @@ const ORDERED_SYMBOLS = [
   'normalizeEvidenceEntry',                       // src/lib/evidence-vault-core.js
   'createEvidenceVaultStore',                     // src/evidence-vault-store.js
   'EvidenceSaveForm', 'EvidenceVaultPane',        // src/research-evidence-vault.js
+  'knowledgeStore', 'publishKnowledge',           // src/knowledge-store.js（图谱面板）
   'researchMethodProvider', 'researchAssetProvider', 'ResearchPromptStudioHost', // dsh/prompt-studio-glue.js
   'ResearchVaultHost',             // src/research-vault.js
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
   'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
+  'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
   'ResearchConsole',               // src/research-console.js
 ]
 // vendor 唯一外露到拼接作用域的符号；它的其余内部声明都包在 `const PromptKit = (React => {…})`

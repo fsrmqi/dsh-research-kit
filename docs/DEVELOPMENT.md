@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（173 项 / 20 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（205 项 / 23 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -103,7 +103,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 173 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 205 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

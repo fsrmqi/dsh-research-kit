@@ -5012,9 +5012,422 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 自动沉淀的结构化提取器（纯逻辑，无 React、无浏览器依赖、无网络请求）。
+    //
+    // 职责：把一条助手回答的文本解析成「知识节点 + 关系 + 引用来源」三组结构，
+    // 供 knowledge-store 去重入库、knowledge-deposition 联动灵感资产/证据库、
+    // 证据图谱绘制。它是规则提取器，不是理解器：
+    //   - 只捕捉显式的陈述模式（X 影响 Y、A 与 B 相关、研究表明……），
+    //     捕捉不到不算失败，捕捉到的一律「待核验」；
+    //   - 输出必须确定：同一文本重复提取必得同一结果（回归测试钉住）；
+    //   - 输出必须有界：单条消息的节点/关系/引用各设上限，防止长回答撑爆存储。
+    //
+    // 旗舰样例（需求原文）：“某基因可能影响水稻耐盐性” 应得到
+    //   基因(某基因) —可能影响→ 性状(耐盐性) ←研究对象— 物种(水稻)。
+    // 由 extractClaims + expandEntityPhrase 两级实现：先抽二元关系，
+    // 再把「物种+性状」复合短语拆开并补 research-subject 关系。
+
+    // ── 词表与标签 ────────────────────────────────────────────────────────────────
+
+    const KNOWLEDGE_KINDS = ['question', 'hypothesis', 'finding', 'method', 'entity']
+    const KNOWLEDGE_KIND_LABELS = {
+      question: '研究问题', hypothesis: '假设', finding: '研究发现', method: '方法', entity: '实体',
+    }
+    const KNOWLEDGE_ENTITY_KINDS = ['gene', 'protein', 'trait', 'organism', 'pathway', 'compound', 'generic']
+    const KNOWLEDGE_ENTITY_LABELS = {
+      gene: '基因', protein: '蛋白质', trait: '性状', organism: '物种/材料', pathway: '通路', compound: '物质', generic: '实体',
+    }
+    const KNOWLEDGE_STATUSES = ['to_verify', 'verified', 'disputed']
+    const KNOWLEDGE_STATUS_LABELS = { to_verify: '待核验', verified: '已核验', disputed: '存疑' }
+    const KNOWLEDGE_POLARITIES = ['positive', 'negative', 'uncertain', 'neutral']
+    const KNOWLEDGE_POLARITY_LABELS = { positive: '正向', negative: '负向', uncertain: '不确定', neutral: '' }
+
+    // 关系词表：前六种由提取器产生；about/records/supports/deposited 由入库与图谱层生成。
+    const CLAIM_RELATIONS = ['may-affect', 'promotes', 'inhibits', 'causes', 'correlates', 'research-subject', 'about', 'records', 'supports', 'deposited']
+    const CLAIM_RELATION_LABELS = {
+      'may-affect': '可能影响', promotes: '促进', inhibits: '抑制', causes: '导致',
+      correlates: '相关', 'research-subject': '研究对象', about: '涉及',
+      records: '记录自', supports: '支持', deposited: '沉淀为资产',
+    }
+
+    // 性状词表：显式列举 + 「X性」后缀规则（X 含 耐/抗/稳/敏 时才认，避免「可能性」这类误报）。
+    const TRAIT_WORDS = [
+      '耐盐性', '耐盐碱性', '抗旱性', '耐旱性', '耐涝性', '耐热性', '耐寒性', '抗寒性', '抗病性', '抗虫性',
+      '抗倒伏性', '耐逆性', '抗逆性', '耐低氮性', '抗氧化性', '产量', '品质', '株高', '穗长', '穗数',
+      '千粒重', '粒重', '分蘖数', '结实率', '发芽率', '萌发率', '成活率', '存活率', '表达量', '丰度',
+      '活性', '含量', '积累量', '存活', '整精米率', '垩白度', '直链淀粉含量',
+    ]
+    const ORGANISM_WORDS = [
+      '水稻', '小麦', '大麦', '玉米', '拟南芥', '大豆', '棉花', '油菜', '马铃薯', '番茄', '高粱', '谷子',
+      '花生', '苜蓿', '杨树', '葡萄', '柑橘', '小鼠', '大鼠', '斑马鱼', '果蝇', '线虫', '酵母', '大肠杆菌', '人类',
+    ]
+
+    // ── 限额与常量 ────────────────────────────────────────────────────────────────
+
+    const MAX_NODES_PER_MESSAGE = 24
+    const MAX_CLAIMS_PER_MESSAGE = 24
+    const MAX_CITATIONS_PER_MESSAGE = 8
+    const MAX_LABEL_CHARS = 60
+    const MAX_EXCERPT_CHARS = 200
+
+    const SENTENCE_SPLIT = /(?<=[。！？!?；;])\s*|\n+/
+    const MARKDOWN_CODE_BLOCK = /```[\s\S]*?```/g
+    const MARKDOWN_INLINE_CODE = /`([^`]*)`/g
+    const MARKDOWN_BOLD = /\*\*([^*]+)\*\*/g
+    const MARKDOWN_ITALIC = /\*([^*]+)\*/g
+    const MARKDOWN_HEADING = /^#{1,6}\s+/gm
+    const MARKDOWN_LIST = /^\s*[-*+]\s+/gm
+    const MARKDOWN_LINK = /\[([^\]]{1,120})\]\((https?:\/\/[^)\s]+)\)/g
+
+    // 二元关系模式（按优先级排列，逐短句只取第一个命中的模式）。
+    // 主体/客体各限 24 字：科学陈述的主语通常是短语而非长句，超限多半是没抽对。
+    // polarity 是模式自带的方向先验；句中含不确定词时统一收敛为 uncertain。
+    const CLAIM_PATTERNS = [
+      { relation: 'may-affect', re: /^(.{1,24}?)(?:可能|或许|也许|有望)(?:会|将|将会)?(?:显著|明显)?(?:地)?(影响|调控|调节|改变|决定)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+      { relation: 'promotes', re: /^(.{1,24}?)(?:显著|明显)?(?:地)?(促进|增强|提高|上调|提升|增加|延长|改善|激活)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+      { relation: 'inhibits', re: /^(.{1,24}?)(?:显著|明显)?(?:地)?(抑制|削弱|减弱|降低|下调|减少|缩短|阻碍|损害|破坏)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+      { relation: 'causes', re: /^(.{1,24}?)(?:直接|间接)?(导致|引起|造成|诱发|引发)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+      { relation: 'correlates', re: /^(.{1,24}?)与(.{1,24}?)(?:之间)?(?:呈|存在)?(?:显著)?(正|负)?相关/ },
+    ]
+
+    // 主体/客体里不允许再出现关系动词或介词引导——出现说明切分失败，宁可丢掉这条关系。
+    const CLAIM_SPAN_STOPWORDS = /(促进|抑制|影响|调控|导致|引起|相关|激活|通过|利用|借助|采用|使用|研究表明|可能)/
+    // 裸代词/泛指主语没有图谱价值。
+    const CLAIM_SPAN_PRONOUNS = /^(我们|本研究|研究|作者|其|该|此|这|它们|他们|它|两者|二者|两者之间|二者之间)$/
+
+    // 引导句式：剥离后得到「发现/假设/问题/方法」节点，剩余短句继续抽二元关系。
+    const FINDING_MARKER = /^(?:研究|实验|结果|数据|分析|测序|观察|文献)(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)|^(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)/
+    const HYPOTHESIS_MARKER = /^(?:我们|本研究|作者|团队)?(?:假设|猜想|推测|被认为可能是)/
+    const QUESTION_MARKER = /^(?:研究问题|科学问题|核心问题|关键问题)(?:是|为)?(?:：|:|\s)?/
+    const METHOD_MARKER = /^(?:采用|使用|借助|利用)[^，。；]{0,40}?(?:方法|技术|平台|流程|协议|体系)|^方法(?:是|：|:)/
+    // 主语前缀（本研究/我们…）不影响句式类型，先剥掉再匹配引导词。
+    const SUBJECT_PREFIX = /^(?:本研究|本文|我们|团队|笔者)(?=采用|使用|借助|利用|发现|表明|显示|证实|说明|假设|推测|猜想|观察到)/
+    const QUESTION_HINT = /(如何|是否|为何|为什么|怎样|哪些|哪种|哪些个|什么|多少|能否|可否|哪个)/
+    const UNCERTAIN_HINT = /(可能|或许|也许|有望|疑似|推测|大概)/
+
+    // ── 基础工具 ──────────────────────────────────────────────────────────────────
+
+    // FNV-1a 32 位哈希：给「规范化 key」生成确定性短 id（无 crypto 依赖，纯同步）。
+    function hashKey(text) {
+      const str = String(text || '')
+      let hash = 0x811c9dc5
+      for (let i = 0; i < str.length; i++) {
+        hash ^= str.charCodeAt(i)
+        hash = Math.imul(hash, 0x01000193) >>> 0
+      }
+      return `${hash.toString(16).padStart(8, '0')}${str.length.toString(16)}`
+    }
+
+    function normalizeKnowledgeLabel(value) {
+      return String(value || '')
+        .replace(/\s+/g, ' ')
+        .replace(MARKDOWN_BOLD, '$1')
+        .replace(/^[「『"'\s]+|[。；，,、.!！?？：:」』"'\s]+$/g, '')
+        .trim()
+    }
+
+    function clampKnowledgeLabel(value, max = MAX_LABEL_CHARS) {
+      const text = normalizeKnowledgeLabel(value)
+      return text.length > max ? `${text.slice(0, max - 1)}…` : text
+    }
+
+    // 去重 key：kind（实体再带 entityKind）+ 规范化标签。拉丁文统一小写，中文不受影响。
+    function normalizeEntityKey(label) {
+      return normalizeKnowledgeLabel(label).toLowerCase()
+    }
+
+    function knowledgeKeyFor(kind, entityKind, label) {
+      const suffix = kind === 'entity' && entityKind ? `:${entityKind}` : ''
+      return `${kind}${suffix}:${normalizeEntityKey(label)}`
+    }
+
+    // ── 实体识别 ──────────────────────────────────────────────────────────────────
+
+    function isGeneLike(text) {
+      if (/基因$|^基因/.test(text)) return true
+      if (/^miR/i.test(text)) return true
+      // 拉丁短代号：含数字或多个大写字母（Ghd7、OsNAC3、SPL9、NRT1.1B），且不是普通英文单词。
+      if (/^[A-Za-z][A-Za-z0-9.-]{1,11}$/.test(text) && (/\d/.test(text) || /[A-Z].*[A-Z]/.test(text))) return true
+      return false
+    }
+
+    function classifyEntityKind(label) {
+      const text = normalizeKnowledgeLabel(label)
+      if (!text) return 'generic'
+      if (isGeneLike(text)) return 'gene'
+      if (/(蛋白|蛋白质|酶)$/.test(text)) return 'protein'
+      if (/(途径|通路)$/.test(text)) return 'pathway'
+      if (TRAIT_WORDS.includes(text) || (/[耐抗稳敏][^性]*性$/.test(text) && text.length <= 8)) return 'trait'
+      for (const word of ORGANISM_WORDS) { if (text === word || text.startsWith(word)) return 'organism' }
+      if (/(素|酸|碱|苷|醇|酯)$/.test(text) && text.length <= 8) return 'compound'
+      return 'generic'
+    }
+
+    // 「X的T」「物种+性状」复合短语拆分：返回实体序列与额外的 research-subject 关系。
+    // 端点约定：关系的主体/客体取展开序列的**最后一个**实体（「水稻耐盐性」→ 性状），
+    // 其余实体用 research-subject 串到该端点上（「水稻」→研究对象→「耐盐性」）。
+    function expandEntityPhrase(phrase) {
+      const text = normalizeKnowledgeLabel(phrase)
+      if (!text) return { entities: [], endpoint: null, extras: [] }
+      // 形如「P的T」且 T 是性状：P 与 T 各自成实体。
+      const possessive = /^(.{1,16}?)的(.{1,12})$/.exec(text)
+      if (possessive && (TRAIT_WORDS.includes(possessive[2]) || /[耐抗稳敏][^性]*性$/.test(possessive[2]))) {
+        return splitSubjectTrait(possessive[1], possessive[2])
+      }
+      // 形如「物种+性状」连写（水稻耐盐性）。
+      for (const word of ORGANISM_WORDS) {
+        if (text.startsWith(word) && text.length > word.length) {
+          const tail = text.slice(word.length)
+          if (TRAIT_WORDS.includes(tail) || /[耐抗稳敏][^性]*性$/.test(tail)) return splitSubjectTrait(word, tail)
+        }
+      }
+      const kind = classifyEntityKind(text)
+      return { entities: [{ key: knowledgeKeyFor('entity', kind, text), label: text, entityKind: kind }], endpoint: knowledgeKeyFor('entity', kind, text), extras: [] }
+    }
+
+    function splitSubjectTrait(subject, trait) {
+      const sKind = classifyEntityKind(subject)
+      const tKind = 'trait'
+      const sKey = knowledgeKeyFor('entity', sKind, subject)
+      const tKey = knowledgeKeyFor('entity', tKind, trait)
+      return {
+        entities: [
+          { key: sKey, label: subject, entityKind: sKind },
+          { key: tKey, label: trait, entityKind: tKind },
+        ],
+        endpoint: tKey,
+        extras: [{ fromKey: sKey, toKey: tKey, relation: 'research-subject', polarity: 'neutral' }],
+      }
+    }
+
+    // ── 引用来源 ──────────────────────────────────────────────────────────────────
+
+    const CITATION_PATTERNS = [
+      { kind: 'doi', regex: /\b10\.\d{4,9}\/[-._;()/:a-z0-9]+/gi, trim: /[.,;)\]}>]+$/ },
+      { kind: 'pmcid', regex: /\bPMC\d{6,9}\b/gi },
+      { kind: 'nct', regex: /\bNCT\d{8}\b/gi },
+      { kind: 'arxiv', regex: /\barxiv:\s*([\d.]+v\d+)/gi, group: 1 },
+      { kind: 'pmid', regex: /\bpmid:?\s*(\d{5,8})\b/gi, group: 1 },
+      { kind: 'accession', regex: /\b(?:GSE|GSM|SRP|PRJNA|PRJEB|PRJDA)\d{4,9}\b/g },
+    ]
+    const URL_PATTERN = /https?:\/\/[^\s"'<>()\[\]{}，。；、！？]+/g
+
+    function sentenceAt(sentences, index) {
+      return clampKnowledgeLabel(sentences[index], 100)
+    }
+
+    // 从原文提取引用：markdown 链接标题优先，其余用所在句做标题兜底（normalizeEvidenceEntry 需要标题）。
+    function extractCitations(text) {
+      const source = String(text || '')
+      if (!source.trim()) return []
+      const sentences = source.split(SENTENCE_SPLIT).map(part => part.trim()).filter(Boolean)
+      const linkTitles = new Map()
+      for (const match of source.matchAll(MARKDOWN_LINK)) linkTitles.set(match[2], match[1].trim())
+      const results = []
+      const seen = new Set()
+      const push = citation => {
+        if (!citation) return
+        const key = citation.identifier ? `${citation.identifierKind}:${citation.identifier.toLowerCase()}` : `url:${citation.url.toLowerCase()}`
+        if (seen.has(key)) return
+        seen.add(key)
+        results.push(citation)
+      }
+      for (const pattern of CITATION_PATTERNS) {
+        pattern.regex.lastIndex = 0
+        for (const match of source.matchAll(pattern.regex)) {
+          const raw = match[pattern.group || 0]
+          if (!raw) continue
+          const value = pattern.trim ? raw.replace(pattern.trim, '') : raw
+          if (!value) continue
+          const at = match.index || 0
+          push({ title: sentenceAt(sentences, sentenceIndexAt(source, at, sentences)), url: '', identifier: value, identifierKind: pattern.kind })
+        }
+      }
+      for (const match of source.matchAll(URL_PATTERN)) {
+        const url = match[0].replace(/[.,;)\]]+$/, '')
+        if (!url) continue
+        const at = match.index || 0
+        push({ title: linkTitles.get(url) || sentenceAt(sentences, sentenceIndexAt(source, at, sentences)), url, identifier: '', identifierKind: 'none' })
+      }
+      // DOI 常以 https://doi.org/<doi> 链接形式出现：同一来源会同时命中 doi 与 url 两条，
+      // 保留带稳定标识符的那条，丢弃与之重复的纯链接。
+      const identifiers = results.filter(item => item.identifier).map(item => item.identifier.toLowerCase())
+      return results.filter(item => item.identifier || !identifiers.some(id => item.url.toLowerCase().includes(id)))
+    }
+
+    function sentenceIndexAt(text, index, sentences) {
+      let consumed = 0
+      for (let i = 0; i < sentences.length; i++) {
+        const found = text.indexOf(sentences[i], consumed)
+        if (found < 0) continue
+        consumed = found + sentences[i].length
+        if (index < consumed) return i
+      }
+      return 0
+    }
+
+    // ── 关系抽取 ──────────────────────────────────────────────────────────────────
+
+    function cleanClaimSpan(span) {
+      const text = normalizeKnowledgeLabel(span)
+      if (!text || text.length > 24) return ''
+      if (CLAIM_SPAN_PRONOUNS.test(text)) return ''
+      if (CLAIM_SPAN_STOPWORDS.test(text)) return ''
+      return text
+    }
+
+    function extractClaimsFromClause(clause) {
+      const rows = []
+      const fragments = clause.split(/[；;]/).map(part => part.trim()).filter(Boolean)
+      for (const fragment of fragments) {
+        for (const pattern of CLAIM_PATTERNS) {
+          const match = pattern.re.exec(fragment)
+          if (!match) continue
+          if (pattern.re === CLAIM_PATTERNS[4].re) {
+            // correlates：A 与 B 相关；「正相关/负相关」决定极性，无修饰词时是不确定。
+            const subject = cleanClaimSpan(match[1])
+            const object = cleanClaimSpan(match[2])
+            if (!subject || !object) continue // 本模式切分失败：换下一个模式再试，不放弃整句
+            const polarity = match[3] === '正' ? 'positive' : match[3] === '负' ? 'negative' : 'uncertain'
+            rows.push({ subjectPhrase: subject, objectPhrase: object, relation: 'correlates', polarity })
+            break
+          }
+          const subject = cleanClaimSpan(match[1])
+          const object = cleanClaimSpan(match[3])
+          if (!subject || !object) continue // 同上：切分失败就换模式（例：「……降低」会先被 inhibits 撞上空宾语）
+          // 极性：模式自带方向先验（抑制=负向，其余=正向）；句中含不确定词（可能/或许/有望…）时收敛为 uncertain。
+          const polarity = UNCERTAIN_HINT.test(fragment) ? 'uncertain' : pattern.re === CLAIM_PATTERNS[2].re ? 'negative' : 'positive'
+          rows.push({ subjectPhrase: subject, objectPhrase: object, relation: pattern.re === CLAIM_PATTERNS[2].re ? 'inhibits' : relationOf(pattern), polarity })
+          break
+        }
+      }
+      return rows
+    }
+
+    function relationOf(pattern) {
+      return pattern.relation
+    }
+
+    // ── 引导句式 ──────────────────────────────────────────────────────────────────
+
+    function stripLeadingMarker(sentence) {
+      const text = sentence.trim().replace(SUBJECT_PREFIX, '')
+      const attempt = (regex, kind, keepFull = false) => {
+        const match = regex.exec(text)
+        if (!match) return null
+        // 方法句的标记（采用…方法）本身含工具名，整句保留；其余句式剥离引导词。
+        const clause = keepFull ? text : text.slice(match[0].length).replace(/^[，,：:、\s]+/, '')
+        return clause.length >= 4 ? { kind, clause } : null
+      }
+      return attempt(FINDING_MARKER, 'finding')
+        || attempt(HYPOTHESIS_MARKER, 'hypothesis')
+        || attempt(QUESTION_MARKER, 'question')
+        || attempt(METHOD_MARKER, 'method', true)
+    }
+
+    function isQuestionSentence(sentence) {
+      return /[？?]/.test(sentence) && QUESTION_HINT.test(sentence)
+    }
+
+    // ── 主入口 ────────────────────────────────────────────────────────────────────
+
+    function stripMarkdownForClaims(text) {
+      return String(text || '')
+        .replace(MARKDOWN_CODE_BLOCK, ' ')
+        .replace(MARKDOWN_INLINE_CODE, '$1')
+        .replace(MARKDOWN_BOLD, '$1')
+        .replace(MARKDOWN_ITALIC, '$1')
+        .replace(MARKDOWN_HEADING, '')
+        .replace(MARKDOWN_LIST, '')
+        .replace(MARKDOWN_LINK, '$1')
+    }
+
+    // 从一条助手回答提取知识结构。确定性与有界性是本函数的契约：
+    //   - 同一文本两次调用返回 deepEqual 的结果；
+    //   - 节点 ≤ 24、关系 ≤ 24、引用 ≤ 8，超限按出现顺序截断（关系在节点截断后丢弃失端者）。
+    function extractKnowledge(rawText) {
+      const text = String(rawText || '')
+      if (!text.trim()) return { nodes: [], claims: [], citations: [] }
+      const citations = extractCitations(text)
+      const clean = stripMarkdownForClaims(text)
+      const sentences = clean.split(SENTENCE_SPLIT).map(part => part.trim()).filter(part => part.length >= 4)
+
+      const nodes = new Map()
+      const claims = []
+      const addNode = (kind, entityKind, label, excerpt) => {
+        const cleanLabel = clampKnowledgeLabel(label)
+        if (!cleanLabel) return null
+        const key = knowledgeKeyFor(kind, entityKind, cleanLabel)
+        if (!nodes.has(key)) nodes.set(key, { key, kind, entityKind: kind === 'entity' ? entityKind : '', label: cleanLabel, excerpt: clampExcerpt(excerpt) })
+        return key
+      }
+      const addClaim = row => {
+        if (!row || !row.fromKey || !row.toKey || row.fromKey === row.toKey) return
+        if (claims.some(item => item.fromKey === row.fromKey && item.toKey === row.toKey && item.relation === row.relation)) return
+        claims.push({ ...row, excerpt: clampExcerpt(row.excerpt) })
+      }
+
+      for (const sentence of sentences) {
+        const marked = stripLeadingMarker(sentence)
+        const clause = marked ? marked.clause : sentence
+        let claimEntityKeys = []
+        for (const found of extractClaimsFromClause(clause).slice(0, 6)) {
+          const subject = expandEntityPhrase(found.subjectPhrase)
+          const object = expandEntityPhrase(found.objectPhrase)
+          if (!subject.endpoint || !object.endpoint) continue
+          for (const entity of [...subject.entities, ...object.entities]) addNode('entity', entity.entityKind, entity.label, sentence)
+          addClaim({ fromKey: subject.endpoint, toKey: object.endpoint, relation: found.relation, polarity: found.polarity, excerpt: sentence })
+          for (const extra of [...subject.extras, ...object.extras]) addClaim({ ...extra, excerpt: sentence })
+          claimEntityKeys = [...claimEntityKeys, subject.endpoint, object.endpoint, ...subject.extras.map(item => item.fromKey), ...object.extras.map(item => item.fromKey)]
+        }
+        if (marked) {
+          const key = addNode(marked.kind, '', clause, sentence)
+          // 发现/假设/问题节点与该句关系涉及的实体相连（最多 3 个），否则知识节点会悬浮成孤岛。
+          for (const entityKey of [...new Set(claimEntityKeys)].slice(0, 3)) addClaim({ fromKey: key, toKey: entityKey, relation: 'about', polarity: 'neutral', excerpt: sentence })
+        } else if (isQuestionSentence(sentence)) {
+          addNode('question', '', sentence, sentence)
+        }
+      }
+
+      const limitedNodes = [...nodes.values()].slice(0, MAX_NODES_PER_MESSAGE)
+      const presentKeys = new Set(limitedNodes.map(node => node.key))
+      const limitedClaims = claims
+        .filter(claim => presentKeys.has(claim.fromKey) && presentKeys.has(claim.toKey))
+        .slice(0, MAX_CLAIMS_PER_MESSAGE)
+      return { nodes: limitedNodes, claims: limitedClaims, citations: citations.slice(0, MAX_CITATIONS_PER_MESSAGE) }
+    }
+
+    function clampExcerpt(value) {
+      const text = String(value || '').trim()
+      if (!text) return ''
+      return text.length > MAX_EXCERPT_CHARS ? `${text.slice(0, MAX_EXCERPT_CHARS - 1)}…` : text
+    }
+
+    // 入库前的节点/关系规范化（knowledge-store 复用）：非法条目由调用方跳过并计数。
+    function normalizeKnowledgeNodeDraft(input = {}) {
+      const kind = KNOWLEDGE_KINDS.includes(input.kind) ? input.kind : ''
+      const label = clampKnowledgeLabel(input.label)
+      if (!kind || !label) throw new Error('知识节点缺少类型或标签。')
+      const entityKind = kind === 'entity' ? (KNOWLEDGE_ENTITY_KINDS.includes(input.entityKind) ? input.entityKind : 'generic') : ''
+      return {
+        key: input.key || knowledgeKeyFor(kind, entityKind, label),
+        kind, entityKind, label,
+        excerpt: clampExcerpt(input.excerpt),
+      }
+    }
+
+    function normalizeKnowledgeClaimDraft(input = {}) {
+      const relation = String(input.relation || '').trim()
+      const polarity = KNOWLEDGE_POLARITIES.includes(input.polarity) ? input.polarity : 'neutral'
+      if (!relation || relation.length > 40) throw new Error('知识关系缺少类型。')
+      if (!input.fromKey || !input.toKey) throw new Error('知识关系缺少端点。')
+      return { fromKey: String(input.fromKey), toKey: String(input.toKey), relation, polarity, excerpt: clampExcerpt(input.excerpt) }
+    }
+
+
     // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
     // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [] } = {}) {
+    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] } } = {}) {
       const nodes = new Map()
       const edges = []
       const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -5062,19 +5475,45 @@ window.__ModuleLoader__.load({
           if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
         }
       }
+      // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
+      // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
+      // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
+      const knowledgeNodes = Array.isArray(knowledge?.nodes) ? knowledge.nodes : []
+      const knowledgeClaims = Array.isArray(knowledge?.claims) ? knowledge.claims : []
+      for (const record of knowledgeNodes) {
+        if (!record?.id || nodes.has(record.id)) continue
+        const kindLabel = KNOWLEDGE_KIND_LABELS[record.kind] || record.kind || '知识'
+        const entityLabel = record.kind === 'entity' && record.entityKind ? ` · ${KNOWLEDGE_ENTITY_LABELS[record.entityKind] || record.entityKind}` : ''
+        add({ id: record.id, kind: record.kind, label: record.label || '未命名知识', detail: `${kindLabel}${entityLabel} · ${KNOWLEDGE_STATUS_LABELS[record.status] || '待核验'}` })
+        for (const source of record.sources || []) {
+          if (!source || (source.seq === null && !source.sessionId)) continue
+          const messageId = `message:${source.sessionId || 'local'}:${source.seq ?? 0}`
+          add({ id: messageId, kind: 'message', label: `会话消息 #${source.seq ?? '?'}`, detail: source.at ? new Date(source.at).toLocaleString('zh-CN') : '' })
+          link(messageId, record.id, 'records')
+        }
+        for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'supports')
+        if (record.assetId) link(record.id, `asset:${record.assetId}`, 'deposited')
+      }
+      // 关系端点指向不存在（或被删除）的节点时，由末尾的边过滤自然剔除，不悬挂。
+      for (const claim of knowledgeClaims) {
+        if (!claim?.from || !claim?.to) continue
+        link(claim.from, claim.to, claim.relation || 'relates')
+      }
       return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
     }
 
     const EVIDENCE_NODE_COLORS = {
-      database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b'
+      database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
+      message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',
     }
 
     // ── 布局 ──────────────────────────────────────────────────────────────────────
-    // 分列语义：资源在最左（0），已保存证据在最右（4）。kind → 列号是固定映射，
+    // 分列语义：来源消息在最左（0），已保存证据在最右（4）。kind → 列号是固定映射，
     // 不随图的形状变化，否则同一批节点会因新边出现而整体换列。
+    // 自动沉淀知识的流向：消息(0) → 问题/实体(1) → 发现/假设/方法(2) → 证据(4)。
     const GRAPH_NODE_WIDTH = 136
     const GRAPH_NODE_HEIGHT = 54
-    const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4 }
+    const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2 }
     const GRAPH_COLUMN_GAP = 220
     const GRAPH_ROW_GAP = 82
     const GRAPH_ORIGIN_X = 70
@@ -6532,6 +6971,8 @@ window.__ModuleLoader__.load({
     const STORE = 'evidence'
     const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
+    // indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
+    // 导出而非复制——构建器把全部模块拼进同一作用域，同名顶层函数会静默覆盖。
     function indexedDbFactory() {
       try {
         return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
@@ -6711,6 +7152,363 @@ window.__ModuleLoader__.load({
           return rows.length
         },
       }
+    }
+
+
+
+    // 自动沉淀知识库持久化：IndexedDB 双 store（nodes / claims）。
+    //
+    // 与证据库（dsh-research-kit-evidence）同一套取舍：
+    //   - IndexedDB 而非 localStorage：知识节点与关系会随对话持续增长，不能挤占配额；
+    //   - 沙箱/隐私模式下降级为进程内内存存储，接口不变，isDegraded() 显式告知；
+    //   - 顶层符号名全局唯一：构建器把所有模块拼进同一作用域（见 evidence-store.js 注释），
+    //     因此 IndexedDB 工具从 evidence-vault-store 导入复用，绝不重名声明。
+    //
+    // 去重与合并语义（对应需求「相同内容合并，保留来源消息；冲突结论并列保留」）：
+    //   - 节点 id = hash(kind + entityKind + 规范化标签) → 同一内容天然合并；
+    //     合并时**追加**来源消息（同一 sessionId+seq 只记一次，最多保留前 5 条）；
+    //   - 关系 id = hash(主语key | 关系 | 宾语key | 极性) → 「A 可能影响 B」与
+    //     「A 促进 B」是两条关系记录，**并列保留**，谁也不覆盖谁；
+    //   - 用户推进过的核验状态（verified/disputed）不会被自动沉淀降回 to_verify。
+
+    const KNOWLEDGE_DB_NAME = 'dsh-research-kit-knowledge'
+    const KNOWLEDGE_DB_VERSION = 1
+    const KNOWLEDGE_NODE_STORE = 'nodes'
+    const KNOWLEDGE_CLAIM_STORE = 'claims'
+    const KNOWLEDGE_NODE_ID_PREFIX = 'kn-'
+    const KNOWLEDGE_CLAIM_ID_PREFIX = 'kc-'
+
+    // 来源消息是追溯线索不是全文存档：每条知识最多记 5 条来源，每条摘录 200 字。
+    const MAX_SOURCES_PER_RECORD = 5
+    const MAX_SOURCE_EXCERPT_CHARS = 200
+    const MAX_EVIDENCE_LINKS_PER_NODE = 12
+
+    function knowledgeSourceId(source) {
+      return `${source.sessionId || ''}:${Number.isFinite(source.seq) ? source.seq : ''}`
+    }
+
+    function normalizeKnowledgeSource(input = {}) {
+      const excerpt = String(input.excerpt || '').trim()
+      return {
+        sessionId: String(input.sessionId || ''),
+        seq: Number.isFinite(Number(input.seq)) ? Number(input.seq) : null,
+        turn: Number.isFinite(Number(input.turn)) ? Number(input.turn) : null,
+        at: Number(input.at) || 0,
+        excerpt: excerpt.length > MAX_SOURCE_EXCERPT_CHARS ? `${excerpt.slice(0, MAX_SOURCE_EXCERPT_CHARS - 1)}…` : excerpt,
+      }
+    }
+
+    // 追加来源消息：同一 sessionId+seq 只记一次；超过上限时保留最早的（首次出处最可追溯）。
+    function mergeKnowledgeSources(existing = [], incoming = []) {
+      const rows = Array.isArray(existing) ? [...existing] : []
+      const seen = new Set(rows.map(knowledgeSourceId))
+      for (const raw of Array.isArray(incoming) ? incoming : []) {
+        const source = normalizeKnowledgeSource(raw)
+        if (source.excerpt === '' && !source.sessionId && source.seq === null) continue
+        const id = knowledgeSourceId(source)
+        if (seen.has(id)) continue
+        seen.add(id)
+        rows.push(source)
+      }
+      return rows.slice(0, MAX_SOURCES_PER_RECORD)
+    }
+
+    function knowledgeNodeIdFor(key) {
+      return `${KNOWLEDGE_NODE_ID_PREFIX}${hashKey(key)}`
+    }
+
+    // 关系的稳定身份：主语 key | 关系 | 宾语 key | 极性。极性参与身份是刻意的——
+    // 「A 可能影响 B」（不确定）与「A 促进 B」（正向）语义不同，应并列保留供人工裁决。
+    function knowledgeClaimKeyFor({ fromKey, relation, toKey, polarity }) {
+      return `${fromKey}|${relation}|${toKey}|${polarity}`
+    }
+
+    function knowledgeClaimIdFor(identity) {
+      return `${KNOWLEDGE_CLAIM_ID_PREFIX}${hashKey(identity)}`
+    }
+
+    function sortKnowledgeNodes(rows) {
+      return [...rows].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    }
+
+    function sortKnowledgeClaims(rows) {
+      return [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    }
+
+    function createKnowledgeStore() {
+      let dbPromise = null
+      let degraded = false
+      const memory = { nodes: [], claims: [] }
+
+      const connect = () => {
+        if (degraded) return Promise.resolve(null)
+        if (dbPromise) return dbPromise
+        const factory = indexedDbFactory()
+        if (!factory) { degraded = true; return Promise.resolve(null) }
+        dbPromise = new Promise(resolve => {
+          let request
+          try { request = factory.open(KNOWLEDGE_DB_NAME, KNOWLEDGE_DB_VERSION) } catch { degraded = true; resolve(null); return }
+          request.onupgradeneeded = () => {
+            const db = request.result
+            if (!db.objectStoreNames.contains(KNOWLEDGE_NODE_STORE)) {
+              const nodes = db.createObjectStore(KNOWLEDGE_NODE_STORE, { keyPath: 'id' })
+              nodes.createIndex('key', 'key')
+              nodes.createIndex('kind', 'kind')
+              nodes.createIndex('updatedAt', 'updatedAt')
+            }
+            if (!db.objectStoreNames.contains(KNOWLEDGE_CLAIM_STORE)) {
+              const claims = db.createObjectStore(KNOWLEDGE_CLAIM_STORE, { keyPath: 'id' })
+              claims.createIndex('from', 'from')
+              claims.createIndex('to', 'to')
+              claims.createIndex('updatedAt', 'updatedAt')
+            }
+          }
+          request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
+          request.onerror = () => { degraded = true; resolve(null) }
+          request.onblocked = () => { degraded = true; resolve(null) }
+        })
+        return dbPromise
+      }
+
+      const withStore = async (storeName, mode, run) => {
+        const db = await connect()
+        if (!db) return undefined
+        const tx = db.transaction(storeName, mode)
+        const value = await run(tx.objectStore(storeName))
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = () => resolve()
+          tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
+          tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
+        })
+        return value
+      }
+
+      const readNodes = async () => {
+        const rows = await withStore(KNOWLEDGE_NODE_STORE, 'readonly', store => requestToPromise(store.getAll()))
+        return sortKnowledgeNodes(Array.isArray(rows) ? rows : memory.nodes)
+      }
+
+      const readClaims = async () => {
+        const rows = await withStore(KNOWLEDGE_CLAIM_STORE, 'readonly', store => requestToPromise(store.getAll()))
+        return sortKnowledgeClaims(Array.isArray(rows) ? rows : memory.claims)
+      }
+
+      const putRows = async (storeName, rows) => {
+        if (!rows.length) return true
+        const touched = await withStore(storeName, 'readwrite', async store => {
+          for (const row of rows) await requestToPromise(store.put(row))
+          return true
+        })
+        if (!touched) {
+          const bucket = storeName === KNOWLEDGE_NODE_STORE ? 'nodes' : 'claims'
+          const merged = [...rows, ...memory[bucket].filter(item => !rows.some(row => row.id === item.id))]
+          memory[bucket] = bucket === 'nodes' ? sortKnowledgeNodes(merged) : sortKnowledgeClaims(merged)
+        }
+        return true
+      }
+
+      const deleteRow = async (storeName, id) => {
+        const touched = await withStore(storeName, 'readwrite', store => requestToPromise(store.delete(id)))
+        if (!touched) {
+          const bucket = storeName === KNOWLEDGE_NODE_STORE ? 'nodes' : 'claims'
+          memory[bucket] = memory[bucket].filter(item => item.id !== id)
+        }
+        return true
+      }
+
+      return {
+        // 主动探测：宿主根本没有 indexedDB 时，不必等第一次读写就如实报告降级。
+        isDegraded: () => degraded || indexedDbFactory() === null,
+
+        async listNodes({ kind } = {}) {
+          const rows = await readNodes()
+          return kind ? rows.filter(row => row.kind === kind) : rows
+        },
+
+        async listClaims() {
+          return readClaims()
+        },
+
+        // 把一条提取结果合并入库。nodes/claims 是提取器输出的 draft（带 key），
+        // source 是来源消息（{ sessionId, seq, turn, at, excerpt }），可为空（手动提取）。
+        async applyExtraction({ nodes = [], claims = [], source = {}, now = Date.now() } = {}) {
+          const origin = normalizeKnowledgeSource(source)
+          const hasOrigin = Boolean(origin.excerpt || origin.sessionId || origin.seq !== null)
+          const existingNodes = await readNodes()
+          const existingClaims = await readClaims()
+          const nodeById = new Map(existingNodes.map(row => [row.id, row]))
+          const nodeIdByKey = new Map(existingNodes.map(row => [row.key, row.id]))
+          const claimById = new Map(existingClaims.map(row => [row.id, row]))
+          const touchedNodes = []
+          const touchedClaims = []
+          let addedNodes = 0
+          let mergedNodes = 0
+          let addedClaims = 0
+          let mergedClaims = 0
+          let skippedNodes = 0
+          let skippedClaims = 0
+
+          for (const draft of Array.isArray(nodes) ? nodes : []) {
+            let clean
+            try { clean = normalizeKnowledgeNodeDraft(draft) } catch { skippedNodes++; continue }
+            const id = knowledgeNodeIdFor(clean.key)
+            const previous = nodeById.get(id)
+            const incoming = hasOrigin ? [{ ...origin, excerpt: draft.excerpt || origin.excerpt }] : []
+            if (previous) {
+              const next = {
+                ...previous,
+                label: clean.label,
+                entityKind: clean.kind === 'entity' ? (clean.entityKind || previous.entityKind) : previous.entityKind,
+                sources: mergeKnowledgeSources(previous.sources, incoming),
+                // 用户推进过的核验状态不回退：自动沉淀只填写「待核验」，不改写人工结论。
+                status: previous.status === 'to_verify' ? 'to_verify' : previous.status,
+                updatedAt: now,
+              }
+              nodeById.set(id, next)
+              touchedNodes.push(next)
+              mergedNodes++
+            } else {
+              const row = {
+                id,
+                key: clean.key,
+                kind: clean.kind,
+                entityKind: clean.entityKind,
+                label: clean.label,
+                status: 'to_verify',
+                sources: mergeKnowledgeSources([], incoming),
+                evidenceIds: [],
+                assetId: '',
+                createdAt: now,
+                updatedAt: now,
+              }
+              nodeById.set(id, row)
+              nodeIdByKey.set(clean.key, id)
+              touchedNodes.push(row)
+              addedNodes++
+            }
+          }
+
+          // 关系端点解析失败（实体被限额截断）就丢弃该关系，绝不悬挂。
+          for (const draft of Array.isArray(claims) ? claims : []) {
+            let clean
+            try { clean = normalizeKnowledgeClaimDraft(draft) } catch { skippedClaims++; continue }
+            const fromId = nodeIdByKey.get(clean.fromKey)
+            const toId = nodeIdByKey.get(clean.toKey)
+            if (!fromId || !toId) { skippedClaims++; continue }
+            const identity = knowledgeClaimKeyFor(clean)
+            const id = knowledgeClaimIdFor(identity)
+            const previous = claimById.get(id)
+            const incoming = hasOrigin ? [{ ...origin, excerpt: draft.excerpt || origin.excerpt }] : []
+            const row = {
+              id,
+              key: identity,
+              from: fromId,
+              to: toId,
+              relation: clean.relation,
+              polarity: clean.polarity,
+              status: previous && previous.status !== 'to_verify' ? previous.status : 'to_verify',
+              sources: mergeKnowledgeSources(previous?.sources, incoming),
+              createdAt: previous?.createdAt || now,
+              updatedAt: now,
+            }
+            claimById.set(id, row)
+            touchedClaims.push(row)
+            if (previous) mergedClaims++
+            else addedClaims++
+          }
+
+          await putRows(KNOWLEDGE_NODE_STORE, touchedNodes)
+          await putRows(KNOWLEDGE_CLAIM_STORE, touchedClaims)
+          return {
+            nodes: await readNodes(),
+            claims: await readClaims(),
+            addedNodes, mergedNodes, skippedNodes,
+            addedClaims, mergedClaims, skippedClaims,
+          }
+        },
+
+        async setNodeStatus(id, status) {
+          if (!KNOWLEDGE_STATUSES.includes(status)) throw new Error(`未知的核验状态：${status}`)
+          const rows = await readNodes()
+          const row = rows.find(item => item.id === id)
+          if (!row || row.status === status) return row || null
+          const next = { ...row, status, updatedAt: Date.now() }
+          await putRows(KNOWLEDGE_NODE_STORE, [next])
+          return next
+        },
+
+        async setClaimStatus(id, status) {
+          if (!KNOWLEDGE_STATUSES.includes(status)) throw new Error(`未知的核验状态：${status}`)
+          const rows = await readClaims()
+          const row = rows.find(item => item.id === id)
+          if (!row || row.status === status) return row || null
+          const next = { ...row, status, updatedAt: Date.now() }
+          await putRows(KNOWLEDGE_CLAIM_STORE, [next])
+          return next
+        },
+
+        async linkEvidence(nodeId, evidenceId) {
+          const clean = String(evidenceId || '')
+          if (!clean) return null
+          const rows = await readNodes()
+          const row = rows.find(item => item.id === nodeId)
+          if (!row) return null
+          if ((row.evidenceIds || []).includes(clean)) return row
+          const next = { ...row, evidenceIds: [...(row.evidenceIds || []), clean].slice(0, MAX_EVIDENCE_LINKS_PER_NODE), updatedAt: Date.now() }
+          await putRows(KNOWLEDGE_NODE_STORE, [next])
+          return next
+        },
+
+        async setAssetId(nodeId, assetId) {
+          const clean = String(assetId || '')
+          if (!clean) return null
+          const rows = await readNodes()
+          const row = rows.find(item => item.id === nodeId)
+          if (!row) return null
+          if (row.assetId === clean) return row
+          const next = { ...row, assetId: clean, updatedAt: Date.now() }
+          await putRows(KNOWLEDGE_NODE_STORE, [next])
+          return next
+        },
+
+        // 删除一个知识节点，同时删除指向它的全部关系（图谱不允许悬挂端点）。
+        // 关系与节点在不同 store，无法共享一个事务：先删关系再删节点，中断也只是多留一条孤儿关系。
+        async removeNode(nodeId) {
+          const claims = await readClaims()
+          const doomed = claims.filter(row => row.from === nodeId || row.to === nodeId)
+          for (const row of doomed) await deleteRow(KNOWLEDGE_CLAIM_STORE, row.id)
+          await deleteRow(KNOWLEDGE_NODE_STORE, nodeId)
+          return true
+        },
+
+        // 只清空知识图谱沉淀；证据库与灵感资产不受影响（与「清空本会话临时记录」的边界互补）。
+        async clear() {
+          const clearedNodes = await withStore(KNOWLEDGE_NODE_STORE, 'readwrite', store => requestToPromise(store.clear()))
+          const clearedClaims = await withStore(KNOWLEDGE_CLAIM_STORE, 'readwrite', store => requestToPromise(store.clear()))
+          if (clearedNodes === undefined && clearedClaims === undefined) { memory.nodes = []; memory.claims = [] }
+          return true
+        },
+      }
+    }
+
+    // ── 单例 + 订阅 ───────────────────────────────────────────────────────────────
+    // 与证据库同样的理由：沉淀入口（会话事件监听）与展示入口（证据图谱）不在同一棵
+    // 子树里，靠模块级单例与监听保持同步。
+    let sharedKnowledgeStore = null
+    const knowledgeListeners = new Set()
+
+    function knowledgeStore() {
+      if (!sharedKnowledgeStore) sharedKnowledgeStore = createKnowledgeStore()
+      return sharedKnowledgeStore
+    }
+
+    function subscribeKnowledge(listener) {
+      knowledgeListeners.add(listener)
+      return () => knowledgeListeners.delete(listener)
+    }
+
+    function publishKnowledge() {
+      for (const listener of knowledgeListeners) { try { listener() } catch { /* 单个监听失败不影响其余 */ } }
     }
 
 
@@ -7940,6 +8738,15 @@ window.__ModuleLoader__.load({
       { value: 'path', label: '两点路径' }
     ]
 
+    // 图例：只渲染图上实际出现的类型；顺序按「自动沉淀知识的流向」排列新旧两组节点。
+    const GRAPH_KIND_LABELS = {
+      database: '数据库', skill: '技能', workflow: '工作流', query: '查询', 'agent-query': 'Agent 查询',
+      source: '候选来源', plan: '计划', stage: '阶段', asset: '灵感资产', evidence: '已保存证据',
+      message: '来源消息', question: '研究问题', entity: '实体', finding: '研究发现', hypothesis: '假设', method: '方法',
+    }
+    const GRAPH_LEGEND_ORDER = ['message', 'question', 'entity', 'finding', 'hypothesis', 'method', 'database', 'skill', 'workflow', 'query', 'source', 'plan', 'stage', 'asset', 'evidence']
+    const KNOWLEDGE_STATUS_OPTIONS = KNOWLEDGE_STATUSES.map(status => ({ value: status, label: KNOWLEDGE_STATUS_LABELS[status] }))
+
     // 导出物会被转发出去，读者需要先知道它含什么、不含什么。这段话同时出现在导出
     // 提示弹窗与导出文件正文里——提示不是装饰，它是本能力的验收项之一。
     const GRAPH_EXPORT_SCOPE = '仅含图上已显示的节点标题、来源库、稳定标识符、核验状态与关系；不含笔记、全文、检索词、附件或输入框草稿。'
@@ -8005,6 +8812,13 @@ window.__ModuleLoader__.load({
       const [assets, setAssets] = React.useState([])
       const vault = React.useMemo(() => evidenceVaultStore(), [])
       const [savedEvidence, setSavedEvidence] = React.useState([])
+      const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
+      const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
+      // 自动沉淀开关是显式 opt-in：默认关闭；状态持久在 localStorage，由 knowledge-deposition 读写。
+      const [autoDeposit, setAutoDeposit] = React.useState(() => isAutoDepositEnabled())
+      const [selectedKnowledgeId, setSelectedKnowledgeId] = React.useState('')
+      // 「清空本会话临时记录」范围有限但不可逆，用两段式确认（与证据库清空同一模式）。
+      const [confirmClear, setConfirmClear] = React.useState(false)
       const [flowing, setFlowing] = React.useState(true)
       const [view, setView] = React.useState(() => decodeGraphView(typeof window === 'undefined' ? '' : window.location.hash))
       const [pan, setPan] = React.useState({ x: 0, y: 0 })
@@ -8019,6 +8833,14 @@ window.__ModuleLoader__.load({
       React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
       const refreshSavedEvidence = React.useCallback(() => vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([])), [vault])
       React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
+      const refreshKnowledge = React.useCallback(() => {
+        const store = knowledgeStore()
+        Promise.all([store.listNodes(), store.listClaims()])
+          .then(([nodes, claims]) => { setKnowledgeNodes(nodes || []); setKnowledgeClaims(claims || []) })
+          .catch(() => { setKnowledgeNodes([]); setKnowledgeClaims([]) })
+      }, [])
+      React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
+      React.useEffect(() => onAutoDepositChange(value => setAutoDeposit(value)), [])
 
       // 视图状态写回链接：只写焦点、范围模式、路径两端与缩放，不写任何证据内容。
       React.useEffect(() => {
@@ -8031,7 +8853,8 @@ window.__ModuleLoader__.load({
         const savedDatabases = catalog.filter(item => item.type === 'database' && savedEvidence.some(entry => entry.sourceDatabase === item.name))
         return [...new Map([...resources, ...savedDatabases].map(item => [item.id, item])).values()]
       }, [resources, savedEvidence])
-      const graph = React.useMemo(() => buildEvidenceGraph({ resources: graphResources, workflows: records.workflows, queries: records.queries, plans: records.plans, assets, savedEvidence }), [graphResources, records, assets, savedEvidence])
+      const knowledgeInput = React.useMemo(() => ({ nodes: knowledgeNodes, claims: knowledgeClaims }), [knowledgeNodes, knowledgeClaims])
+      const graph = React.useMemo(() => buildEvidenceGraph({ resources: graphResources, workflows: records.workflows, queries: records.queries, plans: records.plans, assets, savedEvidence, knowledge: knowledgeInput }), [graphResources, records, assets, savedEvidence, knowledgeInput])
       const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
       const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
 
@@ -8112,6 +8935,38 @@ window.__ModuleLoader__.load({
         return evidenceNeighborhood(graph, view.focus, view.mode)
       }, [view, graph])
 
+      // ── 结论追溯面板（点击知识节点展开）────────────────────────────────────────
+      const selectedKnowledge = React.useMemo(
+        () => knowledgeNodes.find(node => node.id === selectedKnowledgeId) || null,
+        [knowledgeNodes, selectedKnowledgeId],
+      )
+      const relatedClaims = React.useMemo(
+        () => (selectedKnowledgeId ? knowledgeClaims.filter(claim => claim.from === selectedKnowledgeId || claim.to === selectedKnowledgeId) : []),
+        [knowledgeClaims, selectedKnowledgeId],
+      )
+      const knowledgeLabelOf = React.useCallback(
+        id => knowledgeNodes.find(node => node.id === id)?.label || id,
+        [knowledgeNodes],
+      )
+      // 冲突结论并列提示：同一对端点存在极性不一致的多条关系（如「促进」与「抑制」并存）时，
+      // 自动沉淀不裁决冲突——如实计数并提示人工核验（需求：冲突结论并列保留）。
+      const knowledgeConflictCount = React.useMemo(() => {
+        if (!selectedKnowledgeId) return 0
+        const groups = new Map()
+        for (const claim of relatedClaims) {
+          const pair = claim.from < claim.to ? `${claim.from}|${claim.to}` : `${claim.to}|${claim.from}`
+          groups.set(pair, [...(groups.get(pair) || []), claim.polarity])
+        }
+        return [...groups.values()].filter(polarities => new Set(polarities).size > 1).length
+      }, [relatedClaims, selectedKnowledgeId])
+
+      const updateKnowledgeStatus = status => {
+        if (!selectedKnowledge) return
+        knowledgeStore().setNodeStatus(selectedKnowledge.id, status)
+          .then(() => publishKnowledge())
+          .catch(error => setNotice(`更新核验状态失败：${error?.message || error}`))
+      }
+
       const minimapWidth = 148
       const minimapHeight = Math.max(70, Math.round((minimapWidth * layout.height) / Math.max(1, layout.width)))
       const frameHeight = Math.min(GRAPH_FRAME_HEIGHT, Math.max(320, layout.height))
@@ -8151,7 +9006,7 @@ window.__ModuleLoader__.load({
             className: `rk-graph-node${marked ? ' rk-graph-node-focus' : ''}`,
             opacity: dim ? 0.25 : 1,
             'aria-label': `聚焦 ${node.label}`,
-            onClick: event => { event.preventDefault(); activateNode(node.id) }
+            onClick: event => { event.preventDefault(); activateNode(node.id); setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '') }
           }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
             h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
             h('rect', { key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface, stroke: graphKindColor(node.kind), strokeWidth: 1.5 }),
@@ -8208,12 +9063,33 @@ window.__ModuleLoader__.load({
           key: 'head',
           kicker: 'Research Kit',
           title: '研究证据图谱',
-          lead: '连接本会话的资源、工作流和查询来源，并接入已保存证据；不显示检索词、原始文件、全文或笔记。箭头表示关系方向，流动效果只呈现已存在的关系。可缩放、拖拽与框选范围。',
+          lead: '连接本会话的资源、工作流和查询来源，并接入已保存证据与自动沉淀的研究知识；不显示检索词、原始文件、全文或笔记。箭头表示代码记录到的关系方向，不代表已核验的科学结论。可缩放、拖拽与框选范围。',
           actions: [
             h(Button, { key: 'motion', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停链路流动' : '播放链路流动'),
             h(Button, { key: 'export', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照'),
             h(Button, { key: 'link', variant: 'ghost', onClick: copyViewLink }, '复制视图链接'),
-            h(Button, { key: 'clear', variant: 'ghost', onClick: () => evidence.clear() }, '清空本会话查询记录')
+            h(Button, {
+              key: 'auto-deposit',
+              variant: autoDeposit ? 'soft' : 'ghost',
+              'aria-pressed': autoDeposit,
+              title: '开启后自动从助手回答提取研究知识并入库（本地完成，全部以待核验状态保存）',
+              onClick: () => {
+                const next = !autoDeposit
+                setAutoDepositEnabled(next)
+                setAutoDeposit(next)
+                setNotice(next
+                  ? '已开启自动沉淀：此后每条助手回答完成后，会在本地提取研究问题、发现、假设与引用来源，全部以「待核验」状态进入灵感资产、证据库与本图谱；相同内容自动合并，冲突结论并列保留。'
+                  : '已关闭自动沉淀：已保存的知识、证据与灵感资产全部保留，可继续手动操作。')
+              },
+            }, autoDeposit ? '自动沉淀 · 已开启' : '自动沉淀 · 已关闭'),
+            // 命名修正：这个动作清的是「本会话临时记录」（查询/工作流/计划），
+            // 不含持久化的证据、灵感资产与自动沉淀知识——两段式确认把边界写在按钮上。
+            confirmClear
+              ? h(Button, {
+                key: 'clear-confirm', variant: 'danger', icon: 'trash',
+                onClick: () => { evidence.clear(); setConfirmClear(false); setNotice('已清空本会话的查询、工作流与计划记录；已保存证据、灵感资产与自动沉淀知识不受影响。') },
+              }, '确认清空临时记录')
+              : h(Button, { key: 'clear', variant: 'ghost', onClick: () => setConfirmClear(true), title: '只清除本会话的查询、工作流与计划记录，不影响持久化数据' }, '清空本会话临时记录'),
           ]
         }),
         graph.nodes.length ? h(Toolbar, { key: 'summary', sticky: true }, [
@@ -8226,11 +9102,65 @@ window.__ModuleLoader__.load({
           h(Button, { key: 'reset', size: 'sm', variant: 'ghost', onClick: resetView }, '复位'),
           h('span', { key: 'hint', style: { marginLeft: 'auto', color: C.muted, fontSize: 12 } }, '按住 Ctrl / ⌘ 滚轮缩放；拖拽平移')
         ]) : null,
+        // 图例：只列图上实际出现的节点类型，随图动态增减。
+        graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
+          GRAPH_LEGEND_ORDER.filter(kind => graph.nodes.some(node => node.kind === kind)).map(kind => h('span', { key: kind, style: { display: 'inline-flex', alignItems: 'center', gap: 5 } }, [
+            h('span', { key: 'dot', 'aria-hidden': 'true', style: { width: 9, height: 9, borderRadius: 3, background: graphKindColor(kind), display: 'inline-block' } }),
+            GRAPH_KIND_LABELS[kind] || kind,
+          ]))) : null,
         notice ? h(Notice, { key: 'notice', tone: 'info', style: { margin: '0 var(--rk-gutter) 12px' } }, notice) : null,
         graph.nodes.length
-          ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter)', padding: 12, background: C.surfaceAlt } },
+          ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
               h('div', { style: { position: 'relative' } }, [canvas, minimap]))
-          : h(EmptyState, { key: 'empty', text: '尚无可绘制的证据关系', hint: '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成。' }),
+          : h(EmptyState, { key: 'empty', text: '尚无可绘制的证据关系', hint: '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」，让图谱随科研对话积累。' }),
+        // 结论追溯面板：点开知识节点后展示关系、关联证据、沉淀资产与来源消息摘录。
+        selectedKnowledge ? h(Card, { key: 'knowledge-detail', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [
+          h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            h('strong', { key: 't', style: { fontSize: 14 } }, selectedKnowledge.label),
+            h(Badge, { key: 'k', color: graphKindColor(selectedKnowledge.kind) },
+              `${KNOWLEDGE_KIND_LABELS[selectedKnowledge.kind] || selectedKnowledge.kind}${selectedKnowledge.entityKind ? ` · ${KNOWLEDGE_ENTITY_LABELS[selectedKnowledge.entityKind] || selectedKnowledge.entityKind}` : ''}`),
+            h('span', { key: 'spacer', style: { flex: 1 } }),
+            h(Select, {
+              key: 'status', value: selectedKnowledge.status, options: KNOWLEDGE_STATUS_OPTIONS,
+              onChange: updateKnowledgeStatus, ariaLabel: `设置「${selectedKnowledge.label}」的核验状态`,
+              style: { width: 'auto', minWidth: 96 },
+            }),
+            h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: () => setSelectedKnowledgeId('') }, '收起'),
+          ]),
+          relatedClaims.length ? h('div', { key: 'claims', style: { display: 'grid', gap: 6, fontSize: 13 } }, [
+            h('strong', { key: 'lt', style: { fontSize: 12, color: C.muted } }, '知识关系'),
+            ...relatedClaims.map(claim => {
+              const label = CLAIM_RELATION_LABELS[claim.relation] || claim.relation
+              const polarity = KNOWLEDGE_POLARITY_LABELS[claim.polarity] ? `（${KNOWLEDGE_POLARITY_LABELS[claim.polarity]}）` : ''
+              const state = claim.status !== 'to_verify' ? `（${KNOWLEDGE_STATUS_LABELS[claim.status]}）` : ''
+              return h('span', { key: claim.id }, `${knowledgeLabelOf(claim.from)} —${label}${polarity}→ ${knowledgeLabelOf(claim.to)}${state}`)
+            }),
+          ]) : null,
+          knowledgeConflictCount ? h(Notice, { key: 'conflict', tone: 'warn', icon: 'shield' },
+            `该结论存在 ${knowledgeConflictCount} 组方向或极性不一致的并列记录（例如「促进」与「抑制」并存）。自动沉淀不裁决冲突，均保留待人工核验。`) : null,
+          (selectedKnowledge.evidenceIds || []).length ? h('div', { key: 'evidence', style: { display: 'grid', gap: 4, fontSize: 13 } }, [
+            h('strong', { key: 'lt', style: { fontSize: 12, color: C.muted } }, '关联证据'),
+            ...selectedKnowledge.evidenceIds.map(id => {
+              const entry = savedEvidence.find(item => item.id === id)
+              if (!entry) return h('span', { key: id, style: { color: C.muted } }, '（关联的证据条目不在当前视图，可能已被删除或属于其他项目）')
+              return h('span', { key: id }, entry.title, entry.status ? `（${entry.status === 'verified' ? '已核验' : entry.status === 'unverified' ? '未核验' : entry.status}）` : '')
+            }),
+          ]) : null,
+          selectedKnowledge.assetId ? h('div', { key: 'asset', style: { fontSize: 13 } }, [
+            h('strong', { key: 'lt', style: { fontSize: 12, color: C.muted } }, '沉淀到灵感资产：'),
+            assets.find(item => item.id === selectedKnowledge.assetId)?.title || selectedKnowledge.assetId,
+          ]) : null,
+          (selectedKnowledge.sources || []).length ? h('div', { key: 'sources', style: { display: 'grid', gap: 8 } }, [
+            h('strong', { key: 'lt', style: { fontSize: 12, color: C.muted } }, '来源消息（自动保留的摘录）'),
+            ...selectedKnowledge.sources.map((source, index) => h('div', { key: index, style: { display: 'grid', gap: 3 } }, [
+              h('span', { key: 'm', style: { color: C.muted, fontSize: 12 } },
+                `会话 ${source.sessionId ? source.sessionId.slice(0, 12) : '本地'} · 消息 #${source.seq ?? '?'}${source.at ? ` · ${new Date(source.at).toLocaleString('zh-CN')}` : ''}`),
+              h('div', { key: 'x', style: { whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.55, padding: '8px 10px', border: `1px solid ${C.line}`, borderRadius: 8, background: C.surfaceAlt } }, source.excerpt || '（无摘录）'),
+            ])),
+          ]) : null,
+          h('p', { key: 'hint', style: { margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.5 } },
+            '以上内容由规则提取自动生成，全部以「待核验」起步；提取不等于正确，请以可访问的原文为准逐条核验后再引用。'),
+        ]) : null,
         exportOpen ? h(Modal, {
           key: 'export-modal',
           title: '导出证据链路快照',
@@ -8251,6 +9181,252 @@ window.__ModuleLoader__.load({
 
     function ResearchEvidenceGraphHost({ sessionId, embedded = false }) {
       return h(ResearchEvidenceGraph, { sessionId, assetProvider: researchAssetProvider, embedded })
+    }
+
+
+
+    // 自动沉淀编排：接入 DSH「回答完成」事件，把助手回答自动转成知识结构并联动三个库。
+    //
+    // 数据流（需求原文的对应关系）：
+    //   1. 回答完成   → sessions.binding(sessionId).eventSource 里的 assistant/message 事件；
+    //   2. 结构化提取 → extractKnowledge（问题/实体/发现/假设/方法/关系/引用来源）；
+    //   3. 自动入库   → 发现/假设/问题/方法 → 灵感资产（待验证）；引用来源 → 证据库（未核验）；
+    //                    知识节点与关系 → knowledge-store（待核验），同时生成图谱节点与连线；
+    //   4. 合并去重   → 相同内容按稳定 id 合并，追加来源消息；冲突结论（同端点不同极性）并列保留；
+    //   5. 追溯       → 节点携带来源消息摘录与证据/资产关联，图谱点开结论即可回看。
+    //
+    // 隐私与安全边界：
+    //   - 默认关闭，必须在图谱页显式开启（显式 opt-in，不静默读取会话内容）；
+    //   - 提取在浏览器本地完成，无任何网络请求；只有用户手动核验后内容才可信；
+    //   - 只保留有界摘录（每条来源 ≤200 字、每条知识 ≤5 条来源），不存整段回答。
+
+    const AUTO_DEPOSIT_STORAGE_KEY = 'dsh-research-kit.auto-deposit.enabled'
+    const AUTO_DEPOSIT_EVENT = 'dsh-research-kit:auto-deposit-changed'
+    const DEPOSITION_TAG = '自动沉淀'
+    // 证据条目的来源库标注：不是目录里的数据库，图谱里不会连到资源节点，靠 supports 边连知识节点。
+    const DEPOSITION_SOURCE_DATABASE = '会话回答'
+    // 开关关闭期间的事件水位线照常前进：开启后只处理新回答，不回溯补提取历史会话。
+    // 长度门槛只拦纯寒暄（「好的，谢谢」）；真正的过滤者是提取器——无研究内容自然返回空结构，
+    // 门槛定得过高会误伤「Ghd7 促进水稻耐盐性。」这类短而真实的回答。
+    const MIN_DEPOSITION_MESSAGE_CHARS = 12
+    // 只有这四类知识进入灵感资产；实体（基因/性状/物种…）只在图谱里作为关系端点。
+    const DEPOSIT_ASSET_KINDS = ['question', 'hypothesis', 'finding', 'method']
+    const DEPOSIT_ASSET_THINKING_KIND = { question: 'question', hypothesis: 'assumption', finding: 'conclusion', method: 'method' }
+
+    // ── 开关 ──────────────────────────────────────────────────────────────────────
+
+    function isAutoDepositEnabled() {
+      try { return globalThis.localStorage?.getItem(AUTO_DEPOSIT_STORAGE_KEY) === '1' } catch { return false }
+    }
+
+    function setAutoDepositEnabled(value) {
+      try { globalThis.localStorage?.setItem(AUTO_DEPOSIT_STORAGE_KEY, value ? '1' : '0') } catch { /* 不可用时仅本次会话生效 */ }
+      try {
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new CustomEvent(AUTO_DEPOSIT_EVENT, { detail: { enabled: Boolean(value) } }))
+        }
+      } catch { /* 通知失败不影响开关本身 */ }
+      return Boolean(value)
+    }
+
+    function onAutoDepositChange(listener) {
+      if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return () => {}
+      const handler = () => { try { listener(isAutoDepositEnabled()) } catch { /* 单个监听失败不影响其余 */ } }
+      window.addEventListener(AUTO_DEPOSIT_EVENT, handler)
+      return () => window.removeEventListener(AUTO_DEPOSIT_EVENT, handler)
+    }
+
+    // ── 处理水位线（按会话记录已提取到的 seq）──────────────────────────────────────
+    // localStorage 足够：每会话只存一个数字。刷新页面后事件源会重放全部历史事件，
+    // 靠水位线避免重复沉淀；没有它，每次刷新都会把旧回答再入库一遍。
+
+    function depositionCursorKey(sessionId) {
+      return `dsh-research-kit.deposition.cursor.${String(sessionId || 'local')}`
+    }
+
+    function readDepositionCursor(sessionId) {
+      try { return Number(globalThis.localStorage?.getItem(depositionCursorKey(sessionId))) || 0 } catch { return 0 }
+    }
+
+    function writeDepositionCursor(sessionId, seq) {
+      try { globalThis.localStorage?.setItem(depositionCursorKey(sessionId), String(Number(seq) || 0)) } catch { /* 不可用时重启后会重复提取一次，可接受 */ }
+    }
+
+    // ── 单条消息沉淀 ──────────────────────────────────────────────────────────────
+
+    function normalizeTitleForDedupe(title) {
+      return normalizeKnowledgeLabel(title).toLowerCase()
+    }
+
+    const EMPTY_SUMMARY = { extracted: false, addedNodes: 0, mergedNodes: 0, addedClaims: 0, mergedClaims: 0, citations: 0, savedEvidence: 0, duplicateEvidence: 0, failedEvidence: 0, savedAssets: 0, skippedAssets: 0 }
+
+    // 把一条助手回答沉淀入库。所有依赖可注入（store/assetProvider/saveEvidence/activeProject），
+    // 便于在 Node 测试里用内存存储与桩复现完整链路；浏览器侧使用默认单例。
+    // 返回摘要供测试与 UI 提示使用；任何单步失败都被计数吞掉——自动流程不允许打断宿主。
+    async function depositAssistantMessage({
+      text,
+      sessionId = '',
+      seq = null,
+      turn = null,
+      at = 0,
+      assetProvider = null,
+      store = knowledgeStore(),
+      saveEvidence = saveEvidenceEntry,
+      activeProject,
+      now = Date.now(),
+    } = {}) {
+      const summary = { ...EMPTY_SUMMARY, sessionId: String(sessionId || ''), seq: Number.isFinite(Number(seq)) ? Number(seq) : null }
+      const source = String(text || '')
+      if (!source.trim()) return summary
+      const extraction = extractKnowledge(source)
+      summary.citations = extraction.citations.length
+      if (!extraction.nodes.length && !extraction.claims.length && !extraction.citations.length) return summary
+      summary.extracted = true
+
+      const origin = { sessionId: summary.sessionId, seq: summary.seq, turn, at: at || now, excerpt: source.trim() }
+      const applied = await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: origin, now })
+      summary.addedNodes = applied.addedNodes
+      summary.mergedNodes = applied.mergedNodes
+      summary.addedClaims = applied.addedClaims
+      summary.mergedClaims = applied.mergedClaims
+
+      const project = activeProject !== undefined ? activeProject : getActiveProject()
+      const touchedByThisMessage = row => (row.sources || []).some(item => item.sessionId === summary.sessionId && item.seq === summary.seq)
+
+      // 引用来源 → 证据库：状态保持「未核验」，重复（同项目同标识符）直接跳过，绝不覆盖已有条目。
+      const evidenceIds = []
+      for (const citation of extraction.citations) {
+        try {
+          const result = await saveEvidence({
+            title: citation.title || citation.identifier || citation.url,
+            sourceDatabase: DEPOSITION_SOURCE_DATABASE,
+            identifier: citation.identifier,
+            identifierKind: citation.identifierKind,
+            url: citation.url,
+            project,
+            tags: [DEPOSITION_TAG],
+            reason: `自动沉淀：助手回答中引用的来源（消息 seq ${summary.seq ?? '未知'}），需逐条人工核验。`,
+            note: `来源摘录：${(citation.title || '').slice(0, 160)}`,
+          })
+          if (result?.entry?.id) { evidenceIds.push(result.entry.id); summary.savedEvidence++ }
+        } catch (error) {
+          if (error?.code === 'DUPLICATE') summary.duplicateEvidence++
+          else summary.failedEvidence++
+        }
+      }
+      if (evidenceIds.length) {
+        for (const node of applied.nodes) {
+          if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+          if (!touchedByThisMessage(node)) continue
+          for (const evidenceId of evidenceIds) await store.linkEvidence(node.id, evidenceId)
+        }
+      }
+
+      // 发现/假设/问题/方法 → 灵感资产：按标题去重（同一结论不重复建卡），全部为「待验证」。
+      let knownTitles = new Set()
+      if (typeof assetProvider?.list === 'function') {
+        try { knownTitles = new Set(((await assetProvider.list()) || []).map(item => normalizeTitleForDedupe(item?.title)).filter(Boolean)) } catch { knownTitles = new Set() }
+      }
+      for (const node of applied.nodes) {
+        if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+        if (!touchedByThisMessage(node)) continue
+        const body = node.sources?.[0]?.excerpt || node.label
+        if (!body.trim() || typeof assetProvider?.save !== 'function' || knownTitles.has(normalizeTitleForDedupe(node.label))) { summary.skippedAssets++; continue }
+        try {
+          const asset = await assetProvider.save({
+            title: node.label,
+            body,
+            type: 'insight',
+            thinkingKind: DEPOSIT_ASSET_THINKING_KIND[node.kind] || 'conclusion',
+            epistemicStatus: 'to_verify',
+            verification: { status: 'pending', evidence: '', checkedAt: 0 },
+            project,
+            tags: [DEPOSITION_TAG],
+            note: `自动沉淀自助手回答，默认待验证；来源消息：会话 ${summary.sessionId || '本地'} seq ${summary.seq ?? '未知'}。`,
+            provenance: { kind: 'auto-deposition', sessionId: summary.sessionId, seq: summary.seq },
+          })
+          if (asset?.id) {
+            await store.setAssetId(node.id, asset.id)
+            knownTitles.add(normalizeTitleForDedupe(node.label))
+            summary.savedAssets++
+          } else { summary.skippedAssets++ }
+        } catch { summary.skippedAssets++ }
+      }
+
+      publishKnowledge()
+      return summary
+    }
+
+    // ── DSH 事件接线 ──────────────────────────────────────────────────────────────
+
+    // assistant/message 的 data.message.content 是内容块数组；只取可见文本块。
+    function depositionTextOf(data) {
+      const content = data?.message?.content
+      if (!Array.isArray(content)) return ''
+      return content.filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
+    }
+
+    // 挂到 DSH 会话服务上：
+    //   - 跟随 sessions.list 的当前会话切换，逐会话订阅事件流（eventSource）；
+    //   - 每次事件流通知都扫一遍新 assistant/message（seq 大于水位线），
+    //     串行排队沉淀，失败不重试、不打断宿主；
+    //   - 宿主未提供 sessions 服务（单测/独立页）时返回空操作，绝不抛错。
+    // 返回卸载函数：插件卸载时解除全部订阅。
+    function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
+      const sessions = ctx?.sessions
+      if (!sessions?.list || typeof sessions?.binding !== 'function') return () => {}
+      let disposeFeed = () => {}
+      let boundSessionId = ''
+      let queue = Promise.resolve()
+
+      const drain = eventSource => {
+        const windowArg = eventSource.getSnapshot()
+        const entries = Array.isArray(windowArg?.entries) ? windowArg.entries : []
+        let cursor = readDepositionCursor(boundSessionId)
+        for (const event of entries) {
+          if (!event || event.type !== 'assistant/message') continue
+          const seq = Number(event.seq)
+          if (!Number.isFinite(seq) || seq <= cursor) continue
+          cursor = seq
+          const data = event.data || {}
+          const text = depositionTextOf(data)
+          // interrupted 是被取消的半截回答：不完整，不做提取（需求只提「回答完成」）。
+          if (isAutoDepositEnabled() && !data.interrupted && text.length >= MIN_DEPOSITION_MESSAGE_CHARS) {
+            const payload = { text, sessionId: boundSessionId, seq, turn: Number(data.turn) || null, at: Number(event.time) || Date.now(), assetProvider }
+            queue = queue.then(() => depositAssistantMessage(payload)).catch(() => { /* 单条失败不阻断后续消息 */ })
+          }
+          writeDepositionCursor(boundSessionId, cursor)
+        }
+      }
+
+      const rebind = sessionId => {
+        if (sessionId === boundSessionId) return
+        try { disposeFeed() } catch { /* 旧订阅已失效也继续 */ }
+        disposeFeed = () => {}
+        boundSessionId = sessionId ? String(sessionId) : ''
+        if (!boundSessionId) return
+        let binding = null
+        try { binding = sessions.binding(boundSessionId) } catch { return }
+        const eventSource = binding?.eventSource
+        if (!eventSource || typeof eventSource.getSnapshot !== 'function' || typeof eventSource.subscribe !== 'function') return
+        const handle = () => { try { drain(eventSource) } catch { /* 沉淀环节的任何异常都不允许冒泡到宿主 */ } }
+        try { disposeFeed = eventSource.subscribe(handle) } catch { disposeFeed = () => {}; return }
+        handle()
+      }
+
+      const followCurrentSession = () => {
+        let current = ''
+        try { current = sessions.list.getSnapshot()?.current || '' } catch { /* 会话列表不可读时保持现状 */ }
+        rebind(current ? String(current) : '')
+      }
+
+      let disposeList = () => {}
+      try { disposeList = sessions.list.subscribe(followCurrentSession) } catch { disposeList = () => {} }
+      followCurrentSession()
+      return () => {
+        try { disposeList() } catch { /* 已失效 */ }
+        try { disposeFeed() } catch { /* 已失效 */ }
+      }
     }
 
 
@@ -9310,6 +10486,15 @@ window.__ModuleLoader__.load({
         ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
       ]
       const disposers = [registerResearchSlots(ctx, components)]
+      // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
+      // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
+      try {
+        disposers.push(attachKnowledgeDeposition(ctx, {
+          // researchAssetProvider 是构建产物拼接作用域里的顶层符号（prompt-studio-glue.js 定义）；
+          // 源码形态下不存在，用 typeof 守卫，避免 ReferenceError。
+          assetProvider: typeof researchAssetProvider === 'undefined' ? null : researchAssetProvider,
+        }))
+      } catch { /* 沉淀接线失败不影响四个视图槽位 */ }
       return () => disposers.forEach(dispose => dispose?.())
     }
 

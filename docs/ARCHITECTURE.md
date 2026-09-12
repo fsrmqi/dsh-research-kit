@@ -85,6 +85,8 @@ dsh-research-kit/
 │   ├── research-selection-store.js  # 会话级资源选择（仅存于当前会话）
 │   ├── evidence-store.js            # 本会话证据索引（只读汇总）
 │   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB 最小 schema + 内存降级 + 项目隔离 / 去重 / 备份
+│   ├── knowledge-store.js           # 自动沉淀知识库持久化：节点/关系双 store，稳定 id 去重合并、冲突并列（IndexedDB + 内存降级）
+│   ├── knowledge-deposition.js      # 自动沉淀编排：开关、assistant/message 事件接线、水位线、联动灵感资产与证据库
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
 │   ├── catalog-category-filter.js   # 工作台与弹层共用的分类筛选组件（快捷分类与颜色集中在此）
@@ -93,7 +95,7 @@ dsh-research-kit/
 │   ├── route-replay.js              # 组装回放：trace 分段、引用块预览、独立 viewer 弹窗（§3.2）
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
 │   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
-│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点
+│   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点 + 自动沉淀开关与结论追溯面板
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
@@ -101,7 +103,8 @@ dsh-research-kit/
 │       ├── icons.js                 # 图标 path
 │       ├── enhance-output.js        # 模型输出协议解析（Node half 与浏览器共用）
 │       ├── vault-core.js            # 灵感资产纯逻辑与隐私边界
-│       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据接入）
+│       ├── knowledge-extract.js     # 自动沉淀结构化提取器（纯逻辑）：知识节点/关系/引用来源，确定性与有界性契约
+│       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据与自动沉淀知识接入）
 │       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
@@ -130,7 +133,7 @@ dsh-research-kit/
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
-├── test/                            # 173 项测试（20 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 205 项测试（23 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -149,6 +152,9 @@ dsh-research-kit/
 | `src/research-selection-store.js` | 会话级资源选择的读写与广播 | 跨会话持久化。 |
 | `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
 | `src/evidence-vault-store.js` | 证据库持久化：IndexedDB 最小 schema、按项目隔离与去重、备份序列化，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目。 |
+| `src/knowledge-store.js` | 自动沉淀知识库持久化：节点/关系双 store、稳定 id 去重合并、冲突并列保留，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；改写用户推进过的核验状态。 |
+| `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与水位线、订阅 DSH 会话事件流（`sessions.binding().eventSource`）、调用提取器并联动三个库 | 在开关关闭时提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
+| `src/lib/knowledge-extract.js` | 规则化结构提取：知识节点/关系/引用来源，确定性与有界性输出 | 访问 DOM、网络或存储；把无法核验的提取结果标为已核验。 |
 | `src/theme.js` | 主题 CSS 变量与 GlobalStyle 注入 | 读取宿主私有主题 API。 |
 | `src/ui.js` | 无业务状态的基础组件与图标 | 持有业务逻辑或读取目录数据。 |
 | `src/research-console.js` | 分区调度、分区导航、两级吸顶偏移实测 | 持有任何分区的业务逻辑，或读写分区的数据。 |
@@ -172,8 +178,8 @@ dsh-research-kit/
 | --- | --- | --- | --- | --- |
 | 资源与工作流 | 发现层 | 目录检索、按参数与技能组装 Prompt、公开数据源直查 | 不生产知识、不沉淀资产、不直接出网 | 目录收藏与使用历史 |
 | 方法工坊 | 构造层 | 方法卡库、变量填充生成可编辑 Prompt、从当前对话提取草稿并写回输入框 | 不管理资产正文、不检索项目记忆或最近会话、不替工作流决定领域参数 | 方法卡与工坊资产 |
-| 研究资产库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不自动入库、不静默注入 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
-| 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源、资产与已保存证据之间的关系（节点与边见 §3.5） | 不执行查询、不生成结论、不保存原始文件与检索词；对证据库只读接入，不写入、不携带笔记与全文 | 本会话证据索引（`evidence-store`）；对证据库（IndexedDB `dsh-research-kit-evidence`）只读 |
+| 研究资产库（含「灵感资产 / 证据库」子模块） | 沉淀层 | 灵感资产增删改、版本派生与对比、验证状态跟进；证据库逐条保存来源元数据与笔记、按项目隔离与去重、导出导入与彻底删除 | 不生成 Prompt、不存原始数据与完整查询结果、不静默注入；「不自动入库」的唯一例外是显式开启的自动沉淀（见 §3.6）——入库条目一律带「自动沉淀」标签且保持未核验/待验证 | 灵感资产（PromptKit asset provider）；证据条目（IndexedDB `dsh-research-kit-evidence`） |
+| 研究证据图谱 | 证据层 | 可视化本会话已选资源、已启动工作流、直查来源、资产、已保存证据与自动沉淀知识之间的关系（节点与边见 §3.5）；承载自动沉淀开关与结论追溯面板 | 不执行查询、不生成结论、不保存原始文件与检索词；对证据库只读接入，不写入、不携带笔记与全文 | 本会话证据索引（`evidence-store`）；自动沉淀知识库（IndexedDB `dsh-research-kit-knowledge`）；对证据库只读 |
 
 契约由 `src/lib/console-sections.js` 声明、`test/research-console.test.js` 守护：
 
@@ -414,12 +420,13 @@ composeWorkflow(workflow, values, …)
 ### 3.5 证据图谱（分区④）
 
 ```text
-输入（四个来源，全部只读）
+输入（五个来源；前四个只读，第五个由 §3.6 的开关控制写入）
   ├─ 本会话资源选择（分区① 勾选，存内存 selection store）
   ├─ 本会话查询记录（工作流启动 / 数据源直查，存内存 evidence store）
   ├─ 灵感资产（PromptKit asset provider，含派生与关联关系）
-  └─ 已保存证据（IndexedDB dsh-research-kit-evidence，只读接入；见 §3.4）
-  → buildEvidenceGraph() 纯逻辑产出节点与边（不含检索词、全文、笔记）
+  ├─ 已保存证据（IndexedDB dsh-research-kit-evidence，只读接入；见 §3.4）
+  └─ 自动沉淀知识（IndexedDB dsh-research-kit-knowledge；节点/关系，见 §3.6）
+  → buildEvidenceGraph() 纯逻辑产出节点与边（不含检索词、全文、笔记与来源摘录）
   → layoutEvidenceGraph() 确定性分层布局：按 kind 分列，同列按 id 字典序（新增节点不让已有节点跳位）
   → routeEvidenceEdges() 端口路由 + 方向性锚点：正向右缘→左缘，逆向左缘→右缘，贝塞尔连线
   → 视图层只消费布局结果：缩放平移、迷你地图、范围模式、导出均为确定性重算，不持有图算法
@@ -435,8 +442,9 @@ composeWorkflow(workflow, values, …)
 | `source` | `source:` | 候选来源标题与链接 |
 | `asset` | `asset:` | 资产标题与认识状态 |
 | `evidence` | `evidence:` | `来源库 · 稳定标识符 · 核验状态` |
+| `message` / `question` / `entity` / `finding` / `hypothesis` / `method` | `message:` / `kn-` | 自动沉淀知识（类型 · 实体子类 · 核验状态），见 §3.6 |
 
-边类型共七种：`workflow → resource`（`uses`）、`query → resource`（`queries`）、`query → source`（`returns`）、`asset → asset`（`derives`，派生自父资产）、`asset → asset | evidence`（`relates`，显式关联）、`evidence → resource`（`saved-from`，按来源库名匹配同库资源）、`evidence → source`（`saved-copy`，按 URL 或稳定标识符匹配本会话查询来源）。两端节点必须都存在，否则该边不产出。
+自动沉淀相关的边：`message → 知识节点`（`records`，摘自哪条会话消息）、知识关系本体（`may-affect` / `promotes` / `inhibits` / `causes` / `correlates` / `research-subject` / `about`）、`evidence → 知识节点`（`supports`，关联证据支持该结论）、`知识节点 → asset`（`deposited`，已沉淀为灵感资产）。此前七种会话/沉淀边保持不变：`uses`、`queries`、`returns`、`derives`、`relates`、`saved-from`、`saved-copy`。两端节点必须都存在，否则该边不产出。
 
 **方向性锚点。** 连线原先固定「左缘连到右缘」，当边方向本身逆向时（如 `workflow → resource`——工作流列在资源列右侧）线段会穿过节点、产生穿越感。现改为按两端 `x` 决定锚点：`from.x <= to.x` 走「右缘 → 左缘」，否则走「左缘 → 右缘」。因为锚点自适应会让「箭头指向谁」不再自明，图谱导语显式写着「箭头表示关系方向」。
 
@@ -445,6 +453,29 @@ composeWorkflow(workflow, values, …)
 **隐私边界。** 证据节点只带来源库、稳定标识符与核验状态，**不带笔记、全文或检索词**；图谱对证据库是只读接入（不写入、不修改）。未保存的查询来源与已保存证据是两类不同节点，前者随页面内存消失，后者持久化在 IndexedDB，二者不互相冒充。该边界由 `test/evidence-graph.test.js` 断言（序列化结果不得包含笔记正文），并延伸到导出与分享：
 
 **导出与视图链接。** 复制视图链接只编码焦点、范围模式、路径两端与缩放（`encodeGraphView`），**绝不编码证据内容**——链接会被转发，标题与标识符都不该进去。导出快照（SVG / HTML）由用户显式触发，导出弹窗与导出文件正文都写明元数据范围：仅含节点标题、来源库、稳定标识符、核验状态与关系，不含笔记、全文、检索词、附件或输入框草稿；导出物把当前主题解析成真实色值（导出到独立文件后 CSS 变量不再有定义，否则会渲染成黑块）。
+
+### 3.6 自动沉淀（图谱页开关，默认关闭）
+
+```text
+回答完成（DSH 会话事件流 assistant/message，含 turn/step/seq，interrupted 半截回答跳过）
+  → attachKnowledgeDeposition()：跟随当前会话，按「每会话水位线」（localStorage）只处理新消息
+  → extractKnowledge() 规则提取（纯逻辑、本地完成、无网络请求）：
+      研究问题 / 实体（基因·蛋白·性状·物种·通路·物质）/ 发现 / 假设 / 方法 / 引用来源（DOI·PMID·URL· accession）
+      二元关系（可能影响 / 促进 / 抑制 / 导致 / 相关 / 研究对象），极性分正向·负向·不确定
+  → 三路入库（全部「待核验 / 未核验」起步，带「自动沉淀」标签）：
+      发现·假设·问题·方法 → 灵感资产（按标题去重，thinkingKind 映射，provenance 记录来源消息）
+      引用来源 → 证据库（复用证据库去重：同项目同标识符跳过，绝不覆盖已有条目）
+      知识节点与关系 → knowledge-store（IndexedDB，稳定 id 去重合并）
+  → publishKnowledge() 广播 → 图谱出现「来源消息 → 知识 → 证据/资产」链路
+```
+
+**可信度与合并语义。** 从回答提取出来不等于正确：所有自动条目一律以待核验起步，只有人工可推进核验状态，且 `knowledge-store` 明确不把人工状态降回待核验；证据条目沿用「保存不等于认可」的未核验默认。相同内容按稳定 id（规范化标签哈希 / 关系四元组哈希）合并并追加来源消息（每条知识最多保留 5 条来源、每条摘录 ≤200 字）；同一对实体的相反或不同方向关系（如「促进」与「抑制」并存）是不同记录，**并列保留**——冲突由结论追溯面板计数提示，自动沉淀不裁决。提取器是规则式的，捕捉不到不算失败；节点 ≤24、关系 ≤24、引用 ≤8 每条消息封顶。
+
+**开关与水位线。** 默认关闭，只能在图谱页显式开启（不静默读取会话内容）；关闭期间水位线照常前进——重新开启后只处理新回答，不回溯补提取历史消息，也不会把开启前的旧对话重复入库。页面刷新后事件窗口会重放全部历史事件，水位线（按会话记录已处理 seq）保证不重复沉淀。单条消息沉淀失败只计数、不重试、绝不打断宿主页面。
+
+**结论追溯面板。** 点击图谱中的知识节点展开：知识关系（含方向与极性）、关联证据条目（含核验状态）、沉淀到的灵感资产，以及来源消息摘录（会话 · 消息 seq · 摘录原文）；面板内可直接推进核验状态。图谱页另提供动态图例（只列图上实际出现的节点类型）。「清空本会话临时记录」（原「清空本会话查询记录」）只清本会话的查询、工作流与计划记录，**不触及**已保存证据、灵感资产与自动沉淀知识；自动沉淀知识另有独立的清空入口（`knowledge-store.clear()`），两者边界互补。
+
+**隐私边界。** 提取在浏览器本地完成，无任何新增网络请求；只保留有界摘录不存整段回答；知识节点的图数据只含类型与核验状态，**来源摘录不进入图数据**（由 `test/evidence-graph.test.js` 断言），因此导出快照天然脱敏；溯源详情只在图谱面板内由 knowledge-store 直读。
 
 ## 4. 目录数据契约
 

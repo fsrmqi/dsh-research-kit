@@ -80,7 +80,7 @@ A single `conversation.view` tab, sectioned along the research loop. The section
 | Resources & Workflows | Discover | Catalog search, parameterized assembly, direct database lookup |
 | Method Workshop | Construct | Method cards + variable fill-in → editable prompt; extract a draft from the current conversation |
 | Research Vault | Deposit | Asset CRUD, version diff, verification tracking; an **Evidence Vault** sub-module saves source metadata and notes per item, project-isolated and de-duplicated |
-| Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources, assets and saved evidence |
+| Evidence Graph | Evidence | Traceable relations among this session's resources, workflows, query sources, assets, saved evidence and auto-deposited research knowledge; optional "auto deposition" accumulates knowledge as the research conversation grows |
 
 ![The research loop across four sections: discover, construct, deposit, evidence](docs/assets/research-loop.svg)
 
@@ -94,8 +94,9 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Composer quick entry** — "Resources / Workflows" buttons on the composer toolbar open an overlay picker without leaving the chat; a selected workflow goes through a preview dialog and writes the draft. **It never auto-sends.**
 - **Draft enhancer** — one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original.
 - **Favorites & history** — one-click star on any entry; successful write/send/copy is recorded locally (ID, name, first-line summary, timestamp; 20 entries max).
-- **Evidence vault** — save individual results from public database lookups, each carrying a stable identifier (DOI / PMID / NCT / arXiv) and source link, defaulting to "unverified"; project-isolated de-duplication, JSON export/import and hard delete. **Only source metadata and notes you write are stored — no full text, no query terms, and nothing is saved automatically.**
+- **Evidence vault** — save individual results from public database lookups, each carrying a stable identifier (DOI / PMID / NCT / arXiv) and source link, defaulting to "unverified"; project-isolated de-duplication, JSON export/import and hard delete. **Only source metadata and notes you write are stored — no full text, no query terms. Nothing is saved automatically except by the explicitly enabled auto deposition below, which tags every entry and keeps it "unverified".**
 - **Evidence graph** — traces relations among this session's resources, workflows, query sources, assets and **saved evidence**; evidence nodes carry only source database / stable identifier / verification status, **never notes or query terms**; arrows show relation direction, with anchors chosen from the two endpoints' actual positions rather than a fixed "always left-to-right". Deterministic layered layout with Ctrl / ⌘ wheel zoom, drag panning and reset, a minimap for quick navigation, and four range modes (focus / upstream / downstream / two-point path); you can copy a link that carries view state only, and export desensitized SVG / HTML snapshots (the metadata scope is stated before each export).
+- **Auto deposition (off by default)** — once enabled on the graph page, every completed assistant reply is parsed locally into research questions, entities (gene / protein / trait / organism…), findings, hypotheses, methods and cited sources, plus their relations (e.g. "gene —may affect→ trait ←research subject— organism"). Findings/hypotheses/questions/methods land in the asset vault ("to verify"), cited sources land in the evidence vault ("unverified", tagged), and knowledge nodes/relations appear in the graph with traceable source-message excerpts; identical content merges, conflicting conclusions are kept side by side, everything starts as "to verify", and turning it off keeps everything already saved.
 - **Research-result explainer diagrams** — a built-in "research result explainer diagram" workflow turns findings into diagram IR, which `scripts/render-diagrams.mjs --html` renders **deterministically** into single-file interactive HTML (shareable and opens offline); `--from-files` scaffolds IR from files produced in a session. `scripts/validate-diagrams.mjs` gives machine-readable rule diagnostics and is part of `npm run check` (no IR files ship in the repo, so it takes effect when an IR is produced or reviewed).
 - **Multiple prompt exits** — beyond write-to-composer and send, "Copy prompt" works even when host actions are missing.
 - **Launch-time validation** — field-level errors (red border + message) inside the preview dialog; missing required parameters never write the draft.
@@ -214,7 +215,7 @@ The remaining 111 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (525 entries, 525 unique IDs, shards identical to the aggregated entries), 173 regression tests in 20 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (525 entries, 525 unique IDs, shards identical to the aggregated entries), 205 regression tests in 23 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -223,7 +224,7 @@ Verified so far: catalog contract validation (525 entries, 525 unique IDs, shard
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (173 / 20 files)
+npm test        # pure-logic, contract and render-level regression tests (205 / 23 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

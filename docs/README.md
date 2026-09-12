@@ -58,4 +58,4 @@
 
 1. **`ui/client.js` 是构建产物，不得手改。** 改源码后必须 `npm run build` 并提交产物，CI 会校验一致性。
 2. **`vendor/` 下的工件均为 SHA 锁定快照，不得手改。** 当前 3 个（`promptkit-embed.js`、`archify/template.html`、`archify/i18n.mjs`），清单与校验方式见 `vendor/vendor-manifest.json` 与 [NOTICE](../NOTICE)；改动任何一个都会让 `npm run check` 失败。
-3. **自动化测试无法替代真实 profile 验收。** 仓库内 173 项测试（20 个测试文件）覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。
+3. **自动化测试无法替代真实 profile 验收。** 仓库内 205 项测试（23 个测试文件）覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。

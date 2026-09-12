@@ -1,6 +1,7 @@
 // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [] } = {}) {
+import { KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUS_LABELS } from './knowledge-extract.js'
+export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] } } = {}) {
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -48,19 +49,45 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
       if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
     }
   }
+  // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
+  // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
+  // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
+  const knowledgeNodes = Array.isArray(knowledge?.nodes) ? knowledge.nodes : []
+  const knowledgeClaims = Array.isArray(knowledge?.claims) ? knowledge.claims : []
+  for (const record of knowledgeNodes) {
+    if (!record?.id || nodes.has(record.id)) continue
+    const kindLabel = KNOWLEDGE_KIND_LABELS[record.kind] || record.kind || '知识'
+    const entityLabel = record.kind === 'entity' && record.entityKind ? ` · ${KNOWLEDGE_ENTITY_LABELS[record.entityKind] || record.entityKind}` : ''
+    add({ id: record.id, kind: record.kind, label: record.label || '未命名知识', detail: `${kindLabel}${entityLabel} · ${KNOWLEDGE_STATUS_LABELS[record.status] || '待核验'}` })
+    for (const source of record.sources || []) {
+      if (!source || (source.seq === null && !source.sessionId)) continue
+      const messageId = `message:${source.sessionId || 'local'}:${source.seq ?? 0}`
+      add({ id: messageId, kind: 'message', label: `会话消息 #${source.seq ?? '?'}`, detail: source.at ? new Date(source.at).toLocaleString('zh-CN') : '' })
+      link(messageId, record.id, 'records')
+    }
+    for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'supports')
+    if (record.assetId) link(record.id, `asset:${record.assetId}`, 'deposited')
+  }
+  // 关系端点指向不存在（或被删除）的节点时，由末尾的边过滤自然剔除，不悬挂。
+  for (const claim of knowledgeClaims) {
+    if (!claim?.from || !claim?.to) continue
+    link(claim.from, claim.to, claim.relation || 'relates')
+  }
   return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
 }
 
 export const EVIDENCE_NODE_COLORS = {
-  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b'
+  database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
+  message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',
 }
 
 // ── 布局 ──────────────────────────────────────────────────────────────────────
-// 分列语义：资源在最左（0），已保存证据在最右（4）。kind → 列号是固定映射，
+// 分列语义：来源消息在最左（0），已保存证据在最右（4）。kind → 列号是固定映射，
 // 不随图的形状变化，否则同一批节点会因新边出现而整体换列。
+// 自动沉淀知识的流向：消息(0) → 问题/实体(1) → 发现/假设/方法(2) → 证据(4)。
 export const GRAPH_NODE_WIDTH = 136
 export const GRAPH_NODE_HEIGHT = 54
-const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4 }
+const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2 }
 const GRAPH_COLUMN_GAP = 220
 const GRAPH_ROW_GAP = 82
 const GRAPH_ORIGIN_X = 70

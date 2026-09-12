@@ -14,7 +14,9 @@ const DB_VERSION = 1
 const STORE = 'evidence'
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
-function indexedDbFactory() {
+// indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
+// 导出而非复制——构建器把全部模块拼进同一作用域，同名顶层函数会静默覆盖。
+export function indexedDbFactory() {
   try {
     return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
   } catch {
@@ -22,7 +24,7 @@ function indexedDbFactory() {
   }
 }
 
-function requestToPromise(request) {
+export function requestToPromise(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败'))

@@ -173,3 +173,39 @@ test('导出只消费图上已显示的布局与路由，不读取证据原文',
   assert.ok(body.includes('routes'), '导出应遍历已解析路由')
   assert.ok(!/savedEvidence|\.note\b|entry\./.test(body), '导出不得读取证据库原文或笔记')
 })
+
+// ── 自动沉淀知识接入 ──────────────────────────────────────────────────────────
+test('知识图谱：节点、关系、来源消息与证据支持边接入图谱', () => {
+  const graph = buildEvidenceGraph({
+    savedEvidence: [{ id: 'ev1', title: '已保存论文', sourceDatabase: '会话回答', identifier: '10.1038/x', status: 'unverified' }],
+    knowledge: {
+      nodes: [
+        { id: 'kn-gene', kind: 'entity', entityKind: 'gene', label: 'Ghd7', status: 'to_verify', sources: [{ sessionId: 's1', seq: 3, at: 1000 }] },
+        { id: 'kn-trait', kind: 'entity', entityKind: 'trait', label: '耐盐性', status: 'to_verify', sources: [] },
+        { id: 'kn-finding', kind: 'finding', label: 'Ghd7 可能影响耐盐性', status: 'to_verify', evidenceIds: ['ev1'] },
+      ],
+      claims: [
+        { id: 'kc1', from: 'kn-gene', to: 'kn-trait', relation: 'may-affect', polarity: 'uncertain' },
+        { id: 'kc2', from: 'kn-finding', to: 'kn-gene', relation: 'about', polarity: 'neutral' },
+      ],
+    },
+  })
+  assert.ok(graph.nodes.some(node => node.id === 'kn-gene' && node.kind === 'entity'))
+  assert.ok(graph.nodes.some(node => node.id === 'message:s1:3' && node.kind === 'message'), '来源消息应成为图谱节点')
+  assert.ok(graph.edges.some(edge => edge.from === 'message:s1:3' && edge.to === 'kn-gene' && edge.kind === 'records'))
+  assert.ok(graph.edges.some(edge => edge.from === 'kn-gene' && edge.to === 'kn-trait' && edge.kind === 'may-affect'))
+  assert.ok(graph.edges.some(edge => edge.from === 'evidence:ev1' && edge.to === 'kn-finding' && edge.kind === 'supports'))
+  const layout = layoutEvidenceGraph(graph)
+  const byId = new Map(layout.nodes.map(node => [node.id, node]))
+  assert.ok(byId.get('message:s1:3').x < byId.get('kn-finding').x, '来源消息应在发现节点左侧')
+  // 端点缺失的关系必须被剔除，不允许悬挂
+  const dangling = buildEvidenceGraph({ knowledge: { nodes: [], claims: [{ id: 'kc', from: 'kn-a', to: 'kn-b', relation: 'relates' }] } })
+  assert.equal(dangling.edges.length, 0)
+})
+
+test('知识节点的图数据不含来源摘录（导出物脱敏的前提）', () => {
+  const graph = buildEvidenceGraph({
+    knowledge: { nodes: [{ id: 'kn-x', kind: 'finding', label: '结论', status: 'to_verify', sources: [{ sessionId: 's', seq: 1, excerpt: '不应进入图数据的摘录' }] }], claims: [] },
+  })
+  assert.ok(!JSON.stringify(graph).includes('不应进入图数据'), '来源摘录不得进入图数据')
+})
