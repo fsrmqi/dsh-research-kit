@@ -104,3 +104,38 @@ test('hashKey 与规范化标签是稳定去重的地基', () => {
   assert.notEqual(knowledgeKeyFor('entity', 'gene', 'Ghd7'), knowledgeKeyFor('entity', 'trait', 'Ghd7'), '不同实体类型不合并')
   assert.equal(normalizeKnowledgeLabel('  水稻的耐盐性。'), '水稻的耐盐性', '首尾标点应剥离')
 })
+
+// ── 英文句式 ──────────────────────────────────────────────────────────────────
+
+test('英文：may affect + in <物种> 尾巴拆出研究对象关系', () => {
+  const { nodes, claims } = extractKnowledge('Ghd7 may affect salt tolerance in rice.')
+  const gene = nodes.find(node => node.label === 'Ghd7')
+  const trait = nodes.find(node => node.label === 'salt tolerance')
+  const organism = nodes.find(node => node.label === 'rice')
+  assert.ok(gene?.entityKind === 'gene' && trait?.entityKind === 'trait' && organism?.entityKind === 'organism')
+  assert.ok(claims.some(claim => claim.fromKey === gene.key && claim.toKey === trait.key && claim.relation === 'may-affect' && claim.polarity === 'uncertain'))
+  assert.ok(claims.some(claim => claim.fromKey === organism.key && claim.toKey === trait.key && claim.relation === 'research-subject'))
+})
+
+test('英文：促进/抑制/相关的方向与极性', () => {
+  const promotes = extractKnowledge('OsNAC3 significantly promotes salt tolerance.').claims
+  assert.ok(promotes.some(claim => claim.relation === 'promotes' && claim.polarity === 'positive'))
+  const inhibits = extractKnowledge('ABA inhibits seed germination.').claims
+  assert.ok(inhibits.some(claim => claim.relation === 'inhibits' && claim.polarity === 'negative'))
+  const correlates = extractKnowledge('Ghd7 expression is positively associated with salt tolerance.').claims
+  assert.ok(correlates.some(claim => claim.relation === 'correlates' && claim.polarity === 'positive'))
+})
+
+test('英文：Our results show… 得到发现节点并与实体相连', () => {
+  const { nodes, claims } = extractKnowledge('Our results show that OsNAC3 enhances salt tolerance in rice.')
+  const finding = nodes.find(node => node.kind === 'finding')
+  assert.ok(finding, '英文发现句式应识别为发现节点')
+  assert.ok(claims.some(claim => claim.fromKey === finding.key && claim.relation === 'about'))
+  assert.ok(nodes.some(node => node.label === 'rice' && node.entityKind === 'organism'))
+})
+
+test('英文：疑问句得到研究问题节点；中文旗舰样例不受影响', () => {
+  assert.ok(extractKnowledge('How does Ghd7 regulate salt tolerance?').nodes.some(node => node.kind === 'question'))
+  const flagship = extractKnowledge('Ghd7 可能影响水稻耐盐性。')
+  assert.ok(flagship.claims.some(claim => claim.relation === 'may-affect'))
+})

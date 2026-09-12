@@ -212,3 +212,24 @@ test('宿主未提供 sessions 服务时静默跳过，不抛错', () => {
   assert.equal(typeof dispose, 'function')
   assert.doesNotThrow(() => dispose())
 })
+
+test('project 传递：知识节点带当前项目，资产去重按（标题+项目）隔离', async () => {
+  const store = createKnowledgeStore()
+  const assetProvider = makeAssetProviderStub()
+  // 用本文件其他用例没碰过的实体（OsNAC9/小麦/抗旱性），避免与共享桩库里的既有行纠缠。
+  const text = '研究表明，OsNAC9 可能影响小麦抗旱性。'
+  const first = await depositAssistantMessage({ text, sessionId: 's-proj', seq: 1, assetProvider, store, saveEvidence: async () => ({ entry: { id: 'ev-p1' } }), activeProject: '项目A' })
+  assert.ok(first.savedAssets >= 1)
+  const gene = (await store.listNodes()).find(node => node.label === 'OsNAC9')
+  assert.equal(gene.project, '项目A', '知识节点应记录沉淀时的当前项目')
+
+  // 同一结论在另一个项目：不应被项目 A 的资产挡住（资产侧与证据库同口径按项目隔离）
+  const second = await depositAssistantMessage({ text, sessionId: 's-proj', seq: 2, assetProvider, store, saveEvidence: async () => ({ entry: { id: 'ev-p2' } }), activeProject: '项目B' })
+  assert.equal(second.savedAssets, 1, '不同项目的同名结论应各自建卡')
+  const projects = assetProvider.assets.map(asset => asset.project).sort()
+  assert.deepEqual(projects, ['项目A', '项目B'])
+  // 同一项目内重复消息：仍然跳过，不重复建卡
+  const third = await depositAssistantMessage({ text, sessionId: 's-proj', seq: 3, assetProvider, store, saveEvidence: async () => { const error = new Error('dup'); error.code = 'DUPLICATE'; throw error }, activeProject: '项目A' })
+  assert.equal(third.savedAssets, 0)
+  assert.ok(third.skippedAssets >= 1)
+})

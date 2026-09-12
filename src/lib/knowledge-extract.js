@@ -48,6 +48,15 @@ const ORGANISM_WORDS = [
   '花生', '苜蓿', '杨树', '葡萄', '柑橘', '小鼠', '大鼠', '斑马鱼', '果蝇', '线虫', '酵母', '大肠杆菌', '人类',
 ]
 
+// 英文词表：英文综述/文献回答同样要能抽出知识关系（收窄匹配，宁可漏不可错）。
+const EN_TRAIT_PATTERNS = [
+  /salt (?:stress )?tolerance$/i, /drought (?:tolerance|resistance)$/i, /disease resistance$/i,
+  /blast resistance$/i, /heat tolerance$/i, /cold tolerance$/i, /abiotic stress tolerance$/i,
+  /(?:grain )?yield$/i, /plant height$/i, /tillering$/i, /seed germination$/i, /germination rate$/i,
+  /expression level$/i, /biomass$/i, /grain quality$/i, / lodging resistance$/i,
+]
+const EN_ORGANISM_WORDS = ['rice', 'wheat', 'maize', 'barley', 'arabidopsis', 'soybean', 'cotton', 'tomato', 'potato', 'sorghum', 'mouse', 'mice', 'human', 'zebrafish', 'yeast']
+
 // ── 限额与常量 ────────────────────────────────────────────────────────────────
 
 export const MAX_NODES_PER_MESSAGE = 24
@@ -56,7 +65,7 @@ export const MAX_CITATIONS_PER_MESSAGE = 8
 export const MAX_LABEL_CHARS = 60
 export const MAX_EXCERPT_CHARS = 200
 
-const SENTENCE_SPLIT = /(?<=[。！？!?；;])\s*|\n+/
+const SENTENCE_SPLIT = /(?<=[。！？!?；;])\s*|\n+|(?<=[a-z)"'’]\.)(?=\s+[A-Z0-9])/
 const MARKDOWN_CODE_BLOCK = /```[\s\S]*?```/g
 const MARKDOWN_INLINE_CODE = /`([^`]*)`/g
 const MARKDOWN_BOLD = /\*\*([^*]+)\*\*/g
@@ -76,19 +85,33 @@ const CLAIM_PATTERNS = [
   { relation: 'correlates', re: /^(.{1,24}?)与(.{1,24}?)(?:之间)?(?:呈|存在)?(?:显著)?(正|负)?相关/ },
 ]
 
+// 英文二元关系模式：中文模式未命中时兜底。主体/客体放宽到 48 字符（英文短语更长），
+// 可选的「in <物种>」尾巴拆成独立的 research-subject 关系（salt tolerance in rice）。
+const EN_CLAIM_PATTERNS = [
+  { relation: 'may-affect', re: /^(.{2,48}?)\s+(?:may|might|could)\s+(?:significantly\s+)?(affect|regulate|alter|influence|determine)\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
+  { relation: 'promotes', re: /^(.{2,48}?)\s+(?:significantly\s+)?(promotes?|enhances?|increases?|improves?|upregulates?|boosts?)(?:\s+the)?\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
+  { relation: 'inhibits', re: /^(.{2,48}?)\s+(?:significantly\s+)?(inhibits?|suppresses?|reduces?|decreases?|impairs?|disrupts?)(?:\s+the)?\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
+  { relation: 'causes', re: /^(.{2,48}?)\s+(?:directly\s+|indirectly\s+)?(causes?|leads?\s+to|results?\s+in|triggers?)(?:\s+the)?\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
+  { relation: 'correlates', re: /^(.{2,48}?)\s+(?:is|are|was|were)\s+(?:significantly\s+)?(positively|negatively)?\s*associated\s+with\s+(.{2,48}?)\s*[.!?]?$/i },
+]
+
 // 主体/客体里不允许再出现关系动词或介词引导——出现说明切分失败，宁可丢掉这条关系。
 const CLAIM_SPAN_STOPWORDS = /(促进|抑制|影响|调控|导致|引起|相关|激活|通过|利用|借助|采用|使用|研究表明|可能)/
+const EN_CLAIM_SPAN_STOPWORDS = /\b(promotes?|inhibits?|affects?|causes?|associated|through|via|whereas|however|which|that|led|resulted)\b/i
 // 裸代词/泛指主语没有图谱价值。
 const CLAIM_SPAN_PRONOUNS = /^(我们|本研究|研究|作者|其|该|此|这|它们|他们|它|两者|二者|两者之间|二者之间)$/
+const EN_CLAIM_SPAN_PRONOUNS = /^(we|they|it|this study|our study|our results|these results|the authors?)$/i
 
 // 引导句式：剥离后得到「发现/假设/问题/方法」节点，剩余短句继续抽二元关系。
 const FINDING_MARKER = /^(?:研究|实验|结果|数据|分析|测序|观察|文献)(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)|^(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)/
+const EN_FINDING_MARKER = /^(?:our|this|these|the)?\s*(?:results?|data|analysis|experiments?|studies?|observations?)?\s*(?:show|shows|showed|indicates?|indicated|suggests?|suggested|demonstrates?|demonstrated|reveals?|revealed|confirms?|confirmed|found)\s+(?:that\s+)?/i
 const HYPOTHESIS_MARKER = /^(?:我们|本研究|作者|团队)?(?:假设|猜想|推测|被认为可能是)/
+const EN_HYPOTHESIS_MARKER = /^(?:we|the authors?)\s+(?:hypothesise|hypothesize|hypothesized|speculate|propose|proposed)\s+(?:that\s+)?/i
 const QUESTION_MARKER = /^(?:研究问题|科学问题|核心问题|关键问题)(?:是|为)?(?:：|:|\s)?/
 const METHOD_MARKER = /^(?:采用|使用|借助|利用)[^，。；]{0,40}?(?:方法|技术|平台|流程|协议|体系)|^方法(?:是|：|:)/
 // 主语前缀（本研究/我们…）不影响句式类型，先剥掉再匹配引导词。
 const SUBJECT_PREFIX = /^(?:本研究|本文|我们|团队|笔者)(?=采用|使用|借助|利用|发现|表明|显示|证实|说明|假设|推测|猜想|观察到)/
-const QUESTION_HINT = /(如何|是否|为何|为什么|怎样|哪些|哪种|哪些个|什么|多少|能否|可否|哪个)/
+const QUESTION_HINT = /(如何|是否|为何|为什么|怎样|哪些|哪种|哪些个|什么|多少|能否|可否|哪个|\bhow\b|\bwhether\b|\bwhy\b|\bwhat\b|\bwhich\b)/i
 const UNCERTAIN_HINT = /(可能|或许|也许|有望|疑似|推测|大概)/
 
 // ── 基础工具 ──────────────────────────────────────────────────────────────────
@@ -144,9 +167,20 @@ export function classifyEntityKind(label) {
   if (/(蛋白|蛋白质|酶)$/.test(text)) return 'protein'
   if (/(途径|通路)$/.test(text)) return 'pathway'
   if (TRAIT_WORDS.includes(text) || (/[耐抗稳敏][^性]*性$/.test(text) && text.length <= 8)) return 'trait'
+  if (EN_TRAIT_PATTERNS.some(pattern => pattern.test(text))) return 'trait'
   for (const word of ORGANISM_WORDS) { if (text === word || text.startsWith(word)) return 'organism' }
+  const lowered = text.toLowerCase()
+  for (const word of EN_ORGANISM_WORDS) {
+    if (lowered === word || lowered.startsWith(`${word} `)) return 'organism'
+  }
   if (/(素|酸|碱|苷|醇|酯)$/.test(text) && text.length <= 8) return 'compound'
   return 'generic'
+}
+
+function isEnTrait(text) { return EN_TRAIT_PATTERNS.some(pattern => pattern.test(text)) }
+function isEnOrganism(text) {
+  const lowered = normalizeKnowledgeLabel(text).toLowerCase()
+  return EN_ORGANISM_WORDS.some(word => lowered === word || lowered.startsWith(`${word} `))
 }
 
 // 「X的T」「物种+性状」复合短语拆分：返回实体序列与额外的 research-subject 关系。
@@ -165,6 +199,20 @@ export function expandEntityPhrase(phrase) {
     if (text.startsWith(word) && text.length > word.length) {
       const tail = text.slice(word.length)
       if (TRAIT_WORDS.includes(tail) || /[耐抗稳敏][^性]*性$/.test(tail)) return splitSubjectTrait(word, tail)
+    }
+  }
+  // 英文「trait in organism」（salt tolerance in rice）：性状为端点，物种补研究对象关系。
+  const inTail = /^(.{2,48}?)\s+in\s+(.{2,24})$/i.exec(text)
+  if (inTail && isEnTrait(inTail[1]) && isEnOrganism(inTail[2])) {
+    const traitKey = knowledgeKeyFor('entity', 'trait', inTail[1])
+    const organismKey = knowledgeKeyFor('entity', 'organism', inTail[2])
+    return {
+      entities: [
+        { key: traitKey, label: inTail[1], entityKind: 'trait' },
+        { key: organismKey, label: inTail[2], entityKind: 'organism' },
+      ],
+      endpoint: traitKey,
+      extras: [{ fromKey: organismKey, toKey: traitKey, relation: 'research-subject', polarity: 'neutral' }],
     }
   }
   const kind = classifyEntityKind(text)
@@ -262,10 +310,22 @@ function cleanClaimSpan(span) {
   return text
 }
 
+// 英文跨度清洗：放宽到 48 字符；句首状语（Under salt stress, …）取最后一个逗号后的主体。
+function cleanClaimSpanEn(span) {
+  const text = normalizeKnowledgeLabel(span)
+  if (!text || text.length > 48) return ''
+  const head = text.split(/,\s+/).pop().trim()
+  if (!head || head.length > 48) return ''
+  if (EN_CLAIM_SPAN_PRONOUNS.test(head)) return ''
+  if (EN_CLAIM_SPAN_STOPWORDS.test(head)) return ''
+  return head
+}
+
 function extractClaimsFromClause(clause) {
   const rows = []
   const fragments = clause.split(/[；;]/).map(part => part.trim()).filter(Boolean)
   for (const fragment of fragments) {
+    let matched = false
     for (const pattern of CLAIM_PATTERNS) {
       const match = pattern.re.exec(fragment)
       if (!match) continue
@@ -276,6 +336,7 @@ function extractClaimsFromClause(clause) {
         if (!subject || !object) continue // 本模式切分失败：换下一个模式再试，不放弃整句
         const polarity = match[3] === '正' ? 'positive' : match[3] === '负' ? 'negative' : 'uncertain'
         rows.push({ subjectPhrase: subject, objectPhrase: object, relation: 'correlates', polarity })
+        matched = true
         break
       }
       const subject = cleanClaimSpan(match[1])
@@ -284,6 +345,29 @@ function extractClaimsFromClause(clause) {
       // 极性：模式自带方向先验（抑制=负向，其余=正向）；句中含不确定词（可能/或许/有望…）时收敛为 uncertain。
       const polarity = UNCERTAIN_HINT.test(fragment) ? 'uncertain' : pattern.re === CLAIM_PATTERNS[2].re ? 'negative' : 'positive'
       rows.push({ subjectPhrase: subject, objectPhrase: object, relation: pattern.re === CLAIM_PATTERNS[2].re ? 'inhibits' : relationOf(pattern), polarity })
+      matched = true
+      break
+    }
+    if (matched) continue
+    // 英文兜底：中文模式未命中时尝试英文模式（英文综述/文献回答同样能抽出知识关系）。
+    for (const pattern of EN_CLAIM_PATTERNS) {
+      const match = pattern.re.exec(fragment)
+      if (!match) continue
+      const subject = cleanClaimSpanEn(match[1])
+      const object = cleanClaimSpanEn(match[3])
+      if (!subject || !object) break
+      if (pattern.re === EN_CLAIM_PATTERNS[4].re) {
+        const polarity = match[2] === undefined ? 'uncertain' : /^positively$/i.test(match[2]) ? 'positive' : /^negatively$/i.test(match[2]) ? 'negative' : 'uncertain'
+        rows.push({ subjectPhrase: subject, objectPhrase: object, relation: 'correlates', polarity })
+      } else {
+        const polarity = pattern.re === EN_CLAIM_PATTERNS[2].re ? 'negative' : pattern.re === EN_CLAIM_PATTERNS[0].re ? 'uncertain' : 'positive'
+        rows.push({ subjectPhrase: subject, objectPhrase: object, relation: pattern.re === EN_CLAIM_PATTERNS[2].re ? 'inhibits' : pattern.relation, polarity })
+        // 「in <物种>」尾巴拆成独立的 research-subject 关系（rice →研究对象→ salt tolerance）。
+        if (match[4]) {
+          const organism = cleanClaimSpanEn(match[4])
+          if (organism) rows.push({ subjectPhrase: organism, objectPhrase: object, relation: 'research-subject', polarity: 'neutral' })
+        }
+      }
       break
     }
   }
@@ -309,6 +393,8 @@ function stripLeadingMarker(sentence) {
     || attempt(HYPOTHESIS_MARKER, 'hypothesis')
     || attempt(QUESTION_MARKER, 'question')
     || attempt(METHOD_MARKER, 'method', true)
+    || attempt(EN_FINDING_MARKER, 'finding')
+    || attempt(EN_HYPOTHESIS_MARKER, 'hypothesis')
 }
 
 function isQuestionSentence(sentence) {

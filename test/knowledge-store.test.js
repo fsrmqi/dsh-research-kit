@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import {
   createKnowledgeStore, knowledgeNodeIdFor, knowledgeClaimIdFor, knowledgeClaimKeyFor,
+  serializeKnowledgeBackup, parseKnowledgeBackup, mergeKnowledgeBackup, KNOWLEDGE_BACKUP_KIND,
 } from '../src/knowledge-store.js'
 import { extractKnowledge } from '../src/lib/knowledge-extract.js'
 
@@ -111,5 +112,62 @@ test('无 IndexedDB 时降级为内存存储并显式告知', async () => {
     assert.equal((await store.listNodes()).length, 3)
   } finally {
     installFakeIndexedDB() // 恢复桩，避免污染本文件后续用例的降级前提
+  }
+})
+
+test('project 字段随沉淀入库，且不被后续无项目沉淀覆盖', async () => {
+  const store = createKnowledgeStore()
+  const extraction = extractKnowledge('Ghd7 可能影响水稻耐盐性。')
+  await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: SOURCE_A, project: '项目A' })
+  await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: { ...SOURCE_B, seq: 3 }, project: '' })
+  const gene = (await store.listNodes()).find(node => node.label === 'Ghd7')
+  assert.equal(gene.project, '项目A', '已带项目的记录不被空项目覆盖')
+  const fresh = extractKnowledge('OsNAC3 促进水稻耐盐性。')
+  const applied = await store.applyExtraction({ nodes: fresh.nodes, claims: fresh.claims, source: SOURCE_A, project: '项目B' })
+  assert.equal(applied.nodes.find(node => node.label === 'OsNAC3').project, '项目B')
+})
+
+test('知识备份：序列化往返、增量合并跳过已存在、端点缺失的关系拒收', async () => {
+  const source = createKnowledgeStore()
+  const extraction = extractKnowledge('研究表明，Ghd7 可能影响水稻耐盐性。')
+  const applied = await source.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: SOURCE_A, project: '项目A' })
+  const gene = applied.nodes.find(node => node.label === 'Ghd7')
+  await source.setNodeStatus(gene.id, 'verified')
+  // 序列化必须用核验后的最新列表（applied.nodes 是写入前的旧快照）。
+  const latestNodes = await source.listNodes()
+  const backupText = serializeKnowledgeBackup({ nodes: latestNodes, claims: applied.claims })
+  const parsed = parseKnowledgeBackup(backupText)
+  assert.equal(parsed.nodes.length, latestNodes.length)
+
+  // 恢复目标必须是「另一台设备」：摘掉当前桩、装一块全新空库，否则同库共享数据会让合并语义测空。
+  fake.restore()
+  const isolated = installFakeIndexedDB()
+  try {
+    const target = createKnowledgeStore()
+    const restored = await target.importBackup(parsed)
+    assert.equal(restored.addedNodes, latestNodes.length)
+    const restoredGene = restored.nodes.find(node => node.label === 'Ghd7')
+    assert.equal(restoredGene.status, 'verified', '人工核验状态应随备份保留')
+    assert.equal(restoredGene.project, '项目A')
+    assert.equal(restored.claims.length, applied.claims.length, '关系端点应通过确定性 id 重建')
+
+    // 重复恢复：全部按身份跳过
+    const again = await target.importBackup(parsed)
+    assert.equal(again.addedNodes, 0)
+    assert.equal(again.addedClaims, 0)
+    assert.equal(again.skippedNodes, latestNodes.length)
+
+    // 端点缺失的关系（id 指向不存在的节点）必须拒收
+    const dangling = mergeKnowledgeBackup([], [], applied.nodes, [{ id: 'kc-x', from: 'kn-nonexistent', to: 'kn-also-missing', relation: 'relates', polarity: 'neutral' }])
+    assert.equal(dangling.addedClaims, 0)
+    assert.equal(dangling.invalidClaims, 1)
+
+    // 非本库备份与损坏内容要拒绝，不能静默解析成残缺数据
+    assert.throws(() => parseKnowledgeBackup('{"kind":"other","version":1,"nodes":[],"claims":[]}'))
+    assert.throws(() => parseKnowledgeBackup('not json'))
+    assert.equal(JSON.parse(serializeKnowledgeBackup({ nodes: [], claims: [] })).kind, KNOWLEDGE_BACKUP_KIND)
+  } finally {
+    isolated.restore()
+    installFakeIndexedDB() // 恢复共享桩
   }
 })

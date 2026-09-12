@@ -1,6 +1,7 @@
 import {
   hashKey, normalizeKnowledgeNodeDraft, normalizeKnowledgeClaimDraft,
-  KNOWLEDGE_STATUSES,
+  KNOWLEDGE_STATUSES, KNOWLEDGE_KINDS, KNOWLEDGE_ENTITY_KINDS,
+  knowledgeKeyFor,
 } from './lib/knowledge-extract.js'
 import { indexedDbFactory, requestToPromise } from './evidence-vault-store.js'
 
@@ -30,6 +31,11 @@ export const KNOWLEDGE_CLAIM_ID_PREFIX = 'kc-'
 export const MAX_SOURCES_PER_RECORD = 5
 export const MAX_SOURCE_EXCERPT_CHARS = 200
 export const MAX_EVIDENCE_LINKS_PER_NODE = 12
+
+function clampKnowledgeText(value, max) {
+  const text = String(value || '').trim()
+  return text.length > max ? text.slice(0, max) : text
+}
 
 function knowledgeSourceId(source) {
   return `${source.sessionId || ''}:${Number.isFinite(source.seq) ? source.seq : ''}`
@@ -81,6 +87,106 @@ function sortKnowledgeNodes(rows) {
 
 function sortKnowledgeClaims(rows) {
   return [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+}
+
+// ── 备份导出 / 恢复（对齐证据库的备份语义）────────────────────────────────────
+// 知识沉淀随对话持续积累，必须有脱离站点的搬运通道：格式带 kind 与 version，
+// 恢复按 key 身份增量合并（已存在跳过，不覆盖现有核验状态），端点缺失的关系拒收。
+
+export const KNOWLEDGE_BACKUP_KIND = 'dsh-research-kit-knowledge'
+export const KNOWLEDGE_BACKUP_VERSION = 1
+
+export function serializeKnowledgeBackup({ nodes = [], claims = [] } = {}) {
+  return JSON.stringify({
+    kind: KNOWLEDGE_BACKUP_KIND,
+    version: KNOWLEDGE_BACKUP_VERSION,
+    exportedAt: Date.now(),
+    nodes: Array.isArray(nodes) ? nodes : [],
+    claims: Array.isArray(claims) ? claims : [],
+  }, null, 2)
+}
+
+// 解析失败一律抛错：半份备份比没有备份更危险（与证据库备份同一原则）。
+export function parseKnowledgeBackup(text) {
+  const raw = String(text || '').trim()
+  if (!raw) throw new Error('备份内容为空。')
+  let parsed
+  try { parsed = JSON.parse(raw) } catch { throw new Error('备份不是合法 JSON，请确认复制完整。') }
+  if (parsed?.kind !== KNOWLEDGE_BACKUP_KIND) throw new Error('这不是自动沉淀知识库的备份文件。')
+  if (Number(parsed?.version) > KNOWLEDGE_BACKUP_VERSION) throw new Error(`备份版本 ${parsed.version} 高于当前支持的 ${KNOWLEDGE_BACKUP_VERSION}，请升级 Research Kit 后再恢复。`)
+  if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.claims)) throw new Error('备份文件缺少 nodes/claims 字段。')
+  return { nodes: parsed.nodes, claims: parsed.claims }
+}
+
+// 增量合并：节点按 key（关系按四元组身份）识别已存在；字段逐项收紧；
+// 端点在「现有 ∪ 恢复集」里都找不到的关系按无效计数拒收，绝不悬挂。
+export function mergeKnowledgeBackup(existingNodes = [], existingClaims = [], incomingNodes = [], incomingClaims = [], now = Date.now()) {
+  const knownNodes = new Map(Array.isArray(existingNodes) ? existingNodes.map(row => [row.key, row]) : [])
+  const outNodes = []
+  let addedNodes = 0
+  let skippedNodes = 0
+  let invalidNodes = 0
+  for (const raw of Array.isArray(incomingNodes) ? incomingNodes : []) {
+    if (!raw || typeof raw !== 'object') { invalidNodes++; continue }
+    const kind = KNOWLEDGE_KINDS.includes(raw.kind) ? raw.kind : ''
+    const label = clampKnowledgeText(raw.label, 60)
+    if (!kind || !label) { invalidNodes++; continue }
+    const key = clampKnowledgeText(raw.key, 200) || knowledgeKeyFor(kind, kind === 'entity' ? raw.entityKind : '', label)
+    if (knownNodes.has(key)) { skippedNodes++; continue }
+    const row = {
+      id: knowledgeNodeIdFor(key),
+      key,
+      kind,
+      entityKind: kind === 'entity' ? (KNOWLEDGE_ENTITY_KINDS.includes(raw.entityKind) ? raw.entityKind : 'generic') : '',
+      label,
+      status: KNOWLEDGE_STATUSES.includes(raw.status) ? raw.status : 'to_verify',
+      project: clampKnowledgeText(raw.project, 120),
+      sources: mergeKnowledgeSources([], raw.sources),
+      evidenceIds: (Array.isArray(raw.evidenceIds) ? raw.evidenceIds.map(String).filter(Boolean) : []).slice(0, MAX_EVIDENCE_LINKS_PER_NODE),
+      assetId: clampKnowledgeText(raw.assetId, 120),
+      createdAt: Number(raw.createdAt) || now,
+      updatedAt: Number(raw.updatedAt) || now,
+    }
+    knownNodes.set(key, row)
+    outNodes.push(row)
+    addedNodes++
+  }
+  // 关系端点解析：备份里的 from/to 是节点 id，id=hash(key) 确定性可逆；按 id 找回 key 后重算身份。
+  const keyOfNodeId = new Map()
+  for (const row of knownNodes.values()) keyOfNodeId.set(row.id, row.key)
+  const knownClaims = new Map(Array.isArray(existingClaims) ? existingClaims.map(row => [row.id, row]) : [])
+  const outClaims = []
+  let addedClaims = 0
+  let skippedClaims = 0
+  let invalidClaims = 0
+  for (const raw of Array.isArray(incomingClaims) ? incomingClaims : []) {
+    if (!raw || typeof raw !== 'object') { invalidClaims++; continue }
+    const relation = clampKnowledgeText(raw.relation, 40)
+    const polarity = ['positive', 'negative', 'uncertain', 'neutral'].includes(raw.polarity) ? raw.polarity : 'neutral'
+    const fromKey = keyOfNodeId.get(String(raw.from || ''))
+    const toKey = keyOfNodeId.get(String(raw.to || ''))
+    if (!relation || !fromKey || !toKey) { invalidClaims++; continue }
+    const identity = knowledgeClaimKeyFor({ fromKey, relation, toKey, polarity })
+    const id = knowledgeClaimIdFor(identity)
+    if (knownClaims.has(id)) { skippedClaims++; continue }
+    const row = {
+      id,
+      key: identity,
+      from: knowledgeNodeIdFor(fromKey),
+      to: knowledgeNodeIdFor(toKey),
+      relation,
+      polarity,
+      status: KNOWLEDGE_STATUSES.includes(raw.status) ? raw.status : 'to_verify',
+      project: clampKnowledgeText(raw.project, 120),
+      sources: mergeKnowledgeSources([], raw.sources),
+      createdAt: Number(raw.createdAt) || now,
+      updatedAt: Number(raw.updatedAt) || now,
+    }
+    knownClaims.set(id, row)
+    outClaims.push(row)
+    addedClaims++
+  }
+  return { nodes: outNodes, claims: outClaims, addedNodes, skippedNodes, invalidNodes, addedClaims, skippedClaims, invalidClaims }
 }
 
 export function createKnowledgeStore() {
@@ -179,7 +285,9 @@ export function createKnowledgeStore() {
 
     // 把一条提取结果合并入库。nodes/claims 是提取器输出的 draft（带 key），
     // source 是来源消息（{ sessionId, seq, turn, at, excerpt }），可为空（手动提取）。
-    async applyExtraction({ nodes = [], claims = [], source = {}, now = Date.now() } = {}) {
+    // project 记录沉淀时的当前项目（图谱按项目筛选的数据基础）；已有 project 的记录不被覆盖。
+    async applyExtraction({ nodes = [], claims = [], source = {}, project = '', now = Date.now() } = {}) {
+      const projectKey = clampKnowledgeText(project, 120)
       const origin = normalizeKnowledgeSource(source)
       const hasOrigin = Boolean(origin.excerpt || origin.sessionId || origin.seq !== null)
       const existingNodes = await readNodes()
@@ -207,6 +315,7 @@ export function createKnowledgeStore() {
             ...previous,
             label: clean.label,
             entityKind: clean.kind === 'entity' ? (clean.entityKind || previous.entityKind) : previous.entityKind,
+            project: previous.project || projectKey,
             sources: mergeKnowledgeSources(previous.sources, incoming),
             // 用户推进过的核验状态不回退：自动沉淀只填写「待核验」，不改写人工结论。
             status: previous.status === 'to_verify' ? 'to_verify' : previous.status,
@@ -223,6 +332,7 @@ export function createKnowledgeStore() {
             entityKind: clean.entityKind,
             label: clean.label,
             status: 'to_verify',
+            project: projectKey,
             sources: mergeKnowledgeSources([], incoming),
             evidenceIds: [],
             assetId: '',
@@ -255,6 +365,7 @@ export function createKnowledgeStore() {
           relation: clean.relation,
           polarity: clean.polarity,
           status: previous && previous.status !== 'to_verify' ? previous.status : 'to_verify',
+          project: (previous && previous.project) || projectKey,
           sources: mergeKnowledgeSources(previous?.sources, incoming),
           createdAt: previous?.createdAt || now,
           updatedAt: now,
@@ -317,6 +428,14 @@ export function createKnowledgeStore() {
       const next = { ...row, assetId: clean, updatedAt: Date.now() }
       await putRows(KNOWLEDGE_NODE_STORE, [next])
       return next
+    },
+
+    // 恢复备份：合并判定在纯函数 mergeKnowledgeBackup 里（可测），这里只负责读写与事务。
+    async importBackup({ nodes = [], claims = [], now = Date.now() } = {}) {
+      const merged = mergeKnowledgeBackup(await readNodes(), await readClaims(), nodes, claims, now)
+      await putRows(KNOWLEDGE_NODE_STORE, merged.nodes)
+      await putRows(KNOWLEDGE_CLAIM_STORE, merged.claims)
+      return { ...merged, nodes: await readNodes(), claims: await readClaims() }
     },
 
     // 删除一个知识节点，同时删除指向它的全部关系（图谱不允许悬挂端点）。

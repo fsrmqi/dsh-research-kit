@@ -77,6 +77,20 @@ function normalizeTitleForDedupe(title) {
 
 const EMPTY_SUMMARY = { extracted: false, addedNodes: 0, mergedNodes: 0, addedClaims: 0, mergedClaims: 0, citations: 0, savedEvidence: 0, duplicateEvidence: 0, failedEvidence: 0, savedAssets: 0, skippedAssets: 0 }
 
+// 最近一次成功沉淀的摘要（含 at 时间戳），供图谱页展示「最近沉淀」反馈。
+// 模块级单变量：只有最后一次有意义，无需历史。
+let latestDepositionSummary = null
+
+export function lastDepositionSummary() {
+  return latestDepositionSummary
+}
+
+// 灵感资产去重键：标题 + 项目。证据库按项目隔离去重，资产侧必须同口径——
+// 否则项目 A 沉淀过的结论会在项目 B 被误跳过（资产正文可能按项目有不同的 nextAction）。
+function assetDedupeKey(title, project) {
+  return `${normalizeTitleForDedupe(title)}::${String(project || '').trim()}`
+}
+
 // 把一条助手回答沉淀入库。所有依赖可注入（store/assetProvider/saveEvidence/activeProject），
 // 便于在 Node 测试里用内存存储与桩复现完整链路；浏览器侧使用默认单例。
 // 返回摘要供测试与 UI 提示使用；任何单步失败都被计数吞掉——自动流程不允许打断宿主。
@@ -101,13 +115,13 @@ export async function depositAssistantMessage({
   summary.extracted = true
 
   const origin = { sessionId: summary.sessionId, seq: summary.seq, turn, at: at || now, excerpt: source.trim() }
-  const applied = await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: origin, now })
+  const project = activeProject !== undefined ? activeProject : getActiveProject()
+  const applied = await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: origin, project, now })
   summary.addedNodes = applied.addedNodes
   summary.mergedNodes = applied.mergedNodes
   summary.addedClaims = applied.addedClaims
   summary.mergedClaims = applied.mergedClaims
 
-  const project = activeProject !== undefined ? activeProject : getActiveProject()
   const touchedByThisMessage = row => (row.sources || []).some(item => item.sessionId === summary.sessionId && item.seq === summary.seq)
 
   // 引用来源 → 证据库：状态保持「未核验」，重复（同项目同标识符）直接跳过，绝不覆盖已有条目。
@@ -139,16 +153,21 @@ export async function depositAssistantMessage({
     }
   }
 
-  // 发现/假设/问题/方法 → 灵感资产：按标题去重（同一结论不重复建卡），全部为「待验证」。
-  let knownTitles = new Set()
+  // 发现/假设/问题/方法 → 灵感资产：按（标题 + 项目）去重（同一结论不重复建卡），全部为「待验证」。
+  let knownAssetKeys = new Set()
   if (typeof assetProvider?.list === 'function') {
-    try { knownTitles = new Set(((await assetProvider.list()) || []).map(item => normalizeTitleForDedupe(item?.title)).filter(Boolean)) } catch { knownTitles = new Set() }
+    try {
+      knownAssetKeys = new Set(((await assetProvider.list()) || [])
+        .map(item => assetDedupeKey(item?.title, item?.project))
+        .filter(key => !key.startsWith('::')))
+    } catch { knownAssetKeys = new Set() }
   }
   for (const node of applied.nodes) {
     if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
     if (!touchedByThisMessage(node)) continue
     const body = node.sources?.[0]?.excerpt || node.label
-    if (!body.trim() || typeof assetProvider?.save !== 'function' || knownTitles.has(normalizeTitleForDedupe(node.label))) { summary.skippedAssets++; continue }
+    const dedupeKey = assetDedupeKey(node.label, project)
+    if (!body.trim() || typeof assetProvider?.save !== 'function' || knownAssetKeys.has(dedupeKey)) { summary.skippedAssets++; continue }
     try {
       const asset = await assetProvider.save({
         title: node.label,
@@ -164,13 +183,14 @@ export async function depositAssistantMessage({
       })
       if (asset?.id) {
         await store.setAssetId(node.id, asset.id)
-        knownTitles.add(normalizeTitleForDedupe(node.label))
+        knownAssetKeys.add(dedupeKey)
         summary.savedAssets++
       } else { summary.skippedAssets++ }
     } catch { summary.skippedAssets++ }
   }
 
   publishKnowledge()
+  if (summary.extracted) latestDepositionSummary = { ...summary, at: now }
   return summary
 }
 
