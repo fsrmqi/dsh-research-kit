@@ -191,6 +191,23 @@ test('路由安全与降级：只代执行 mcp__ 工具；宿主无 tools 服务
   assert.equal((await pending.done).status, 405)
 })
 
+test('路由：请求体超过 32KB 时在解析前拒绝，且不执行 MCP 工具', async () => {
+  let executed = false
+  const route = memorySearchRoute({
+    tools: {
+      schemas: () => [{ name: 'mcp__memory-center__search', parameters: { properties: { query: { type: 'string' } }, required: ['query'] } }],
+      execute: async () => { executed = true },
+    },
+  })
+  const req = { method: 'POST', async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ query: 'x'.repeat(33_000) })) } }
+  const pending = makeReply()
+  await route.handler(req, pending.res)
+  const result = await pending.done
+  assert.equal(result.status, 413)
+  assert.equal(result.body.error, 'request_too_large')
+  assert.equal(executed, false)
+})
+
 test('接线：增强器 searchMemory 经路由检索并合并来源；用户不勾选就不进 Prompt（禁止静默注入）', () => {
   const glue = readFileSync(new URL('../dsh/prompt-enhancer-glue.js', import.meta.url), 'utf8')
   assert.match(glue, /\/dsh-research-kit\/memory-search/)

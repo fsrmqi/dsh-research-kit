@@ -106,6 +106,26 @@ test('路由层：同一客户端超出每分钟预算返回 429', async () => {
   assert.ok(sawLimited, '连续查询应触发每分钟速率限制')
 })
 
+test('路由层：本机反向代理使用首个 XFF，非本机请求不能伪造 XFF 绕过限流', async () => {
+  const web = { async fetch() { return jsonResult({ message: { items: [] } }) } }
+  const route = databaseQueryRoute({ web, databases, logger: null })
+  const url = `${DATABASE_QUERY_PATH}?database_id=crossref&q=proxy-${Math.random()}&limit=1`
+  const proxyReq = { method: 'GET', url, socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-forwarded-for': '198.51.100.8, 127.0.0.1' } }
+  const proxyResponse = makeResponse()
+  await route.handler(proxyReq, proxyResponse)
+  assert.equal(proxyResponse.status, 200)
+
+  // 远程客户端自带 XFF 时，仍按 socket IP 计数；使用不同 XFF 不应创建不同配额。
+  const remoteKey = `remote-${Math.random()}`
+  for (let index = 0; index < 13; index += 1) {
+    const response = makeResponse()
+    const req = { method: 'GET', url: `${DATABASE_QUERY_PATH}?database_id=crossref&q=remote-${Math.random()}-${index}&limit=1`, socket: { remoteAddress: remoteKey }, headers: { 'x-forwarded-for': `spoof-${index}` } }
+    await route.handler(req, response)
+    if (index < 12) assert.equal(response.status, 200)
+    else assert.equal(response.status, 429)
+  }
+})
+
 test('路由层：Agent 回退响应带可执行的查询任务文本', async () => {
   const route = databaseQueryRoute({ web: { async fetch() { throw new Error('不应调用') } }, databases, logger: null })
   const response = makeResponse()

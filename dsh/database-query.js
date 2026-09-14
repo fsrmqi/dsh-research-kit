@@ -11,6 +11,7 @@ const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX_ENTRIES = 200
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 12
+const MAX_RATE_BUCKETS = 1000
 
 const queryCache = new Map()
 const inFlightQueries = new Map()
@@ -38,23 +39,44 @@ function cacheSet(key, result) {
   }
 }
 
-// 每 IP 滑动计数：窗口内达到上限时拒绝本次查询。
+function pruneRateBuckets(now) {
+  for (const [key, times] of rateBuckets) {
+    const active = times.filter(at => now - at < RATE_LIMIT_WINDOW_MS)
+    if (active.length) rateBuckets.set(key, active)
+    else rateBuckets.delete(key)
+  }
+}
+
+function evictOldestRateBucket() {
+  let oldestKey = null
+  let oldestAt = Infinity
+  for (const [key, times] of rateBuckets) {
+    const at = times[0] ?? Infinity
+    if (at < oldestAt) { oldestAt = at; oldestKey = key }
+  }
+  if (oldestKey !== null) rateBuckets.delete(oldestKey)
+}
+
+// 每 IP 滑动计数：窗口内达到上限时拒绝本次查询。桶数也有硬上限，
+// 防止短时间的大量新客户端标识把进程内 Map 撑大。
 function rateLimitExceeded(clientKey) {
   const now = Date.now()
-  const bucket = (rateBuckets.get(clientKey) || []).filter(at => now - at < RATE_LIMIT_WINDOW_MS)
+  pruneRateBuckets(now)
+  const bucket = rateBuckets.get(clientKey) || []
   if (bucket.length >= RATE_LIMIT_MAX_REQUESTS) { rateBuckets.set(clientKey, bucket); return true }
+  while (!rateBuckets.has(clientKey) && rateBuckets.size >= MAX_RATE_BUCKETS) evictOldestRateBucket()
   bucket.push(now)
   rateBuckets.set(clientKey, bucket)
-  if (rateBuckets.size > 1000) {
-    for (const [key, times] of rateBuckets) {
-      if (!times.some(at => now - at < RATE_LIMIT_WINDOW_MS)) rateBuckets.delete(key)
-    }
-  }
   return false
 }
 
 function clientKeyFor(req) {
-  return String(req?.socket?.remoteAddress || req?.headers?.['x-forwarded-for'] || 'local')
+  const remoteAddress = String(req?.socket?.remoteAddress || '')
+  // DSH 常部署为本机 webServer；此时本机反向代理传来的首个 XFF 才可信。
+  // 非本机直连一律使用 socket 地址，避免客户端伪造 XFF 绕过限流。
+  const isLoopback = remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1'
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim()
+  return isLoopback && forwarded ? forwarded : remoteAddress || 'local'
 }
 
 function textBody(result) {

@@ -5,6 +5,7 @@ const MAX_TEXT_CHARS = 4000
 const EXEC_TIMEOUT_MS = 15_000
 const MAX_SERVERS = 24
 const MAX_QUERY_CHARS = 300
+const MAX_REQUEST_BYTES = 32_768
 
 // ── MCP 检索工具选择与参数合成（纯函数，单测覆盖）────────────────────────────
 // Memory Center 以 MCP 服务器形式接入（工具名 `mcp__<server>__<tool>`）。
@@ -93,6 +94,21 @@ function reply(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
+async function readRequestBody(req) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > MAX_REQUEST_BYTES) {
+      // 对真实 Node 请求尽快停止继续接收；测试桩可能没有 destroy，故保持可选。
+      try { req.destroy?.() } catch {}
+      throw Object.assign(new Error('请求内容过大。'), { code: 'request_too_large' })
+    }
+    chunks.push(chunk)
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch { return {} }
+}
+
 let callCounter = 0
 
 function parseServerOf(name) {
@@ -113,10 +129,11 @@ export function memorySearchRoute({ tools, logger } = {}) {
     kind: 'exact', path: MEMORY_SEARCH_PATH,
     async handler(req, res) {
       if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method_not_allowed' })
-      const chunks = []
-      for await (const chunk of req) chunks.push(chunk)
       let body = {}
-      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch { body = {} }
+      try { body = await readRequestBody(req) } catch (error) {
+        if (error?.code === 'request_too_large') return reply(res, 413, { ok: false, error: 'request_too_large', message: `请求内容不能超过 ${MAX_REQUEST_BYTES / 1024}KB。` })
+        throw error
+      }
       const query = String(body.query || '').trim()
       const server = String(body.server || DEFAULT_MEMORY_SERVER)
       const limit = Math.max(1, Math.min(Number(body.limit) || 8, 20))
