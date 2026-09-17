@@ -13,7 +13,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "blog-post",
@@ -29,7 +47,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "draft-protocol",
@@ -51,7 +87,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "procedure": {
+          "type": "string",
+          "description": "Procedure or experiment to document"
+        }
+      },
+      "required": [
+        "procedure"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "write-press-release",
@@ -67,7 +118,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "social-media-post",
@@ -89,7 +158,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "num_posts": {
+          "type": "string",
+          "description": "Number of posts in thread (default: 5-7)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "podcast-script",
@@ -116,7 +208,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Topic to discuss"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Episode duration in minutes (default: 20)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "policy-brief",
@@ -143,7 +255,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Policy topic"
+        },
+        "audience": {
+          "type": "string",
+          "description": "Target audience (e.g., legislators, public health officials)"
+        }
+      },
+      "required": [
+        "topic",
+        "audience"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "patient-education",
@@ -165,7 +297,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "Medical condition or procedure"
+        }
+      },
+      "required": [
+        "condition"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "write-textbook-chapter",
@@ -197,7 +344,32 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Chapter topic"
+        },
+        "level": {
+          "type": "string",
+          "description": "Audience level (undergraduate, graduate, professional)"
+        },
+        "length": {
+          "type": "string",
+          "description": "Target word count (default: 5000)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic",
+        "level"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "elevator-pitch",
@@ -224,6 +396,26 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Research project description"
+        },
+        "audience": {
+          "type": "string",
+          "description": "Target audience (investors, general public, program officers)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   }
 ]

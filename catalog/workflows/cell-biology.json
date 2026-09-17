@@ -19,7 +19,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "reference": {
+          "type": "string",
+          "description": "Reference markers or cell atlas to use",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "flow-cytometry-analysis",
@@ -46,7 +69,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "gating": {
+          "type": "string",
+          "description": "Gating strategy or panel description"
+        },
+        "comparison": {
+          "type": "string",
+          "description": "Groups to compare"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "gating",
+        "comparison",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "cell-cell-communication",
@@ -68,7 +119,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "type": "string",
+          "description": "Conditions to compare (optional)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "cell-cycle-analysis",
@@ -90,7 +164,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "type": "string",
+          "description": "Conditions to compare (optional)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "perturbation-analysis",
@@ -112,7 +209,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "screen_type": {
+          "type": "string",
+          "description": "Screen type (Perturb-seq, CRISPRi, CRISPRa, CRISPR KO)"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "screen_type",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "lineage-tracing",
@@ -128,7 +248,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "spatial-cell-analysis",
@@ -155,7 +293,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "Platform (MERFISH, Xenium, CosMx, IMC, mIF)"
+        },
+        "outcome": {
+          "type": "string",
+          "description": "Clinical outcome to correlate with (optional)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "platform",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "metabolic-modeling",
@@ -182,7 +348,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "organism": {
+          "type": "string",
+          "description": "Organism (E. coli, yeast, human)"
+        },
+        "media": {
+          "type": "string",
+          "description": "Growth media composition",
+          "default": ""
+        }
+      },
+      "required": [
+        "organism"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "glycan-analysis",
@@ -204,6 +390,29 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "type": "string",
+          "description": "Conditions or products to compare"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "comparison",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   }
 ]

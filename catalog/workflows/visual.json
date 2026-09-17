@@ -13,7 +13,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "publication-figure",
@@ -35,7 +53,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "description": "Specific figure instructions (optional)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "slide-deck",
@@ -57,7 +98,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "string",
+          "description": "Presentation context (e.g., conference talk, lab meeting, journal club)"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "context",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "conference-poster",
@@ -73,7 +137,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "infographic",
@@ -89,7 +171,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-schematic",
@@ -111,7 +211,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "concept": {
+          "type": "string",
+          "description": "Process or concept to illustrate"
+        }
+      },
+      "required": [
+        "concept"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-flowchart",
@@ -133,7 +248,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "description": "Workflow or process to diagram"
+        }
+      },
+      "required": [
+        "workflow"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-timeline",
@@ -160,7 +290,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project title or description"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Project duration (e.g., 3 years, 12 months)"
+        }
+      },
+      "required": [
+        "project",
+        "duration"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-heatmap",
@@ -182,7 +332,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "type": "string",
+          "description": "Additional instructions (optional)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-network-diagram",
@@ -204,7 +377,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "metric": {
+          "type": "string",
+          "description": "Node sizing metric (e.g., degree, betweenness)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-geographic-map",
@@ -220,7 +416,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "create-dashboard",
@@ -236,7 +450,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "research-result-explain",
@@ -284,6 +516,39 @@
       "动画只回放 IR 声明的事实，不代表执行已发生或已验证；结果需人工核验。",
       "图内数字必须可回溯到结果文件（含 sha256 防过期）或会话证据；不得编造节点或数字。"
     ],
-    "prompt": "请把研究结果生成为一张动画解释图（diagram IR → 交互 HTML）。图题与受众：{diagram_title}。路线规划：{route_plan}。输入：{source_files}。先核验会话可执行 Node（node -v 并记录版本，缺失时如实报告）。步骤：1. 若输入为文件路径列表：运行 `node scripts/render-diagrams.mjs --from-files <路径...> -o <主题>.diagram.json` 生成脚手架（自动记录 sha256 与格式提示）；若输入为「会话内产出」：按同一 IR 契约手写骨架。2. 阅读文件与会话产物，补全语义：把文件节点连成过程路线，提炼关键发现（kind: finding），每个发现必须挂 source（path + anchor 行号/列名/键路径）——数字必须能在出处文件或会话证据中找到，不得编造节点或数字。3. 按 routes 定义播放路线；综述场景分「检索逻辑」（检索式→各库命中→去重→纳入）与「内容逻辑」（主题→支撑证据→结论→待核验）两幕。4. 运行 `node scripts/validate-diagrams.mjs <IR 路径>`：失败时读取 diagnostics，只修改 subject 指向的对象、只用 supportedFixes 列出的修复，最多两轮聚焦修复；仍失败则如实报告并交付 IR 文件本身。5. 运行 `node scripts/render-diagrams.mjs --html <IR 路径> -o <主题>.html` 产出交互 HTML；若工作区提供证据库导出的解释图素材（evidence-explain-pack*.json），加 `--evidence <素材路径>`（可多个），把证据条目并入「证据库来源」卡片——未核验条目按原状态标注，不得改标已核验。6. 交付：报告 IR 与 HTML 的确切工作区路径（shell 生成的文件不会自动出现在 Web Produced Files 栏）。诚实边界：动画只回放 IR 声明的事实，不代表运行时已验证；结果需人工核验；文件在出图后变动会被哈希校验标记为过期。输出为需人工核验的解释图草稿。"
+    "prompt": "请把研究结果生成为一张动画解释图（diagram IR → 交互 HTML）。图题与受众：{diagram_title}。路线规划：{route_plan}。输入：{source_files}。先核验会话可执行 Node（node -v 并记录版本，缺失时如实报告）。步骤：1. 若输入为文件路径列表：运行 `node scripts/render-diagrams.mjs --from-files <路径...> -o <主题>.diagram.json` 生成脚手架（自动记录 sha256 与格式提示）；若输入为「会话内产出」：按同一 IR 契约手写骨架。2. 阅读文件与会话产物，补全语义：把文件节点连成过程路线，提炼关键发现（kind: finding），每个发现必须挂 source（path + anchor 行号/列名/键路径）——数字必须能在出处文件或会话证据中找到，不得编造节点或数字。3. 按 routes 定义播放路线；综述场景分「检索逻辑」（检索式→各库命中→去重→纳入）与「内容逻辑」（主题→支撑证据→结论→待核验）两幕。4. 运行 `node scripts/validate-diagrams.mjs <IR 路径>`：失败时读取 diagnostics，只修改 subject 指向的对象、只用 supportedFixes 列出的修复，最多两轮聚焦修复；仍失败则如实报告并交付 IR 文件本身。5. 运行 `node scripts/render-diagrams.mjs --html <IR 路径> -o <主题>.html` 产出交互 HTML；若工作区提供证据库导出的解释图素材（evidence-explain-pack*.json），加 `--evidence <素材路径>`（可多个），把证据条目并入「证据库来源」卡片——未核验条目按原状态标注，不得改标已核验。6. 交付：报告 IR 与 HTML 的确切工作区路径（shell 生成的文件不会自动出现在 Web Produced Files 栏）。诚实边界：动画只回放 IR 声明的事实，不代表运行时已验证；结果需人工核验；文件在出图后变动会被哈希校验标记为过期。输出为需人工核验的解释图草稿。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "source_files": {
+          "type": "string",
+          "description": "每行一个工作区内路径；要解释会话内产出时填「会话内产出」"
+        },
+        "diagram_title": {
+          "type": "string",
+          "description": "如：差异表达分析解释（组会汇报）"
+        },
+        "route_plan": {
+          "type": "string",
+          "description": "如：QC → 比对定量 → 差异基因 → 待核验；综述场景分「检索逻辑」与「内容逻辑」两幕"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "source_files",
+        "diagram_title",
+        "route_plan",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   }
 ]

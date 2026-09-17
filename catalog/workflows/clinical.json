@@ -33,7 +33,35 @@
       "pubmed",
       "clinicaltrials"
     ],
-    "prompt": "请分析用户通过 @文件 引用的患者队列数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。主要结局：{outcome}；预设亚组：{subgroups}。依次进行：1. 描述人口学与临床特征（Table 1，组间用标准化差值）；2. 分析主要结局，报告绝对与相对效应量及 95% 置信区间；3. 多变量分析校正预设混杂因素，检查模型假设；4. 有预设亚组时做亚组分析，用正式的交互检验而非亚组内 p 值比较，并做多重性校正；5. 生成完整 Table 1 与关键图。探索性分析与预设分析分开呈现；不得编造患者数据或结局。输出标注“研究草案——非临床用途”。"
+    "prompt": "请分析用户通过 @文件 引用的患者队列数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。主要结局：{outcome}；预设亚组：{subgroups}。依次进行：1. 描述人口学与临床特征（Table 1，组间用标准化差值）；2. 分析主要结局，报告绝对与相对效应量及 95% 置信区间；3. 多变量分析校正预设混杂因素，检查模型假设；4. 有预设亚组时做亚组分析，用正式的交互检验而非亚组内 p 值比较，并做多重性校正；5. 生成完整 Table 1 与关键图。探索性分析与预设分析分开呈现；不得编造患者数据或结局。输出标注“研究草案——非临床用途”。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "description": "主要结局"
+        },
+        "subgroups": {
+          "type": "string",
+          "description": "如按年龄、不育时长、病因分类；留空时不做亚组分析",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "outcome",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "case-control-analysis",
@@ -63,7 +91,30 @@
       "pubmed",
       "gnomad"
     ],
-    "prompt": "请分析用户通过 @文件 引用的病例对照数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。匹配设计：{matching}。依次进行：1. 比较病例与对照的基线特征；2. 计算粗与校正 OR 及 95% 置信区间；3. 匹配设计用条件 logistic 回归（非匹配用非条件）；4. 检查混杂与效应修饰（分层/交互分析）；5. 适用时做剂量-反应趋势检验；6. 报告选择偏倚与回忆偏倚的可能性及方向。固定随机种子并记录软件版本；不得编造病例数据。输出标注“研究草案——非临床用途”，并附偏倚评估说明。"
+    "prompt": "请分析用户通过 @文件 引用的病例对照数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息，不做个体层面的诊疗建议。匹配设计：{matching}。依次进行：1. 比较病例与对照的基线特征；2. 计算粗与校正 OR 及 95% 置信区间；3. 匹配设计用条件 logistic 回归（非匹配用非条件）；4. 检查混杂与效应修饰（分层/交互分析）；5. 适用时做剂量-反应趋势检验；6. 报告选择偏倚与回忆偏倚的可能性及方向。固定随机种子并记录软件版本；不得编造病例数据。输出标注“研究草案——非临床用途”，并附偏倚评估说明。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "matching": {
+          "type": "string",
+          "description": "如按年龄与地域 1:2 匹配；留空按非匹配处理",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "longitudinal-study",
@@ -92,7 +143,30 @@
     "suggestedDatabaseIds": [
       "pubmed"
     ],
-    "prompt": "请分析用户通过 @文件 引用的纵向数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息。时间结构：{time_var}。依次进行：1. 描述测量模式（每人次数、缺失分布与缺失机制讨论）；2. 用混合效应模型（或 GEE）建模时间趋势与组间差异，说明随机效应结构选择依据；3. 检查残差假设与 influential points；4. 时变协变量与基线协变量分开处理并说明；5. 报告固定效应估计、置信区间与模型拟合。缺失数据的处理策略须明确说明并做敏感性分析；不得编造随访数据。输出标注“研究草案——非临床用途”。"
+    "prompt": "请分析用户通过 @文件 引用的纵向数据。仅使用用户获准使用的数据；不输出可识别个人身份的信息。时间结构：{time_var}。依次进行：1. 描述测量模式（每人次数、缺失分布与缺失机制讨论）；2. 用混合效应模型（或 GEE）建模时间趋势与组间差异，说明随机效应结构选择依据；3. 检查残差假设与 influential points；4. 时变协变量与基线协变量分开处理并说明；5. 报告固定效应估计、置信区间与模型拟合。缺失数据的处理策略须明确说明并做敏感性分析；不得编造随访数据。输出标注“研究草案——非临床用途”。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "time_var": {
+          "type": "string",
+          "description": "如随访月数、每年一次共 3 次"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "time_var",
+        "files"
+      ]
+    },
+    "agent_guidance": "分析结论须区分统计显著性与实际意义。样本量不足时标注为 [缺失]。不得将 p 值作为效应量大小的证据。",
+    "checkpoints": []
   },
   {
     "id": "electronic-health-records",
@@ -124,7 +198,30 @@
       "pubmed",
       "openfda"
     ],
-    "prompt": "请分析用户通过 @文件 引用的结构化电子病历数据。仅使用已去标识化或用户获准使用的数据；不在输出中暴露直接标识符；不做个体层面的诊疗决策。队列定义：{cohort_def}。依次进行：1. 按定义构建队列，报告每条纳入/排除标准的流失人数（CONSORT 式流程）；2. 数据质量检视：关键变量的缺失、异常值、编码不一致；3. 描述基线特征；4. 按研究问题做结局分析，明确混杂控制策略；5. 讨论 EHR 特有偏倚（编码不全、检测偏倚、 immortal time bias）及其方向。EHR 编码不等于临床事实——解读时区分诊断记录与真实状态；不得编造病历内容。输出标注“研究草案——非临床用途”。"
+    "prompt": "请分析用户通过 @文件 引用的结构化电子病历数据。仅使用已去标识化或用户获准使用的数据；不在输出中暴露直接标识符；不做个体层面的诊疗决策。队列定义：{cohort_def}。依次进行：1. 按定义构建队列，报告每条纳入/排除标准的流失人数（CONSORT 式流程）；2. 数据质量检视：关键变量的缺失、异常值、编码不一致；3. 描述基线特征；4. 按研究问题做结局分析，明确混杂控制策略；5. 讨论 EHR 特有偏倚（编码不全、检测偏倚、 immortal time bias）及其方向。EHR 编码不等于临床事实——解读时区分诊断记录与真实状态；不得编造病历内容。输出标注“研究草案——非临床用途”。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "cohort_def": {
+          "type": "string",
+          "description": "纳入/排除标准、索引事件、随访窗口"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "cohort_def",
+        "files"
+      ]
+    },
+    "agent_guidance": "分析结论须区分统计显著性与实际意义。样本量不足时标注为 [缺失]。不得将 p 值作为效应量大小的证据。",
+    "checkpoints": []
   },
   {
     "id": "risk-prediction-model",
@@ -155,7 +252,30 @@
       "pubmed",
       "gnomad"
     ],
-    "prompt": "请基于用户通过 @文件 引用的数据构建临床风险预测模型，目标：{target}。仅使用已去标识化或获准使用的数据；模型不得用于个体层面的诊疗决策。依次进行：1. 明确候选预测因子，筛查数据泄漏（不得使用结局相关的过程变量）；2. 按报告规范（TRIPOD）开发模型：训练/验证划分或交叉验证，固定种子；3. 报告区分度（AUC/C-statistic）与校准（校准曲线、校准斜率）——校准与区分度同等重要；4. 决策曲线分析评估临床净收益；5. 缺失数据处理透明化（多重插补等）并做敏感性分析；6. 报告按 TRIPOD 清单自查。模型是研究产物，未经外部验证不得宣称可直接临床应用；不得虚构性能数字。输出标注“研究草案——非临床用途”。"
+    "prompt": "请基于用户通过 @文件 引用的数据构建临床风险预测模型，目标：{target}。仅使用已去标识化或获准使用的数据；模型不得用于个体层面的诊疗决策。依次进行：1. 明确候选预测因子，筛查数据泄漏（不得使用结局相关的过程变量）；2. 按报告规范（TRIPOD）开发模型：训练/验证划分或交叉验证，固定种子；3. 报告区分度（AUC/C-statistic）与校准（校准曲线、校准斜率）——校准与区分度同等重要；4. 决策曲线分析评估临床净收益；5. 缺失数据处理透明化（多重插补等）并做敏感性分析；6. 报告按 TRIPOD 清单自查。模型是研究产物，未经外部验证不得宣称可直接临床应用；不得虚构性能数字。输出标注“研究草案——非临床用途”。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "如“非梗阻性无精子症的诊断预测”"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "target",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "diagnostic-accuracy",
@@ -187,7 +307,30 @@
     "limitations": [
       "仅限研究分析，不作个体诊断或临床决策；参考标准与阈值须由专业人员确认。"
     ],
-    "prompt": "请基于 @文件 对“{index_test}”进行研究性诊断准确性分析。明确目标人群、参考标准、阈值预设、纳入流程与缺失处理；计算敏感度、特异度、似然比、ROC/AUC及置信区间，评估验证偏倚、谱偏倚和不确定结果处理。按 STARD 思路列出缺失报告项。不得虚构性能数值或给出个体诊断建议。输出标注“研究草案——非临床用途”。"
+    "prompt": "请基于 @文件 对“{index_test}”进行研究性诊断准确性分析。明确目标人群、参考标准、阈值预设、纳入流程与缺失处理；计算敏感度、特异度、似然比、ROC/AUC及置信区间，评估验证偏倚、谱偏倚和不确定结果处理。按 STARD 思路列出缺失报告项。不得虚构性能数值或给出个体诊断建议。输出标注“研究草案——非临床用途”。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "index_test": {
+          "type": "string",
+          "description": "待评估指标或检测"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "index_test",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "clinical-trial-analysis",
@@ -209,7 +352,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "type": "string",
+          "description": "Primary endpoint"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "endpoint",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "survival-analysis-clinical",
@@ -246,7 +412,45 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "description": "Outcome (OS, PFS, DFS, etc.)"
+        },
+        "time_unit": {
+          "type": "string",
+          "description": "Time unit (days, months, years)"
+        },
+        "groups": {
+          "type": "string",
+          "description": "Groups to compare"
+        },
+        "covariates": {
+          "type": "string",
+          "description": "Covariates for adjustment",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "outcome",
+        "time_unit",
+        "groups",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "epidemiological-study",
@@ -273,7 +477,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "Research question"
+        },
+        "study_type": {
+          "type": "string",
+          "description": "Study type (cohort, case-control, cross-sectional, ecological)"
+        }
+      },
+      "required": [
+        "question",
+        "study_type"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "medical-image-analysis",
@@ -300,7 +524,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "modality": {
+          "type": "string",
+          "description": "Imaging modality (CT, MRI, X-ray, H&E, IHC)"
+        },
+        "target_structure": {
+          "type": "string",
+          "description": "Structure to segment or analyze"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "modality",
+        "target_structure",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "treatment-comparison",
@@ -327,7 +579,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "treatments": {
+          "type": "string",
+          "description": "Treatments to compare"
+        },
+        "method": {
+          "type": "string",
+          "description": "Adjustment method (propensity score, regression, matching)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "treatments",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "adverse-event-analysis",
@@ -349,7 +629,30 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "groups": {
+          "type": "string",
+          "description": "Treatment groups to compare"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "groups",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "cost-effectiveness-analysis",
@@ -381,7 +684,32 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "interventions": {
+          "type": "string",
+          "description": "Interventions to compare"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Clinical condition"
+        },
+        "perspective": {
+          "type": "string",
+          "description": "Analysis perspective (payer, societal, hospital)",
+          "default": ""
+        }
+      },
+      "required": [
+        "interventions",
+        "condition"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "systematic-review-clinical",
@@ -403,7 +731,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "Clinical question (PICO format preferred)"
+        }
+      },
+      "required": [
+        "question"
+      ]
+    },
+    "agent_guidance": "审阅前先用 verify_citation 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
+    "checkpoints": []
   },
   {
     "id": "clinical-guideline-summary",
@@ -430,7 +773,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "type": "string",
+          "description": "Clinical condition"
+        },
+        "societies": {
+          "type": "string",
+          "description": "Guideline societies (e.g., AHA, NICE, WHO)",
+          "default": ""
+        }
+      },
+      "required": [
+        "condition"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "quality-improvement",
@@ -452,7 +815,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "initiative": {
+          "type": "string",
+          "description": "QI initiative or metric to analyze"
+        }
+      },
+      "required": [
+        "initiative"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "health-equity-analysis",
@@ -479,7 +857,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "description": "Health outcome"
+        },
+        "demographics": {
+          "type": "string",
+          "description": "Demographic variables (race, ethnicity, income, geography)"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "outcome",
+        "demographics",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "population-health-assessment",
@@ -501,7 +907,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "population": {
+          "type": "string",
+          "description": "Population (county, city, or demographic group)"
+        }
+      },
+      "required": [
+        "population"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "digital-pathology",
@@ -533,6 +954,39 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "仅用于研究与资料整理；不得编造数据、图表、引用或完成状态，不提供个体诊疗建议。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "stain": {
+          "type": "string",
+          "description": "Stain type (H&E, IHC, IF, special stain)"
+        },
+        "magnification": {
+          "type": "string",
+          "description": "Analysis magnification (20, 40)",
+          "default": ""
+        },
+        "metrics": {
+          "type": "string",
+          "description": "Metrics to quantify (cell counts, tumor %, TIL density)"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "stain",
+        "metrics",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   }
 ]

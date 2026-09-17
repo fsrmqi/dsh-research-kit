@@ -19,7 +19,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "disease": {
+          "type": "string",
+          "description": "Disease name or indication"
+        }
+      },
+      "required": [
+        "disease"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "virtual-screening",
@@ -51,7 +66,40 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Drug target name"
+        },
+        "pdb_id": {
+          "type": "string",
+          "description": "PDB ID of target structure",
+          "default": ""
+        },
+        "library_size": {
+          "type": "string",
+          "description": "Library size to screen",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "target",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "admet-prediction",
@@ -67,7 +115,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "lead-optimization",
@@ -99,7 +165,40 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "compound": {
+          "type": "string",
+          "description": "Lead compound (SMILES or name)"
+        },
+        "target": {
+          "type": "string",
+          "description": "Drug target"
+        },
+        "property": {
+          "type": "string",
+          "description": "Property to optimize (potency, selectivity, solubility, metabolic stability)"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "compound",
+        "target",
+        "property",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "drug-repurposing",
@@ -121,7 +220,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "disease": {
+          "type": "string",
+          "description": "Disease or indication"
+        }
+      },
+      "required": [
+        "disease"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "pharmacokinetics-modeling",
@@ -148,7 +262,35 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "drug": {
+          "type": "string",
+          "description": "Drug name or compound ID"
+        },
+        "doses": {
+          "type": "string",
+          "description": "Doses to simulate (e.g., 10 mg, 50 mg, 100 mg)",
+          "default": ""
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "drug",
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "dose-response-analysis",
@@ -164,7 +306,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "drug-interaction-prediction",
@@ -186,7 +346,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "drugs": {
+          "type": "string",
+          "description": "Drug names or list"
+        }
+      },
+      "required": [
+        "drugs"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "clinical-trial-design",
@@ -213,7 +388,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "drug": {
+          "type": "string",
+          "description": "Drug or intervention"
+        },
+        "indication": {
+          "type": "string",
+          "description": "Disease indication"
+        }
+      },
+      "required": [
+        "drug",
+        "indication"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "toxicity-prediction",
@@ -229,7 +424,25 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "使用 @文件 引用的材料文件路径"
+        }
+      },
+      "required": [
+        "files"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "pharmacogenomics-analysis",
@@ -256,7 +469,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "drug": {
+          "type": "string",
+          "description": "Drug name"
+        },
+        "genotype": {
+          "type": "string",
+          "description": "Gene, allele, or synthetic/aggregate genotype context",
+          "default": ""
+        }
+      },
+      "required": [
+        "drug"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "drug-target-network",
@@ -278,7 +511,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "compounds": {
+          "type": "string",
+          "description": "Compound names or SMILES list"
+        }
+      },
+      "required": [
+        "compounds"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "competitive-landscape-pharma",
@@ -300,7 +548,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "indication": {
+          "type": "string",
+          "description": "Therapeutic area or indication"
+        }
+      },
+      "required": [
+        "indication"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "side-effect-prediction",
@@ -322,7 +585,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "compound": {
+          "type": "string",
+          "description": "Compound (SMILES or drug name)"
+        }
+      },
+      "required": [
+        "compound"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "formulation-optimization",
@@ -349,6 +627,26 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "compound": {
+          "type": "string",
+          "description": "Compound (SMILES or name)"
+        },
+        "route": {
+          "type": "string",
+          "description": "Administration route (oral, IV, topical, inhaled)"
+        }
+      },
+      "required": [
+        "compound",
+        "route"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   }
 ]

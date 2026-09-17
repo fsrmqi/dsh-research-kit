@@ -24,7 +24,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Research topic and hypothesis"
+        },
+        "agency": {
+          "type": "string",
+          "description": "Funding agency (e.g., NIH R01, NSF CAREER)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "budget-justification",
@@ -51,7 +71,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Project title / topic"
+        },
+        "budget": {
+          "type": "string",
+          "description": "Budget target (e.g., $250K/year for 3 years)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "write-biosketch",
@@ -83,7 +123,32 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "PI name and current position"
+        },
+        "agency": {
+          "type": "string",
+          "description": "Funding agency (NIH, NSF, DOE, etc.)"
+        },
+        "topic": {
+          "type": "string",
+          "description": "Proposal topic"
+        }
+      },
+      "required": [
+        "name",
+        "agency",
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "write-significance",
@@ -105,7 +170,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Research topic"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "write-innovation",
@@ -127,7 +207,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Research topic and approach"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "write-approach",
@@ -154,7 +249,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Research topic with specific aims"
+        },
+        "agency": {
+          "type": "string",
+          "description": "Funding agency",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "project-timeline",
@@ -181,7 +296,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Project topic"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Project duration (e.g., 3 years, 5 years)"
+        }
+      },
+      "required": [
+        "topic",
+        "duration"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "broader-impacts",
@@ -203,7 +338,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Project topic"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "checkpoints": []
   },
   {
     "id": "risk-mitigation",
@@ -225,7 +375,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Project topic and aims"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "facilities-equipment",
@@ -252,6 +417,26 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Project topic"
+        },
+        "institution": {
+          "type": "string",
+          "description": "Institution name"
+        }
+      },
+      "required": [
+        "topic",
+        "institution"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   }
 ]

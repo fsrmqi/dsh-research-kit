@@ -19,7 +19,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "composition": {
+          "type": "string",
+          "description": "Chemical composition (e.g., Li2FeSiO4, TiO2)"
+        }
+      },
+      "required": [
+        "composition"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "phase-diagram-analysis",
@@ -41,7 +56,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "system": {
+          "type": "string",
+          "description": "Material system (e.g., Fe-C, Al-Cu, Li-Ni-Mn-Co-O)"
+        }
+      },
+      "required": [
+        "system"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "mechanical-property-prediction",
@@ -63,7 +93,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Material (formula or crystal structure file)"
+        }
+      },
+      "required": [
+        "material"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "materials-screening",
@@ -90,7 +135,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "application": {
+          "type": "string",
+          "description": "Target application (e.g., battery cathode, thermoelectric, photocatalyst)"
+        },
+        "properties": {
+          "type": "string",
+          "description": "Desired properties and ranges"
+        }
+      },
+      "required": [
+        "application",
+        "properties"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "defect-analysis",
@@ -117,7 +182,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Host material"
+        },
+        "temperature": {
+          "type": "string",
+          "description": "Temperature of interest (K)",
+          "default": ""
+        }
+      },
+      "required": [
+        "material"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "alloy-design",
@@ -144,7 +229,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "application": {
+          "type": "string",
+          "description": "Application (aerospace, biomedical, automotive, etc.)"
+        },
+        "requirements": {
+          "type": "string",
+          "description": "Property requirements"
+        }
+      },
+      "required": [
+        "application",
+        "requirements"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "battery-material-analysis",
@@ -171,7 +276,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Material formula"
+        },
+        "component": {
+          "type": "string",
+          "description": "Battery component (cathode, anode, electrolyte, solid electrolyte)"
+        }
+      },
+      "required": [
+        "material",
+        "component"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "thermal-conductivity-modeling",
@@ -203,7 +328,32 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Material"
+        },
+        "t_min": {
+          "type": "string",
+          "description": "Min temperature K (default: 100)",
+          "default": ""
+        },
+        "t_max": {
+          "type": "string",
+          "description": "Max temperature K (default: 1000)",
+          "default": ""
+        }
+      },
+      "required": [
+        "material"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "surface-energy-calculation",
@@ -230,7 +380,27 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Material"
+        },
+        "adsorbate": {
+          "type": "string",
+          "description": "Adsorbate molecule (optional)",
+          "default": ""
+        }
+      },
+      "required": [
+        "material"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "polymer-property-prediction",
@@ -252,7 +422,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "polymer": {
+          "type": "string",
+          "description": "Polymer (repeat unit SMILES or name)"
+        }
+      },
+      "required": [
+        "polymer"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "band-structure-calculation",
@@ -274,7 +459,22 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "material": {
+          "type": "string",
+          "description": "Material (formula or CIF file)"
+        }
+      },
+      "required": [
+        "material"
+      ]
+    },
+    "agent_guidance": "基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。",
+    "checkpoints": []
   },
   {
     "id": "materials-literature-review",
@@ -301,6 +501,26 @@
     "suggestedDatabaseIds": [],
     "limitations": [
       "需基于用户提供材料或已核验来源生成；不得编造数据、图表、引用或完成状态。"
-    ]
+    ],
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Materials topic"
+        },
+        "years": {
+          "type": "string",
+          "description": "Years to cover (default: 5)",
+          "default": ""
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "审阅前先用 verify_citation 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
+    "checkpoints": []
   }
 ]
