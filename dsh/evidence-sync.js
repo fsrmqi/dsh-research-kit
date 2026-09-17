@@ -1,6 +1,7 @@
 
 import {
   deleteProjectEntry,
+  listAllProjectEntries,
   mergeProjectEntries,
   readProjectEntries,
   safeProjectName,
@@ -41,7 +42,12 @@ export function evidenceSyncRoute({ logger } = {}) {
       try {
         if (req.method === 'GET') {
           const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`)
-          const project = requestProject(url.searchParams.get('project'))
+          const projectParam = url.searchParams.get('project')
+          if (!projectParam) {
+            const entries = await listAllProjectEntries()
+            return reply(res, 200, { ok: true, project: 'all', entries, count: entries.length })
+          }
+          const project = requestProject(projectParam)
           const entries = await readProjectEntries(project)
           return reply(res, 200, { ok: true, project, entries, count: entries.length })
         }

@@ -39,8 +39,121 @@ function publishEvidenceVault() {
   for (const listener of listeners) { try { listener() } catch { /* 单个监听失败不影响其余 */ } }
 }
 
+const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
+
+function canUseFileSync() {
+  return typeof window !== 'undefined' && typeof fetch === 'function'
+}
+
+function fileEvidenceInput(entry) {
+  return {
+    id: entry.id,
+    title: entry.title,
+    sourceDatabase: entry.source_database || entry.sourceDatabase || 'MCP Agent',
+    identifier: entry.identifier,
+    identifierKind: entry.identifier_type || entry.identifierKind || 'accession',
+    url: entry.url,
+    savedAt: entry.saved_at ? Date.parse(entry.saved_at) : undefined,
+    project: entry.project || 'default',
+    tags: Array.isArray(entry.tags) ? entry.tags : [],
+    reason: entry.reason || '',
+    note: entry.note || '',
+    status: entry.status || 'unverified',
+    grade: entry.grade || 'ungraded',
+    agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
+  }
+}
+
+function vaultEvidenceFileEntry(entry) {
+  return {
+    id: entry.id,
+    identifier_type: entry.identifierKind || 'accession',
+    identifier: entry.identifier || '',
+    title: entry.title,
+    url: entry.url || '',
+    note: entry.note || '',
+    project: entry.project || 'default',
+    grade: entry.grade || 'ungraded',
+    status: entry.status || 'unverified',
+    source: 'dsh-ui',
+    saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
+  }
+}
+
+function evidenceSyncKey(entry) {
+  const project = String(entry.project || '').trim().toLowerCase()
+  const identifier = String(entry.identifier || '').trim().toLowerCase()
+  if (identifier) return `${project}::${entry.identifierKind || entry.identifier_type || 'accession'}:${identifier}`
+  const url = String(entry.url || '').trim().toLowerCase().replace(/\/$/, '')
+  if (url) return `${project}::url:${url}`
+  return `${project}::title:${String(entry.title || '').slice(0, 80).toLowerCase()}`
+}
+
+async function fetchFileEvidenceEntries(project) {
+  const query = project ? `?project=${encodeURIComponent(project)}` : ''
+  const response = await fetch(`${EVIDENCE_SYNC_PATH}${query}`, { signal: AbortSignal.timeout(5_000) })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  const payload = await response.json()
+  if (!payload?.ok || !Array.isArray(payload.entries)) throw new Error(payload?.error || 'invalid_response')
+  return payload.entries
+}
+
+async function postFileEvidenceEntries(entries) {
+  const byProject = new Map()
+  for (const entry of entries) {
+    const project = entry.project || 'default'
+    if (!byProject.has(project)) byProject.set(project, [])
+    byProject.get(project).push(entry)
+  }
+  for (const [project, rows] of byProject) {
+    const response = await fetch(EVIDENCE_SYNC_PATH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, entries: rows }),
+      signal: AbortSignal.timeout(5_000),
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  }
+}
+
+export async function syncEvidenceVaultWithFiles(project) {
+  if (!canUseFileSync()) return { skipped: true, imported: 0, exported: 0 }
+  const store = evidenceVaultStore()
+  const fileEntries = await fetchFileEvidenceEntries(project)
+  const localEntries = await store.list(project ? { project } : {})
+  const localKeys = new Set(localEntries.map(evidenceSyncKey))
+  let imported = 0
+  for (const fileEntry of fileEntries) {
+    if (localKeys.has(evidenceSyncKey(fileEntry))) continue
+    try {
+      await store.save(fileEvidenceInput(fileEntry), { onDuplicate: 'new' })
+      imported++
+    } catch {
+      // 非法或无法追溯的文件条目不入库；文件侧保留原样，UI 不伪造条目。
+    }
+  }
+
+  const nextLocalEntries = await store.list(project ? { project } : {})
+  const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
+  const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
+  if (missing.length) await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry))
+  publishEvidenceVault()
+  return { skipped: false, imported, exported: missing.length }
+}
+
+async function persistEvidenceEntryToFile(entry) {
+  if (!canUseFileSync()) return false
+  try {
+    await postFileEvidenceEntries([vaultEvidenceFileEntry(entry)])
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function saveEvidenceEntry(input, options) {
   const result = await evidenceVaultStore().save(input, options)
+  await persistEvidenceEntryToFile(result.entry)
   publishEvidenceVault()
   return result
 }

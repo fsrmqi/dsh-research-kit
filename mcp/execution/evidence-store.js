@@ -1,5 +1,5 @@
 
-import { appendFile, mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -97,6 +97,19 @@ async function writeEntriesUnlocked(project, entries) {
 
 export async function readProjectEntries(project) {
   return withProjectLock(project, () => readEntriesUnlocked(project))
+}
+
+export async function listAllProjectEntries() {
+  if (!existsSync(BASE_DIR)) return []
+  const names = (await readdir(BASE_DIR, { withFileTypes: true }))
+    .filter(item => item.isDirectory())
+    .map(item => item.name)
+  const entries = []
+  for (const name of names) {
+    const rows = await readProjectEntries(name)
+    entries.push(...rows)
+  }
+  return entries
 }
 
 export async function mergeProjectEntries(project, incoming = []) {

@@ -11,6 +11,7 @@ export const EVIDENCE_STATUS_LABELS = {
   disputed: '存疑',
   stale: '已失效',
 }
+export const EVIDENCE_GRADES = ['ungraded', 'empirical', 'inference', 'missing']
 export const EVIDENCE_IDENTIFIER_LABELS = {
   doi: 'DOI',
   pmid: 'PMID',
@@ -83,6 +84,7 @@ export function normalizeEvidenceEntry(input = {}) {
   const identifierKind = input.identifierKind || (identifier ? (detected.value === identifier ? detected.kind : 'accession') : 'none')
   if (!url && !identifier) throw new Error('证据条目既没有原始链接也没有稳定标识符；无法追溯的来源不入库。')
   const status = EVIDENCE_STATUSES.includes(input.status) ? input.status : 'unverified'
+  const grade = EVIDENCE_GRADES.includes(input.grade) ? input.grade : 'ungraded'
   return {
     id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title,
@@ -96,6 +98,8 @@ export function normalizeEvidenceEntry(input = {}) {
     reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
     note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
     status,
+    grade,
+    agentProduced: input.agentProduced === true,
   }
 }
 
