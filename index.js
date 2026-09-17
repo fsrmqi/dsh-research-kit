@@ -3,6 +3,7 @@ import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
 import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
+import { evidenceSyncRoute } from './dsh/evidence-sync.js'
 
 // 科研插件的唯一 Node half。公开数据源查询只经 DSH 的受控 web 服务出网；
 // 语义增强复用当前会话已建立的路由（sessionId → provider/model），浏览器端永不持有 API Key。
@@ -68,4 +69,6 @@ export function apply(ctx) {
   // Memory Center 项目记忆检索（ROADMAP §5）：只代为执行 mcp__ 前缀的检索工具，
   // 结果交浏览器端预览；是否进入 Prompt 由用户在增强面板显式勾选（禁止静默注入）。
   ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger })), 'dsh-research-kit memory search')
+  // 证据同步（Agent 化改造 §6.3）：文件系统为单一真源，IndexedDB 仅作 UI 缓存层。
+  ctx.effect(() => ctx.webServer.register(evidenceSyncRoute({ logger })), 'dsh-research-kit evidence sync')
 }

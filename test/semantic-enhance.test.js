@@ -5,6 +5,7 @@ import { SEMANTIC_ENHANCE_PATH, SEMANTIC_ENHANCE_STREAM_PATH } from '../dsh/sema
 import { DATABASE_QUERY_PATH as QUERY_PATH } from '../dsh/database-query.js'
 import { HOST_CAPABILITIES_PATH } from '../dsh/host-capabilities.js'
 import { MEMORY_SEARCH_PATH } from '../dsh/memory-search.js'
+import { EVIDENCE_SYNC_PATH } from '../dsh/evidence-sync.js'
 
 // Node half 统一注册：index.js 应注册公开查询 + 语义增强（非流式/流式）三条路由，
 // 且会话模型路由随 agent/created 与 agent/disposed 增删。
@@ -26,7 +27,7 @@ function makeContext() {
   }
 }
 
-test('index.js 统一注册五条路由且不使用 dsh-promptkit 路径', () => {
+test('index.js 统一注册六条路由且不使用 dsh-promptkit 路径', () => {
   const { ctx, registered } = makeContext()
   apply(ctx)
   assert.deepEqual(registered.map(route => route.path).sort(), [
@@ -35,6 +36,7 @@ test('index.js 统一注册五条路由且不使用 dsh-promptkit 路径', () =>
     SEMANTIC_ENHANCE_STREAM_PATH,
     HOST_CAPABILITIES_PATH,
     MEMORY_SEARCH_PATH,
+    EVIDENCE_SYNC_PATH,
   ].sort())
   assert.ok(registered.every(route => route.path.startsWith('/dsh-research-kit/')))
 })

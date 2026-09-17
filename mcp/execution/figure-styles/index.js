@@ -1,0 +1,95 @@
+
+export const STYLES = {
+  bar_paired_delta: {
+    description: '配对对比柱 + 增益标注（baseline vs method）',
+    figure_type: 'bar',
+    rcParams: {
+      'font.family': 'serif',
+      'font.serif': ['Palatino', 'Times New Roman', 'DejaVu Serif'],
+    },
+    colors: { baseline: '#A8C8E8', method: '#1B3D6E', delta: '#CC2200' },
+    layout: { bar_width: 0.32, gap: 0.08, spine_linewidth: 1.4, grid: false },
+    annotations: { delta_label: { fontweight: 'bold', color: '#CC2200', fontsize: 9.5 } },
+    title: { position: 'upper left inside axes', fontweight: 'bold', fontsize: 11.5 },
+  },
+  bar_grouped_hatch: {
+    description: '分组柱 + 斜线填充主方法 + 柱顶数值',
+    figure_type: 'bar',
+    rcParams: {
+      'text.usetex': true,
+      'font.family': 'serif',
+      'font.serif': ['Computer Modern Roman', 'STIX Two Text', 'DejaVu Serif'],
+      'hatch.color': 'white',
+      'hatch.linewidth': 1.4,
+    },
+    colors: { ablation: ['#FFB695', '#FF7F5E', '#D00000'], comparison: ['#D3D3D3', '#A9A9A9', '#D00000'] },
+    layout: { bar_total_width: 0.78, grid: 'y-only', grid_color: '#DDDDDD', spine: 'all', spine_color: '#7A7A7A', spine_linewidth: 0.8 },
+    annotations: { bar_values: { fontsize: 8.7, best_bold: true, best_color: '#8B0000' } },
+    hatch: { pattern: '//', only_last: true },
+  },
+  line_confidence_band: {
+    description: '折线 + 置信区间阴影',
+    figure_type: 'line',
+    rcParams: {
+      'text.usetex': true,
+      'font.family': 'serif',
+      'font.serif': ['Computer Modern Roman', 'STIX Two Text', 'DejaVu Serif'],
+    },
+    colors: { primary: '#3A8B3A', secondary: '#3B6BB5', base: '#999999' },
+    layout: { band_alpha: 0.15, linewidth_primary: 1.8, linewidth_secondary: 1.8, spine: 'left-bottom', grid: false },
+    legend: { framealpha: 0, primary_bold: true },
+  },
+  line_training_curve: {
+    description: '训练曲线 + 垂直断点线 + 水平参考线',
+    figure_type: 'line',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans', 'Arial'] },
+    colors: { primary: '#5B0DAD', secondary: '#5BBCCA', reference: '#3D78C2' },
+    layout: { spine: 'all', tick_direction: 'out', grid: false },
+    annotations: { vline: { linestyle: '--', alpha: 0.85, linewidth: 1.5 }, hline: { linestyle: '--', linewidth: 1.5 } },
+    legend: { loc: 'lower right', frameon: true },
+  },
+  line_loss_with_inset: {
+    description: 'Loss 曲线 + L 形 spine + 局部放大 inset',
+    figure_type: 'line',
+    rcParams: {
+      'text.usetex': true,
+      'font.family': 'serif',
+      'font.serif': ['Computer Modern Roman', 'STIX Two Text', 'DejaVu Serif'],
+    },
+    colors: { primary: '#2CA02C', secondary: '#FF7F0E', tertiary: '#1F77B4' },
+    layout: { spine: 'L-with-arrows', grid: 'dotted', grid_color: '#E0E0E0', inset: true, connection_line: { color: '#333333', linestyle: '--', lw: 0.8 } },
+    legend: { loc: 'upper right', frameon: true, edgecolor: '#DDDDDD' },
+  },
+  scatter_tsne_cluster: {
+    description: 't-SNE 聚类 + 注释框',
+    figure_type: 'scatter',
+    rcParams: {
+      'text.usetex': true,
+      'font.family': 'serif',
+      'font.serif': ['Computer Modern Roman', 'STIX Two Text'],
+    },
+    colors: {
+      clusters: ['#6A4C93', '#D651A0', '#F06292', '#FF8A65', '#FFB74D', '#FFF176', '#C888E8'],
+    },
+    layout: { scatter_size: 14, scatter_alpha: 0.55, annotation_box: { style: 'round,pad=0.30', edge: '#2C3E50', facealpha: 0.28 }, spine: 'all', spine_color: '#333333', tick_direction: 'in', grid: 'dotted', grid_color: '#E0E0E0' },
+    legend: { frameon: true, edgecolor: '#CCCCCC', loc: 'upper right' },
+  },
+  scatter_broken_axis: {
+    description: '折断 X 轴散点图（双面板）',
+    figure_type: 'scatter',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans', 'Arial'] },
+    colors: { pareto: '#E53935', nonpareto: '#F4B8B8', fewshot: '#6B4FA0', mce: '#E69B00', ace: '#2E86C1' },
+    layout: { dual_panel: true, width_ratios: [5, 1.3], wspace: 0.05, spine_left: 'L', spine_right: 'bottom-only', break_symbol: 'bottom-only' },
+    legend: { loc: 'lower right', frameon: true, edgecolor: '#CCCCCC' },
+  },
+  radar_dual_series: {
+    description: '双方法多维雷达对比（正八边形网格）',
+    figure_type: 'radar',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['DejaVu Sans', 'Arial'] },
+    colors: { primary: '#76A676', secondary: '#7D82FF' },
+    layout: { projection: 'polar', theta_zero: 'N', theta_direction: -1, grid_shape: 'octagon', grid_linestyle: '--', grid_color: '#CCCCCC', fill_alpha: 0.18, linewidth_primary: 2.8, linewidth_secondary: 1.3, rmin: 0.35, rmax: 1.0 },
+    legend: { position: 'upper-left-outside' },
+  },
+}
+
+export const STYLE_NAMES = Object.keys(STYLES)

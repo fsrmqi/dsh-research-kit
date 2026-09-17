@@ -6,6 +6,8 @@ import { verifyCitation, detectIdentifierType } from '../execution/citation-veri
 import { saveEvidence, listEvidence, linkEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
 import { exportPassport, importPassport } from '../state/material-passport.js'
+import { evaluateCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
+import { generateFigure, listFigureStyles } from '../execution/figure-generator.js'
 import { wrap, err } from '../execution/wrapper.js'
 
 const tools = [
@@ -221,6 +223,77 @@ const tools = [
       } catch (e) {
         return err(`导入失败：${e.message}`)
       }
+    },
+  },
+
+  {
+    name: 'link_evidence',
+    description: 'Link an evidence entry to a research asset for traceability.',
+    inputSchema: {
+      evidence_id: z.string().describe('Evidence entry ID'),
+      asset_id: z.string().describe('Research asset ID to link'),
+      project: z.string().optional().describe('Project name'),
+    },
+    async execute({ evidence_id, asset_id, project }) {
+      try {
+        const result = await linkEvidence(evidence_id, asset_id, project)
+        return wrap(result, { source: 'evidence-store', confidence: 'verified' })
+      } catch (e) {
+        return err(`关联失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'generate_figure',
+    description: 'Generate a publication-quality matplotlib script using a pre-built paper style. Returns the Python script to execute.',
+    inputSchema: {
+      style: z.string().describe('Style name (use list_figure_styles to see options)'),
+      data: z.record(z.any()).describe('Data object: { categories, series, clusters, ... } depending on figure type'),
+      title: z.string().optional().describe('Figure title'),
+      xlabel: z.string().optional().describe('X-axis label'),
+      ylabel: z.string().optional().describe('Y-axis label'),
+      figsize: z.array(z.number()).length(2).optional().describe('Figure size [width, height] in inches'),
+      dpi: z.number().int().optional().default(300).describe('Output DPI'),
+    },
+    async execute({ style, data, title, xlabel, ylabel, figsize, dpi }) {
+      return generateFigure(style, data, { title, xlabel, ylabel, figsize, dpi })
+    },
+  },
+
+  {
+    name: 'list_figure_styles',
+    description: 'List all available paper figure styles with their type and color palettes.',
+    inputSchema: {},
+    async execute() {
+      const styles = listFigureStyles()
+      return wrap({ styles }, { source: 'figure-styles', confidence: 'verified' })
+    },
+  },
+
+  {
+    name: 'checkpoint_status',
+    description: 'Get the checkpoint state for a research pipeline run.',
+    inputSchema: {
+      run_id: z.string().describe('Run ID from export_passport'),
+    },
+    async execute({ run_id }) {
+      const state = await getCheckpointState(run_id)
+      return wrap(state, { source: 'checkpoint-manager', confidence: 'verified' })
+    },
+  },
+
+  {
+    name: 'approve_checkpoint',
+    description: 'Approve a checkpoint to allow the agent to continue to the next stage.',
+    inputSchema: {
+      run_id: z.string().describe('Run ID'),
+      stage: z.string().describe('Stage name to approve'),
+      note: z.string().optional().describe('Optional note about the approval'),
+    },
+    async execute({ run_id, stage, note }) {
+      const result = await recordApproval(run_id, stage, { approved_by: 'user', note })
+      return wrap(result, { source: 'checkpoint-manager', confidence: 'verified' })
     },
   },
 ]
