@@ -6,8 +6,11 @@ import { verifyCitation, detectIdentifierType } from '../execution/citation-veri
 import { saveEvidence, listEvidence, linkEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
 import { exportPassport, importPassport } from '../state/material-passport.js'
-import { evaluateCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
+import { evaluateCheckpoints, initializeCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
 import { generateFigure, listFigureStyles } from '../execution/figure-generator.js'
+import { auditClaims } from '../execution/claim-auditor.js'
+import { linkLiterature } from '../execution/literature-linker.js'
+import { detectTextAnomalies } from '../execution/anomaly-detector.js'
 import { wrap, err } from '../execution/wrapper.js'
 
 const tools = [
@@ -194,6 +197,7 @@ const tools = [
     description: 'Export a Material Passport (cross-session research state snapshot) as YAML.',
     inputSchema: {
       project: z.string().optional().describe('Project name'),
+      workflow_id: z.string().optional().describe('Workflow ID; used to initialize required checkpoints'),
       current_stage: z.string().describe('Current pipeline stage (e.g. literature_search, evidence_extraction, synthesis)'),
       completed: z.array(z.object({ stage: z.string(), tool: z.string(), summary: z.string() })).optional().describe('Completed steps'),
       pending: z.array(z.object({ stage: z.string(), tool: z.string().optional(), workflow_id: z.string().optional(), note: z.string().optional() })).optional().describe('Remaining steps'),
@@ -203,6 +207,12 @@ const tools = [
     async execute(input) {
       try {
         const result = await exportPassport(input)
+        if (input.workflow_id) {
+          const workflow = itemById(input.workflow_id)
+          if (!workflow || workflow.type !== 'workflow') return err(`工作流 "${input.workflow_id}" 不存在。`)
+          const completedStages = (input.completed || []).map(step => step.stage)
+          result.checkpoint_state = await initializeCheckpoints(result.run_id, workflow, completedStages)
+        }
         return wrap(result, { source: 'material-passport', confidence: 'verified' })
       } catch (e) {
         return err(`导出失败：${e.message}`)
@@ -292,8 +302,51 @@ const tools = [
       note: z.string().optional().describe('Optional note about the approval'),
     },
     async execute({ run_id, stage, note }) {
-      const result = await recordApproval(run_id, stage, { approved_by: 'user', note })
-      return wrap(result, { source: 'checkpoint-manager', confidence: 'verified' })
+      try {
+        const result = await recordApproval(run_id, stage, { approved_by: 'user', note })
+        return wrap(result, { source: 'checkpoint-manager', confidence: 'verified' })
+      } catch (e) {
+        return err(e.message)
+      }
+    },
+  },
+
+  {
+    name: 'claim_audit',
+    description: 'Audit all claims with citations (DOI/PMID/arXiv) in a text. Verifies each citation exists and whether the abstract supports the claim.',
+    inputSchema: {
+      text: z.string().min(20).describe('The text to audit (paper draft, review, etc.)'),
+      max_claims: z.number().int().min(1).max(50).optional().default(20).describe('Max claims to audit'),
+    },
+    async execute({ text, max_claims }) {
+      return auditClaims(text, { max_claims })
+    },
+  },
+
+  {
+    name: 'link_literature',
+    description: 'Discover citation relationships between saved evidence entries using the OpenAlex reference graph.',
+    inputSchema: {
+      project: z.string().optional().describe('Project name'),
+      max_lookups: z.number().int().min(1).max(20).optional().default(10).describe('Max DOI lookups'),
+    },
+    async execute({ project, max_lookups }) {
+      try {
+        return await linkLiterature({ project, max_lookups })
+      } catch (e) {
+        return err(`文献互引分析失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'anomaly_detect',
+    description: 'Detect textual anomalies: redundant patterns, contradictions, silence zones (missing elements like limitations or sample size). Based on literature-review methodology.',
+    inputSchema: {
+      text: z.string().min(50).describe('The text to analyze (paper draft, review, abstract, etc.)'),
+    },
+    async execute({ text }) {
+      return detectTextAnomalies(text)
     },
   },
 ]

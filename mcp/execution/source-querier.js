@@ -2,6 +2,10 @@
 const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX_REQUESTS = 12
+const inFlightQueries = new Map()
+const rateBuckets = new Map()
 
 function cacheKey(dbId, query, limit) { return `${dbId}::${query.trim()}::${limit}` }
 function cacheGet(key) {
@@ -27,6 +31,33 @@ async function fetchJson(url) {
   const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
   if (!res.ok) throw new Error(`数据源返回 HTTP ${res.status}`)
   return res.json()
+}
+
+function rateLimitExceeded(sourceId) {
+  const now = Date.now()
+  const bucket = (rateBuckets.get(sourceId) || []).filter(at => now - at < RATE_LIMIT_WINDOW_MS)
+  if (bucket.length >= RATE_LIMIT_MAX_REQUESTS) {
+    rateBuckets.set(sourceId, bucket)
+    return true
+  }
+  bucket.push(now)
+  rateBuckets.set(sourceId, bucket)
+  while (rateBuckets.size > 100) rateBuckets.delete(rateBuckets.keys().next().value)
+  return false
+}
+
+async function fetchWithRetry(url, accept) {
+  let response
+  try {
+    response = await fetch(url, { headers: { Accept: accept }, signal: AbortSignal.timeout(15_000) })
+  } catch (error) {
+    throw error
+  }
+  if (response.status === 429) {
+    await new Promise(resolve => setTimeout(resolve, 1_200))
+    response = await fetch(url, { headers: { Accept: accept }, signal: AbortSignal.timeout(15_000) })
+  }
+  return response
 }
 
 const ADAPTERS = {
@@ -108,25 +139,46 @@ async function querySource(sourceId, query, limit = 5) {
     }
   }
 
+  const normalizedQuery = String(query || '').trim().slice(0, 300)
+  if (!normalizedQuery) throw new Error('查询词不能为空。')
   const normalizedLimit = Math.max(1, Math.min(Number(limit) || 5, 10))
-  const key = cacheKey(sourceId, query, normalizedLimit)
+  const key = cacheKey(sourceId, normalizedQuery, normalizedLimit)
   const cached = cacheGet(key)
   if (cached) return { ...cached, cached: true }
 
-  const url = adapter.url(query, normalizedLimit)
-  const raw = await fetch(url, { headers: { Accept: adapter.isXml ? 'application/xml' : 'application/json' }, signal: AbortSignal.timeout(15_000) })
-  if (!raw.ok) throw new Error(`数据源 "${sourceId}" 返回 HTTP ${raw.status}`)
-  const body = adapter.isXml ? await raw.text() : await raw.json()
-  const sources = adapter.parse(body)
-
-  const result = {
-    sources,
-    total: sources.length,
-    source_name: sourceId,
-    availability: AVAILABILITY_MAP[sourceId] || 'unknown',
+  if (inFlightQueries.has(key)) {
+    const result = await inFlightQueries.get(key)
+    return { ...result, shared_request: true }
   }
-  cacheSet(key, result)
-  return result
+
+  if (rateLimitExceeded(sourceId)) {
+    const error = new Error(`数据源 "${sourceId}" 查询频率超出本地预算（每分钟 ${RATE_LIMIT_MAX_REQUESTS} 次）。请稍后重试或改用缓存结果。`)
+    error.code = 'RATE_LIMITED'
+    throw error
+  }
+
+  const request = (async () => {
+    const url = adapter.url(normalizedQuery, normalizedLimit)
+    const raw = await fetchWithRetry(url, adapter.isXml ? 'application/xml' : 'application/json')
+    if (!raw.ok) throw new Error(`数据源 "${sourceId}" 返回 HTTP ${raw.status}`)
+    const body = adapter.isXml ? await raw.text() : await raw.json()
+    const sources = adapter.parse(body)
+    const result = {
+      sources,
+      total: sources.length,
+      source_name: sourceId,
+      availability: AVAILABILITY_MAP[sourceId] || 'unknown',
+    }
+    cacheSet(key, result)
+    return result
+  })()
+
+  inFlightQueries.set(key, request)
+  try {
+    return await request
+  } finally {
+    inFlightQueries.delete(key)
+  }
 }
 
 function listAvailableSources() {

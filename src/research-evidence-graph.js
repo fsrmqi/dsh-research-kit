@@ -52,6 +52,19 @@ const GRAPH_FRAME_HEIGHT = 520
 
 function graphKindColor(kind) { return EVIDENCE_NODE_COLORS[kind] || C.lineStrong }
 
+const GRADE_NODE_COLORS = { empirical: '#27AE60', inference: '#F39C12', missing: '#E74C3C' }
+const GRADE_STROKE_DASH = { inference: '4,2', missing: '2,2' }
+
+function nodeStrokeColor(node) {
+  if (node.kind === 'evidence' && node.grade && GRADE_NODE_COLORS[node.grade]) return GRADE_NODE_COLORS[node.grade]
+  return graphKindColor(node.kind)
+}
+
+function nodeStrokeDash(node) {
+  if (node.kind === 'evidence' && node.grade && GRADE_STROKE_DASH[node.grade]) return GRADE_STROKE_DASH[node.grade]
+  return null
+}
+
 function graphEscape(value) {
   return String(value ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
 }
@@ -79,11 +92,14 @@ function readGraphTheme() {
 function buildGraphSvgMarkup(layout, routes, theme) {
   const edges = routes.map(route => `<path d="${route.d}" fill="none" stroke="${theme.line}" stroke-width="1.5" marker-end="url(#rk-arrow)"/>`).join('\n  ')
   const nodes = layout.nodes.map(node => {
-    const color = graphKindColor(node.kind)
+    const color = nodeStrokeColor(node)
+    const dash = nodeStrokeDash(node)
+    const agentBadge = node.agentProduced ? `<circle cx="${GRAPH_NODE_WIDTH - 12}" cy="10" r="4" fill="#3498DB"/>` : ''
     return `<g transform="translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})">`
-      + `<rect width="${GRAPH_NODE_WIDTH}" height="${GRAPH_NODE_HEIGHT}" rx="9" fill="${theme.surface}" stroke="${color}" stroke-width="1.5"/>`
+      + `<rect width="${GRAPH_NODE_WIDTH}" height="${GRAPH_NODE_HEIGHT}" rx="9" fill="${theme.surface}" stroke="${color}" stroke-width="1.5"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`
       + `<text x="10" y="22" font-size="12" fill="${theme.ink}">${graphEscape(graphLabel(node.label))}</text>`
-      + `<text x="10" y="40" font-size="10" fill="${color}">${graphEscape(node.kind)}</text></g>`
+      + `<text x="10" y="40" font-size="10" fill="${color}">${graphEscape(node.kind)}</text>`
+      + agentBadge + `</g>`
   }).join('\n  ')
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${layout.width} ${layout.height}" width="${layout.width}" height="${layout.height}" role="img" aria-label="研究证据图谱">`
     + `<title>研究证据图谱</title>`
@@ -376,9 +392,14 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         onClick: event => { event.preventDefault(); activateNode(node.id); setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '') }
       }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
         h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
-        h('rect', { key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface, stroke: graphKindColor(node.kind), strokeWidth: 1.5 }),
+        h('rect', {
+          key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface,
+          stroke: nodeStrokeColor(node), strokeWidth: 1.5,
+          ...(nodeStrokeDash(node) ? { strokeDasharray: nodeStrokeDash(node) } : {}),
+        }),
         h('text', { key: 'title', x: 10, y: 22, fill: C.ink, fontSize: 12, fontWeight: 700 }, graphLabel(node.label)),
-        h('text', { key: 'kind', x: 10, y: 40, fill: graphKindColor(node.kind), fontSize: 10 }, node.kind)
+        h('text', { key: 'kind', x: 10, y: 40, fill: nodeStrokeColor(node), fontSize: 10 }, node.kind),
+        ...(node.agentProduced ? [h('circle', { key: 'agent-badge', cx: GRAPH_NODE_WIDTH - 12, cy: 10, r: 4, fill: '#3498DB' })] : []),
       ]))
     })
   ])

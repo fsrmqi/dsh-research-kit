@@ -1,0 +1,103 @@
+
+import { verifyCitation } from './citation-verifier.js'
+import { wrap } from './wrapper.js'
+
+const CITATION_PATTERNS = [
+  { regex: /\[(\d+)\]\((?:https?:\/\/doi\.org\/)?(10\.[^\s)]+)\)/g, type: 'doi' },
+  { regex: /\[(\d+)\]\((?:https?:\/\/(?:www\.)?pubmed\.ncbi\.nlm\.nih\.gov\/)?(\d{5,8})\)/g, type: 'pmid' },
+  { regex: /\[([^\]]+)\]\((?:https?:\/\/doi\.org\/)?(10\.[^\s)]+)\)/g, type: 'doi' },
+  { regex: /(?:doi[:\s]*|https?:\/\/doi\.org\/)(10\.\d{4,9}\/[-._;()/:a-z0-9]+)/gi, type: 'doi' },
+  { regex: /(?:PMID[:\s]*|pubmed\.ncbi\.nlm\.nih\.gov\/)(\d{5,8})/gi, type: 'pmid' },
+  { regex: /\barxiv:(\d{4}\.\d{4,5}(?:v\d+)?)/gi, type: 'arxiv' },
+]
+
+function extractClaims(text) {
+  const claims = []
+  const raw = String(text || '')
+  const seen = new Set()
+  for (const pattern of CITATION_PATTERNS) {
+    pattern.regex.lastIndex = 0
+    let match
+    while ((match = pattern.regex.exec(raw)) !== null) {
+      const identifier = match[2] || match[1]
+      if (!identifier) continue
+      const cleaned = identifier.replace(/[).,;]+$/, '').trim()
+      if (!cleaned) continue
+      // Extract surrounding context: 200 chars before and after the citation match
+      const start = Math.max(0, match.index - 200)
+      const end = Math.min(raw.length, match.index + match[0].length + 200)
+      const context = raw.slice(start, end).replace(/\s+/g, ' ').trim()
+      const claimText = context.replace(pattern.regex, '').replace(/\s+/g, ' ').trim()
+      if (claimText.length > 10) {
+        const key = `${pattern.type}:${cleaned.toLowerCase()}:${claimText.slice(0, 180).toLowerCase()}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        claims.push({
+          claim: claimText.slice(0, 300),
+          citation: cleaned,
+          citation_type: pattern.type,
+          context: context.slice(0, 300),
+        })
+      }
+    }
+  }
+  return claims
+}
+
+async function mapWithConcurrency(items, limit, run) {
+  const results = new Array(items.length)
+  let cursor = 0
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await run(items[index], index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+async function auditClaims(text, { max_claims = 20 } = {}) {
+  const allClaims = extractClaims(text)
+  if (!allClaims.length) {
+    return wrap({ claims: [], summary: { total: 0, message: '未在文本中找到带 DOI/PMID/arXiv 引用的 claim。' } }, { source: 'claim-auditor', confidence: 'verified' })
+  }
+
+  const selected = allClaims.slice(0, max_claims)
+  const results = await mapWithConcurrency(selected, 4, async item => {
+    let audit = { exists: false, supported: null, evidence: '', severity: 'unverifiable', category: 'verification-failed' }
+    try {
+      const result = await verifyCitation(item.citation, item.claim)
+      audit = {
+        exists: result.exists,
+        supported: result.claim_supported ?? null,
+        evidence: result.claim_evidence || result.reason || '',
+        confidence: result.confidence || 0.5,
+        severity: !result.exists ? 'high-warn' : result.claim_supported === false ? 'high-warn' : result.claim_supported === true ? 'ok' : 'advisory',
+        category: !result.exists ? 'fabricated-reference' : result.claim_supported === false ? 'claim-not-supported' : result.claim_supported === true ? 'supported' : 'needs-fulltext-review',
+      }
+    } catch (e) {
+      audit.evidence = `验证失败：${e.message}`
+      audit.category = 'verification-error'
+    }
+    return { ...item, ...audit }
+  })
+
+  const summary = {
+    total: allClaims.length,
+    audited: results.length,
+    supported: results.filter(r => r.category === 'supported').length,
+    not_supported: results.filter(r => r.category === 'claim-not-supported').length,
+    fabricated: results.filter(r => r.category === 'fabricated-reference').length,
+    needs_review: results.filter(r => r.category === 'needs-fulltext-review').length,
+    errors: results.filter(r => r.category === 'verification-error').length,
+  }
+
+  return wrap({ claims: results, summary }, {
+    source: 'claim-auditor',
+    confidence: 'api',
+    disclaimer: 'claim 支持性判断基于摘要关键词匹配，不能替代全文核验。',
+  })
+}
+
+export { auditClaims, extractClaims }

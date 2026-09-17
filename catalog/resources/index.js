@@ -8,9 +8,10 @@ import literature from './literature.json' with { type: 'json' }
 import genomics from './genomics.json' with { type: 'json' }
 import omics from './omics.json' with { type: 'json' }
 import generalScience from './general-science.json' with { type: 'json' }
+import chineseAcademic from './chinese-academic.json' with { type: 'json' }
 import databaseMetadataConfig from './database-metadata.json' with { type: 'json' }
 
-const resources = [...cropBreeding, ...literature, ...genomics, ...omics, ...generalScience]
+const resources = [...cropBreeding, ...literature, ...genomics, ...omics, ...generalScience, ...chineseAcademic]
 
 export default resources
 export { resources, databaseMetadataConfig }

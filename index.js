@@ -4,6 +4,7 @@ import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic
 import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
 import { evidenceSyncRoute } from './dsh/evidence-sync.js'
+import { agentActivityRoute } from './dsh/agent-activity.js'
 
 // 科研插件的唯一 Node half。公开数据源查询只经 DSH 的受控 web 服务出网；
 // 语义增强复用当前会话已建立的路由（sessionId → provider/model），浏览器端永不持有 API Key。
@@ -71,4 +72,6 @@ export function apply(ctx) {
   ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger })), 'dsh-research-kit memory search')
   // 证据同步（Agent 化改造 §6.3）：文件系统为单一真源，IndexedDB 仅作 UI 缓存层。
   ctx.effect(() => ctx.webServer.register(evidenceSyncRoute({ logger })), 'dsh-research-kit evidence sync')
+  // Agent 活动面板数据源：MCP 调用日志 + checkpoint 状态（Agent 化改造 §8.1）。
+  ctx.effect(() => ctx.webServer.register(agentActivityRoute({ logger })), 'dsh-research-kit agent activity')
 }

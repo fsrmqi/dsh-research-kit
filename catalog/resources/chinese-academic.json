@@ -1,0 +1,109 @@
+[
+  {
+    "id": "airiti-library",
+    "type": "database",
+    "name": "华艺线上图书馆 Airiti Library",
+    "description": "台湾学术期刊、学位论文、会议论文与人文社科全文检索平台，覆盖台湾及华文/国际学术资源，提供繁体、简体和英文界面",
+    "category": "中文学术资源",
+    "tags": [
+      "台湾学术",
+      "人文社科",
+      "期刊论文",
+      "学位论文"
+    ],
+    "url": "https://www.airitilibrary.com/",
+    "accessNote": "可公开检索摘要与目录，全文按授权提供（机构订阅或个人购买）；查询时记录来源、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "taiwan-soc-journals",
+    "type": "database",
+    "name": "台湾人社百刊 Taiwan Journals Search",
+    "description": "台湾核心人文社科期刊整合检索平台，重点覆盖台湾社会学、政治学、历史学、法学等核心期刊及亚洲研究",
+    "category": "中文学术资源",
+    "tags": [
+      "台湾学术",
+      "人文社科",
+      "期刊检索"
+    ],
+    "url": "https://p.udpweb.com/soc",
+    "accessNote": "商业订阅型平台，通常需机构或个人购买；检索和浏览可能需要授权。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ndltd-taiwan",
+    "type": "database",
+    "name": "台湾博硕士论文知识加值系统 NDLTD",
+    "description": "台湾地区博硕士学位论文统一检索平台，由台湾国家图书馆运营，收录台湾各大学学位论文",
+    "category": "中文学术资源",
+    "tags": [
+      "台湾学术",
+      "学位论文",
+      "国家图书馆"
+    ],
+    "url": "https://ndltd.ncl.edu.tw/",
+    "accessNote": "可公开检索摘要与目录；全文下载通常需要授权或付费。查询时记录来源、日期与许可边界。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "hyread-taiwan",
+    "type": "database",
+    "name": "HyRead 台湾电子书与期刊",
+    "description": "台湾电子书与电子期刊平台，收录台湾大学出版社、政府出版物与学术期刊电子版",
+    "category": "中文学术资源",
+    "tags": [
+      "台湾学术",
+      "电子书",
+      "大学出版社"
+    ],
+    "url": "https://www.hyread.com.tw/",
+    "accessNote": "部分内容可免费阅读；全文通常需机构订阅或个人购买。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "cnki-alternative-journals",
+    "type": "database",
+    "name": "拒绝知网：开放学术期刊导航",
+    "description": "以阅读世界顶级期刊为主、辅以各类大学学报期刊的资源导航，涵盖开放获取替代方案",
+    "category": "中文学术资源",
+    "tags": [
+      "开放获取",
+      "期刊导航",
+      "替代资源"
+    ],
+    "url": "https://doaj.org/search/journals",
+    "accessNote": "DOAJ 收录经同行评审的开放获取期刊，可免费检索和阅读全文。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ssrn-social-science",
+    "type": "database",
+    "name": "SSRN 社会科学研究网络",
+    "description": "社会科学、经济、法律、金融和管理领域的预印本与工作论文平台，适合追踪未正式发表的早期研究",
+    "category": "中文学术资源",
+    "tags": [
+      "预印本",
+      "社会科学",
+      "经济学",
+      "法学"
+    ],
+    "url": "https://www.ssrn.com/",
+    "accessNote": "可公开检索和下载多数论文；部分需注册。SSRN 论文可能未经同行评审，引用时应注明版本和研究状态。",
+    "availability": "requires-mcp"
+  },
+  {
+    "id": "ideas-repec",
+    "type": "database",
+    "name": "RePEc / IDEAS 经济学研究",
+    "description": "经济学工作论文、期刊书目和作者/机构发现的综合平台，不托管全部全文",
+    "category": "中文学术资源",
+    "tags": [
+      "经济学",
+      "工作论文",
+      "书目发现"
+    ],
+    "url": "https://ideas.repec.org/",
+    "accessNote": "主要是书目发现平台；全文取决于原始出版商。引用工作论文时应注明版本和发布日期。",
+    "availability": "requires-mcp"
+  }
+]

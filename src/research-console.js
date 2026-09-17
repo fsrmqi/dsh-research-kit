@@ -3,6 +3,7 @@ import { h, C, GlobalStyle } from './theme.js'
 import { Page, Segmented } from './ui.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
+import { AgentActivityPanel } from './agent-activity.js'
 
 // 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
 // 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
@@ -92,5 +93,6 @@ export function ResearchConsole(props) {
       ]),
     ]),
     h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
+    h(AgentActivityPanel, { key: 'agent-activity', sessionId }),
   ])
 }

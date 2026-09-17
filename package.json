@@ -14,6 +14,7 @@
   "files": [
     "catalog",
     "src",
+    "mcp",
     "ui",
     "dsh",
     "vendor",

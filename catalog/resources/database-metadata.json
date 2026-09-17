@@ -181,6 +181,21 @@
         "aflow",
         "particle-data-group"
       ]
+    },
+    {
+      "group": "中文学术资源",
+      "dataKind": "台湾及华文学术期刊、学位论文、开放获取替代与社科预印本",
+      "queryExample": "按主题、作者或机构检索华文学术文献，注意区分同行评审与预印本。",
+      "citationRule": "记录数据库名称、检索日期与全文许可边界；预印本须标注未同行评审。",
+      "ids": [
+        "airiti-library",
+        "taiwan-soc-journals",
+        "ndltd-taiwan",
+        "hyread-taiwan",
+        "cnki-alternative-journals",
+        "ssrn-social-science",
+        "ideas-repec"
+      ]
     }
   ],
   "accessOverrides": {
