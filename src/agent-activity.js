@@ -67,7 +67,7 @@ function CheckpointBanner({ cp, onApprove, busy }) {
   ])
 }
 
-export function AgentActivityPanel({ sessionId, runId = '' }) {
+export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
   const [expanded, setExpanded] = React.useState(false)
   const [calls, setCalls] = React.useState([])
   const [checkpoints, setCheckpoints] = React.useState([])
@@ -91,6 +91,16 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
         if (data.calls.length) {
           latestAt.current = data.calls[0].at
           setCalls(prev => [...data.calls, ...prev].slice(0, 100))
+
+          // 方案 A：runId 为空时，从 MCP 调用日志自动捕获最近的 research_run_start 的 run_id
+          if (!runId && onRunDetected) {
+            const startCall = data.calls.find(call => call.tool === 'research_run_start' && call.ok !== false)
+            if (startCall) {
+              const match = (startCall.result_summary || '').match(/passport:([A-Za-z0-9._-]+)/)
+              const detectedRunId = match?.[1] || startCall.run_id || ''
+              if (detectedRunId) onRunDetected(detectedRunId, startCall)
+            }
+          }
         }
         setCheckpoints(data.checkpoints || [])
         setArtifacts(data.artifacts || [])

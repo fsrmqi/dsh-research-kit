@@ -12171,7 +12171,7 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    function AgentActivityPanel({ sessionId, runId = '' }) {
+    function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       const [expanded, setExpanded] = React.useState(false)
       const [calls, setCalls] = React.useState([])
       const [checkpoints, setCheckpoints] = React.useState([])
@@ -12195,6 +12195,16 @@ window.__ModuleLoader__.load({
             if (data.calls.length) {
               latestAt.current = data.calls[0].at
               setCalls(prev => [...data.calls, ...prev].slice(0, 100))
+
+              // 方案 A：runId 为空时，从 MCP 调用日志自动捕获最近的 research_run_start 的 run_id
+              if (!runId && onRunDetected) {
+                const startCall = data.calls.find(call => call.tool === 'research_run_start' && call.ok !== false)
+                if (startCall) {
+                  const match = (startCall.result_summary || '').match(/passport:([A-Za-z0-9._-]+)/)
+                  const detectedRunId = match?.[1] || startCall.run_id || ''
+                  if (detectedRunId) onRunDetected(detectedRunId, startCall)
+                }
+              }
             }
             setCheckpoints(data.checkpoints || [])
             setArtifacts(data.artifacts || [])
@@ -12407,7 +12417,16 @@ window.__ModuleLoader__.load({
           ]),
         ]),
         h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
-        h(AgentActivityPanel, { key: 'agent-activity', sessionId, runId: researchContext.activeRunId }),
+        h(AgentActivityPanel, {
+          key: 'agent-activity',
+          sessionId,
+          runId: researchContext.activeRunId,
+          onRunDetected: mcpRunId => {
+            if (mcpRunId && mcpRunId !== researchContext.activeRunId) {
+              updateResearchContext({ activeRunId: mcpRunId })
+            }
+          },
+        }),
       ])
     }
 
