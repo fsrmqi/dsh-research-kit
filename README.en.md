@@ -8,7 +8,7 @@
 
 [English](README.en.md) · [简体中文](README.md)
 
-> A catalog and launcher for research workflows in DeepSeek Harness: 317 human-reviewed workflows, 86 skill entries, 122 scientific data sources.
+> A catalog and launcher for research workflows in DeepSeek Harness: 349 human-reviewed workflows, 109 skill entries, 129 scientific data sources.
 
 It turns recurring research tasks — peer review, writing an introduction, literature synthesis, planning a statistical analysis — into **parameterized, editable prompts that you review before sending**. The plugin only assembles the task and hands it back to your session; execution stays with your own DSH agent.
 
@@ -42,7 +42,7 @@ Research Kit turns those four into reusable assets.
 ## How it works
 
 ```text
-Research capability catalog (525 entries)
+Research capability catalog (587 entries)
   → pick a workflow
   → fill parameters, reference materials via @file
   → review and edit the final prompt
@@ -60,13 +60,13 @@ Deliberate trade-offs:
 
 ## Capabilities
 
-**🧪 317 human-reviewed research workflows**
+**🧪 349 human-reviewed research workflows**
 Across twenty-four workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
 
-**🧩 86 skill entries: 23 guidance modules + 63 capability entries**
+**🧩 109 skill entries: 46 guidance modules + 63 capability entries**
 Guidance modules work as prompt guidance — scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication, plus method modules for experimental design, hypothesis generation, scientific brainstorming, critical thinking, statistical power, systematic literature review, scientific visualization, uncertainty & units, clinical report drafts, venue compliance, peer-review comments, and grant writing, and three domain modules: agricultural experiment design, crop genomics & breeding evidence, and bioinformatics workflow governance — toggled at launch to fold into the workflow prompt. Capability entries are catalogued under an honest "requires host capability" status — bulk RNA-seq, Nextflow, Benchling/DNAnexus integrations, literature API search, docx/pdf production and other execution-side skills — stating the required toolchain, credentials and data-egress boundaries with a pre-use checklist; they inject no prompt fragment and execute nothing themselves.
 
-**🔬 122 scientific data sources, 11 of them queryable in-plugin**
+**🔬 129 scientific data sources, 11 of them queryable in-plugin**
 Literature, clinical, genetics, omics, protein/chemistry — plus astronomy & space, biodiversity, climate & environment, geospatial. Public APIs return candidate records with links and stable identifiers; rate-limited, licensed or parameter-heavy sources fall back explicitly to the DSH agent / MCP.
 
 **✍️ Fully visible and editable before send**
@@ -106,7 +106,9 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
+- - **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 31 `research_*` tools (literature search and verification, evidence inventory and grading, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+
+**Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
 
 </details>
 
@@ -145,7 +147,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 525 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 587 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live; expand the **assembly replay** in the detail pane to verify segment by segment how the prompt was assembled;
@@ -190,8 +192,12 @@ Workflows are maintained as per-family shards under `catalog/workflows/` (one JS
 | Mathematics (mathematics) | 12 |
 | Machine learning (machine-learning) | 15 |
 | Engineering (engineering) | 12 |
+| Advanced workflows (advanced) | 9 |
+| Deep research (deep-research) | 7 |
+| Paper writing (paper-writing) | 11 |
+| Submission & venue compliance (submission) | 5 |
 
-Plus 86 skills (`catalog/skills/`: core 20 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63) and 122 database entries (`catalog/resources/`: crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
+Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63) and 129 database entries (`catalog/resources/`: chinese-academic 7 / crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
 
 ## Privacy & security
 
@@ -218,7 +224,7 @@ The remaining 111 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (525 entries, 525 unique IDs, shards identical to the aggregated entries), 242 regression tests in 28 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries), 352 regression tests in 41 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -227,7 +233,7 @@ Verified so far: catalog contract validation (525 entries, 525 unique IDs, shard
 ```bash
 npm run build   # generate ui/client.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (242 / 28 files)
+npm test        # pure-logic, contract and render-level regression tests (352 / 41 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

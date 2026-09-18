@@ -35,7 +35,7 @@ export const TOOL_REGISTRY = [
     name: 'research_catalog_search',
     category: 'catalog', tier: 'entry', access: 'read-only', requiresConfirmation: false,
     helpRoute: 'start', labelZh: '搜索工作流',
-    summaryZh: '搜索 317 条工作流目录',
+    summaryZh: '搜索 349 条工作流目录',
     example: "{ query: '审阅论文', limit: 2 }",
     artifactKind: '',
   },

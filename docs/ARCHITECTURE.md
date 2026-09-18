@@ -75,11 +75,11 @@
 ```text
 dsh-research-kit/
 ├── catalog/                         # 人工审核的科研资产，纯数据；三个 index.js 是唯一数据入口
-│   ├── workflows/                   # 参数化 Prompt 工作流，按流程族分片（317 条 / 24 个类目）
+│   ├── workflows/                   # 参数化 Prompt 工作流，按流程族分片（349 条 / 28 个类目）
 │   │   ├── index.js                 # 唯一聚合入口：按固定顺序导出数组，新增分片必须在此登记
 │   │   └── <流程族>.json            # 每个分类一个分片（paper-manuscript、genomics、ecology…）
-│   ├── skills/                      # 技能，按稳定用途分片（core / crop-breeding / bioinformatics / host-capabilities，共 86 条）
-│   ├── resources/                   # 数据源，按稳定用途分片（crop-breeding / literature / genomics / omics / general-science，共 122 条）
+│   ├── skills/                      # 技能，按稳定用途分片（core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63，共 109 条）
+│   ├── resources/                   # 数据源，按稳定用途分片（chinese-academic / crop-breeding / literature / genomics / omics / general-science，共 129 条）
 │   │   ├── index.js                 # 唯一聚合入口，并导出 database-metadata.json 的分组展示元数据
 │   │   └── database-metadata.json   # 数据源分组等展示元数据（对象型配置，不是条目分片）
 ├── src/
@@ -116,6 +116,33 @@ dsh-research-kit/
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
+├── mcp/                           # MCP Server：31 个 research_* 工具的注册、实现与执行层
+│   ├── server.js                  # MCP 进程入口：注册工具、转发调用、状态查询
+│   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
+│   ├── tools/
+│   │   └── index.js               # 31 个工具实现（参数校验、编排、外呼学术 API）
+│   ├── state/                     # 运行状态与产物
+│   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
+│   │   ├── material-passport.js    # 跨会话状态快照（护照 YAML）
+│   │   └── run-overview.js         # 运行总览聚合（阶段/检查点/证据/最近产物/下一步）
+│   └── execution/                 # 审阅与生成执行层（纯逻辑 + 外呼适配器）
+│       ├── anomaly-detector.js     # 冗余/矛盾/缺失异常检测
+│       ├── call-logger.js          # 工具调用日志（活动面板与用法统计数据源）
+│       ├── citation-verifier.js    # DOI/PMID/arXiv 存在性与 claim 支持核验
+│       ├── claim-auditor.js        # 文本级 claim-source 对齐审计
+│       ├── contract.js             # 执行层契约（输入输出形状）
+│       ├── disclosure-generator.js  # 期刊 AI 披露声明生成（15 个期刊政策）
+│       ├── evidence-grader.js      # 实证/推论/缺失三级分级
+│       ├── evidence-inventory.js   # 证据盘点汇总
+│       ├── evidence-store.js       # 证据条目持久化（文件系统为真源）
+│       ├── figure-generator.js    # 多面板 matplotlib 图表脚本生成（8 个风格）
+│       ├── figure-styles/index.js  # 图表风格模板（精确 rcParams）
+│       ├── hedging-phrases.js      # 限制语词典
+│       ├── literature-linker.js    # 证据互引关系发现
+│       ├── openalex-fetcher.js     # OpenAlex 元数据获取
+│       ├── source-querier.js      # 多数据源直查适配器
+│       ├── writing-quality.js      # 学术写作质量检查
+│       └── wrapper.js              # 执行层统一包装（计时/错误/日志）
 ├── dsh/
 │   ├── standalone-glue.js           # DSH 槽位注册唯一入口（view + input.left + input.overlay + input.right）
 │   ├── slot-registry.js             # 四个槽位的 id/order/label 单一事实源（纯数据）
@@ -124,7 +151,9 @@ dsh-research-kit/
 │   ├── database-query.js            # 公开数据源直查适配器、缓存与限流（Node half）
 │   ├── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
 │   ├── host-capabilities.js         # 宿主能力探测：装配事实 + MCP 连接清单（Node half，只读）
-│   └── memory-search.js             # Memory Center 检索：工具挑选、Schema 参数合成、代执行 mcp__ 工具（Node half）
+│   ├── memory-search.js             # Memory Center 检索：工具挑选、Schema 参数合成、代执行 mcp__ 工具（Node half）
+│   ├── agent-activity.js           # Agent 活动面板：调用轨迹聚合、运行 ID 自动捕获与检查点确认桥接（HTTP handler）
+│   └── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
 ├── ui/
 │   ├── package.json                 # 浏览器子包元数据
 │   └── client.js                    # 构建生成的 DSH ModuleLoader 产物（勿手改）
@@ -142,7 +171,7 @@ dsh-research-kit/
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
-├── test/                            # 242 项测试（28 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 352 项测试（41 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -232,7 +261,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 | --- | --- | --- | --- |
 | 一级 | `.rk-console-nav`（分区导航 + 说明块） | 是 | 回答"我在哪个分区"，跨分区切换不应需要回滚 |
 | — | 分区封面 `PageHead`（kicker / 标题 / 导语 / 低频动作） | 否 | 定位是"封面"：标题与一级导航的当前标签重复，导语是读一次的介绍；吸住会白占约 87px 并放大重复感 |
-| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 525 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
+| 二级 | `.rk-sticky-toolbar`（该分区的常驻操作行） | 是 | 高频控件。资源 587 项、资产与方法库持续增长，滚走意味着每次操作都要先回顶部 |
 
 四个分区的二级吸顶带按同一口径组装（检索 + 筛选 + 该分区的模式/主操作）：
 

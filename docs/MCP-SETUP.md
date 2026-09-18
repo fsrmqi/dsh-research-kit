@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 28 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 31 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 ## 前置条件
 
@@ -71,7 +71,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 28 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 31 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -145,7 +145,7 @@ dsh-research-kit 本身就是 DSH 插件。MCP Server 可以在 DSH 内以两种
 
 插件安装后，MCP Server 随 DSH 宿主自动可用。Agent 在当前会话中可以直接调用 MCP 工具，无需额外配置。
 
-确认方式：在 DSH 会话中让 Agent 列出当前可用的 MCP 工具。如果看到 `mcp__dsh-research-kit__search_workflows` 等条目，说明已自动接入。
+确认方式：在 DSH 会话中让 Agent 列出当前可用的 MCP 工具。如果看到 `mcp__dsh-research-kit__research_catalog_search` 等条目，说明已自动接入。
 
 ### 方式 2：独立进程（与 UI 并行）
 
@@ -235,7 +235,7 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | Tool | 功能 |
 |------|------|
 | `research_help` | MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作（默认入口） |
-| `research_catalog_search` | 搜索 317 条工作流目录（默认入口） |
+| `research_catalog_search` | 搜索 349 条工作流目录（默认入口） |
 | `research_workflow_compose` | 填参数生成 Prompt（默认入口） |
 | `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源 |
 | `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存（默认入口） |
