@@ -200,6 +200,55 @@ async function saveEvidence({ identifier_type, identifier, title, url, note, pro
   return { saved: true, id: entry.id, dedup_status: 'new' }
 }
 
+// 批量保存：单次锁内完成全部去重与写入，避免逐条调用时的锁竞争。
+// run_id 为批级可选关联；条目级 dedup 行为与单条 saveEvidence 完全一致。
+async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
+  const projectName = safeProjectName(project)
+  const normalizedRunId = typeof run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(run_id) ? run_id : ''
+  const entries = []
+  const invalid = []
+  for (const item of items.slice(0, 50)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) { invalid.push({ index: entries.length + invalid.length, reason: '条目不是对象' }); continue }
+    if (!item.title && !item.identifier) { invalid.push({ index: entries.length + invalid.length, reason: '缺少 title 与 identifier' }); continue }
+    entries.push({
+      id: makeId(),
+      identifier_type: item.identifier_type || 'none',
+      identifier: item.identifier_type === 'none' ? '' : String(item.identifier || ''),
+      title: String(item.title || ''),
+      url: String(item.url || ''),
+      note: String(item.note || ''),
+      project: projectName,
+      grade: item.grade_hint || 'ungraded',
+      status: 'unverified',
+      source: 'mcp-agent',
+      saved_at: new Date().toISOString(),
+      run_id: normalizedRunId,
+    })
+  }
+  return withProjectLock(projectName, async () => {
+    const existing = await readEntriesUnlocked(projectName)
+    const seen = new Map(existing.map(entry => [dedupKey(entry), entry]))
+    const added = []
+    const duplicates = []
+    for (const entry of entries) {
+      const key = dedupKey(entry)
+      if (seen.has(key)) { duplicates.push({ title: entry.title, identifier: entry.identifier, existing_id: seen.get(key)?.id }); continue }
+      seen.set(key, entry)
+      added.push(entry)
+    }
+    if (added.length) await appendFile(entriesFile(projectName), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+    return {
+      project: projectName,
+      run_id: normalizedRunId,
+      requested: items.length,
+      accepted: entries.length,
+      saved: added.map(entry => ({ saved: true, id: entry.id, title: entry.title, identifier_type: entry.identifier_type, identifier: entry.identifier, dedup_status: 'new' })),
+      duplicates,
+      invalid,
+    }
+  })
+}
+
 async function listEvidence({ project, identifier_type, grade, run_id, limit } = {}) {
   const projectName = safeProjectName(project)
   let entries = await readProjectEntries(projectName)
@@ -224,4 +273,4 @@ async function linkEvidence(evidenceId, assetId, project) {
   })
 }
 
-export { saveEvidence, listEvidence, linkEvidence, dedupKey }
+export { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence, dedupKey }

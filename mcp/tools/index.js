@@ -3,11 +3,11 @@ import { z } from 'zod/v3'
 import { searchCatalog, itemById, composeWorkflow } from '../../src/catalog.js'
 import { querySource, listAvailableSources } from '../execution/source-querier.js'
 import { verifyCitation, detectIdentifierType } from '../execution/citation-verifier.js'
-import { saveEvidence, listEvidence, linkEvidence } from '../execution/evidence-store.js'
+import { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
 import { exportPassport, importPassport, loadPassport } from '../state/material-passport.js'
-import { listRecentRuns } from '../state/run-overview.js'
-import { inventoryEvidence } from '../execution/evidence-inventory.js'
+import { listRecentRuns, buildRunOverview } from '../state/run-overview.js'
+import { inventoryEvidence, applyEvidenceGrades } from '../execution/evidence-inventory.js'
 import { readCallLogs } from '../execution/call-logger.js'
 import { evaluateCheckpoints, initializeCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
 import { generateFigure, listFigureStyles } from '../execution/figure-generator.js'
@@ -19,6 +19,7 @@ import { generateDisclosureStatement, listDisclosurePolicies } from '../executio
 import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
 import { fetchOpenAlexMetadata } from '../execution/openalex-fetcher.js'
 import { wrap, err } from '../execution/wrapper.js'
+import { contract } from '../execution/contract.js'
 
 function sourceIdentity(source) {
   const identifier = String(source?.id || '').trim()
@@ -55,9 +56,10 @@ const DISCOVERY_ROUTES = [
     ],
   },
   {
-    id: 'literature', label: '发现与检索文献', keywords: ['文献', '检索', '论文', 'doi', '引用', '来源'],
+    id: 'literature', label: '发现与检索文献', keywords: ['文献', '检索', '论文', 'doi', '引用', '来源', '保存'],
     chain: [
       ['research_literature_search', '默认多源检索、去重；核验和保存均须显式开启。'],
+      ['research_evidence_save_batch', '人工挑选候选后批量显式保存。'],
       ['research_evidence_review', '盘点已保存证据的可追溯性与建议分级。'],
     ],
   },
@@ -68,6 +70,7 @@ const DISCOVERY_ROUTES = [
       ['research_evidence_list', '检索已保存的证据条目。'],
       ['research_evidence_save', '仅在确认需要时保存单条来源元数据。'],
       ['research_evidence_grade', '针对单条证据作细粒度建议分级。'],
+      ['research_evidence_grade_apply', '预览→确认两段式把建议分级写回；绝不自动应用。'],
     ],
   },
   {
@@ -127,7 +130,7 @@ const tools = [
         label: item.label,
         recommended_chain: item.chain.map(([tool, reason], index) => ({ step: index + 1, tool, reason })),
       })
-      return wrap({
+      return contract({
         ...(selected ? { recommended: serialize(selected) } : {}),
         ...(selected ? {} : { guidance: '请描述目标，或在 route 中指定任务类别；也可先从“启动研究运行”开始。' }),
         ...(include_all_routes ? { routes: DISCOVERY_ROUTES.map(serialize) } : {}),
@@ -136,6 +139,13 @@ const tools = [
         source: 'research-tool-discovery',
         confidence: 'verified',
         disclaimer: '此工具只推荐调用路径；不会代表你执行检索、写入、审批或外部请求。',
+        summary: {
+          route: selected?.id || null,
+          routes_available: DISCOVERY_ROUTES.length,
+        },
+        next_actions: selected
+          ? selected.chain.map(([tool, reason]) => `${tool}：${reason}`)
+          : ['补充目标描述后重试，或从 include_all_routes=true 查看完整路由目录。'],
       })
     },
   },
@@ -294,7 +304,7 @@ const tools = [
         }
       }
 
-      return wrap({
+      return contract({
         query,
         sources,
         total: sources.length,
@@ -311,7 +321,23 @@ const tools = [
       }, {
         source: 'literature-search',
         confidence: failures.length ? 'partial' : 'api',
-        disclaimer: '检索结果是候选记录；去重与标识符存在性核验均不能替代原文、全文与纳入标准审查。证据保存仅在 save_to_evidence=true 时执行。',
+        disclaimer: '检索结果是候选记录；去重与标识符存在性核验均不能替代原文、全文与纳入标准审查。',
+        run_id,
+        summary: {
+          total: sources.length,
+          searched: successes.length,
+          failed: failures.length,
+          saved: save_to_evidence ? saved.filter(item => item.saved).length : 0,
+        },
+        next_actions: [
+          ...(sources.length ? ['从候选来源中挑选需要长期追溯的条目；用 research_evidence_save_batch 批量显式保存。'] : ['本次检索无结果；更换检索词或增补 source_ids 后重试。']),
+          ...(sources.some(source => source.identifier_type === 'none') ? ['部分候选缺少稳定标识符；保存前先回原文补齐 DOI/PMID。'] : []),
+          '结果仅供筛选；纳入标准与原文核验需人工完成。',
+        ],
+        warnings: [
+          ...(failures.length ? [`${failures.length} 个数据源查询失败：${failures.map(f => f.source_id).join('、')}。`] : []),
+          ...(!sources.length && !failures.length ? ['所有数据源均返回 0 条结果。'] : []),
+        ],
       })
     },
   },
@@ -405,23 +431,169 @@ const tools = [
       try {
         const inventory = await inventoryEvidence({ project, run_id, limit })
         const { entries, summary, missing, unverified } = inventory
-        return wrap({
+        return contract({
           project: inventory.project,
-          ...(run_id ? { run_id } : {}),
           entries,
-          summary,
           next_actions: [
             ...(missing.length ? [`补齐 ${missing.length} 条缺少稳定标识符或链接的证据来源。`] : []),
             ...(unverified.length ? [`人工核验 ${unverified.length} 条尚未核验的证据；自动建议不等同于确认。`] : []),
             ...(!entries.length ? ['当前范围没有证据条目；先使用 research_literature_search 或 research_evidence_save 添加可追溯来源。'] : []),
+            ...(unverified.length ? ['如需按建议分级写回证据库，使用 research_evidence_grade_apply（preview=true 预览，显式确认后应用）。'] : []),
           ],
         }, {
           source: 'evidence-review',
           confidence: 'cached',
           disclaimer: '建议分级来自规则引擎且未写回证据库；研究者需核验原文与证据质量。',
+          summary,
+          run_id,
+          warnings: [
+            ...(missing.length ? [`${missing.length} 条证据无法追溯原文。`] : []),
+          ],
         })
       } catch (e) {
         return err(`证据盘点失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_evidence_save_batch',
+    description: 'Explicitly save multiple selected literature candidates as evidence entries in one call (metadata only, all marked unverified). Use after research_literature_search to persist only the candidates a human or agent has chosen; never saves automatically.',
+    inputSchema: {
+      entries: z.array(z.object({
+        identifier_type: z.enum(['doi', 'pmid', 'pmcid', 'nct', 'arxiv', 'url', 'none']).optional().describe('Type of stable identifier'),
+        identifier: z.string().optional().describe('Identifier value (e.g. DOI string)'),
+        title: z.string().optional().describe('Title of the source'),
+        url: z.string().optional().describe('URL link to the source'),
+        note: z.string().optional().describe('Optional note about this candidate'),
+        grade_hint: z.enum(['empirical', 'inference', 'missing', 'ungraded']).optional().describe('Suggested grade'),
+      })).min(1).max(50).describe('Selected candidates to save (from research_literature_search sources)'),
+      project: z.string().optional().default('default').describe('Project name for organizing evidence'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to link all saved entries to'),
+    },
+    async execute({ entries, project, run_id }) {
+      try {
+        const result = await saveEvidenceBatch(entries, { project, run_id })
+        return contract(result, {
+          source: 'evidence-store',
+          confidence: 'verified',
+          disclaimer: '批量保存的条目全部为「未核验」状态；来源可靠性与纳入标准仍需人工逐条确认。',
+          run_id,
+          summary: {
+            requested: result.requested,
+            saved: result.saved.length,
+            duplicates: result.duplicates.length,
+            invalid: result.invalid.length,
+          },
+          next_actions: [
+            ...(result.saved.length ? ['使用 research_evidence_review 盘点本次保存的证据缺口与未核验项。'] : []),
+            ...(result.duplicates.length ? [`${result.duplicates.length} 条候选与已有证据重复，已跳过；如需补充信息请用 research_evidence_save 更新单条。`] : []),
+            ...(result.invalid.length ? [`${result.invalid.length} 条候选缺少 title 与 identifier，未保存；请补齐后重试。`] : []),
+            ...(!result.saved.length && !result.duplicates.length ? ['没有可保存的候选；先通过 research_literature_search 获取来源。'] : []),
+          ],
+          warnings: [
+            ...(result.invalid.length ? [`${result.invalid.length} 条候选格式不合法被拒绝。`] : []),
+          ],
+        })
+      } catch (e) {
+        return err(`批量保存失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_evidence_grade_apply',
+    description: 'Apply rule-suggested grades to evidence entries behind a preview-then-confirm gate. Default returns a preview plan without writing anything; set apply=true (after human confirmation) to write the suggested grades. Entries are only processed when their ids are explicitly listed.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to scope the plan'),
+      evidence_ids: z.array(z.string()).max(200).optional().describe('Explicit evidence entry IDs to process; omit to preview all differing entries in scope'),
+      apply: z.boolean().optional().default(false).describe('Set true only after the preview has been reviewed and confirmed by a human'),
+      limit: z.number().int().min(1).max(200).optional().default(200).describe('Max evidence entries scanned for the plan'),
+    },
+    async execute({ project, run_id, evidence_ids, apply, limit }) {
+      try {
+        const result = await applyEvidenceGrades({ project, run_id, evidence_ids, apply, limit })
+        return contract(result, {
+          source: 'evidence-inventory',
+          confidence: apply ? 'verified' : 'cached',
+          disclaimer: apply
+            ? '写回的分级仍来自规则引擎，人工确认的是「应用」这个动作本身；如需修正请用人工复核覆盖。'
+            : '当前为预览模式，未写入任何数据；确认后需以 apply=true 再次调用才会写回。',
+          run_id,
+          summary: {
+            apply: Boolean(result.apply),
+            changed: result.changed,
+            planned: result.plan?.length ?? 0,
+          },
+          next_actions: apply
+            ? ['分级已写回；使用 research_evidence_review 复核最新盘点结果。']
+            : (result.plan?.length
+                ? ['人工核对上方计划后，以 apply=true 与相同的 evidence_ids 再次调用才会写回。', '预览不会修改任何条目；可以直接放弃。']
+                : ['当前范围内没有建议分级与已存分级不同的条目；无需应用。']),
+          warnings: apply ? [] : ['本次调用是预览：未写回任何分级。'],
+        })
+      } catch (e) {
+        return err(`分级应用失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_usage_stats',
+    description: 'Read-only aggregated tool-usage observability: per-tool call counts, failure rates, help-route demand, and where research chains commonly break. Only sanitized metadata is counted — query terms, goals, note text and paper content are never stored or returned.',
+    inputSchema: {
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to scope the statistics'),
+      limit: z.number().int().min(10).max(200).optional().default(200).describe('Max recent call-log entries analyzed'),
+    },
+    async execute({ run_id, limit }) {
+      try {
+        const logs = await readCallLogs({ limit, ...(run_id ? { runId: run_id } : {}) })
+        const byTool = new Map()
+        for (const call of logs) {
+          const bucket = byTool.get(call.tool) || { tool: call.tool, calls: 0, failed: 0 }
+          bucket.calls += 1
+          if (call.ok === false) bucket.failed += 1
+          byTool.set(call.tool, bucket)
+        }
+        const tools = [...byTool.values()].map(bucket => ({
+          ...bucket,
+          failure_rate: bucket.calls ? Number((bucket.failed / bucket.calls).toFixed(3)) : 0,
+        })).sort((a, b) => b.calls - a.calls)
+        // 帮助路由需求量：research_help 的调用次数是「不知道该用什么」的直接信号。
+        const helpCalls = byTool.get('research_help')?.calls || 0
+        // 链路中断探测：run_start 之后没有任何 literature/evidence 类调用，说明链路在启动后断了。
+        const startedRuns = new Set(logs.filter(call => call.tool === 'research_run_start' && call.run_id).map(call => call.run_id))
+        const advancedRuns = new Set(logs.filter(call => call.run_id && startedRuns.has(call.run_id) && call.tool !== 'research_run_start').map(call => call.run_id))
+        const stalledRuns = [...startedRuns].filter(id => !advancedRuns.has(id))
+        return contract({
+          scope: run_id ? { run_id } : { window: `last ${logs.length} calls` },
+          window_entries: logs.length,
+          tools,
+          observability: {
+            help_calls: helpCalls,
+            runs_started: startedRuns.size,
+            runs_stalled_after_start: stalledRuns.length,
+            stalled_run_ids: stalledRuns.slice(0, 5),
+          },
+        }, {
+          source: 'usage-stats',
+          confidence: 'cached',
+          disclaimer: '统计只基于脱敏调用元数据；查询词、目标描述与论文正文从不落盘，也无法从这里还原。',
+          summary: {
+            entries_analyzed: logs.length,
+            distinct_tools: tools.length,
+            total_failures: tools.reduce((sum, tool) => sum + tool.failed, 0),
+          },
+          next_actions: [
+            ...(tools.some(tool => tool.failure_rate >= 0.5 && tool.calls >= 2) ? ['存在失败率过高的工具；优先检查其前置依赖（如宿主 MCP 数据源配置）。'] : []),
+            ...(helpCalls > logs.length * 0.3 && logs.length >= 10 ? ['research_help 占比过高；可在提示词里固化常用调用链。'] : []),
+            ...(stalledRuns.length ? [`${stalledRuns.length} 个 run 启动后没有后续工具调用；用 research_run_status 查看它们停在哪一步。`] : []),
+            '统计仅供改进工具体验；不构成对研究质量的评价。',
+          ],
+        })
+      } catch (e) {
+        return err(`用量统计失败：${e.message}`)
       }
     },
   },
@@ -449,22 +621,27 @@ const tools = [
           pending: [{ stage: current_stage, workflow_id, note: `已启动工作流：${workflow.name}` }],
         })
         const checkpoint_state = await initializeCheckpoints(passport.run_id, workflow, [])
-        return wrap({
-          run_id: passport.run_id,
-          project: project || 'default',
+        return contract({
           current_stage,
           workflow: { id: workflow.id, name: workflow.name, category: workflow.category },
           checkpoint_state,
           passport: { yaml: passport.passport_yaml, hash: passport.hash },
+        }, {
+          source: 'research-run-starter',
+          confidence: 'verified',
+          disclaimer: '创建运行和检查点不代表研究步骤已经执行；每项研究结论仍需人工核验。',
+          run_id: passport.run_id,
+          summary: {
+            workflow_id: workflow.id,
+            workflow_name: workflow.name,
+            current_stage,
+            pending_checkpoints: (checkpoint_state.pending || []).length,
+          },
           next_actions: [
             '使用 research_run_status 查看运行总览、证据盘点与推荐下一步。',
             '使用 research_workflow_compose 生成当前阶段的可执行 Prompt。',
             '检索与保存请走 research_literature_search；核验与保存均须显式开启。',
           ],
-        }, {
-          source: 'research-run-starter',
-          confidence: 'verified',
-          disclaimer: '创建运行和检查点不代表研究步骤已经执行；每项研究结论仍需人工核验。',
         })
       } catch (e) {
         return err(`启动研究运行失败：${e.message}`)
@@ -485,45 +662,57 @@ const tools = [
       try {
         if (!run_id) {
           const runs = await listRecentRuns({ limit: recent_limit })
-          return wrap({
+          return contract({
             runs,
-            next_actions: [
-              ...(runs.length ? ['选择一个 run_id 再次调用，查看该运行的总览与推荐下一步。'] : []),
-              ...(!runs.length ? ['当前没有已启动的运行；使用 research_run_start 从目录工作流创建。'] : []),
-            ],
           }, {
             source: 'research-run-status',
             confidence: 'cached',
             disclaimer: '运行列表来自护照与检查点文件；创建运行不代表研究步骤已经执行。',
+            summary: {
+              runs_listed: runs.length,
+              waiting_review: runs.filter(run => run.pending_checkpoints > 0).length,
+            },
+            next_actions: [
+              ...(runs.length ? ['选择一个 run_id 再次调用，查看该运行的总览与推荐下一步。'] : []),
+              ...(!runs.length ? ['当前没有已启动的运行；使用 research_run_start 从目录工作流创建。'] : []),
+            ],
           })
         }
 
-        const passport = await loadPassport(run_id)
-        const checkpoint = await getCheckpointState(run_id).catch(e => {
-          if (e?.code === 'CHECKPOINT_STATE_CORRUPT') throw e
-          return { run_id, checkpoints: {}, pending: [], approved: [] }
-        })
-        const workflowId = passport?.workflow_id || passport?.pending?.[0]?.workflow_id || ''
-        const workflow = workflowId ? itemById(workflowId) : null
+        const overview = await buildRunOverview(run_id)
+        const workflow = overview.workflow_id ? itemById(overview.workflow_id) : null
         const evidence = await inventoryEvidence({
-          project: project || passport?.project || 'default',
+          project: project || overview.project === 'unknown' ? (project || 'default') : (project || overview.project),
           run_id,
           limit,
         })
         const logs = await readCallLogs({ limit: 200, runId: run_id })
         const artifacts = logs.filter(call => call.ok !== false && call.artifact_kind).slice(0, 10)
           .map(call => ({ kind: call.artifact_kind, tool: call.tool, summary: call.result_summary, at: call.at }))
-        const pending = checkpoint.pending || []
+        const pending = overview.checkpoint_state.pending || []
         const { missing_traceability: missing, unverified } = evidence.summary
-        return wrap({
-          run_id,
+        return contract({
           project: evidence.project,
-          current_stage: passport?.current_stage || 'unknown',
-          workflow: workflow ? { id: workflow.id, name: workflow.name, category: workflow.category } : (workflowId ? { id: workflowId } : null),
-          status: pending.length ? 'waiting_review' : 'active',
-          checkpoints: { pending, approved: checkpoint.approved || [] },
+          current_stage: overview.current_stage,
+          workflow: overview.workflow_id ? { id: overview.workflow_id, ...(overview.workflow_name ? { name: overview.workflow_name } : {}) } : null,
+          status: overview.status,
+          checkpoints: { pending, approved: overview.checkpoint_state.approved || [] },
+          stage_progress: overview.stage_progress,
           evidence: evidence.summary,
-          artifacts,
+        }, {
+          source: 'research-run-status',
+          confidence: 'cached',
+          disclaimer: '状态汇总为只读投影，不代表研究步骤已被执行或核验；每项结论仍需人工确认。',
+          run_id,
+          summary: {
+            current_stage: overview.current_stage,
+            status: overview.status,
+            workflow_completed: overview.stage_progress?.workflow_completed ?? null,
+            pending_checkpoints: pending.length,
+            evidence_total: evidence.summary.total,
+            missing_traceability: missing,
+            unverified,
+          },
           next_actions: [
             ...(pending.length ? [`人工审批 ${pending.length} 个待放行检查点：${pending.join('、')}；使用 research_run_checkpoint_approve 并由人工确认。`] : []),
             ...(missing ? [`补齐 ${missing} 条缺少稳定标识符或链接的证据来源。`] : []),
@@ -532,10 +721,7 @@ const tools = [
             ...(!pending.length && evidence.entries.length && !artifacts.length ? ['证据已就绪；使用 research_review_output 审阅研究草稿，或 research_run_export 导出护照交接。'] : []),
             ...(!pending.length && artifacts.length ? ['使用 research_run_export 导出护照交接，或 research_review_output 继续审阅草稿。'] : []),
           ],
-        }, {
-          source: 'research-run-status',
-          confidence: 'cached',
-          disclaimer: '状态汇总为只读投影，不代表研究步骤已被执行或核验；每项结论仍需人工确认。',
+          artifacts,
         })
       } catch (e) {
         return err(`运行状态查询失败：${e.message}`)
@@ -689,20 +875,27 @@ const tools = [
         checkWritingQuality(text),
         checkHedgingPhrases(text),
       ])
-      return wrap({
+      return contract({
         claims: claims.data,
         anomalies: anomalies.data,
         writing: writing.data,
         hedging: hedging.data,
+      }, {
+        source: 'research-output-review',
+        confidence: 'mixed',
+        disclaimer: '汇总审阅包含 API 核验与规则检查；所有建议均需研究者人工确认。',
+        run_id,
+        summary: {
+          claims_audited: claims.data?.claims?.length ?? claims.data?.total ?? 0,
+          anomalies: anomalies.data?.summary?.contradictions ?? anomalies.data?.findings?.length ?? 0,
+          quality_flags: writing.data?.summary?.total ?? writing.data?.issues?.length ?? 0,
+          hedging_phrases: hedging.data?.total ?? hedging.data?.phrases?.length ?? 0,
+        },
         next_actions: [
           '优先修复未找到或不支持的引用声明，再复核全文。',
           '逐条确认高风险矛盾与缺失要素，避免将模式信号直接当作结论。',
           '修改表述时保留保护性限制语；删除它们会改变声明强度。',
         ],
-      }, {
-        source: 'research-output-review',
-        confidence: 'mixed',
-        disclaimer: '汇总审阅包含 API 核验与规则检查；所有建议均需研究者人工确认。',
       })
     },
   },

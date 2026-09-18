@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { recordApproval } from '../mcp/state/checkpoint-manager.js'
+import { buildRunOverview } from '../mcp/state/run-overview.js'
 
 export const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
 
@@ -94,15 +95,18 @@ export function agentActivityRoute({ logger } = {}) {
           const since = url.searchParams.get('since') || null
           const runId = url.searchParams.get('run_id') || ''
           if (runId && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(runId)) return reply(res, 400, { ok: false, error: 'invalid_run_id' })
-          const [calls, checkpoints] = await Promise.all([
+          const [calls, checkpoints, runOverview] = await Promise.all([
             readCallLogs({ limit, since, runId }),
             readCheckpoints(runId),
+            // 运行总览（ROADMAP P1-1）：与 research_run_status 共享同一聚合层，
+            // UI 无需复刻阶段/检查点推导逻辑；run 不存在时返回 null，前端按无概览渲染。
+            runId ? buildRunOverview(runId).catch(() => null) : Promise.resolve(null),
           ])
           // 产物是调用日志的只读投影，避免为摘要再维护一份可能漂移的存储。
           const artifacts = calls.filter(call => call.ok !== false && call.artifact_kind).map(call => ({
             id: call.id, kind: call.artifact_kind, tool: call.tool, summary: call.result_summary, at: call.at,
           }))
-          return reply(res, 200, { ok: true, calls, checkpoints, artifacts })
+          return reply(res, 200, { ok: true, calls, checkpoints, artifacts, run_overview: runOverview })
         }
 
         if (req.method === 'POST') {

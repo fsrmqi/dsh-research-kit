@@ -12,7 +12,9 @@ const MAX_LOG_SIZE = 5 * 1024 * 1024
 
 let writeQueue = Promise.resolve()
 
-const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params'])
+// 脱敏范围（ROADMAP P3-8）：除自由文本字段外，query/goal 这类研究内容键也不落盘——
+// 统计只看「调了哪个工具、失败没有、耗时多少」，不看用户查了什么。
+const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params', 'query', 'goal'])
 
 async function ensureDir() {
   if (!existsSync(LOG_DIR)) await mkdir(LOG_DIR, { recursive: true })

@@ -72,6 +72,8 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
   const [calls, setCalls] = React.useState([])
   const [checkpoints, setCheckpoints] = React.useState([])
   const [artifacts, setArtifacts] = React.useState([])
+  const [runOverview, setRunOverview] = React.useState(null)
+  const [artifactFilter, setArtifactFilter] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState(null)
   const latestAt = React.useRef(null)
@@ -92,6 +94,7 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
         }
         setCheckpoints(data.checkpoints || [])
         setArtifacts(data.artifacts || [])
+        setRunOverview(data.run_overview || null)
       }
     } catch { /* fetch error: keep last state */ }
   }, [runId])
@@ -101,6 +104,8 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
     setCalls([])
     setCheckpoints([])
     setArtifacts([])
+    setRunOverview(null)
+    setArtifactFilter('')
   }, [runId])
 
   React.useEffect(() => {
@@ -130,6 +135,15 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
     Object.values(cp.checkpoints || {}).some(v => !v.approved)
   )
 
+  // 产物按 kind 筛选（ROADMAP P1-3）：kinds 来自实际产物投影，全部有效时显示「全部」。
+  const artifactKinds = [...new Set(artifacts.map(item => item.kind))]
+  const visibleArtifacts = artifactFilter ? artifacts.filter(item => item.kind === artifactFilter) : artifacts
+  // 下一步建议直接来自 run_overview 聚合层推导，UI 不复刻业务规则。
+  const stageProgress = runOverview?.stage_progress
+  const overviewLine = runOverview
+    ? `阶段 ${runOverview.current_stage} · ${runOverview.status === 'waiting_review' ? '待人工审批' : '进行中'}`
+    : ''
+
   return h('div', {
     style: {
       margin: '0 var(--rk-gutter) 8px',
@@ -154,10 +168,30 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
     ]),
     expanded && h('div', { key: 'body', style: { padding: '0 14px 10px' } }, [
       error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
+      runOverview && h('div', { key: 'overview', style: { padding: '6px 0', borderBottom: `1px solid ${C.line}15` } }, [
+        h('div', { key: 'line', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+          h('span', { key: 'stage', style: { fontSize: 12, fontWeight: 600 } }, overviewLine),
+          stageProgress?.next_stage && h('span', { key: 'next', style: { fontSize: 11, color: C.muted } }, `下一阶段：${stageProgress.next_stage}`),
+          runOverview.workflow_name && h('span', { key: 'wf', style: { fontSize: 11, color: C.muted } }, runOverview.workflow_name),
+        ]),
+        ...(stageProgress?.completed_stages?.length ? [h('div', { key: 'done', style: { fontSize: 11, color: C.muted, marginTop: 2 } }, `已放行阶段：${stageProgress.completed_stages.join('、')}`)] : []),
+      ]),
       ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
-      artifacts.length ? h('div', { key: 'artifacts', style: { display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' } }, artifacts.map(item =>
-        h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
-      )) : null,
+      artifacts.length ? h('div', { key: 'artifacts', style: { margin: '4px 0 8px' } }, [
+        artifactKinds.length > 1 && h('div', { key: 'filter', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 } }, [
+          h('button', {
+            key: 'all', onClick: () => setArtifactFilter(''),
+            style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter ? 'transparent' : C.amberTint, color: C.ink },
+          }, '全部'),
+          ...artifactKinds.map(kind => h('button', {
+            key: kind, onClick: () => setArtifactFilter(kind),
+            style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter === kind ? C.amberTint : 'transparent', color: C.ink },
+          }, artifactKindLabel(kind))),
+        ]),
+        h('div', { key: 'list', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, visibleArtifacts.map(item =>
+          h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
+        )),
+      ]) : null,
       calls.length === 0 && !error
         ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
         : h('div', { key: 'calls', style: { maxHeight: 300, overflowY: 'auto' } },

@@ -2,16 +2,41 @@
 // run 总览的状态聚合层：run 列表没有单独的注册表文件，
 // 以 passports 与 checkpoints 目录的并集为事实源，mtime 作为活跃度排序。
 // 该模块只读，供 research_run_status 工具使用。
+//
+// 阶段状态机（ROADMAP P2-6）：workflow.checkpoints 的 after_stage 只标记「需要暂停的闸门」，
+// 完整阶段序列不在目录里声明。这里把 checkpoint 位置翻译成阶段推进语义：
+//   current_stage     护照记录的当前阶段
+//   completed_stages  checkpoint 已批准的阶段（人工放行即视为该阶段完成）
+//   next_stage        第一个未批准闸门的 after_stage（无闸门时为 null，由调用方自定下一步）
 
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { loadPassport } from './material-passport.js'
+import { itemById } from '../../src/catalog.js'
 
 const PASSPORT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'passports')
 const CHECKPOINT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'checkpoints')
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/
+
+// 按工作流 checkpoint 顺序推导阶段推进：已批准的闸门即已完成的阶段，
+// 第一个未批准闸门的 after_stage 是下一个待执行阶段。
+function deriveStageProgress(workflow, checkpointState) {
+  const gates = Array.isArray(workflow?.checkpoints) ? workflow.checkpoints : []
+  if (!gates.length) return null
+  const approved = new Set(checkpointState?.approved || [])
+  const pending = (checkpointState?.pending || [])
+  const ordered = [...gates].sort((a, b) => String(a.after_stage).localeCompare(String(b.after_stage)))
+  const completed = ordered.map(gate => String(gate.after_stage)).filter(stage => approved.has(stage))
+  const nextGate = ordered.find(gate => !approved.has(String(gate.after_stage)))
+  return {
+    completed_stages: completed,
+    pending_stage: pending[0] || null,
+    next_stage: nextGate ? String(nextGate.after_stage) : null,
+    workflow_completed: !nextGate,
+  }
+}
 
 async function listRunIdsWithMtime(dir, suffix) {
   if (!existsSync(dir)) return []
@@ -72,4 +97,27 @@ async function readCheckpointSummary(runId) {
   }
 }
 
-export { listRecentRuns }
+// 单个 run 的完整状态聚合（ passports + checkpoints + workflow 目录 ），不读日志与证据，
+// 供 research_run_status 的 run_id 分支与 UI 概览复用。
+async function buildRunOverview(runId) {
+  const [passport, checkpoint] = await Promise.all([
+    loadPassport(runId).catch(() => null),
+    readCheckpointSummary(runId).catch(() => null),
+  ])
+  const workflowId = passport?.workflow_id || passport?.pending?.[0]?.workflow_id || ''
+  const workflow = workflowId ? itemById(workflowId) : null
+  const stageProgress = workflow ? deriveStageProgress(workflow, checkpoint) : null
+  return {
+    run_id: runId,
+    passport_found: Boolean(passport),
+    project: passport?.project || 'unknown',
+    current_stage: passport?.current_stage || 'unknown',
+    workflow_id: workflowId || null,
+    workflow_name: workflow?.name || null,
+    checkpoint_state: checkpoint || { pending: [], approved: [] },
+    stage_progress: stageProgress,
+    status: checkpoint?.pending?.length ? 'waiting_review' : 'active',
+  }
+}
+
+export { listRecentRuns, buildRunOverview }
