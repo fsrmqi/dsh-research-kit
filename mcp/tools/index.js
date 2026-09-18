@@ -316,7 +316,7 @@ const tools = [
 
   {
     name: 'claim_audit',
-    description: 'Audit all claims with citations (DOI/PMID/arXiv) in a text. Verifies each citation exists and whether the abstract supports the claim.',
+    description: 'Audit all unique claim-citation pairs in a text. Verifies each cited reference exists and whether the abstract supports the specific claim. Same DOI with different claims is audited separately.',
     inputSchema: {
       text: z.string().min(20).describe('The text to audit (paper draft, review, etc.)'),
       max_claims: z.number().int().min(1).max(50).optional().default(20).describe('Max claims to audit'),

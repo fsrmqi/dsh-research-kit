@@ -15,15 +15,15 @@ test('异常检测：显著性矛盾在同一分段内触发，短文本返回�
   assert.equal(short.summary.message, '文本过短，无法进行有效分析。')
 })
 
-test('claim 审计：同一 DOI 的不同 claim 被正确去重，避免重复提取', () => {
+test('claim 审计：同一 DOI 的不同 claim 分别保留，同 pattern 重复去重', () => {
   const text = [
     'CRISPR enables genome editing [1](https://doi.org/10.1038/s41586-020-2649-2).',
     'NumPy is a fruit [1](https://doi.org/10.1038/s41586-020-2649-2).',
     'NumPy is also a programming language [1](https://doi.org/10.1038/s41586-020-2649-2).',
   ].join(' ')
   const claims = extractClaims(text)
-  // 同一 DOI 只提取一次（首次出现）
-  assert.strictEqual(claims.length, 1, '同一 DOI 应被去重')
+  // 同一 DOI 的 3 条不同 claim 分别保留（每条上下文不同）
+  assert.strictEqual(claims.length, 3, '同 DOI 不同 claim 应分别保留')
   assert.ok(claims[0].citation.includes('10.1038'), 'DOI 正确')
 })
 

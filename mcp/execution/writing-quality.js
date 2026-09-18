@@ -51,6 +51,31 @@ const EXCEPTION_TERMS = new Set([
   'paradigm shift', 'robust estimator', 'robust regression',
 ])
 
+const CJK_FLAGGED_TERMS = [
+  { term: '众所周知', why: '空洞的引导语，不提供新信息', alternatives: '直接引用具体来源' },
+  { term: '不言而喻', why: '如果真的不言而喻就不需要说', alternatives: '直接陈述论据' },
+  { term: '毋庸置疑', why: '过度自信，削弱论证严谨性', alternatives: '提供证据后让读者自行判断' },
+  { term: '日益增长', why: '泛化的趋势描述，缺乏数据支撑', alternatives: '引用具体增长率或统计数据' },
+  { term: '广泛的应用前景', why: '空泛的贡献声明', alternatives: '描述具体应用场景和目标用户' },
+  { term: '具有重要意义', why: '意义需要论证而非声明', alternatives: '用具体数据或案例说明重要性' },
+  { term: '取得了显著进展', why: '进展的幅度和方向不明确', alternatives: '具体说明在哪个方向取得了什么进展' },
+  { term: '引起广泛关注', why: '关注来源和程度模糊', alternatives: '引用具体的后续研究或引用数据' },
+  { term: '深入研究', why: '过度使用的研究动词', alternatives: '系统考察、定量分析、实证检验' },
+  { term: '可见一斑', why: '比喻模糊，不精确', alternatives: '直接说明这说明什么' },
+]
+
+const CJK_THROAT_CLEARING = [
+  { phrase: '在本研究中', fix: '删除。直接开始叙述研究内容' },
+  { phrase: '下面将讨论', fix: '删除。直接讨论' },
+  { phrase: '以下内容将探讨', fix: '删除。直接探讨' },
+  { phrase: '本文将着重讨论', fix: '删除。直接讨论' },
+  { phrase: '众所周知', fix: '删除或引用具体来源' },
+  { phrase: '不言而喻', fix: '删除。直接陈述论据' },
+  { phrase: '值得注意的是', fix: '删除。直接指出值得注意的内容' },
+  { phrase: '需要指出的是', fix: '删除。直接指出' },
+  { phrase: '综上所述', fix: '改为具体结论句。仅限结论节使用' },
+]
+
 function checkQuality(text) {
   const raw = String(text || '')
   if (raw.length < 100) {
@@ -90,6 +115,23 @@ function checkQuality(text) {
     }
   }
 
+  const cjkFlagged = []
+  for (const item of CJK_FLAGGED_TERMS) {
+    const count = (raw.match(new RegExp(item.term, 'g')) || []).length
+    if (count > 0) cjkFlagged.push({ term: item.term, count, why: item.why, alternatives: item.alternatives })
+  }
+
+  const cjkThroat = []
+  for (const item of CJK_THROAT_CLEARING) {
+    const index = raw.indexOf(item.phrase)
+    if (index >= 0) {
+      cjkThroat.push({
+        phrase: item.phrase, position: index, fix: item.fix,
+        context: raw.slice(Math.max(0, index - 30), index + item.phrase.length + 30).replace(/\s+/g, ' ').trim().slice(0, 120),
+      })
+    }
+  }
+
   const punctuationIssues = []
   const emDashCount = (raw.match(/—|--/g) || []).length
   if (emDashCount > raw.split(/[.。]/).length * 0.3) {
@@ -108,15 +150,20 @@ function checkQuality(text) {
   const summary = {
     text_length: raw.length,
     word_count: raw.split(/\s+/).filter(Boolean).length,
-    flagged_term_count: flaggedTerms.reduce((a, b) => a + b.count, 0),
-    unique_flagged_terms: flaggedTerms.length,
-    throat_clearing_count: throatClearing.length,
+    flagged_term_count: flaggedTerms.reduce((a, b) => a + b.count, 0) + cjkFlagged.reduce((a, b) => a + b.count, 0),
+    unique_flagged_terms: flaggedTerms.length + cjkFlagged.length,
+    throat_clearing_count: throatClearing.length + cjkThroat.length,
     punctuation_issue_count: punctuationIssues.length,
     avg_sentence_length: avgSentenceLength,
     long_sentences_over_40_words: longSentences,
   }
 
-  return { flagged_terms: flaggedTerms, throat_clearing: throatClearing, punctuation_issues: punctuationIssues, summary }
+  return {
+    flagged_terms: [...flaggedTerms, ...cjkFlagged],
+    throat_clearing: [...throatClearing, ...cjkThroat],
+    punctuation_issues: punctuationIssues,
+    summary,
+  }
 }
 
 async function checkWritingQuality(text) {

@@ -24,11 +24,11 @@ const SILENCE_PATTERNS = [
 ]
 
 const MISSING_ELEMENTS = [
-  { key: 'sample_size', pattern: /\b(?:n\s*=|sample size|participants|subjects|N\s*=)\b/i, label: '样本量', description: '未提及样本量或实验对象数量' },
-  { key: 'statistical_test', pattern: /\b(?:p\s*[<=]|t-test|ANOVA|chi-square|regression|confidence interval|CI\b)/i, label: '统计方法', description: '未提及具体统计检验方法' },
+  { key: 'sample_size', pattern: /(?:n\s*=|sample size|participants|subjects|N\s*=|样本量|样本数|受试者|研究对象|参与者)/i, label: '样本量', description: '未提及样本量或实验对象数量' },
+  { key: 'statistical_test', pattern: /(?:p\s*[<=]|t-test|ANOVA|chi-square|regression|confidence interval|CI\b|统计(学)?方法|统计检验|假设检验|回归分析|方差分析|卡方检验)/i, label: '统计方法', description: '未提及具体统计检验方法' },
   { key: 'limitation', pattern: SILENCE_PATTERNS[0].pattern, label: '局限性讨论', description: '未讨论研究局限性' },
-  { key: 'data_availability', pattern: /\b(?:data availab|supplementary|additional file|github|zenodo|osf\.io)\b/i, label: '数据可得性', description: '未提供数据获取方式' },
-  { key: 'ethical_approval', pattern: /\b(?:ethic|IRB|consent|approval number)\b/i, label: '伦理声明', description: '未提及伦理审批或知情同意（如涉及人类/动物实验）' },
+  { key: 'data_availability', pattern: /(?:data availab|supplementary|additional file|github|zenodo|osf\.io|数据可得|数据可用|补充材料|补充文件)/i, label: '数据可得性', description: '未提供数据获取方式' },
+  { key: 'ethical_approval', pattern: /(?:ethic|IRB|consent|approval number|伦理|知情同意|审批号|伦理委员会)/i, label: '伦理声明', description: '未提及伦理审批或知情同意（如涉及人类/动物实验）' },
 ]
 
 const MAX_FINDINGS = 30

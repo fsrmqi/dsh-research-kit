@@ -36,9 +36,14 @@ async function acquireLock(runId) {
       if (error?.code !== 'EEXIST') throw error
       try {
         const info = await stat(file)
+        // 空锁文件（进程在 open 和 writeFile 之间崩溃）用较短的宽限期，
+    // 有内容的锁用完整的 stale timeout。
+        const isStale = info.size === 0
+          ? Date.now() - info.mtimeMs > 2_000
+          : Date.now() - info.mtimeMs > LOCK_STALE_MS
         // 用 rename 接管陈旧锁：只有 rename 成功的进程成为接管者，
         // 避免 stat→unlink→open 之间另一个等待者插入并拿到新锁。
-        if (Date.now() - info.mtimeMs > LOCK_STALE_MS) {
+        if (isStale) {
           await rename(file, `${file}.stale-${process.pid}-${Date.now().toString(36)}`)
         }
       } catch {}

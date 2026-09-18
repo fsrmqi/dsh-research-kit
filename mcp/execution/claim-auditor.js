@@ -12,9 +12,8 @@ const CITATION_PATTERNS = [
 ]
 
 function extractClaims(text) {
-  const claims = []
+  const rawMatches = []
   const raw = String(text || '')
-  const seenIdentifiers = new Map() // identifier -> first match info
   
   for (const pattern of CITATION_PATTERNS) {
     pattern.regex.lastIndex = 0
@@ -24,11 +23,6 @@ function extractClaims(text) {
       if (!identifier) continue
       const cleaned = identifier.replace(/[).,;]+$/, '').trim()
       if (!cleaned) continue
-      
-      // 去重：同一 identifier 只保留第一次出现
-      const lowerId = cleaned.toLowerCase()
-      if (seenIdentifiers.has(lowerId)) continue
-      seenIdentifiers.set(lowerId, true)
       
       // Extract surrounding context: 200 chars before and after the citation match
       const start = Math.max(0, match.index - 200)
@@ -40,14 +34,29 @@ function extractClaims(text) {
       
       const claimText = context.replace(match[0], ' ').replace(/\s+/g, ' ').trim()
       if (claimText.length > 10) {
-        claims.push({
+        rawMatches.push({
           claim: claimText.slice(0, 300),
           citation: cleaned,
           citation_type: pattern.type,
           context: context.slice(0, 300),
+          index: match.index,
         })
       }
     }
+  }
+  
+  // 按 match.index 排序，确保跨 pattern 的匹配按文档顺序排列
+  rawMatches.sort((a, b) => a.index - b.index)
+  
+  // 跨 pattern 去重：同一 identifier 且位置相近（<200 字符）视为同一引用被不同 pattern 匹配
+  const claims = []
+  const lastByIdentifier = new Map()
+  for (const match of rawMatches) {
+    const lowerId = match.citation.toLowerCase()
+    const lastIndex = lastByIdentifier.get(lowerId)
+    if (lastIndex !== undefined && Math.abs(match.index - lastIndex) < 10) continue
+    lastByIdentifier.set(lowerId, match.index)
+    claims.push({ claim: match.claim, citation: match.citation, citation_type: match.citation_type, context: match.context })
   }
   
   return claims
