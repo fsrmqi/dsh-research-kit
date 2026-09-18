@@ -45,7 +45,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
       id: evidenceId, kind: 'evidence', label: entry.title || '未命名证据',
       detail: `${entry.sourceDatabase || '来源未提供'} · ${entry.identifier || '无稳定标识符'} · ${entry.status || 'unverified'}`,
       grade: entry.grade || 'ungraded',
-      agentProduced: entry.source === 'mcp-agent',
+      agentProduced: entry.agentProduced === true || entry.source === 'mcp-agent',
     })
     const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
     if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')

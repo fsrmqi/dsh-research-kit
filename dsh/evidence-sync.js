@@ -1,5 +1,7 @@
 
 import {
+  clearAllProjectEntries,
+  clearProjectEntries,
   deleteProjectEntry,
   listAllProjectEntries,
   mergeProjectEntries,
@@ -58,11 +60,18 @@ export function evidenceSyncRoute({ logger } = {}) {
           const incoming = Array.isArray(body.entries) ? body.entries : []
           if (!incoming.length) return reply(res, 400, { ok: false, error: 'no_entries' })
           const result = await mergeProjectEntries(project, incoming)
-          return reply(res, 200, { ok: true, project, added: result.added, skipped: result.skipped })
+          return reply(res, 200, { ok: true, project, added: result.added, skipped: result.skipped.length })
         }
 
         if (req.method === 'DELETE') {
           const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`)
+          const all = url.searchParams.get('all') === '1'
+          if (all) {
+            const project = url.searchParams.get('project')
+            if (project) await clearProjectEntries(project)
+            else await clearAllProjectEntries()
+            return reply(res, 200, { ok: true, project: project || 'all', cleared: true })
+          }
           const project = requestProject(url.searchParams.get('project'))
           const entryId = url.searchParams.get('id')
           if (!entryId) return reply(res, 400, { ok: false, error: 'missing_id' })

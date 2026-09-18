@@ -136,8 +136,10 @@ export async function syncEvidenceVaultWithFiles(project) {
   const nextLocalEntries = await store.list(project ? { project } : {})
   const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
   const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
-  if (missing.length) await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry))
-  publishEvidenceVault()
+  if (missing.length) {
+    await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry))
+    publishEvidenceVault()
+  }
   return { skipped: false, imported, exported: missing.length }
 }
 
@@ -156,6 +158,23 @@ export async function saveEvidenceEntry(input, options) {
   await persistEvidenceEntryToFile(result.entry)
   publishEvidenceVault()
   return result
+}
+
+export async function removeEvidenceEntryFromFile(entry) {
+  if (!canUseFileSync()) return false
+  const query = new URLSearchParams({ project: entry.project || 'default', id: entry.id })
+  const response = await fetch(`${EVIDENCE_SYNC_PATH}?${query}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) })
+  if (response.status === 404) return false
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return true
+}
+
+export async function clearEvidenceEntriesFromFile(project) {
+  if (!canUseFileSync()) return false
+  const query = project ? '?all=1&project=' + encodeURIComponent(project) : '?all=1'
+  const response = await fetch(`${EVIDENCE_SYNC_PATH}${query}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return true
 }
 
 // ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────────────
@@ -313,7 +332,10 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
 
   const refresh = React.useCallback(() => {
     const version = ++refreshVersion.current
-    Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks()])
+    Promise.resolve()
+      .then(() => syncEvidenceVaultWithFiles(project || undefined))
+      .catch(() => {})
+      .then(() => Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks()]))
       .then(([rows, names, links]) => {
         if (version !== refreshVersion.current) return
         setEntries(rows || [])
@@ -401,6 +423,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       if (fresh.length) await store.importMany(fresh)
       setBackup('')
       setBackupOpen(false)
+      await syncEvidenceVaultWithFiles(project || undefined)
       publishEvidenceVault()
       const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
       const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
@@ -410,6 +433,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
 
   const removeEntry = async item => {
     try {
+      await removeEvidenceEntryFromFile(item)
       await store.remove(item.id)
       publishEvidenceVault()
       setNotice(`已删除「${item.title}」。`)
@@ -419,8 +443,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const changeStatus = async (item, status) => {
     if (status === item.status) return
     try {
-      await store.save({ ...item, status }, { onDuplicate: 'update' })
-      publishEvidenceVault()
+      await saveEvidenceEntry({ ...item, status }, { onDuplicate: 'update' })
       setNotice(`「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
@@ -428,6 +451,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
   const clearScope = async () => {
     try {
+      await clearEvidenceEntriesFromFile(project || undefined)
       let message
       if (project) {
         const removed = await store.removeByProject(project)

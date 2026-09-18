@@ -4,13 +4,13 @@ import { wrap } from './wrapper.js'
 const REDUNDANCY_MARKERS = [
   { pattern: /(.)\1{2,}/g, label: '字符重复', description: '同一字符连续出现 3 次以上' },
   { pattern: /(\b\w+\b)(\s+\1\b){2,}/gi, label: '词语重复', description: '同一词语在短距离内重复出现 3 次以上' },
-  { pattern: /非常+(?!重要|关键|显著)/g, label: '程度副词堆叠', description: '"非常"连用可能是不必要的强调' },
+  { pattern: /(?:非常){2,}/g, label: '程度副词堆叠', description: '"非常"连用可能是不必要的强调' },
   { pattern: /(\b(?:also|additionally|furthermore|moreover|in addition)\b.*\b(?:also|additionally|furthermore|moreover|in addition)\b)/gi, label: '连接词冗余', description: '同一段落内重复使用同类递进连接词' },
 ]
 
 const CONTRADICTION_PAIRS = [
   { a: /\b(?:increase|increased|higher|improve[ds]?)\b/i, b: /\b(?:decrease|decreased|lower|reduce[ds]?|diminish\w*)\b/i, label: '方向矛盾', description: '同一段落同时声称增加和减少' },
-  { a: /\b(?:significant|significantly)\b/i, b: /\b(?:no effect|not significant|no difference)\b/i, label: '显著性矛盾', description: '同时声称显著和不显著' },
+  { a: /\b(?:significant|significantly)\b/i, b: /\b(?:no effect|not significant|no significant|no difference)\b/i, label: '显著性矛盾', description: '同时声称显著和不显著' },
   { a: /\b(?:novel|first|new)\b/i, b: /\b(?:previously reported|known|established)\b/i, label: '新颖性矛盾', description: '同时声称首创和已知' },
   { a: /\b(?:proves?|proven|confirmed)\b/i, b: /\b(?:suggests?|may|might|possibly|hypoth\w+)\b/i, label: '确定性矛盾', description: '同时使用确定性语言和推测性语言' },
   { a: /\b(?:outperform|superior|better than)\b/i, b: /\b(?:comparable|similar to|no significant difference)\b/i, label: '优越性矛盾', description: '同时声称优于和等同于对照组' },
@@ -31,9 +31,18 @@ const MISSING_ELEMENTS = [
   { key: 'ethical_approval', pattern: /\b(?:ethic|IRB|consent|approval number)\b/i, label: '伦理声明', description: '未提及伦理审批或知情同意（如涉及人类/动物实验）' },
 ]
 
+const MAX_FINDINGS = 30
+
 function detectAnomalies(text) {
   const raw = String(text || '')
-  if (raw.length < 50) return { anomalies: [], missing: [], summary: '文本过短，无法进行有效分析。' }
+  if (raw.length < 50) {
+    return {
+      findings: [],
+      presentElements: [],
+      missingElements: [],
+      summary: { text_length: raw.length, total_anomalies: 0, contradictions: 0, redundancies: 0, present_good_practices: 0, missing_elements: 0, message: '文本过短，无法进行有效分析。' },
+    }
+  }
 
   const findings = []
 
@@ -51,8 +60,9 @@ function detectAnomalies(text) {
         context: context.slice(0, 160),
         severity: 'advisory',
       })
-      if (findings.length > 30) break
+      if (findings.length >= MAX_FINDINGS) break
     }
+    if (findings.length >= MAX_FINDINGS) break
   }
 
   const paragraphs = raw.split(/\n\s*\n|(?<=[.。])\s+(?=[A-Z\u4e00-\u9fff])/)

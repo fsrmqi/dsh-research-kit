@@ -27,7 +27,7 @@ function extractClaims(text) {
       const start = Math.max(0, match.index - 200)
       const end = Math.min(raw.length, match.index + match[0].length + 200)
       const context = raw.slice(start, end).replace(/\s+/g, ' ').trim()
-      const claimText = context.replace(pattern.regex, '').replace(/\s+/g, ' ').trim()
+      const claimText = context.replace(match[0], ' ').replace(/\s+/g, ' ').trim()
       if (claimText.length > 10) {
         const key = `${pattern.type}:${cleaned.toLowerCase()}:${claimText.slice(0, 180).toLowerCase()}`
         if (seen.has(key)) continue

@@ -133,7 +133,7 @@ export async function mergeProjectEntries(project, incoming = []) {
       added.push(entry)
     }
     if (added.length) await appendFile(entriesFile(project), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
-    return { entries: [...existing, ...added], added: added.length, skipped: skipped.length }
+    return { entries: [...existing, ...added], added: added.length, skipped }
   })
 }
 
@@ -150,6 +150,26 @@ export async function deleteProjectEntry(project, entryId) {
     await writeEntriesUnlocked(project, filtered)
     return { deleted: true }
   })
+}
+
+export async function clearProjectEntries(project) {
+  return withProjectLock(project, async () => writeEntriesUnlocked(project, []))
+}
+
+export async function clearAllProjectEntries() {
+  if (!existsSync(BASE_DIR)) return 0
+  const names = (await readdir(BASE_DIR, { withFileTypes: true }))
+    .filter(item => item.isDirectory())
+    .map(item => item.name)
+  let cleared = 0
+  for (const name of names) {
+    const entries = await readProjectEntries(name)
+    if (entries.length) {
+      await clearProjectEntries(name)
+      cleared += entries.length
+    }
+  }
+  return cleared
 }
 
 async function saveEvidence({ identifier_type, identifier, title, url, note, project, grade_hint }) {
@@ -196,4 +216,4 @@ async function linkEvidence(evidenceId, assetId, project) {
   })
 }
 
-export { saveEvidence, listEvidence, linkEvidence, dedupKey, safeProjectName }
+export { saveEvidence, listEvidence, linkEvidence, dedupKey }

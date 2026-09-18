@@ -12,7 +12,7 @@ import {
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { catalog, itemById } from './catalog.js'
-import { evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks } from './research-evidence-vault.js'
+import { evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks, syncEvidenceVaultWithFiles } from './research-evidence-vault.js'
 import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,
@@ -169,8 +169,12 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
   React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
   const refreshSavedEvidence = React.useCallback(() => {
-    vault.list().then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
-    listAssetEvidenceLinks().then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
+    syncEvidenceVaultWithFiles(projectFilter || undefined)
+      .catch(() => {})
+      .finally(() => {
+        vault.list({ project: projectFilter || undefined }).then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
+      })
+    listAssetEvidenceLinks({ project: projectFilter || undefined }).then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
   }, [vault])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
   const refreshKnowledge = React.useCallback(() => {
