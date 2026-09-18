@@ -38,8 +38,8 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 27)
-  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_checkpoint_approve', 'research_review_output']) {
+  assert.equal(tools.length, 28)
+  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
 })
@@ -89,6 +89,30 @@ test('MCP 边界：research_run_start 创建可追溯运行与 checkpoint 状态
   assert.equal(parsed.data.workflow.id, 'review-paper')
   assert.equal(parsed.data.checkpoint_state.run_id, 'run-smoke-start')
   assert.ok(parsed.data.passport.yaml.includes('run_id: run-smoke-start'))
+  assert.ok(parsed.data.next_actions[0].includes('research_run_status'), 'run_start 应把 run_status 作为首选下一步')
+})
+
+test('MCP 边界：research_run_status 无 run_id 时列出最近运行', async () => {
+  const parsed = await callTool('research_run_status', {})
+  assert.ok(Array.isArray(parsed.data.runs), 'runs 应为数组')
+  const started = parsed.data.runs.find(run => run.run_id === 'run-smoke-start')
+  assert.ok(started, '先前启动的 run 应出现在列表中')
+  assert.equal(started.project, 'mcp-start-test')
+  assert.equal(started.current_stage, 'planning')
+  assert.ok(parsed.data.next_actions.length > 0)
+})
+
+test('MCP 边界：research_run_status 汇总阶段、检查点与证据盘点', async () => {
+  const parsed = await callTool('research_run_status', { run_id: 'run-smoke-start' })
+  assert.equal(parsed.data.run_id, 'run-smoke-start')
+  assert.equal(parsed.data.project, 'mcp-start-test')
+  assert.equal(parsed.data.current_stage, 'planning')
+  assert.ok(['active', 'waiting_review'].includes(parsed.data.status))
+  assert.ok(Array.isArray(parsed.data.checkpoints.pending))
+  assert.equal(parsed.data.evidence.total, 0, '尚无关联证据时应为 0')
+  assert.ok(Array.isArray(parsed.data.artifacts))
+  assert.ok(parsed.data.next_actions.length > 0)
+  assert.ok(parsed.meta.disclaimer.includes('不代表'))
 })
 
 test('MCP 边界：research_review_output 聚合多个审阅维度', async () => {

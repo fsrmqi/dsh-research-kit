@@ -65,6 +65,7 @@ const DISCOVERY_ROUTES = [
     id: 'evidence', label: '管理和盘点证据', keywords: ['证据', '分级', '证据库', '追溯'],
     chain: [
       ['research_evidence_review', '只读盘点证据缺口和未核验项。'],
+      ['research_evidence_list', '检索已保存的证据条目。'],
       ['research_evidence_save', '仅在确认需要时保存单条来源元数据。'],
       ['research_evidence_grade', '针对单条证据作细粒度建议分级。'],
     ],
@@ -74,6 +75,8 @@ const DISCOVERY_ROUTES = [
     chain: [
       ['research_review_output', '默认聚合引用声明、异常、写作和限制语检查。'],
       ['research_review_claims', '只深挖引用声明对齐时使用。'],
+      ['research_review_anomalies', '只深挖冗余、矛盾与缺失要素时使用。'],
+      ['research_review_writing', '只深挖写作质量问题时使用。'],
     ],
   },
   {
@@ -97,6 +100,7 @@ const DISCOVERY_ROUTES = [
       ['research_run_import', '从已有 Material Passport 恢复上下文。'],
       ['research_run_checkpoint_status', '读取当前待审批的人工闸门。'],
       ['research_run_checkpoint_approve', '仅在人工确认后放行指定阶段。'],
+      ['research_run_export', '交接前导出可追溯的状态快照。'],
     ],
   },
 ]
