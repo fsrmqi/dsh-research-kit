@@ -38,8 +38,8 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 24)
-  for (const expected of ['research_catalog_search', 'research_evidence_save', 'research_figure_generate', 'research_run_start', 'research_run_checkpoint_approve', 'research_review_output']) {
+  assert.equal(tools.length, 26)
+  for (const expected of ['research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
 })
@@ -58,6 +58,20 @@ test('MCP 边界：research_workflow_compose 产出可用 prompt', async () => {
   const { data } = await callTool('research_catalog_search', { query: '审阅论文', limit: 1 })
   const parsed = await callTool('research_workflow_compose', { workflow_id: data.workflows[0].id, params: { focus: '统计' } })
   assert.ok(parsed.data.prompt.length > 0)
+})
+
+test('MCP 边界：research_literature_search 可对不可直查来源如实降级', async () => {
+  const parsed = await callTool('research_literature_search', { query: 'test query', source_ids: ['not-configured'] })
+  assert.equal(parsed.data.total, 0)
+  assert.equal(parsed.data.searched_sources[0].availability, 'requires-host-mcp')
+  assert.equal(parsed.meta.confidence, 'api')
+})
+
+test('MCP 边界：research_evidence_review 在空项目中如实返回空盘点', async () => {
+  const parsed = await callTool('research_evidence_review', { project: 'mcp-empty-review', run_id: 'run-empty-review' })
+  assert.equal(parsed.data.summary.total, 0)
+  assert.equal(parsed.data.summary.missing_traceability, 0)
+  assert.ok(parsed.data.next_actions[0].includes('没有证据条目'))
 })
 
 test('MCP 边界：research_run_start 创建可追溯运行与 checkpoint 状态', async () => {

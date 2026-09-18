@@ -10,10 +10,12 @@ const TOOL_LABELS = {
   research_catalog_search: '搜索工作流',
   research_workflow_compose: '组装工作流',
   research_source_query: '查询数据源',
+  research_literature_search: '综合文献检索',
   research_citation_verify: '验证引用',
   research_evidence_save: '保存证据',
   research_evidence_list: '检索证据',
   research_evidence_grade: '证据分级',
+  research_evidence_review: '证据盘点',
   research_run_start: '启动研究运行',
   research_run_export: '导出护照',
   research_run_import: '导入护照',
@@ -33,7 +35,7 @@ const TOOL_LABELS = {
   research_metadata_openalex_fetch: '获取 OpenAlex 元数据',
 }
 
-const ARTIFACT_LABELS = { figure: '图表脚本', 'review-report': '综合审阅', 'claim-audit': '声明审计', 'anomaly-report': '异常报告', 'quality-report': '质量报告' }
+const ARTIFACT_LABELS = { figure: '图表脚本', 'evidence-report': '证据盘点', 'review-report': '综合审阅', 'claim-audit': '声明审计', 'anomaly-report': '异常报告', 'quality-report': '质量报告' }
 
 function formatTime(iso) {
   try {

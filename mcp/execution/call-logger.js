@@ -13,7 +13,7 @@ let writeQueue = Promise.resolve()
 
 const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params'])
 const ARTIFACT_KINDS = {
-  research_figure_generate: 'figure', research_review_output: 'review-report', research_review_claims: 'claim-audit', research_review_anomalies: 'anomaly-report', research_review_writing: 'quality-report',
+  research_figure_generate: 'figure', research_evidence_review: 'evidence-report', research_review_output: 'review-report', research_review_claims: 'claim-audit', research_review_anomalies: 'anomaly-report', research_review_writing: 'quality-report',
 }
 
 async function ensureDir() {

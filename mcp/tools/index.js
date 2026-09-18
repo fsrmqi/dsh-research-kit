@@ -17,6 +17,31 @@ import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
 import { fetchOpenAlexMetadata } from '../execution/openalex-fetcher.js'
 import { wrap, err } from '../execution/wrapper.js'
 
+function sourceIdentity(source) {
+  const identifier = String(source?.id || '').trim()
+  const identifierType = detectIdentifierType(identifier)
+  if (identifierType) return `${identifierType}:${identifier.toLowerCase()}`
+  const url = String(source?.url || '').trim().replace(/\/$/, '').toLowerCase()
+  if (url) return `url:${url}`
+  return `title:${String(source?.title || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)}`
+}
+
+function mergeLiteratureResults(results) {
+  const merged = new Map()
+  for (const { sourceId, result } of results) {
+    for (const item of result.sources || []) {
+      const key = sourceIdentity(item)
+      const existing = merged.get(key)
+      if (existing) {
+        existing.found_in = [...new Set([...existing.found_in, sourceId])]
+        continue
+      }
+      merged.set(key, { ...item, found_in: [sourceId], identifier_type: detectIdentifierType(item.id) || 'none' })
+    }
+  }
+  return [...merged.values()]
+}
+
 const tools = [
   {
     name: 'research_catalog_search',
@@ -122,6 +147,79 @@ const tools = [
   },
 
   {
+    name: 'research_literature_search',
+    description: 'Search multiple scholarly sources in one call, merge duplicate records, and optionally verify stable identifiers or save the resulting metadata as evidence. Use this as the default literature-discovery entry point; research_source_query remains available for one-source control.',
+    inputSchema: {
+      query: z.string().min(1).max(300).describe('Literature search query'),
+      source_ids: z.array(z.string()).min(1).max(6).optional().default(['crossref', 'openalex', 'semantic-scholar']).describe('Source IDs to query; defaults to three complementary scholarly indexes.'),
+      per_source_limit: z.number().int().min(1).max(10).optional().default(5).describe('Maximum records requested from each source'),
+      verify_identifiers: z.boolean().optional().default(false).describe('Verify up to 10 stable identifiers after retrieval; disabled by default to avoid unnecessary API calls.'),
+      save_to_evidence: z.boolean().optional().default(false).describe('Explicitly save retrieved metadata to the evidence vault; disabled by default.'),
+      project: z.string().optional().default('default').describe('Project used only when save_to_evidence is true'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for evidence and activity traceability.'),
+    },
+    async execute({ query, source_ids, per_source_limit, verify_identifiers, save_to_evidence, project, run_id }) {
+      const settled = await Promise.allSettled(source_ids.map(async sourceId => ({ sourceId, result: await querySource(sourceId, query, per_source_limit) })))
+      const successes = settled.filter(item => item.status === 'fulfilled').map(item => item.value)
+      const failures = settled.flatMap((item, index) => item.status === 'rejected'
+        ? [{ source_id: source_ids[index], error: item.reason?.message || '查询失败' }]
+        : [])
+      const sources = mergeLiteratureResults(successes)
+
+      if (verify_identifiers) {
+        await Promise.all(sources.slice(0, 10).map(async source => {
+          if (source.identifier_type === 'none') return
+          try {
+            const verification = await verifyCitation(source.id)
+            source.verification = { exists: verification.exists, confidence: verification.confidence ?? null }
+          } catch (e) {
+            source.verification = { exists: null, error: e.message }
+          }
+        }))
+      }
+
+      const saved = []
+      if (save_to_evidence) {
+        for (const source of sources) {
+          try {
+            const result = await saveEvidence({
+              identifier_type: source.identifier_type,
+              identifier: source.identifier_type === 'none' ? '' : source.id,
+              title: source.title,
+              url: source.url,
+              project,
+              run_id,
+            })
+            saved.push({ source_id: source.id, ...result })
+          } catch (e) {
+            saved.push({ source_id: source.id, saved: false, error: e.message })
+          }
+        }
+      }
+
+      return wrap({
+        query,
+        sources,
+        total: sources.length,
+        searched_sources: successes.map(({ sourceId, result }) => ({ source_id: sourceId, returned: result.total || 0, availability: result.availability })),
+        failed_sources: failures,
+        ...(save_to_evidence ? {
+          evidence_save: {
+            requested: true,
+            saved: saved.filter(item => item.saved).length,
+            duplicates: saved.filter(item => item.dedup_status === 'duplicate').length,
+            results: saved,
+          },
+        } : {}),
+      }, {
+        source: 'literature-search',
+        confidence: failures.length ? 'partial' : 'api',
+        disclaimer: '检索结果是候选记录；去重与标识符存在性核验均不能替代原文、全文与纳入标准审查。证据保存仅在 save_to_evidence=true 时执行。',
+      })
+    },
+  },
+
+  {
     name: 'research_evidence_save',
     description: 'Save an evidence entry (paper metadata + user note) to the evidence vault. Only saves metadata, never full text.',
     inputSchema: {
@@ -194,6 +292,69 @@ const tools = [
         })
       } catch (e) {
         return err(`分级失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_evidence_review',
+    description: 'Review the evidence inventory for a project or run in one read-only pass. Summarizes stored grades, proposes rule-based grades, and identifies entries with missing traceability or unverified status. Does not modify evidence records.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name to review'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to review only evidence linked to that run.'),
+      limit: z.number().int().min(1).max(200).optional().default(100).describe('Maximum evidence entries to include in the review'),
+    },
+    async execute({ project, run_id, limit }) {
+      try {
+        const inventory = await listEvidence({ project, run_id, limit })
+        const entries = inventory.entries.map(entry => {
+          const assessment = gradeEvidence(entry)
+          return {
+            id: entry.id,
+            title: entry.title,
+            identifier_type: entry.identifier_type,
+            identifier: entry.identifier,
+            url: entry.url,
+            status: entry.status || 'unverified',
+            stored_grade: entry.grade || 'ungraded',
+            suggested_grade: assessment.grade,
+            suggested_grade_label: gradeLabel(assessment.grade),
+            confidence: assessment.confidence,
+            reasoning: assessment.reasoning,
+            saved_at: entry.saved_at,
+          }
+        })
+        const countBy = (key, predicate = value => value) => entries.reduce((counts, entry) => {
+          const value = predicate(entry[key])
+          counts[value] = (counts[value] || 0) + 1
+          return counts
+        }, {})
+        const missing = entries.filter(entry => entry.suggested_grade === 'missing')
+        const unverified = entries.filter(entry => entry.status !== 'verified')
+        return wrap({
+          project: inventory.project,
+          ...(run_id ? { run_id } : {}),
+          entries,
+          summary: {
+            total: inventory.total,
+            returned: entries.length,
+            stored_grades: countBy('stored_grade'),
+            suggested_grades: countBy('suggested_grade'),
+            missing_traceability: missing.length,
+            unverified: unverified.length,
+          },
+          next_actions: [
+            ...(missing.length ? [`补齐 ${missing.length} 条缺少稳定标识符或链接的证据来源。`] : []),
+            ...(unverified.length ? [`人工核验 ${unverified.length} 条尚未核验的证据；自动建议不等同于确认。`] : []),
+            ...(!entries.length ? ['当前范围没有证据条目；先使用 research_literature_search 或 research_evidence_save 添加可追溯来源。'] : []),
+          ],
+        }, {
+          source: 'evidence-review',
+          confidence: 'cached',
+          disclaimer: '建议分级来自规则引擎且未写回证据库；研究者需核验原文与证据质量。',
+        })
+      } catch (e) {
+        return err(`证据盘点失败：${e.message}`)
       }
     },
   },

@@ -205,10 +205,12 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_catalog_search` | 搜索 317 条工作流目录 |
 | `research_workflow_compose` | 填参数生成 Prompt |
 | `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源 |
+| `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存 |
 | `research_citation_verify` | 验证 DOI / PMID / arXiv 是否存在 + claim 支持 |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
 | `research_evidence_list` | 检索已保存证据 |
 | `research_evidence_grade` | 实证 / 推论 / 缺失三级分级 |
+| `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别 |
 | `research_evidence_link` | 证据与资产互链 |
 | `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点 |
 | `research_run_export` | 导出跨会话状态快照 |

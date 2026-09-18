@@ -5,7 +5,8 @@ import path from 'node:path'
 import os from 'node:os'
 
 const CHECKPOINT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'checkpoints')
-const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+// 与 Material Passport 的 run_id 契约一致：允许点号，拒绝路径分隔符。
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 10_000
 
