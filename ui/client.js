@@ -5825,6 +5825,20 @@ window.__ModuleLoader__.load({
     // 节点顺延，不会让已有节点整体跳位（节点重排）；且同一份图重复布局必得完全相同
     // 的结果（有回归测试钉住这两个性质）。
     function layoutEvidenceGraph(graph = {}, options = {}) {
+      const nodes = graph.nodes || []
+      const edges = graph.edges || []
+      const edgeRatio = nodes.length > 0 ? edges.length / nodes.length : 0
+
+      // 稀疏图检测：节点 > 50 或边/节点比 < 10% 时用网格布局。
+      // 分列布局在单列 > 50 个节点时变成一堵墙（高 4000+ px），网格布局更紧凑可读。
+      if (nodes.length > 50 || (nodes.length > 10 && edgeRatio < 0.1)) {
+        return layoutSparseGrid(nodes)
+      }
+
+      return layoutByColumn(graph, options)
+    }
+
+    function layoutByColumn(graph, options) {
       const columnGap = options.columnGap ?? GRAPH_COLUMN_GAP
       const rowGap = options.rowGap ?? GRAPH_ROW_GAP
       const byColumn = new Map()
@@ -5852,6 +5866,37 @@ window.__ModuleLoader__.load({
         rows,
         width: columns ? GRAPH_ORIGIN_X + maxColumn * columnGap + GRAPH_NODE_WIDTH / 2 + GRAPH_MARGIN : GRAPH_ORIGIN_X * 2 + GRAPH_NODE_WIDTH,
         height: (rows ? GRAPH_ORIGIN_Y + (rows - 1) * rowGap + GRAPH_NODE_HEIGHT : GRAPH_ORIGIN_Y + GRAPH_NODE_HEIGHT) + GRAPH_MARGIN
+      }
+    }
+
+    // 稀疏图网格布局：按 kind 分组排序，填充到紧凑方形网格。
+    // 每个 kind 形成一个视觉区块，同类节点相邻。不做路由（无关系时不需要边）。
+    function layoutSparseGrid(nodes) {
+      const sorted = [...nodes].sort((a, b) => {
+        const kindA = GRAPH_COLUMN_OF_KIND[a.kind] ?? 3
+        const kindB = GRAPH_COLUMN_OF_KIND[b.kind] ?? 3
+        if (kindA !== kindB) return kindA - kindB
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+      })
+      const count = sorted.length
+      const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)))
+      const cellW = GRAPH_NODE_WIDTH + 16
+      const cellH = GRAPH_NODE_HEIGHT + 14
+      const gridNodes = sorted.map((node, i) => ({
+        ...node,
+        column: i % cols,
+        row: Math.floor(i / cols),
+        x: GRAPH_ORIGIN_X + (i % cols) * cellW,
+        y: GRAPH_ORIGIN_Y + Math.floor(i / cols) * cellH,
+      }))
+      const gridRows = Math.ceil(count / cols)
+      const gridCols = Math.min(count, cols)
+      return {
+        nodes: gridNodes,
+        columns: gridCols,
+        rows: gridRows,
+        width: GRAPH_ORIGIN_X * 2 + gridCols * cellW + GRAPH_MARGIN,
+        height: GRAPH_ORIGIN_Y * 2 + gridRows * cellH + GRAPH_MARGIN,
       }
     }
 
@@ -9738,6 +9783,8 @@ window.__ModuleLoader__.load({
       // 自动沉淀开关是显式 opt-in：默认关闭；状态持久在 localStorage，由 knowledge-deposition 读写。
       const [autoDeposit, setAutoDeposit] = React.useState(() => isAutoDepositEnabled())
       const [selectedKnowledgeId, setSelectedKnowledgeId] = React.useState('')
+      const [selectedEvidenceNodeId, setSelectedEvidenceNodeId] = React.useState('')
+      const [confirmDeleteEvidence, setConfirmDeleteEvidence] = React.useState(false)
       // 「清空本会话临时记录」范围有限但不可逆，用两段式确认（与证据库清空同一模式）。
       const [confirmClear, setConfirmClear] = React.useState(false)
       // 项目筛选：默认跟随证据库的当前项目（该字段是工作上下文，跨会话保留），'' 表示全部项目。
@@ -9924,6 +9971,11 @@ window.__ModuleLoader__.load({
         () => knowledgeNodes.find(node => node.id === selectedKnowledgeId) || null,
         [knowledgeNodes, selectedKnowledgeId],
       )
+
+      const selectedEvidenceEntry = React.useMemo(
+        () => (selectedEvidenceNodeId ? savedEvidence.find(entry => entry.id === selectedEvidenceNodeId) || null : null),
+        [savedEvidence, selectedEvidenceNodeId],
+      )
       const relatedClaims = React.useMemo(
         () => (selectedKnowledgeId ? knowledgeClaims.filter(claim => claim.from === selectedKnowledgeId || claim.to === selectedKnowledgeId) : []),
         [knowledgeClaims, selectedKnowledgeId],
@@ -9952,8 +10004,27 @@ window.__ModuleLoader__.load({
       }
 
       const minimapWidth = 148
-      const minimapHeight = Math.max(70, Math.round((minimapWidth * layout.height) / Math.max(1, layout.width)))
+      const minimapHeight = Math.min(180, Math.max(70, Math.round((minimapWidth * layout.height) / Math.max(1, layout.width))))
       const frameHeight = Math.min(GRAPH_FRAME_HEIGHT, Math.max(320, layout.height))
+
+      // 迷你地图密度模式：节点 > 50 时用聚合色块代替逐节点矩形，
+      // 避免 193 个节点挤在一起变成无信息量的实心色墙。
+      const nodeCount = layout.nodes.length
+      const useDensityMode = nodeCount > 50
+      const densityGridSize = 12
+      const densityCells = useDensityMode ? (() => {
+        const cellW = layout.width / densityGridSize
+        const cellH = layout.height / Math.max(1, Math.ceil(densityGridSize * layout.height / layout.width))
+        const grid = new Map()
+        for (const node of layout.nodes) {
+          const cx = Math.floor((node.x - GRAPH_NODE_WIDTH / 2) / cellW)
+          const cy = Math.floor(node.y / cellH)
+          const key = `${cx},${cy}`
+          grid.set(key, (grid.get(key) || 0) + 1)
+        }
+        const maxCount = Math.max(...grid.values())
+        return { cellW, cellH, grid, maxCount }
+      })() : null
 
       const canvas = h('svg', {
         ref: frameRef,
@@ -9990,7 +10061,19 @@ window.__ModuleLoader__.load({
             className: `rk-graph-node${marked ? ' rk-graph-node-focus' : ''}`,
             opacity: dim ? 0.25 : 1,
             'aria-label': `聚焦 ${node.label}`,
-            onClick: event => { event.preventDefault(); activateNode(node.id); setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '') }
+            onPointerDown: event => event.stopPropagation(),
+            onClick: event => {
+              event.preventDefault()
+              activateNode(node.id)
+              setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '')
+              if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
+              else setSelectedEvidenceNodeId('')
+              setConfirmDeleteEvidence(false)
+            }
+            , onDoubleClick: event => {
+              event.preventDefault()
+              if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
+            }
           }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
             h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
             h('rect', {
@@ -10018,7 +10101,22 @@ window.__ModuleLoader__.load({
         style: { display: 'block', cursor: 'crosshair' }
       }, [
         h('rect', { key: 'bg', width: layout.width, height: layout.height, fill: C.surfaceAlt, rx: 6 }),
-        ...layout.nodes.map(node => h('rect', {
+        ...(useDensityMode && densityCells
+          ? [...densityCells.grid.entries()].map(([key, count]) => {
+              const [cx, cy] = key.split(',').map(Number)
+              const intensity = count / densityCells.maxCount
+              return h('rect', {
+                key: `density-${key}`,
+                x: cx * densityCells.cellW,
+                y: cy * densityCells.cellH,
+                width: densityCells.cellW,
+                height: densityCells.cellH,
+                rx: 2,
+                fill: C.teal,
+                opacity: 0.15 + intensity * 0.65,
+              })
+            })
+          : layout.nodes.map(node => h('rect', {
           key: node.id,
           x: node.x - GRAPH_NODE_WIDTH / 2,
           y: node.y,
@@ -10027,9 +10125,12 @@ window.__ModuleLoader__.load({
           rx: 6,
           fill: graphKindColor(node.kind),
           opacity: highlighted && !highlighted.has(node.id) ? 0.25 : 0.75
-        })),
+          }))),
         h('rect', { key: 'viewport', x: pan.x, y: pan.y, width: viewWidth, height: viewHeight, fill: 'none', stroke: C.accent, strokeWidth: Math.max(3, layout.width / 140) })
-      ]))
+      ]), useDensityMode ? h('div', {
+        key: 'density-label',
+        style: { position: 'absolute', bottom: 4, left: 8, fontSize: 9, color: C.muted, pointerEvents: 'none' },
+      }, `${nodeCount} 节点 · 密度视图`) : null)
 
       const exportGraph = format => {
         const theme = readGraphTheme()
@@ -10189,6 +10290,67 @@ window.__ModuleLoader__.load({
               ? '调整上方的节点范围或项目筛选；「本会话」只含刷新即消失的记录，「持久沉淀」含证据、灵感资产与自动沉淀知识。'
               : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」让图谱随科研对话积累，或点「沉淀最近回答」手动提取当前会话最近一条回答。',
           }),
+        // Evidence node 详情卡片：点击图谱中的证据节点后弹出，
+        // 展示元数据（标题/DOI/状态/分级/笔记/项目/来源），支持关闭和跳转链接。
+        selectedEvidenceEntry ? h(Card, {
+          key: 'evidence-detail',
+          style: {
+            margin: '0 var(--rk-gutter) 14px', padding: 16,
+            border: `1px solid ${nodeStrokeColor({ kind: 'evidence', grade: selectedEvidenceEntry.grade })}40`,
+            display: 'grid', gap: 10,
+          },
+        }, [
+          h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            h('strong', { key: 'title', style: { fontSize: 14, flex: 1, minWidth: 0 } }, selectedEvidenceEntry.title),
+            selectedEvidenceEntry.grade && selectedEvidenceEntry.grade !== 'ungraded'
+              ? h(Badge, { key: 'grade', color: { empirical: '#27AE60', inference: '#F39C12', missing: '#E74C3C' }[selectedEvidenceEntry.grade] || C.muted },
+                  { empirical: '实证', inference: '推论', missing: '缺失' }[selectedEvidenceEntry.grade] || selectedEvidenceEntry.grade)
+              : null,
+            selectedEvidenceEntry.agentProduced && h(Badge, { key: 'agent', color: '#3498DB' }, 'Agent'),
+            h('span', { key: 'spacer', style: { flex: 1 } }),
+            h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: () => setSelectedEvidenceNodeId('') }, '收起'),
+          ]),
+          h('div', { key: 'meta', style: { display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: C.muted } }, [
+            selectedEvidenceEntry.identifier ? h('span', { key: 'id' },
+              `${selectedEvidenceEntry.identifierKind || ''}: ${selectedEvidenceEntry.identifier}`) : null,
+            selectedEvidenceEntry.sourceDatabase ? h('span', { key: 'src' }, selectedEvidenceEntry.sourceDatabase) : null,
+            selectedEvidenceEntry.project ? h('span', { key: 'proj' }, selectedEvidenceEntry.project) : null,
+            selectedEvidenceEntry.savedAt ? h('span', { key: 'date' }, new Date(selectedEvidenceEntry.savedAt).toLocaleDateString('zh-CN')) : null,
+          ]),
+          selectedEvidenceEntry.note ? h('p', {
+            key: 'note',
+            style: { margin: 0, fontSize: 12, lineHeight: 1.55, color: C.ink, whiteSpace: 'pre-wrap' },
+          }, selectedEvidenceEntry.note) : null,
+          h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+            selectedEvidenceEntry.url ? h(Button, {
+              key: 'url', size: 'sm', variant: 'soft', icon: 'search',
+              onClick: () => { if (typeof window !== 'undefined') window.open(selectedEvidenceEntry.url, '_blank', 'noopener') },
+            }, '打开来源') : null,
+            selectedEvidenceEntry.url ? h('span', {
+              key: 'url-text',
+              style: { fontSize: 11, color: C.muted, alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 300, whiteSpace: 'nowrap' },
+            }, selectedEvidenceEntry.url) : null,
+            h('span', { key: 'delete-spacer', style: { flex: 1 } }),
+            confirmDeleteEvidence
+              ? h(Button, {
+                key: 'delete-confirm', size: 'sm', variant: 'danger', icon: 'trash',
+                onClick: async () => {
+                  setConfirmDeleteEvidence(false)
+                  try {
+                    await removeEvidenceEntryFromFile(selectedEvidenceEntry)
+                    await vault.remove(selectedEvidenceEntry.id)
+                    setSelectedEvidenceNodeId('')
+                    setNotice(`已删除「${selectedEvidenceEntry.title}」。`)
+                  } catch (error) { setNotice(`删除失败：${error?.message || error}`) }
+                },
+              }, '确认删除')
+              : h(Button, {
+                key: 'delete', size: 'sm', variant: 'ghost', icon: 'trash',
+                onClick: () => setConfirmDeleteEvidence(true),
+                title: '从证据库和文件存储中彻底删除此条目（不可恢复）',
+              }, '删除'),
+          ]),
+        ]) : null,
         // 结论追溯面板：点开知识节点后展示关系、关联证据、沉淀资产与来源消息摘录。
         selectedKnowledge ? h(Card, { key: 'knowledge-detail', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [
           h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [

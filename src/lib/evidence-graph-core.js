@@ -108,6 +108,20 @@ const GRAPH_MARGIN = 24
 // 节点顺延，不会让已有节点整体跳位（节点重排）；且同一份图重复布局必得完全相同
 // 的结果（有回归测试钉住这两个性质）。
 export function layoutEvidenceGraph(graph = {}, options = {}) {
+  const nodes = graph.nodes || []
+  const edges = graph.edges || []
+  const edgeRatio = nodes.length > 0 ? edges.length / nodes.length : 0
+
+  // 稀疏图检测：节点 > 50 或边/节点比 < 10% 时用网格布局。
+  // 分列布局在单列 > 50 个节点时变成一堵墙（高 4000+ px），网格布局更紧凑可读。
+  if (nodes.length > 50 || (nodes.length > 10 && edgeRatio < 0.1)) {
+    return layoutSparseGrid(nodes)
+  }
+
+  return layoutByColumn(graph, options)
+}
+
+function layoutByColumn(graph, options) {
   const columnGap = options.columnGap ?? GRAPH_COLUMN_GAP
   const rowGap = options.rowGap ?? GRAPH_ROW_GAP
   const byColumn = new Map()
@@ -135,6 +149,37 @@ export function layoutEvidenceGraph(graph = {}, options = {}) {
     rows,
     width: columns ? GRAPH_ORIGIN_X + maxColumn * columnGap + GRAPH_NODE_WIDTH / 2 + GRAPH_MARGIN : GRAPH_ORIGIN_X * 2 + GRAPH_NODE_WIDTH,
     height: (rows ? GRAPH_ORIGIN_Y + (rows - 1) * rowGap + GRAPH_NODE_HEIGHT : GRAPH_ORIGIN_Y + GRAPH_NODE_HEIGHT) + GRAPH_MARGIN
+  }
+}
+
+// 稀疏图网格布局：按 kind 分组排序，填充到紧凑方形网格。
+// 每个 kind 形成一个视觉区块，同类节点相邻。不做路由（无关系时不需要边）。
+function layoutSparseGrid(nodes) {
+  const sorted = [...nodes].sort((a, b) => {
+    const kindA = GRAPH_COLUMN_OF_KIND[a.kind] ?? 3
+    const kindB = GRAPH_COLUMN_OF_KIND[b.kind] ?? 3
+    if (kindA !== kindB) return kindA - kindB
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
+  const count = sorted.length
+  const cols = Math.max(1, Math.ceil(Math.sqrt(count * 1.4)))
+  const cellW = GRAPH_NODE_WIDTH + 16
+  const cellH = GRAPH_NODE_HEIGHT + 14
+  const gridNodes = sorted.map((node, i) => ({
+    ...node,
+    column: i % cols,
+    row: Math.floor(i / cols),
+    x: GRAPH_ORIGIN_X + (i % cols) * cellW,
+    y: GRAPH_ORIGIN_Y + Math.floor(i / cols) * cellH,
+  }))
+  const gridRows = Math.ceil(count / cols)
+  const gridCols = Math.min(count, cols)
+  return {
+    nodes: gridNodes,
+    columns: gridCols,
+    rows: gridRows,
+    width: GRAPH_ORIGIN_X * 2 + gridCols * cellW + GRAPH_MARGIN,
+    height: GRAPH_ORIGIN_Y * 2 + gridRows * cellH + GRAPH_MARGIN,
   }
 }
 
