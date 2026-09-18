@@ -7,6 +7,7 @@ const POLL_INTERVAL_MS = 5_000
 const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
 
 const TOOL_LABELS = {
+  research_help: 'MCP 工具导航',
   research_catalog_search: '搜索工作流',
   research_workflow_compose: '组装工作流',
   research_source_query: '查询数据源',

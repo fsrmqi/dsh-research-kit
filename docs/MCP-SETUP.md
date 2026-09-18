@@ -200,8 +200,11 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 
 命名统一为 `research_<领域>_<动作>`：`catalog`（目录）、`workflow`（编排）、`source` / `metadata`（外部信息）、`evidence`（证据）、`run`（运行状态）、`review`（审阅）、`figure`（图表）、`disclosure`（披露）。日常审阅优先调用 `research_review_output`；需要深挖单一问题时，再调用对应的细粒度 `research_review_*` 工具。
 
+不知道该调用什么时，先使用 `research_help`。它按自然语言目标返回推荐工具和最短调用链，本身不执行检索、写入或审批。
+
 | Tool | 功能 |
 |------|------|
+| `research_help` | MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作 |
 | `research_catalog_search` | 搜索 317 条工作流目录 |
 | `research_workflow_compose` | 填参数生成 Prompt |
 | `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源 |

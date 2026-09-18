@@ -38,8 +38,8 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 26)
-  for (const expected of ['research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_checkpoint_approve', 'research_review_output']) {
+  assert.equal(tools.length, 27)
+  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
 })
@@ -52,6 +52,13 @@ test('MCP 边界：research_catalog_search 命中中文查询，且 schema 默�
 
   const defaulted = await callTool('research_catalog_search', {})
   assert.equal(defaulted.data.workflows.length, 10, 'limit 未传时应回落到 schema 默认的 10 条')
+})
+
+test('MCP 边界：research_help 为自然语言目标返回最短工具链', async () => {
+  const parsed = await callTool('research_help', { goal: '我想找相关文献并保存关键来源' })
+  assert.equal(parsed.data.recommended.id, 'literature')
+  assert.equal(parsed.data.recommended.recommended_chain[0].tool, 'research_literature_search')
+  assert.ok(parsed.data.available_routes.length >= 7)
 })
 
 test('MCP 边界：research_workflow_compose 产出可用 prompt', async () => {
