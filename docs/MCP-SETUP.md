@@ -202,6 +202,35 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 
 不知道该调用什么时，先使用 `research_help`。它按自然语言目标返回推荐工具和最短调用链，本身不执行检索、写入或审批。
 
+<!-- quick-start:start -->
+**启动一次研究运行**
+1. `research_catalog_search` — 参数示例：`{ query: '审阅论文', limit: 2 }`
+2. `research_run_start` — 参数示例：`{ workflow_id: 'review-paper', project: 'demo', current_stage: 'literature_search' }`
+3. `research_run_status` — 参数示例：`{ run_id: 'run-1a2b3c' }`
+
+**检索并保存文献**
+1. `research_literature_search` — 参数示例：`{ query: 'sleep deprivation memory', run_id: 'run-1a2b3c' }`
+2. `research_evidence_save_batch` — 参数示例：`{ entries: [{ identifier_type: 'doi', identifier: '10.1038/xyz', title: '候选一' }], project: 'demo', run_id: 'run-1a2b3c' }`
+3. `research_evidence_review` — 参数示例：`{ project: 'demo', run_id: 'run-1a2b3c' }`
+
+**审阅研究草稿**
+1. `research_review_output` — 参数示例：`{ text: '<草稿全文，至少100字>', run_id: 'run-1a2b3c' }`
+2. `research_review_claims` — 参数示例：`{ text: '<含引用声明的段落>' }`
+
+**生成论文图表**
+1. `research_figure_list_styles` — 参数示例：`{}`
+2. `research_figure_generate` — 参数示例：`{ style: 'nature', data_hint: '组间比较柱状图' }`
+
+**恢复或推进运行**
+1. `research_run_status` — 参数示例：`{ run_id: 'run-1a2b3c' }`
+2. `research_run_checkpoint_approve` — 参数示例：`{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认' }`
+3. `research_run_export` — 参数示例：`{ run_id: 'run-1a2b3c', current_stage: 'synthesis', workflow_id: 'review-paper' }`
+
+**生成 AI 使用披露**
+1. `research_disclosure_list_policies` — 参数示例：`{}`
+2. `research_disclosure_generate` — 参数示例：`{ target_journal: 'Nature', ai_use_description: 'literature search and language editing' }`
+<!-- quick-start:end -->
+
 <!-- tool-table:start -->
 | Tool | 功能 |
 |------|------|
@@ -217,6 +246,8 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别（默认入口） |
 | `research_evidence_link` | 证据与资产互链 |
 | `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点（默认入口） |
+| `research_evidence_save_batch` | 默认批量保存入口：将检索结果中人工挑选的候选一次性显式保存（默认入口） |
+| `research_evidence_grade_apply` | 预览→确认两段式写回建议分级；默认只预览，绝不自动写回 |
 | `research_run_status` | 运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步（默认入口） |
 | `research_run_export` | 导出跨会话状态快照 |
 | `research_run_import` | 导入状态快照恢复执行 |
@@ -233,4 +264,5 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊）（默认入口） |
 | `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 | `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据 |
+| `research_usage_stats` | 工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据） |
 <!-- tool-table:end -->

@@ -135,3 +135,49 @@ test('研究旅程：无 run_id 的 run_status 列出该 run 摘要', async () =
   assert.equal(row.workflow_id, 'review-paper')
   assert.ok(row.pending_checkpoints !== null, '该工作流建过 checkpoint，应能报告 pending 数')
 })
+
+test('批量保存：人工挑选候选显式落库，重复与非法条目被如实报告', async () => {
+  const batch = await callTool('research_evidence_save_batch', {
+    entries: [
+      { identifier_type: 'doi', identifier: '10.9999/batch-a', title: 'Batch A', project: PROJECT },
+      { identifier_type: 'doi', identifier: '10.9999/pipeline-e2e', title: '重复候选', project: PROJECT },
+      { title: 'Batch C', url: 'https://example.org/c', project: PROJECT },
+    ],
+    project: PROJECT,
+    run_id: RUN_ID,
+  })
+  assert.equal(batch.data.summary.saved, 2, '两条新候选应保存成功')
+  assert.equal(batch.data.summary.duplicates, 1, '与已有 DOI 重复的候选应跳过')
+  assert.ok(batch.data.run_id === RUN_ID || batch.data.summary.saved === 0, '批级 run_id 应传递或降级')
+  assert.ok(Array.isArray(batch.data.next_actions) && batch.data.next_actions.length > 0)
+})
+
+test('分级写回闸门：默认只预览，显式 apply=true 才落库', async () => {
+  const preview = await callTool('research_evidence_grade_apply', { project: PROJECT, run_id: RUN_ID })
+  assert.equal(preview.data.summary.apply, false)
+  assert.equal(preview.data.summary.changed, 0, '预览不得写回任何条目')
+  assert.ok(preview.data.warnings.some(w => w.includes('未写回')), '预览应带明确警告')
+
+  if (preview.data.summary.planned > 0) {
+    const ids = preview.data.plan.map(item => item.id)
+    const applied = await callTool('research_evidence_grade_apply', { project: PROJECT, run_id: RUN_ID, evidence_ids: ids, apply: true })
+    assert.equal(applied.data.summary.apply, true)
+    assert.equal(applied.data.summary.changed, ids.length)
+    // 写回后再次预览应无待应用项
+    const after = await callTool('research_evidence_grade_apply', { project: PROJECT, run_id: RUN_ID, evidence_ids: ids })
+    assert.equal(after.data.summary.planned, 0)
+  }
+})
+
+test('用量统计：只输出脱敏元数据与聚合指标', async () => {
+  const stats = await callTool('research_usage_stats', {})
+  assert.ok(stats.data.window_entries > 0, '沙箱内已有调用日志')
+  assert.ok(stats.data.tools.length > 0)
+  for (const tool of stats.data.tools) {
+    assert.ok(tool.tool.startsWith('research_'))
+    assert.ok(typeof tool.failure_rate === 'number')
+  }
+  const raw = JSON.stringify(stats)
+  assert.ok(!raw.includes('sleep deprivation'), '统计不得包含检索词等研究内容')
+  assert.ok(stats.data.next_actions.length > 0)
+})

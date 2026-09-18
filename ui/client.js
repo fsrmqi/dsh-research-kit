@@ -11564,6 +11564,7 @@ window.__ModuleLoader__.load({
         category: 'navigation', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: null, labelZh: 'MCP 工具导航',
         summaryZh: 'MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作',
+        example: "{ goal: '帮我找文献' }",
         artifactKind: '',
       },
       {
@@ -11571,6 +11572,7 @@ window.__ModuleLoader__.load({
         category: 'catalog', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'start', labelZh: '搜索工作流',
         summaryZh: '搜索 317 条工作流目录',
+        example: "{ query: '审阅论文', limit: 2 }",
         artifactKind: '',
       },
       {
@@ -11578,6 +11580,7 @@ window.__ModuleLoader__.load({
         category: 'workflow', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'start', labelZh: '组装工作流',
         summaryZh: '填参数生成 Prompt',
+        example: "{ workflow_id: 'review-paper', params: { focus: '统计' } }",
         artifactKind: '',
       },
       {
@@ -11585,6 +11588,7 @@ window.__ModuleLoader__.load({
         category: 'source', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: null, labelZh: '查询数据源',
         summaryZh: '直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源',
+        example: "{ source_id: 'crossref', query: 'sleep memory', limit: 5 }",
         artifactKind: '',
       },
       {
@@ -11592,6 +11596,7 @@ window.__ModuleLoader__.load({
         category: 'literature', tier: 'entry', access: 'external', requiresConfirmation: false,
         helpRoute: 'literature', labelZh: '综合文献检索',
         summaryZh: '默认文献检索入口：多源检索、去重、可选核验与显式证据保存',
+        example: "{ query: 'sleep deprivation memory', run_id: 'run-1a2b3c' }",
         artifactKind: '',
       },
       {
@@ -11599,6 +11604,7 @@ window.__ModuleLoader__.load({
         category: 'source', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: null, labelZh: '验证引用',
         summaryZh: '验证 DOI / PMID / arXiv 是否存在 + claim 支持',
+        example: "{ identifier: '10.1038/s41586-020-2649-2' }",
         artifactKind: '',
       },
       {
@@ -11606,6 +11612,7 @@ window.__ModuleLoader__.load({
         category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: 'evidence', labelZh: '保存证据',
         summaryZh: '保存证据条目（元数据，不存全文）',
+        example: "{ identifier_type: 'doi', identifier: '10.1038/s41586-020-2649-2', title: '示例论文', project: 'demo' }",
         artifactKind: '',
       },
       {
@@ -11613,6 +11620,7 @@ window.__ModuleLoader__.load({
         category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '检索证据',
         summaryZh: '检索已保存证据',
+        example: "{ project: 'demo' }",
         artifactKind: '',
       },
       {
@@ -11620,6 +11628,7 @@ window.__ModuleLoader__.load({
         category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '证据分级',
         summaryZh: '实证 / 推论 / 缺失三级分级',
+        example: "{ evidence_id: '<id>', project: 'demo' }",
         artifactKind: '',
       },
       {
@@ -11627,6 +11636,7 @@ window.__ModuleLoader__.load({
         category: 'evidence', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '证据盘点',
         summaryZh: '默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别',
+        example: "{ project: 'demo', run_id: 'run-1a2b3c' }",
         artifactKind: 'evidence-report',
       },
       {
@@ -11634,6 +11644,7 @@ window.__ModuleLoader__.load({
         category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: null, labelZh: '关联证据',
         summaryZh: '证据与资产互链',
+        example: "{ evidence_id: '<id>', asset_id: '<assetId>', project: 'demo' }",
         artifactKind: '',
       },
       {
@@ -11641,6 +11652,23 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'entry', access: 'writes', requiresConfirmation: true,
         helpRoute: 'start', labelZh: '启动研究运行',
         summaryZh: '默认启动入口：创建研究运行、状态护照与人工检查点',
+        example: "{ workflow_id: 'review-paper', project: 'demo', current_stage: 'literature_search' }",
+        artifactKind: '',
+      },
+      {
+        name: 'research_evidence_save_batch',
+        category: 'evidence', tier: 'entry', access: 'writes', requiresConfirmation: true,
+        helpRoute: 'literature', labelZh: '批量保存证据',
+        summaryZh: '默认批量保存入口：将检索结果中人工挑选的候选一次性显式保存',
+        example: "{ entries: [{ identifier_type: 'doi', identifier: '10.1038/xyz', title: '候选一' }], project: 'demo', run_id: 'run-1a2b3c' }",
+        artifactKind: '',
+      },
+      {
+        name: 'research_evidence_grade_apply',
+        category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+        helpRoute: 'evidence', labelZh: '应用证据分级',
+        summaryZh: '预览→确认两段式写回建议分级；默认只预览，绝不自动写回',
+        example: "{ project: 'demo', evidence_ids: ['<id>'], apply: false }",
         artifactKind: '',
       },
       {
@@ -11648,6 +11676,7 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'resume', labelZh: '运行状态总览',
         summaryZh: '运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步',
+        example: "{ run_id: 'run-1a2b3c' }",
         artifactKind: '',
       },
       {
@@ -11655,6 +11684,7 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: 'resume', labelZh: '导出护照',
         summaryZh: '导出跨会话状态快照',
+        example: "{ run_id: 'run-1a2b3c', current_stage: 'synthesis', workflow_id: 'review-paper' }",
         artifactKind: '',
       },
       {
@@ -11662,6 +11692,7 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'resume', labelZh: '导入护照',
         summaryZh: '导入状态快照恢复执行',
+        example: "{ passport_yaml: '<护照 YAML 内容>' }",
         artifactKind: '',
       },
       {
@@ -11669,6 +11700,7 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'resume', labelZh: '检查点状态',
         summaryZh: '查看管道检查点状态',
+        example: "{ run_id: 'run-1a2b3c' }",
         artifactKind: '',
       },
       {
@@ -11676,6 +11708,7 @@ window.__ModuleLoader__.load({
         category: 'run', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: 'resume', labelZh: '审批检查点',
         summaryZh: '审批检查点继续执行',
+        example: "{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认' }",
         artifactKind: '',
       },
       {
@@ -11683,6 +11716,7 @@ window.__ModuleLoader__.load({
         category: 'figure', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'figure', labelZh: '生成图表',
         summaryZh: '按论文风格生成 matplotlib 脚本',
+        example: "{ style: 'nature', data_hint: '组间比较柱状图' }",
         artifactKind: 'figure',
       },
       {
@@ -11690,6 +11724,7 @@ window.__ModuleLoader__.load({
         category: 'figure', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'figure', labelZh: '图表风格列表',
         summaryZh: '列出 8 个可用图表风格',
+        example: "{}",
         artifactKind: '',
       },
       {
@@ -11697,6 +11732,7 @@ window.__ModuleLoader__.load({
         category: 'review', tier: 'entry', access: 'external', requiresConfirmation: false,
         helpRoute: 'review', labelZh: '综合审阅输出',
         summaryZh: '默认审阅入口：聚合声明引用、异常、写作与限制语检查',
+        example: "{ text: '<草稿全文，至少100字>', run_id: 'run-1a2b3c' }",
         artifactKind: 'review-report',
       },
       {
@@ -11704,6 +11740,7 @@ window.__ModuleLoader__.load({
         category: 'review', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: 'review', labelZh: '声明引用审计',
         summaryZh: '文本级 claim-source 对齐审计',
+        example: "{ text: '<含引用声明的段落>' }",
         artifactKind: 'claim-audit',
       },
       {
@@ -11711,6 +11748,7 @@ window.__ModuleLoader__.load({
         category: 'review', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'review', labelZh: '文本异常检测',
         summaryZh: '检测冗余模式、矛盾表述与缺失要素',
+        example: "{ text: '<待检段落>' }",
         artifactKind: 'anomaly-report',
       },
       {
@@ -11718,6 +11756,7 @@ window.__ModuleLoader__.load({
         category: 'review', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'review', labelZh: '写作质量检查',
         summaryZh: '学术写作质量检查（模糊术语、废话开头、标点、句长）',
+        example: "{ text: '<待检段落>' }",
         artifactKind: 'quality-report',
       },
       {
@@ -11725,6 +11764,7 @@ window.__ModuleLoader__.load({
         category: 'review', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: null, labelZh: '限制语检查',
         summaryZh: '检测保护性模糊限制语（不可静默删除）',
+        example: "{ text: '<摘要或小节>' }",
         artifactKind: '',
       },
       {
@@ -11732,6 +11772,7 @@ window.__ModuleLoader__.load({
         category: 'literature', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: null, labelZh: '文献互引分析',
         summaryZh: '发现证据间互引关系',
+        example: "{ project: 'demo' }",
         artifactKind: '',
       },
       {
@@ -11739,6 +11780,7 @@ window.__ModuleLoader__.load({
         category: 'disclosure', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'disclosure', labelZh: '生成 AI 披露',
         summaryZh: '按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊）',
+        example: "{ target_journal: 'Nature', ai_use_description: 'literature search and language editing' }",
         artifactKind: '',
       },
       {
@@ -11746,6 +11788,7 @@ window.__ModuleLoader__.load({
         category: 'disclosure', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'disclosure', labelZh: '披露政策列表',
         summaryZh: '列出支持的期刊 AI 披露政策',
+        example: "{}",
         artifactKind: '',
       },
       {
@@ -11753,6 +11796,15 @@ window.__ModuleLoader__.load({
         category: 'metadata', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: null, labelZh: '获取 OpenAlex 元数据',
         summaryZh: '通过 DOI 或检索词获取 OpenAlex 完整元数据',
+        example: "{ dois: ['10.1038/s41586-020-2649-2'], save_to_evidence: false }",
+        artifactKind: '',
+      },
+      {
+        name: 'research_usage_stats',
+        category: 'navigation', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+        helpRoute: null, labelZh: '用量统计',
+        summaryZh: '工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据）',
+        example: "{}",
         artifactKind: '',
       },
     ]
@@ -12124,6 +12176,8 @@ window.__ModuleLoader__.load({
       const [calls, setCalls] = React.useState([])
       const [checkpoints, setCheckpoints] = React.useState([])
       const [artifacts, setArtifacts] = React.useState([])
+      const [runOverview, setRunOverview] = React.useState(null)
+      const [artifactFilter, setArtifactFilter] = React.useState('')
       const [busy, setBusy] = React.useState(false)
       const [error, setError] = React.useState(null)
       const latestAt = React.useRef(null)
@@ -12144,6 +12198,7 @@ window.__ModuleLoader__.load({
             }
             setCheckpoints(data.checkpoints || [])
             setArtifacts(data.artifacts || [])
+            setRunOverview(data.run_overview || null)
           }
         } catch { /* fetch error: keep last state */ }
       }, [runId])
@@ -12153,6 +12208,8 @@ window.__ModuleLoader__.load({
         setCalls([])
         setCheckpoints([])
         setArtifacts([])
+        setRunOverview(null)
+        setArtifactFilter('')
       }, [runId])
 
       React.useEffect(() => {
@@ -12182,6 +12239,15 @@ window.__ModuleLoader__.load({
         Object.values(cp.checkpoints || {}).some(v => !v.approved)
       )
 
+      // 产物按 kind 筛选（ROADMAP P1-3）：kinds 来自实际产物投影，全部有效时显示「全部」。
+      const artifactKinds = [...new Set(artifacts.map(item => item.kind))]
+      const visibleArtifacts = artifactFilter ? artifacts.filter(item => item.kind === artifactFilter) : artifacts
+      // 下一步建议直接来自 run_overview 聚合层推导，UI 不复刻业务规则。
+      const stageProgress = runOverview?.stage_progress
+      const overviewLine = runOverview
+        ? `阶段 ${runOverview.current_stage} · ${runOverview.status === 'waiting_review' ? '待人工审批' : '进行中'}`
+        : ''
+
       return h('div', {
         style: {
           margin: '0 var(--rk-gutter) 8px',
@@ -12206,10 +12272,30 @@ window.__ModuleLoader__.load({
         ]),
         expanded && h('div', { key: 'body', style: { padding: '0 14px 10px' } }, [
           error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
+          runOverview && h('div', { key: 'overview', style: { padding: '6px 0', borderBottom: `1px solid ${C.line}15` } }, [
+            h('div', { key: 'line', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+              h('span', { key: 'stage', style: { fontSize: 12, fontWeight: 600 } }, overviewLine),
+              stageProgress?.next_stage && h('span', { key: 'next', style: { fontSize: 11, color: C.muted } }, `下一阶段：${stageProgress.next_stage}`),
+              runOverview.workflow_name && h('span', { key: 'wf', style: { fontSize: 11, color: C.muted } }, runOverview.workflow_name),
+            ]),
+            ...(stageProgress?.completed_stages?.length ? [h('div', { key: 'done', style: { fontSize: 11, color: C.muted, marginTop: 2 } }, `已放行阶段：${stageProgress.completed_stages.join('、')}`)] : []),
+          ]),
           ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
-          artifacts.length ? h('div', { key: 'artifacts', style: { display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' } }, artifacts.map(item =>
-            h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
-          )) : null,
+          artifacts.length ? h('div', { key: 'artifacts', style: { margin: '4px 0 8px' } }, [
+            artifactKinds.length > 1 && h('div', { key: 'filter', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 } }, [
+              h('button', {
+                key: 'all', onClick: () => setArtifactFilter(''),
+                style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter ? 'transparent' : C.amberTint, color: C.ink },
+              }, '全部'),
+              ...artifactKinds.map(kind => h('button', {
+                key: kind, onClick: () => setArtifactFilter(kind),
+                style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter === kind ? C.amberTint : 'transparent', color: C.ink },
+              }, artifactKindLabel(kind))),
+            ]),
+            h('div', { key: 'list', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, visibleArtifacts.map(item =>
+              h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
+            )),
+          ]) : null,
           calls.length === 0 && !error
             ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
             : h('div', { key: 'calls', style: { maxHeight: 300, overflowY: 'auto' } },

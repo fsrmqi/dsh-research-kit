@@ -74,7 +74,31 @@ test('注册表 helper：toolMeta 未知名返回 null，artifactKindLabel 未�
   assert.equal(artifactKindLabel('unknown-kind'), '运行产物')
   assert.equal(artifactKindLabel('figure'), '图表脚本')
   assert.ok(entryTools().includes('research_run_status'), 'run_status 应为聚合入口')
+  assert.ok(entryTools().includes('research_evidence_save_batch'), '批量保存应为聚合入口')
   assert.ok(!entryTools().includes('research_review_hedging'), '限制语检查是细粒度工具')
+})
+
+test('统一输出契约：contract 归一顶层字段，空数组按需携带', async () => {
+  const { contract } = await import('../mcp/execution/contract.js')
+  const aggregated = await contract({ total: 3 }, {
+    source: 'test', summary: { total: 3 }, next_actions: ['a'],
+    warnings: ['w'], artifacts: [{ kind: 'figure' }], run_id: 'run-x',
+  })
+  assert.equal(aggregated.data.run_id, 'run-x')
+  assert.deepEqual(aggregated.data.summary, { total: 3 })
+  assert.deepEqual(aggregated.data.next_actions, ['a'])
+  assert.deepEqual(aggregated.data.warnings, ['w'])
+  assert.deepEqual(aggregated.data.artifacts, [{ kind: 'figure' }])
+  assert.ok(aggregated.meta.retrieved_at)
+  const minimal = await contract({}, { source: 't', warnings: [], artifacts: [] })
+  assert.ok(!('warnings' in minimal.data), '空 warnings 不应出现')
+  assert.ok(!('artifacts' in minimal.data), '空 artifacts 不应出现')
+})
+
+test('注册表：每个工具都带参数示例，供文档快速上手自动生成', () => {
+  for (const tool of TOOL_REGISTRY) {
+    assert.ok(typeof tool.example === 'string' && tool.example.length > 0, `${tool.name} 缺少 example`)
+  }
 })
 
 test('写入类工具都要求确认，只读入口都不写', () => {

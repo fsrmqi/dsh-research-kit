@@ -868,7 +868,7 @@ const tools = [
       max_claims: z.number().int().min(1).max(50).optional().default(20).describe('Max cited claims to audit'),
       run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
     },
-    async execute({ text, max_claims }) {
+    async execute({ text, max_claims, run_id }) {
       const [claims, anomalies, writing, hedging] = await Promise.all([
         auditClaims(text, { max_claims }),
         detectTextAnomalies(text),

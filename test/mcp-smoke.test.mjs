@@ -38,8 +38,8 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 28)
-  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_run_checkpoint_approve', 'research_review_output']) {
+  assert.equal(tools.length, 31)
+  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_evidence_save_batch', 'research_evidence_grade_apply', 'research_usage_stats', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
 })
@@ -110,7 +110,8 @@ test('MCP 边界：research_run_status 汇总阶段、检查点与证据盘点',
   assert.ok(['active', 'waiting_review'].includes(parsed.data.status))
   assert.ok(Array.isArray(parsed.data.checkpoints.pending))
   assert.equal(parsed.data.evidence.total, 0, '尚无关联证据时应为 0')
-  assert.ok(Array.isArray(parsed.data.artifacts))
+  // 契约约定：空产物数组按需携带；该 run 无产物时字段可缺席
+  if (parsed.data.artifacts !== undefined) assert.ok(Array.isArray(parsed.data.artifacts))
   assert.ok(parsed.data.next_actions.length > 0)
   assert.ok(parsed.meta.disclaimer.includes('不代表'))
 })
