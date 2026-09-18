@@ -2,41 +2,10 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import { Badge, Button, Notice } from './ui.js'
+import { toolLabel, artifactKindLabel } from '../mcp/tool-registry.js'
 
 const POLL_INTERVAL_MS = 5_000
 const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
-
-const TOOL_LABELS = {
-  research_help: 'MCP 工具导航',
-  research_catalog_search: '搜索工作流',
-  research_workflow_compose: '组装工作流',
-  research_source_query: '查询数据源',
-  research_literature_search: '综合文献检索',
-  research_citation_verify: '验证引用',
-  research_evidence_save: '保存证据',
-  research_evidence_list: '检索证据',
-  research_evidence_grade: '证据分级',
-  research_evidence_review: '证据盘点',
-  research_run_start: '启动研究运行',
-  research_run_export: '导出护照',
-  research_run_import: '导入护照',
-  research_evidence_link: '关联证据',
-  research_figure_generate: '生成图表',
-  research_figure_list_styles: '图表风格列表',
-  research_run_checkpoint_status: '检查点状态',
-  research_run_checkpoint_approve: '审批检查点',
-  research_review_output: '综合审阅输出',
-  research_review_claims: '声明引用审计',
-  research_literature_link: '文献互引分析',
-  research_review_anomalies: '文本异常检测',
-  research_review_writing: '写作质量检查',
-  research_review_hedging: '限制语检查',
-  research_disclosure_generate: '生成 AI 披露',
-  research_disclosure_list_policies: '披露政策列表',
-  research_metadata_openalex_fetch: '获取 OpenAlex 元数据',
-}
-
-const ARTIFACT_LABELS = { figure: '图表脚本', 'evidence-report': '证据盘点', 'review-report': '综合审阅', 'claim-audit': '声明审计', 'anomaly-report': '异常报告', 'quality-report': '质量报告' }
 
 function formatTime(iso) {
   try {
@@ -46,7 +15,7 @@ function formatTime(iso) {
 }
 
 function CallEntry({ call }) {
-  const label = TOOL_LABELS[call.tool] || call.tool
+  const label = toolLabel(call.tool)
   const isError = call.ok === false
   return h('div', {
     key: call.id,
@@ -61,7 +30,7 @@ function CallEntry({ call }) {
       key: 'detail',
       style: { fontSize: 11, color: isError ? '#E74C3C' : C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
     }, isError ? call.error || '调用失败' : call.result_summary || ''),
-    call.artifact_kind ? h(Badge, { key: 'artifact', color: C.teal }, ARTIFACT_LABELS[call.artifact_kind] || '运行产物') : null,
+    call.artifact_kind ? h(Badge, { key: 'artifact', color: C.teal }, artifactKindLabel(call.artifact_kind)) : null,
     h('span', {
       key: 'duration',
       style: { fontSize: 10, color: C.muted, flexShrink: 0, opacity: 0.7 },
@@ -187,7 +156,7 @@ export function AgentActivityPanel({ sessionId, runId = '' }) {
       error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
       ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
       artifacts.length ? h('div', { key: 'artifacts', style: { display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 8px' } }, artifacts.map(item =>
-        h(Badge, { key: item.id, color: C.teal }, `${ARTIFACT_LABELS[item.kind] || '运行产物'} · ${item.summary || '已生成'}`)
+        h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
       )) : null,
       calls.length === 0 && !error
         ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')

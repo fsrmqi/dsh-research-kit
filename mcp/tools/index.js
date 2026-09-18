@@ -5,7 +5,10 @@ import { querySource, listAvailableSources } from '../execution/source-querier.j
 import { verifyCitation, detectIdentifierType } from '../execution/citation-verifier.js'
 import { saveEvidence, listEvidence, linkEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
-import { exportPassport, importPassport } from '../state/material-passport.js'
+import { exportPassport, importPassport, loadPassport } from '../state/material-passport.js'
+import { listRecentRuns } from '../state/run-overview.js'
+import { inventoryEvidence } from '../execution/evidence-inventory.js'
+import { readCallLogs } from '../execution/call-logger.js'
 import { evaluateCheckpoints, initializeCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
 import { generateFigure, listFigureStyles } from '../execution/figure-generator.js'
 import { auditClaims } from '../execution/claim-auditor.js'
@@ -88,8 +91,9 @@ const DISCOVERY_ROUTES = [
     ],
   },
   {
-    id: 'resume', label: '恢复或推进研究运行', keywords: ['恢复', '继续', '检查点', 'checkpoint', '护照'],
+    id: 'resume', label: '恢复或推进研究运行', keywords: ['恢复', '继续', '检查点', 'checkpoint', '护照', '状态'],
     chain: [
+      ['research_run_status', '先看运行总览：阶段、检查点、证据盘点与推荐下一步。'],
       ['research_run_import', '从已有 Material Passport 恢复上下文。'],
       ['research_run_checkpoint_status', '读取当前待审批的人工闸门。'],
       ['research_run_checkpoint_approve', '仅在人工确认后放行指定阶段。'],
@@ -395,43 +399,13 @@ const tools = [
     },
     async execute({ project, run_id, limit }) {
       try {
-        const inventory = await listEvidence({ project, run_id, limit })
-        const entries = inventory.entries.map(entry => {
-          const assessment = gradeEvidence(entry)
-          return {
-            id: entry.id,
-            title: entry.title,
-            identifier_type: entry.identifier_type,
-            identifier: entry.identifier,
-            url: entry.url,
-            status: entry.status || 'unverified',
-            stored_grade: entry.grade || 'ungraded',
-            suggested_grade: assessment.grade,
-            suggested_grade_label: gradeLabel(assessment.grade),
-            confidence: assessment.confidence,
-            reasoning: assessment.reasoning,
-            saved_at: entry.saved_at,
-          }
-        })
-        const countBy = (key, predicate = value => value) => entries.reduce((counts, entry) => {
-          const value = predicate(entry[key])
-          counts[value] = (counts[value] || 0) + 1
-          return counts
-        }, {})
-        const missing = entries.filter(entry => entry.suggested_grade === 'missing')
-        const unverified = entries.filter(entry => entry.status !== 'verified')
+        const inventory = await inventoryEvidence({ project, run_id, limit })
+        const { entries, summary, missing, unverified } = inventory
         return wrap({
           project: inventory.project,
           ...(run_id ? { run_id } : {}),
           entries,
-          summary: {
-            total: inventory.total,
-            returned: entries.length,
-            stored_grades: countBy('stored_grade'),
-            suggested_grades: countBy('suggested_grade'),
-            missing_traceability: missing.length,
-            unverified: unverified.length,
-          },
+          summary,
           next_actions: [
             ...(missing.length ? [`补齐 ${missing.length} 条缺少稳定标识符或链接的证据来源。`] : []),
             ...(unverified.length ? [`人工核验 ${unverified.length} 条尚未核验的证据；自动建议不等同于确认。`] : []),
@@ -467,6 +441,7 @@ const tools = [
           project,
           current_stage,
           constraints,
+          workflow_id: workflow.id,
           pending: [{ stage: current_stage, workflow_id, note: `已启动工作流：${workflow.name}` }],
         })
         const checkpoint_state = await initializeCheckpoints(passport.run_id, workflow, [])
@@ -477,7 +452,11 @@ const tools = [
           workflow: { id: workflow.id, name: workflow.name, category: workflow.category },
           checkpoint_state,
           passport: { yaml: passport.passport_yaml, hash: passport.hash },
-          recommended_tools: ['research_workflow_compose', 'research_source_query', 'research_run_checkpoint_status'],
+          next_actions: [
+            '使用 research_run_status 查看运行总览、证据盘点与推荐下一步。',
+            '使用 research_workflow_compose 生成当前阶段的可执行 Prompt。',
+            '检索与保存请走 research_literature_search；核验与保存均须显式开启。',
+          ],
         }, {
           source: 'research-run-starter',
           confidence: 'verified',
@@ -485,6 +464,77 @@ const tools = [
         })
       } catch (e) {
         return err(`启动研究运行失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_run_status',
+    description: 'Read-only overview of a research run: current workflow stage, pending human checkpoints, evidence inventory (totals, missing traceability, unverified), recent artifacts, and recommended next actions. Without run_id, lists the most recently active runs. Never executes research steps or writes any state.',
+    inputSchema: {
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Research run ID to inspect; omit to list recent runs.'),
+      project: z.string().optional().describe('Project name for the evidence inventory; defaults to the run\'s passport project or "default".'),
+      limit: z.number().int().min(1).max(200).optional().default(100).describe('Max evidence entries included in the inventory'),
+      recent_limit: z.number().int().min(1).max(50).optional().default(10).describe('Max runs listed when run_id is omitted'),
+    },
+    async execute({ run_id, project, limit, recent_limit }) {
+      try {
+        if (!run_id) {
+          const runs = await listRecentRuns({ limit: recent_limit })
+          return wrap({
+            runs,
+            next_actions: [
+              ...(runs.length ? ['选择一个 run_id 再次调用，查看该运行的总览与推荐下一步。'] : []),
+              ...(!runs.length ? ['当前没有已启动的运行；使用 research_run_start 从目录工作流创建。'] : []),
+            ],
+          }, {
+            source: 'research-run-status',
+            confidence: 'cached',
+            disclaimer: '运行列表来自护照与检查点文件；创建运行不代表研究步骤已经执行。',
+          })
+        }
+
+        const passport = await loadPassport(run_id)
+        const checkpoint = await getCheckpointState(run_id).catch(e => {
+          if (e?.code === 'CHECKPOINT_STATE_CORRUPT') throw e
+          return { run_id, checkpoints: {}, pending: [], approved: [] }
+        })
+        const workflowId = passport?.workflow_id || passport?.pending?.[0]?.workflow_id || ''
+        const workflow = workflowId ? itemById(workflowId) : null
+        const evidence = await inventoryEvidence({
+          project: project || passport?.project || 'default',
+          run_id,
+          limit,
+        })
+        const logs = await readCallLogs({ limit: 200, runId: run_id })
+        const artifacts = logs.filter(call => call.ok !== false && call.artifact_kind).slice(0, 10)
+          .map(call => ({ kind: call.artifact_kind, tool: call.tool, summary: call.result_summary, at: call.at }))
+        const pending = checkpoint.pending || []
+        const { missing_traceability: missing, unverified } = evidence.summary
+        return wrap({
+          run_id,
+          project: evidence.project,
+          current_stage: passport?.current_stage || 'unknown',
+          workflow: workflow ? { id: workflow.id, name: workflow.name, category: workflow.category } : (workflowId ? { id: workflowId } : null),
+          status: pending.length ? 'waiting_review' : 'active',
+          checkpoints: { pending, approved: checkpoint.approved || [] },
+          evidence: evidence.summary,
+          artifacts,
+          next_actions: [
+            ...(pending.length ? [`人工审批 ${pending.length} 个待放行检查点：${pending.join('、')}；使用 research_run_checkpoint_approve 并由人工确认。`] : []),
+            ...(missing ? [`补齐 ${missing} 条缺少稳定标识符或链接的证据来源。`] : []),
+            ...(unverified ? [`人工核验 ${unverified} 条尚未核验的证据；自动建议不等同于确认。`] : []),
+            ...(!evidence.entries.length ? ['该 run 还没有证据条目；使用 research_literature_search 检索并显式保存可追溯来源。'] : []),
+            ...(!pending.length && evidence.entries.length && !artifacts.length ? ['证据已就绪；使用 research_review_output 审阅研究草稿，或 research_run_export 导出护照交接。'] : []),
+            ...(!pending.length && artifacts.length ? ['使用 research_run_export 导出护照交接，或 research_review_output 继续审阅草稿。'] : []),
+          ],
+        }, {
+          source: 'research-run-status',
+          confidence: 'cached',
+          disclaimer: '状态汇总为只读投影，不代表研究步骤已被执行或核验；每项结论仍需人工确认。',
+        })
+      } catch (e) {
+        return err(`运行状态查询失败：${e.message}`)
       }
     },
   },
@@ -756,4 +806,4 @@ const tools = [
   },
 ]
 
-export { tools }
+export { tools, DISCOVERY_ROUTES }

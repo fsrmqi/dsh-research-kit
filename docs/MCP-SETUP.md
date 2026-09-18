@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 21 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 28 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 ## 前置条件
 
@@ -71,7 +71,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 21 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 28 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -202,44 +202,35 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 
 不知道该调用什么时，先使用 `research_help`。它按自然语言目标返回推荐工具和最短调用链，本身不执行检索、写入或审批。
 
+<!-- tool-table:start -->
 | Tool | 功能 |
 |------|------|
-| `research_help` | MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作 |
-| `research_catalog_search` | 搜索 317 条工作流目录 |
-| `research_workflow_compose` | 填参数生成 Prompt |
+| `research_help` | MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作（默认入口） |
+| `research_catalog_search` | 搜索 317 条工作流目录（默认入口） |
+| `research_workflow_compose` | 填参数生成 Prompt（默认入口） |
 | `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源 |
-| `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存 |
+| `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存（默认入口） |
 | `research_citation_verify` | 验证 DOI / PMID / arXiv 是否存在 + claim 支持 |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
 | `research_evidence_list` | 检索已保存证据 |
 | `research_evidence_grade` | 实证 / 推论 / 缺失三级分级 |
-| `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别 |
+| `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别（默认入口） |
 | `research_evidence_link` | 证据与资产互链 |
-| `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点 |
+| `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点（默认入口） |
+| `research_run_status` | 运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步（默认入口） |
 | `research_run_export` | 导出跨会话状态快照 |
 | `research_run_import` | 导入状态快照恢复执行 |
-| `research_figure_generate` | 按论文风格生成 matplotlib 脚本 |
-| `research_figure_list_styles` | 列出 8 个可用图表风格 |
 | `research_run_checkpoint_status` | 查看管道检查点状态 |
 | `research_run_checkpoint_approve` | 审批检查点继续执行 |
-| `research_review_output` | 默认审阅入口：聚合声明引用、异常、写作与限制语检查 |
+| `research_figure_generate` | 按论文风格生成 matplotlib 脚本（默认入口） |
+| `research_figure_list_styles` | 列出 8 个可用图表风格 |
+| `research_review_output` | 默认审阅入口：聚合声明引用、异常、写作与限制语检查（默认入口） |
 | `research_review_claims` | 文本级 claim-source 对齐审计 |
-| `research_literature_link` | 发现证据间互引关系 |
 | `research_review_anomalies` | 检测冗余模式、矛盾表述与缺失要素 |
 | `research_review_writing` | 学术写作质量检查（模糊术语、废话开头、标点、句长） |
-| `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊） |
-| `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 | `research_review_hedging` | 检测保护性模糊限制语（不可静默删除） |
+| `research_literature_link` | 发现证据间互引关系 |
+| `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊）（默认入口） |
+| `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 | `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据 |
-
----
-
-## 故障排查
-
-| 症状 | 原因 | 解决 |
-|------|------|------|
-| Agent 说没有可用工具 | MCP Server 未启动或连接失败 | 检查配置文件格式；运行 `node mcp/server.js` 确认入口存在 |
-| Cannot find module | 路径错误或依赖未安装 | 确保用绝对路径；`npm install` 已执行 |
-| research_citation_verify 超时 | Crossref API 网络不通 | 检查网络；SDK 默认 15 秒超时 |
-| 图表脚本中 LaTeX 报错 | 未安装 texlive | 安装 texlive 或将 `text.usetex` 改为 `false` |
-| 证据存储路径不对 | `os.homedir()` 返回异常目录 | 检查 `$HOME` 环境变量 |
+<!-- tool-table:end -->

@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promi
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { artifactKindOf } from '../tool-registry.js'
 
 const LOG_DIR = path.join(os.homedir(), '.dsh-research-kit', 'logs')
 const LOG_FILE = path.join(LOG_DIR, 'calls.jsonl')
@@ -12,9 +13,6 @@ const MAX_LOG_SIZE = 5 * 1024 * 1024
 let writeQueue = Promise.resolve()
 
 const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params'])
-const ARTIFACT_KINDS = {
-  research_figure_generate: 'figure', research_evidence_review: 'evidence-report', research_review_output: 'review-report', research_review_claims: 'claim-audit', research_review_anomalies: 'anomaly-report', research_review_writing: 'quality-report',
-}
 
 async function ensureDir() {
   if (!existsSync(LOG_DIR)) await mkdir(LOG_DIR, { recursive: true })
@@ -58,7 +56,7 @@ async function logCall({ tool, params, result, duration_ms, error }) {
   const entry = {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     tool: String(tool || 'unknown'),
-    artifact_kind: ARTIFACT_KINDS[tool] || '',
+    artifact_kind: artifactKindOf(tool),
     // 运行标识是关联键，不是研究内容；单列保存，活动路由不需要解析已脱敏的 params。
     run_id: typeof params?.run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(params.run_id) ? params.run_id : '',
     params: summarizeParams(params),
@@ -93,7 +91,7 @@ function summarizeResult(result) {
   }
 }
 
-async function readCallLogs({ limit = 50, tool, since } = {}) {
+async function readCallLogs({ limit = 50, tool, since, runId } = {}) {
   if (!existsSync(LOG_FILE)) return []
   try {
     const raw = await readFile(LOG_FILE, 'utf8')
@@ -102,6 +100,7 @@ async function readCallLogs({ limit = 50, tool, since } = {}) {
     }).filter(Boolean)
     if (tool) records = records.filter(record => record.tool === tool)
     if (since) records = records.filter(record => record.at > since)
+    if (runId) records = records.filter(record => record.run_id === runId)
     return records.slice(-Math.min(limit, 200)).reverse()
   } catch {
     return []

@@ -27,6 +27,7 @@ function toYaml(passport) {
   lines.push(`run_id: ${passport.run_id}`)
   lines.push(`created_at: "${passport.created_at}"`)
   lines.push(`project: ${passport.project}`)
+  if (passport.workflow_id) lines.push(`workflow_id: ${passport.workflow_id}`)
   lines.push(`current_stage: ${passport.current_stage}`)
   lines.push('')
   if (passport.completed?.length) {
@@ -107,11 +108,12 @@ function fromYaml(text) {
   return passport
 }
 
-async function exportPassport({ run_id, project, current_stage, completed, pending, constraints, evidence_ids }) {
+async function exportPassport({ run_id, project, current_stage, completed, pending, constraints, evidence_ids, workflow_id }) {
   const passport = {
     run_id: validRunId(run_id) || makeRunId(),
     created_at: new Date().toISOString(),
     project: project || 'default',
+    workflow_id: String(workflow_id || '').trim(),
     current_stage: current_stage || 'unknown',
     completed: completed || [],
     pending: pending || [],
@@ -134,6 +136,7 @@ async function importPassport(passportYaml) {
   return {
     recovered_stage: passport.current_stage,
     project: passport.project,
+    workflow_id: passport.workflow_id || '',
     completed: passport.completed || [],
     pending: passport.pending || [],
     constraints: passport.constraints || [],
@@ -147,4 +150,18 @@ async function listPassports() {
   return files.filter(f => f.endsWith('.yaml')).map(f => f.replace('.yaml', ''))
 }
 
-export { exportPassport, importPassport, listPassports, toYaml, fromYaml }
+// 读取单个 run 的护照（不校验 hash）；run 无护照时返回 null 而不是抛错，
+// 供状态总览对 passports 与 checkpoints 目录不同步的旧 run 优雅降级。
+async function loadPassport(runId) {
+  const id = validRunId(runId)
+  const file = path.join(PASSPORT_DIR, `${id}.yaml`)
+  if (!existsSync(file)) return null
+  try {
+    const passport = fromYaml(await readFile(file, 'utf8'))
+    return passport.run_id ? passport : null
+  } catch {
+    return null
+  }
+}
+
+export { exportPassport, importPassport, listPassports, loadPassport, toYaml, fromYaml }
