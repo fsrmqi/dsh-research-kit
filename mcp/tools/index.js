@@ -13,6 +13,7 @@ import { linkLiterature } from '../execution/literature-linker.js'
 import { detectTextAnomalies } from '../execution/anomaly-detector.js'
 import { checkWritingQuality } from '../execution/writing-quality.js'
 import { generateDisclosureStatement, listDisclosurePolicies } from '../execution/disclosure-generator.js'
+import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
 import { wrap, err } from '../execution/wrapper.js'
 
 const tools = [
@@ -384,6 +385,17 @@ const tools = [
     async execute() {
       const policies = listDisclosurePolicies()
       return wrap({ policies }, { source: 'disclosure-generator', confidence: 'verified' })
+    },
+  },
+
+  {
+    name: 'check_hedging_phrases',
+    description: 'Detect protected hedging phrases (may/might/suggests/初步/可能) that must not be silently removed during revision. Deleting them changes the paper\'s epistemic stance.',
+    inputSchema: {
+      text: z.string().min(20).describe('The text to check (abstract, section, revision)'),
+    },
+    async execute({ text }) {
+      return checkHedgingPhrases(text)
     },
   },
 ]

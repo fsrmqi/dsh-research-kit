@@ -6,6 +6,7 @@ import paperManuscript from './paper-manuscript.json' with { type: 'json' }
 import paperWriting from './paper-writing.json' with { type: 'json' }
 import deepResearch from './deep-research.json' with { type: 'json' }
 import submission from './submission.json' with { type: 'json' }
+import advanced from './advanced.json' with { type: 'json' }
 import literature from './literature.json' with { type: 'json' }
 import dataAnalysis from './data-analysis.json' with { type: 'json' }
 import researchDesign from './research-design.json' with { type: 'json' }
@@ -36,6 +37,7 @@ const workflows = [
   ...paperWriting,
   ...deepResearch,
   ...submission,
+  ...advanced,
   ...literature,
   ...dataAnalysis,
   ...researchDesign,

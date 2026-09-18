@@ -829,5 +829,134 @@
       "不确定选最简单的"
     ],
     "availability": "prompt-guidance"
+  },
+  {
+    "id": "protected-hedging-phrases",
+    "type": "skill",
+    "name": "保护性模糊限制语",
+    "description": "维护一份不可静默删除的模糊限制语清单。修改或压缩摘要时不得删除这些短语——删除会改变论文的认识论立场。",
+    "category": "论文写作",
+    "tags": [
+      "模糊限制语",
+      "修改纪律",
+      "防过度声明"
+    ],
+    "guidance": "保护性模糊限制语分三类：(1) 认识论限制——限定声明条件性/临时性/证据不足性的词汇（may/might/could、tentative/preliminary/exploratory、suggests/indicates/is consistent with、in our sample/for this cohort/under tested conditions）；(2) 反身性/立场标记——披露作者与研究现象关系的表述；(3) 否定性/边界结果——阴性发现和设计限制。规则：这些短语在字数压缩时是预算保护的——先删非保护内容，最后才能动保护短语。每条保护短语对应声明强度阶梯的一个等级——删除限制语 = 静默升级声明强度。",
+    "promptFragment": "修改或压缩摘要时，先标记论文中的保护性模糊限制语（may/might/could、tentative/preliminary、suggests/indicates、in our sample/for this cohort、以及中文的'可能''或许''在本样本中''初步的'）。这些短语受预算保护——不得为节省字数而删除。删除任何限制语等同于静默升级声明强度，违反声明强度阶梯。",
+    "checklist": [
+      "标记保护性限制语",
+      "压缩时最后处理",
+      "删除需授权",
+      "对应声明强度阶梯"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "non-consensus-factor",
+    "type": "skill",
+    "name": "非共识因子",
+    "description": "强制发现一个非共识观察点：'X 并不是 Y，而是 Z'。通过异常检测和矛盾分析找到被集体忽视的细节。",
+    "category": "研究设计",
+    "tags": [
+      "非共识",
+      "批判性思维",
+      "研究创新"
+    ],
+    "guidance": "非共识因子触发条件：(1) 异常检测发现'不必要但刻意保留'的词汇；(2) 变量替换实验发现语义塌陷点；(3) 六维解剖发现注疏间存在未被讨论的空白；(4) 主流共识对某问题存在共同忽视。输出格式：一句核心判断（X 并不是 Y，而是 Z）+ 证据链（逐条列出支持这个判断的[实证]级证据）。不满足触发条件时标注'[本篇无非共识触发点]'，不强行生成。",
+    "promptFragment": "非共识因子规则：综合分析结束时，尝试提出一个'X 并不是 Y，而是 Z'格式的非共识命题。这个命题必须违背常见理解但可被文本证据和逻辑支持。找到触发条件时生成命题并附证据链；找不到时如实标注'[本篇无非共识触发点]'，不强行编造。",
+    "checklist": [
+      "检查触发条件",
+      "违背常见理解",
+      "可被证据支持",
+      "无触发点时如实标注"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "plagiarism-awareness",
+    "type": "skill",
+    "name": "抄袭防范",
+    "description": "写作时的抄袭防范意识：同义词轮换不等于改写，结构镜像不等于原创， paraphrase 必须伴随引用。",
+    "category": "论文写作",
+    "tags": [
+      "抄袭",
+      "学术诚信",
+      "写作纪律"
+    ],
+    "guidance": "抄袭防范规则：(1) 引用他人的观点、数据、方法必须标注来源——即使完全改写了措辞；(2) paraphrase 不是同义词替换——改变句子结构 + 改变措辞 + 标注来源才是 paraphrase；(3) 自我抄袭也是抄袭——已发表的论文段落不能直接复用（除非引用自身并标注'参见作者前期工作'）；(4) AI 生成的文本如果与已有文献高度相似，同样构成抄袭；(5) 引用格式错误不算抄袭但属于学术不规范。",
+    "promptFragment": "抄袭防范规则：(1) 每条引用他人的观点、数据、方法都标注来源；(2) paraphrase 改变结构 + 措辞 + 标注来源，不是同义词替换；(3) 不复用自己已发表的内容而不加引用；(4) AI 生成内容如果与已有文献高度相似同样构成抄袭；(5) 写作时用 check_writing_quality 工具检查同义词轮换——过度轮换可能意味着在掩盖来源。",
+    "checklist": [
+      "每条引用标注来源",
+      "paraphrase 三要素",
+      "自我引用合规",
+      "AI 内容相似度检查"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "ethics-review",
+    "type": "skill",
+    "name": "研究伦理审查",
+    "description": "AI 辅助研究的伦理检查：作者归属、双重用途筛查、公平代表性、知情同意。",
+    "category": "研究设计",
+    "tags": [
+      "研究伦理",
+      "AI 伦理",
+      "双重用途"
+    ],
+    "guidance": "研究伦理检查五项：(1) 作者归属——AI 不能作为作者；作者必须对最终文本负责；所有作者同意提交；(2) 双重用途——研究是否有被滥用的潜在风险（生物安全、网络安全、社会监控）；(3) 公平代表性——文献综述是否系统性遗漏了某些群体或地区的研究（Global South、非英语文献）；(4) 知情同意——涉及人类受试者的研究是否有 IRB 审批和知情同意；(5) 利益冲突——作者是否披露了与研究对象、资助方或工具提供者的利益关系。",
+    "promptFragment": "研究伦理检查规则：(1) AI 不能列为作者；作者对内容负全责；(2) 筛查研究是否有双重用途风险；(3) 检查文献综述是否遗漏了非英语或 Global South 的研究；(4) 涉及人类受试者时确认 IRB 审批和知情同意；(5) 检查利益冲突披露。任何一项 FAIL 不得投稿。",
+    "checklist": [
+      "作者归属合规",
+      "双重用途筛查",
+      "公平代表性",
+      "IRB 审批",
+      "利益冲突披露"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "literature-monitoring",
+    "type": "skill",
+    "name": "文献监控策略",
+    "description": "设置学术文献监控：Google Scholar Alerts、PubMed 邮件提醒、RSS 订阅，确保写作期间不遗漏新发表的文献。",
+    "category": "研究设计",
+    "tags": [
+      "文献监控",
+      "Google Scholar",
+      "RSS",
+      "发表跟踪"
+    ],
+    "guidance": "文献监控三种方式：(1) Google Scholar Alerts——用系统检索的关键词设置邮件提醒，每个关键词簇单独设一个 alert（最多 10-15 个），用引号精确匹配，用 OR 连接同义词；每月审查一次，停用过期的 alert；(2) PubMed MyNCBI——保存检索式 + 设置邮件频率（活跃领域每周，稳定领域每月），可用 MeSH 词精确匹配，支持 RSS feed；(3) RSS 订阅——arXiv 按 category（cs.AI, cs.CL）、bioRxiv/medRxiv 按学科订阅预印本。适用场景：写论文期间追踪新文献、投稿前检查有没有人发了类似研究、发表后追踪引用。",
+    "promptFragment": "文献监控规则：(1) 为研究关键词生成 Google Scholar Alerts 检索式（每个关键词簇一个 alert）；(2) 生成 PubMed MyNCBI 保存检索式（MeSH + 自由文本）；(3) 推荐相关学科的 arXiv/bioRxiv RSS feed；(4) 每月审查一次，停用过期 alert。写论文期间每周检查，投稿前每日检查。",
+    "checklist": [
+      "生成 Scholar Alerts 检索式",
+      "生成 PubMed 保存检索式",
+      "推荐 RSS feed",
+      "设定检查频率"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "vlm-figure-verification",
+    "type": "skill",
+    "name": "VLM 图表验证",
+    "description": "用视觉多模态模型验证渲染后的图表：数据准确性、APA 7.0 合规性、视觉质量。不支持多模态时优雅降级为跳过。",
+    "category": "论文写作",
+    "tags": [
+      "图表验证",
+      "VLM",
+      "多模态",
+      "质量控制"
+    ],
+    "guidance": "VLM 图表验证检查清单：数据准确性（图表值与源数据匹配、所有数据系列齐全、误差条/置信区间正确）、APA 7.0 合规（双轴标签带单位、图例可读、标题格式正确、字号 ≥8pt）、视觉质量（无截断文字、无重叠、颜色可区分、无图表垃圾）。验证流程：生成图表代码 → 执行渲染 → 发送图像+源数据+检查清单给 VLM → VLM 逐项返回 pass/fail → 如有 FAIL 修改代码重新渲染（最多 2 轮）→ 最终结果附加到图表包。不支持多模态时返回 SKIPPED。",
+    "promptFragment": "VLM 图表验证规则：如果当前模型支持多模态，将渲染后的图表图像发送给 VLM 验证数据准确性和 APA 合规性。如果不支持多模态，标注 SKIPPED 并继续。验证清单 10 项：数据匹配、系列齐全、CI 正确、轴标签、图例、标题格式、字号、无截断、颜色区分、无图表垃圾。最多 2 轮修正。",
+    "checklist": [
+      "检查多模态支持",
+      "10 项验证清单",
+      "最多 2 轮修正",
+      "不支持时 SKIPPED"
+    ],
+    "availability": "prompt-guidance"
   }
 ]

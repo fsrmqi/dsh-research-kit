@@ -1,0 +1,493 @@
+[
+  {
+    "id": "claim-manifest-generate",
+    "type": "workflow",
+    "name": "声明意图清单生成",
+    "description": "从论文草稿提取所有声明，生成结构化的声明意图清单：每条声明标注证据来源、声明强度和验证状态。",
+    "category": "论文写作",
+    "tags": [
+      "声明清单",
+      "完整性",
+      "写作"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文草稿（@文件）",
+        "required": true
+      },
+      {
+        "key": "project",
+        "label": "项目名（证据库项目）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "claim-strength-ladder",
+      "ai-failure-modes",
+      "citation-hygiene"
+    ],
+    "prompt": "从论文（{paper_file}）提取所有事实性声明，生成声明意图清单。\n\n(1) 逐段扫描，识别所有声明——数值声明（'X% 提升'）、比较声明（'优于 baseline'）、因果声明（'导致'/'证明'）、存在声明（'首次发现'）；项目：{project}。\n(2) 对每条声明标注：声明文本、引用标识符、声明强度（按阶梯：is consistent with < is associated with < predicts < contributes to < affects < causes）、证据来源（DOI/PMID/实验记录）；(3) 用 list_evidence 检查每条声明的证据是否已在证据库中；(4) 输出：结构化声明清单（JSON 格式），每条含 claim_id、claim_text、citation、strength、evidence_id、verification_status。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文草稿"
+        },
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "声明清单是论文完整性检查的输入。每条声明必须标注引用标识符和证据来源。声明强度按阶梯标注。证据不在库中的声明标注 evidence_id: null，完整性检查时会标记为 PROVENANCE_MISSING。",
+    "checkpoints": [
+      {
+        "after_stage": "manifest",
+        "action": "review_manifest",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "claim-manifest-verify",
+    "type": "workflow",
+    "name": "声明清单验证",
+    "description": "验证声明意图清单中的每条声明：引用是否存在、证据是否支持、声明强度是否与证据匹配。",
+    "category": "论文写作",
+    "tags": [
+      "声明清单",
+      "完整性验证",
+      "证据对齐"
+    ],
+    "placeholders": [
+      {
+        "key": "manifest_file",
+        "label": "声明清单（@文件，JSON 格式）",
+        "required": true
+      },
+      {
+        "key": "project",
+        "label": "项目名",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "claim-strength-ladder",
+      "ai-failure-modes",
+      "citation-hygiene",
+      "protected-hedging-phrases"
+    ],
+    "prompt": "验证声明清单（{manifest_file}）中的每条声明。项目：{project}。\n\n(1) 对每条声明：用 verify_citation 验证引用存在性和声明支持性；(2) 检查声明强度是否与证据匹配——'associated with' 级别的证据不能支撑 'causes' 级别的声明（声明强度阶梯）；(3) 检查保护性模糊限制语——声明原文中的 may/might/possibly 在验证结果中是否被保留；(4) 输出：逐条验证报告，每条标注 ALIGNED / OVERSTATED / NOT_SUPPORTED / STRENGTH_MISMATCH。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "manifest_file": {
+          "type": "string",
+          "description": "声明清单"
+        },
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        }
+      },
+      "required": [
+        "manifest_file"
+      ]
+    },
+    "agent_guidance": "声明清单验证是完整性检查的核心。逐条验证，不抽样。OVERSTATED = 声明强度高于证据支持（违反声明强度阶梯）。NOT_SUPPORTED = 引用原文不支持此声明。STRENGTH_MISMATCH = 声明强度合理但证据等级不足。任何 FAIL 需修复后重新验证。",
+    "checkpoints": [
+      {
+        "after_stage": "verification",
+        "action": "acknowledge_result",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "meta-analysis-execute",
+    "type": "workflow",
+    "name": "Meta-analysis 执行",
+    "description": "执行定量 Meta-analysis：效应量计算、异质性检验（I²）、固定/随机效应模型选择、森林图和漏斗图绘制。",
+    "category": "研究设计",
+    "tags": [
+      "meta-analysis",
+      "效应量",
+      "森林图"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "项目名（证据库项目）",
+        "required": true
+      },
+      {
+        "key": "outcome_measure",
+        "label": "效应量类型（OR/RR/SMD/MD）",
+        "required": false
+      },
+      {
+        "key": "model",
+        "label": "模型（fixed/random，默认根据 I² 自动选择）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "prisma-protocol",
+      "risk-of-bias",
+      "statistics-review"
+    ],
+    "prompt": "对项目「{project}」中已保存的证据执行 Meta-analysis。效应量类型：{outcome_measure}。模型：{model}。\n\n(1) 用 list_evidence 列出全部纳入研究，提取效应量和标准误（从 note 字段或元数据）；(2) 计算 I² 异质性指数：I² < 25% 低异质性 → 固定效应模型，I² > 50% 高异质性 → 随机效应模型；(3) 计算合并效应量和 95% CI；(4) 生成森林图数据（每项研究的效应量 + CI + 权重 + 合并效应量）；(5) 生成漏斗图数据（评估发表偏倚）；(6) 输出：合并效应量、I²、森林图数据（可用 generate_figure 工具绘制）、GRADE 证据等级。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        },
+        "outcome_measure": {
+          "type": "string",
+          "description": "效应量类型"
+        },
+        "model": {
+          "type": "string",
+          "description": "模型类型"
+        }
+      },
+      "required": [
+        "project"
+      ]
+    },
+    "agent_guidance": "Meta-analysis 规则：I² > 50% 用随机效应模型。异质性来源分析（亚组分析或 meta-regression）。发表偏倚用 Egger 检验或漏斗图目测。GRADE 证据等级：高（一致 RCT）→ 中（RCT 有偏倚或观察性一致）→ 低（观察性）→ 极低（间接证据或严重偏倚）。用 generate_figure(style='bar_paired_delta', apa_style=true) 绘制森林图的简化版本。",
+    "checkpoints": [
+      {
+        "after_stage": "data_extraction",
+        "action": "confirm_data",
+        "required": true
+      },
+      {
+        "after_stage": "analysis",
+        "action": "confirm_results",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "process-summary-generate",
+    "type": "workflow",
+    "name": "过程记录生成",
+    "description": "生成人机协作过程记录文档：记录 AI 在各阶段的使用情况、人工审核节点、修改历史和伦理合规状态。",
+    "category": "论文写作",
+    "tags": [
+      "过程记录",
+      "AI 透明度",
+      "伦理合规"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "项目名",
+        "required": false
+      },
+      {
+        "key": "output_format",
+        "label": "输出格式（Markdown/LaTeX）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "ethics-review",
+      "journal-submission-checklist"
+    ],
+    "prompt": "为项目「{project}」生成人机协作过程记录。输出格式：{output_format}。\n\n(1) 从 Agent 活动日志获取 AI 工具调用记录（用了什么工具、什么时候、输入输出概要）；(2) 记录人工审核节点——哪些 checkpoint 被人工确认了、确认时做了什么修改；(3) 记录修改历史——每轮修改的内容和原因（审稿意见/完整性检查/自查）；(4) 生成 AI 使用披露声明（用 generate_disclosure 工具）；(5) 记录伦理合规状态——作者归属、双重用途筛查、公平代表性、知情同意、利益冲突；(6) 输出：结构化的过程记录文档。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        },
+        "output_format": {
+          "type": "string",
+          "description": "输出格式"
+        }
+      }
+    },
+    "agent_guidance": "过程记录规则：如实记录 AI 参与的每个阶段——不夸大也不隐瞒。人工审核节点是关键证据——记录用户在 checkpoint 做了什么决策。AI 使用披露声明按目标期刊的格式生成。过程记录不等同于 AI 披露声明——前者是内部文档，后者是投稿组件。",
+    "checkpoints": [
+      {
+        "after_stage": "process_record",
+        "action": "review_record",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "socratic-roundtable",
+    "type": "workflow",
+    "name": "Socratic 圆桌辩论",
+    "description": "组织多角色学术辩论：配置不同立场的学者角色，通过冲突驱动的对话检验论证的强韧性。",
+    "category": "研究设计",
+    "tags": [
+      "辩论",
+      "批判性思维",
+      "论证检验"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "辩论主题",
+        "required": true
+      },
+      {
+        "key": "core_argument",
+        "label": "核心论点（被挑战的对象）",
+        "required": true
+      },
+      {
+        "key": "roles",
+        "label": "角色配置（默认：3 个对立立场 + 1 个 Socrates）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-critical-thinking",
+      "socratic-research-guide"
+    ],
+    "prompt": "组织关于「{topic}」的学术辩论。核心论点：{core_argument}。角色配置：{roles}。\n\n(1) 配置至少两组对立的学术立场（如定量派 vs 定性派、结构主义 vs 后结构主义），加一个固定席位 Socrates；(2) Socrates 使用诘问法（elenchus）——通过三组致命追问暴露论证的隐含前提和逻辑断裂；(3) 各角色从自己的立场出发挑战或辩护核心论点；(4) 记录共识和分歧——哪些论点在所有立场下都成立（强论点），哪些只在特定立场下成立（弱论点）；(5) 输出：圆桌纪要（各方核心论点 + Socrates 追问 + 强弱论点分类）。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "辩论主题"
+        },
+        "core_argument": {
+          "type": "string",
+          "description": "核心论点"
+        },
+        "roles": {
+          "type": "string",
+          "description": "角色配置"
+        }
+      },
+      "required": [
+        "topic",
+        "core_argument"
+      ]
+    },
+    "agent_guidance": "圆桌辩论规则：每个角色必须从自己的立场出发发言，不得替其他角色说话。Socrates 只提问不表态。纪要如实记录分歧——不强行达成共识。强弱论点分类是辩论的核心产出：强论点经受住了所有立场的挑战。",
+    "checkpoints": [
+      {
+        "after_stage": "role_config",
+        "action": "confirm_roles",
+        "required": true
+      },
+      {
+        "after_stage": "debate",
+        "action": "review_minutes",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "variable-substitution-test",
+    "type": "workflow",
+    "name": "变量替换实验",
+    "description": "对核心概念做最小替换（换动词/对象/时间），通过语义塌陷反证原意图的唯一性。",
+    "category": "研究设计",
+    "tags": [
+      "变量替换",
+      "反事实",
+      "语义分析"
+    ],
+    "placeholders": [
+      {
+        "key": "text",
+        "label": "要分析的文本段落（@文件）",
+        "required": true
+      },
+      {
+        "key": "key_concept",
+        "label": "核心概念或关键词",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-critical-thinking",
+      "non-consensus-factor"
+    ],
+    "prompt": "对文本（{text}）执行变量替换实验。核心概念：{key_concept}。\n\n(1) 识别文本中的核心动词、核心对象和时间/条件限定语；(2) 逐一替换：换动词（'导致' → '关联' → '影响'）+ 记录语义变化；换对象（'基因' → '蛋白质'）+ 记录语义是否塌陷；换时间/条件（'在体外' → '在体内'）+ 记录结论是否仍成立；(3) 塌陷判定：如果替换后结论不再成立或变成荒谬，则原概念选择是唯一的（原意图唯一性得到反证）；(4) 输出：替换实验报告（每个替换 + 语义变化 + 塌陷判定）。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "要分析的文本"
+        },
+        "key_concept": {
+          "type": "string",
+          "description": "核心概念"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "agent_guidance": "变量替换实验规则：最小替换——只改一个变量，保持其他不变。塌陷判定标准：替换后结论不再成立/逻辑断裂/语义荒谬。不塌陷说明原表述不是唯一的，可能有更精确的表达。实验报告按'换X → 语义变化 → 塌陷/不塌陷'逐条记录。",
+    "checkpoints": []
+  },
+  {
+    "id": "bibliographic-integrity-check",
+    "type": "workflow",
+    "name": "文献完整性信号检查",
+    "description": "检查已保存证据的文献完整性：DOI 有效性、撤稿状态、时间线一致性、掠夺性期刊信号。",
+    "category": "研究设计",
+    "tags": [
+      "文献完整性",
+      "撤稿",
+      "污染检测"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "项目名",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "source-quality-hierarchy",
+      "ai-failure-modes",
+      "citation-hygiene"
+    ],
+    "prompt": "对项目「{project}」中所有已保存证据执行文献完整性检查。\n\n(1) DOI 验证：对每条 DOI 调用 verify_citation，确认引用存在；\n(2) 时间线一致性：检查引用的发表年份是否与论文声称的时间范围一致（引用 2020 年论文来支撑 2019 年的发现 = 时间线异常）；\n(3) 掠夺性期刊信号：检查期刊名是否与 Beall's List / Cabell's Blacklist 中的已知模式匹配；\n(4) 撤稿信号：通过 Crossref API 检查文献的 update-to-type 字段是否为 'retraction'（如果 Crossref 返回撤稿信息）；\n(5) 输出：逐条信号报告，每条标注 CLEAN / ADVISORY / HIGH-WARN，附带信号类型和证据来源。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        }
+      }
+    },
+    "agent_guidance": "文献完整性信号规则：每条信号标注认识论等级——deterministic_fact（API 直接返回的事实）、heuristic_advisory（模式匹配的提示）、process_attestation（检查已执行的声明）。ADVISORY 不阻断但需要人工审阅。HIGH-WARN（如撤稿）阻断使用该来源作为论文的证据支撑。",
+    "checkpoints": [
+      {
+        "after_stage": "integrity_check",
+        "action": "acknowledge_signals",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "collaboration-depth-report",
+    "type": "workflow",
+    "name": "协作深度报告",
+    "description": "分析用户与 Agent 的协作模式：委托强度、认知警觉、认知再分配、元认知反思。生成描述性反馈（非阻断）。",
+    "category": "研究设计",
+    "tags": [
+      "协作深度",
+      "人机协作",
+      "自我反思"
+    ],
+    "placeholders": [
+      {
+        "key": "session_context",
+        "label": "当前会话上下文描述",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "socratic-research-guide",
+      "ai-failure-modes"
+    ],
+    "prompt": "分析当前会话中人机协作的深度模式。上下文：{session_context}。\n\n(1) 委托强度：用户是整任务委托（'帮我写文献综述'）还是微提示（'帮我改这句话'）？委托强度高（整任务）→ 更高的学习效率；(2) 认知警觉：用户是否质疑 AI 的输出？是否要求引用来源？是否拒绝不满意的草稿？警觉性是最强预测因子——低警觉是最值得改善的信号；(3) 认知再分配：AI 完成子任务后，用户是否将释放的认知资源投入更高层次的工作？(4) 元认知反思：用户是否在思考自己的思考方式？\n\n输出：四维评分 + 一条描述性反馈。这是描述性观察，不是评分。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "session_context": {
+          "type": "string",
+          "description": "会话上下文"
+        }
+      }
+    },
+    "agent_guidance": "协作深度规则：这是描述性观察，不是评分或门禁。低分不是失败。认知警觉是最重要的维度——如果用户从不质疑 AI 输出，这是最值得改善的信号。反馈应温和具体。",
+    "checkpoints": []
+  },
+  {
+    "id": "vlm-figure-verify",
+    "type": "workflow",
+    "name": "VLM 图表验证",
+    "description": "用视觉多模态模型验证渲染后的图表：数据准确性、APA 合规、视觉质量。不支持多模态时优雅降级为 SKIPPED。",
+    "category": "论文写作",
+    "tags": [
+      "图表验证",
+      "VLM",
+      "多模态"
+    ],
+    "placeholders": [
+      {
+        "key": "figure_file",
+        "label": "渲染后的图表图像（@文件）",
+        "required": true
+      },
+      {
+        "key": "source_data",
+        "label": "源数据（@文件 或 JSON）",
+        "required": true
+      },
+      {
+        "key": "figure_caption",
+        "label": "图表标题和注释",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "vlm-figure-verification",
+      "apa-figure-standards"
+    ],
+    "prompt": "对图表（{figure_file}）执行 VLM 验证。源数据：{source_data}。标题：{figure_caption}。\n\n(1) 检查当前模型是否支持多模态。如果不支持，返回 SKIPPED 并建议使用支持视觉的模型。\n(2) 如果支持，将图表图像和源数据发送给 VLM，按 10 项检查清单逐项验证：\n  数据准确性：图表值与源数据匹配、所有数据系列齐全、CI 正确\n  APA 7.0 合规：轴标签带单位、图例可读、标题格式正确、字号不低于 8pt\n  视觉质量：无截断文字、颜色可区分、无图表垃圾\n(3) 如有 FAIL：修改图表代码重新渲染，最多 2 轮。\n(4) 输出：验证报告。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "figure_file": {
+          "type": "string",
+          "description": "图表图像"
+        },
+        "source_data": {
+          "type": "string",
+          "description": "源数据"
+        },
+        "figure_caption": {
+          "type": "string",
+          "description": "标题"
+        }
+      },
+      "required": [
+        "figure_file",
+        "source_data"
+      ]
+    },
+    "agent_guidance": "VLM 验证规则：先检查模型是否支持多模态——不支持时 SKIPPED 不阻断。10 项检查逐项验证。最多 2 轮修正。验证结果附加到图表包。",
+    "checkpoints": [
+      {
+        "after_stage": "verification",
+        "action": "review_result",
+        "required": false
+      }
+    ]
+  }
+]

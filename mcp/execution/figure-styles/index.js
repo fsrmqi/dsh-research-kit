@@ -90,6 +90,27 @@ export const STYLES = {
     layout: { projection: 'polar', theta_zero: 'N', theta_direction: -1, grid_shape: 'octagon', grid_linestyle: '--', grid_color: '#CCCCCC', fill_alpha: 0.18, linewidth_primary: 2.8, linewidth_secondary: 1.3, rmin: 0.35, rmax: 1.0 },
     legend: { position: 'upper-left-outside' },
   },
+  forest_plot: {
+    description: 'Meta-analysis 森林图（效应量 + 置信区间）',
+    figure_type: 'forest',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'] },
+    colors: { effect: '#0077BB', diamond: '#CC3311', nullline: '#BBBBBB' },
+    layout: { spine: 'left-bottom', grid: false },
+  },
+  funnel_plot: {
+    description: 'Meta-analysis 漏斗图（发表偏倚评估）',
+    figure_type: 'funnel',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'] },
+    colors: { points: '#0077BB', funnel: '#CC3311', center: '#BBBBBB' },
+    layout: { spine: 'left-bottom', grid: false },
+  },
+  heatmap: {
+    description: '相关性热力图',
+    figure_type: 'heatmap',
+    rcParams: { 'font.family': 'sans-serif', 'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'] },
+    colors: { cmap: 'RdBu_r' },
+    layout: { spine: 'all', grid: false, annotate: true },
+  },
 }
 
 export const STYLE_NAMES = Object.keys(STYLES)

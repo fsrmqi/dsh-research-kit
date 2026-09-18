@@ -103,6 +103,29 @@ function validateData(styleName, data) {
     }
   }
 
+  if (styleName === 'forest_plot') {
+    if (!Array.isArray(data.studies) || data.studies.length < 2) return 'forest_plot 需要至少 2 个 studies。'
+    for (const [i, s] of data.studies.entries()) {
+      if (!s.name || !Number.isFinite(Number(s.effect)) || !Number.isFinite(Number(s.ci_lower)) || !Number.isFinite(Number(s.ci_upper)))
+        return `studies[${i}] 需要 name/effect/ci_lower/ci_upper。`
+    }
+  }
+  if (styleName === 'funnel_plot') {
+    if (!Array.isArray(data.studies) || data.studies.length < 3) return 'funnel_plot 需要至少 3 个 studies。'
+    for (const [i, s] of data.studies.entries()) {
+      if (!Number.isFinite(Number(s.effect)) || !Number.isFinite(Number(s.se)))
+        return `studies[${i}] 需要 effect 和 se。`
+    }
+  }
+  if (styleName === 'heatmap') {
+    if (!Array.isArray(data.matrix) || !data.matrix.length) return 'heatmap 需要 matrix 二维数组。'
+    if (!Array.isArray(data.labels) || !data.labels.length) return 'heatmap 需要 labels 数组。'
+    if (data.matrix.length !== data.labels.length) return 'matrix 行数必须等于 labels 长度。'
+    for (const row of data.matrix) {
+      if (!Array.isArray(row) || row.length !== data.labels.length) return 'matrix 必须是方阵且每行长度等于 labels。'
+    }
+  }
+
   return null
 }
 
@@ -323,6 +346,59 @@ for i, (name, item) in enumerate(series.items()):
 ax.set_xticks(angles)
 ax.set_xticklabels(categories, fontsize=9)
 ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.05), frameon=False)
+`
+
+  if (styleName === 'forest_plot') return `
+ax = fig.add_subplot(111)
+studies = DATA['studies']
+null_value = DATA.get('null_value', 0)
+for i, s in enumerate(studies):
+    y = len(studies) - i
+    ax.plot([s['ci_lower'], s['ci_upper']], [y, y], color='black', linewidth=1.0)
+    ax.plot(s['effect'], y, 's', color=STYLE_COLORS['effect'], markersize=6)
+effect_sizes = [s['effect'] for s in studies]
+ci_lowers = [s['ci_lower'] for s in studies]
+ci_uppers = [s['ci_upper'] for s in studies]
+pooled = float(np.mean(effect_sizes))
+pooled_se = float(np.std(effect_sizes) / np.sqrt(len(effect_sizes)))
+ax.plot([pooled - 1.96 * pooled_se, pooled + 1.96 * pooled_se], [0, 0], color='black', linewidth=1.5)
+ax.plot(pooled, 0, 'D', color=STYLE_COLORS['diamond'], markersize=8)
+ax.axvline(null_value, color=STYLE_COLORS['nullline'], linestyle='--', linewidth=0.8)
+ax.set_yticks(range(len(studies) + 1))
+ax.set_yticklabels([s['name'] for s in studies[::-1]] + ['Pooled'])
+ax.set_ylim(-0.5, len(studies) + 0.5)
+`
+
+  if (styleName === 'funnel_plot') return `
+ax = fig.add_subplot(111)
+effects = [s['effect'] for s in DATA['studies']]
+ses = [s['se'] for s in DATA['studies']]
+ax.scatter(ses, effects, c=STYLE_COLORS['points'], s=30, alpha=0.7)
+pooled = DATA.get('pooled_effect', float(np.mean(effects)))
+max_se = max(ses) * 1.1
+ax.plot([0, max_se], [pooled - 1.96 * max_se, pooled], color=STYLE_COLORS['funnel'], linestyle='--', lw=1.0)
+ax.plot([0, max_se], [pooled + 1.96 * max_se, pooled], color=STYLE_COLORS['funnel'], linestyle='--', lw=1.0)
+ax.axvline(pooled, color=STYLE_COLORS['center'], linestyle=':', lw=0.8)
+ax.set_xlabel('Standard Error')
+ax.set_ylabel('Effect Size')
+ax.invert_xaxis()
+`
+
+  if (styleName === 'heatmap') return `
+ax = fig.add_subplot(111)
+matrix = np.asarray(DATA['matrix'], dtype=float)
+im = ax.imshow(matrix, cmap=STYLE_COLORS.get('cmap', 'RdBu_r'), aspect='auto', vmin=-1, vmax=1)
+ax.set_xticks(range(len(DATA['labels'])))
+ax.set_yticks(range(len(DATA['labels'])))
+ax.set_xticklabels(DATA['labels'], rotation=45, ha='right', fontsize=9)
+ax.set_yticklabels(DATA['labels'], fontsize=9)
+if STYLE_LAYOUT.get('annotate', True):
+    for i in range(len(DATA['labels'])):
+        for j in range(len(DATA['labels'])):
+            val = matrix[i][j]
+            ax.text(j, i, f'{val:.2f}', ha='center', va='center',
+                    color='white' if abs(val) > 0.5 else 'black', fontsize=8)
+plt.colorbar(im, ax=ax, shrink=0.8)
 `
 
   // 未覆盖的风格应报错，而不是落到 radar 模板
