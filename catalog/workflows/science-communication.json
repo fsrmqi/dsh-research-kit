@@ -64,7 +64,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -101,7 +101,7 @@
         "procedure"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -135,7 +135,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -227,7 +227,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -274,7 +274,7 @@
         "audience"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -368,7 +368,7 @@
         "level"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -415,7 +415,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   }
 ]

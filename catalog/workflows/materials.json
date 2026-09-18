@@ -520,7 +520,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "审阅前先用 verify_citation 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
+    "agent_guidance": "审阅前先用 research_citation_verify 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
     "checkpoints": []
   }
 ]

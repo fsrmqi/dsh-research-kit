@@ -263,7 +263,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     })
   }
   const runPrompt = (run, prompt) => run
-    ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 save_evidence、export_passport），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
+    ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 research_evidence_save、research_run_export），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
     : prompt
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')

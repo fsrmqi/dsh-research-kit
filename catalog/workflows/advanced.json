@@ -27,7 +27,7 @@
       "ai-failure-modes",
       "citation-hygiene"
     ],
-    "prompt": "从论文（{paper_file}）提取所有事实性声明，生成声明意图清单。\n\n(1) 逐段扫描，识别所有声明——数值声明（'X% 提升'）、比较声明（'优于 baseline'）、因果声明（'导致'/'证明'）、存在声明（'首次发现'）；项目：{project}。\n(2) 对每条声明标注：声明文本、引用标识符、声明强度（按阶梯：is consistent with < is associated with < predicts < contributes to < affects < causes）、证据来源（DOI/PMID/实验记录）；(3) 用 list_evidence 检查每条声明的证据是否已在证据库中；(4) 输出：结构化声明清单（JSON 格式），每条含 claim_id、claim_text、citation、strength、evidence_id、verification_status。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "从论文（{paper_file}）提取所有事实性声明，生成声明意图清单。\n\n(1) 逐段扫描，识别所有声明——数值声明（'X% 提升'）、比较声明（'优于 baseline'）、因果声明（'导致'/'证明'）、存在声明（'首次发现'）；项目：{project}。\n(2) 对每条声明标注：声明文本、引用标识符、声明强度（按阶梯：is consistent with < is associated with < predicts < contributes to < affects < causes）、证据来源（DOI/PMID/实验记录）；(3) 用 research_evidence_list 检查每条声明的证据是否已在证据库中；(4) 输出：结构化声明清单（JSON 格式），每条含 claim_id、claim_text、citation、strength、evidence_id、verification_status。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -83,7 +83,7 @@
       "citation-hygiene",
       "protected-hedging-phrases"
     ],
-    "prompt": "验证声明清单（{manifest_file}）中的每条声明。项目：{project}。\n\n(1) 对每条声明：用 verify_citation 验证引用存在性和声明支持性；(2) 检查声明强度是否与证据匹配——'associated with' 级别的证据不能支撑 'causes' 级别的声明（声明强度阶梯）；(3) 检查保护性模糊限制语——声明原文中的 may/might/possibly 在验证结果中是否被保留；(4) 输出：逐条验证报告，每条标注 ALIGNED / OVERSTATED / NOT_SUPPORTED / STRENGTH_MISMATCH。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "验证声明清单（{manifest_file}）中的每条声明。项目：{project}。\n\n(1) 对每条声明：用 research_citation_verify 验证引用存在性和声明支持性；(2) 检查声明强度是否与证据匹配——'associated with' 级别的证据不能支撑 'causes' 级别的声明（声明强度阶梯）；(3) 检查保护性模糊限制语——声明原文中的 may/might/possibly 在验证结果中是否被保留；(4) 输出：逐条验证报告，每条标注 ALIGNED / OVERSTATED / NOT_SUPPORTED / STRENGTH_MISMATCH。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -143,7 +143,7 @@
       "risk-of-bias",
       "statistics-review"
     ],
-    "prompt": "对项目「{project}」中已保存的证据执行 Meta-analysis。效应量类型：{outcome_measure}。模型：{model}。\n\n(1) 用 list_evidence 列出全部纳入研究，提取效应量和标准误（从 note 字段或元数据）；(2) 计算 I² 异质性指数：I² < 25% 低异质性 → 固定效应模型，I² > 50% 高异质性 → 随机效应模型；(3) 计算合并效应量和 95% CI；(4) 生成森林图数据（每项研究的效应量 + CI + 权重 + 合并效应量）；(5) 生成漏斗图数据（评估发表偏倚）；(6) 输出：合并效应量、I²、森林图数据（可用 generate_figure 工具绘制）、GRADE 证据等级。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "对项目「{project}」中已保存的证据执行 Meta-analysis。效应量类型：{outcome_measure}。模型：{model}。\n\n(1) 用 research_evidence_list 列出全部纳入研究，提取效应量和标准误（从 note 字段或元数据）；(2) 计算 I² 异质性指数：I² < 25% 低异质性 → 固定效应模型，I² > 50% 高异质性 → 随机效应模型；(3) 计算合并效应量和 95% CI；(4) 生成森林图数据（每项研究的效应量 + CI + 权重 + 合并效应量）；(5) 生成漏斗图数据（评估发表偏倚）；(6) 输出：合并效应量、I²、森林图数据（可用 research_figure_generate 工具绘制）、GRADE 证据等级。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -165,7 +165,7 @@
         "project"
       ]
     },
-    "agent_guidance": "Meta-analysis 规则：I² > 50% 用随机效应模型。异质性来源分析（亚组分析或 meta-regression）。发表偏倚用 Egger 检验或漏斗图目测。GRADE 证据等级：高（一致 RCT）→ 中（RCT 有偏倚或观察性一致）→ 低（观察性）→ 极低（间接证据或严重偏倚）。用 generate_figure(style='bar_paired_delta', apa_style=true) 绘制森林图的简化版本。",
+    "agent_guidance": "Meta-analysis 规则：I² > 50% 用随机效应模型。异质性来源分析（亚组分析或 meta-regression）。发表偏倚用 Egger 检验或漏斗图目测。GRADE 证据等级：高（一致 RCT）→ 中（RCT 有偏倚或观察性一致）→ 低（观察性）→ 极低（间接证据或严重偏倚）。用 research_figure_generate(style='bar_paired_delta', apa_style=true) 绘制森林图的简化版本。",
     "checkpoints": [
       {
         "after_stage": "data_extraction",
@@ -206,7 +206,7 @@
       "ethics-review",
       "journal-submission-checklist"
     ],
-    "prompt": "为项目「{project}」生成人机协作过程记录。输出格式：{output_format}。\n\n(1) 从 Agent 活动日志获取 AI 工具调用记录（用了什么工具、什么时候、输入输出概要）；(2) 记录人工审核节点——哪些 checkpoint 被人工确认了、确认时做了什么修改；(3) 记录修改历史——每轮修改的内容和原因（审稿意见/完整性检查/自查）；(4) 生成 AI 使用披露声明（用 generate_disclosure 工具）；(5) 记录伦理合规状态——作者归属、双重用途筛查、公平代表性、知情同意、利益冲突；(6) 输出：结构化的过程记录文档。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "为项目「{project}」生成人机协作过程记录。输出格式：{output_format}。\n\n(1) 从 Agent 活动日志获取 AI 工具调用记录（用了什么工具、什么时候、输入输出概要）；(2) 记录人工审核节点——哪些 checkpoint 被人工确认了、确认时做了什么修改；(3) 记录修改历史——每轮修改的内容和原因（审稿意见/完整性检查/自查）；(4) 生成 AI 使用披露声明（用 research_disclosure_generate 工具）；(5) 记录伦理合规状态——作者归属、双重用途筛查、公平代表性、知情同意、利益冲突；(6) 输出：结构化的过程记录文档。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",
@@ -370,7 +370,7 @@
       "ai-failure-modes",
       "citation-hygiene"
     ],
-    "prompt": "对项目「{project}」中所有已保存证据执行文献完整性检查。\n\n(1) DOI 验证：对每条 DOI 调用 verify_citation，确认引用存在；\n(2) 时间线一致性：检查引用的发表年份是否与论文声称的时间范围一致（引用 2020 年论文来支撑 2019 年的发现 = 时间线异常）；\n(3) 掠夺性期刊信号：检查期刊名是否与 Beall's List / Cabell's Blacklist 中的已知模式匹配；\n(4) 撤稿信号：通过 Crossref API 检查文献的 update-to-type 字段是否为 'retraction'（如果 Crossref 返回撤稿信息）；\n(5) 输出：逐条信号报告，每条标注 CLEAN / ADVISORY / HIGH-WARN，附带信号类型和证据来源。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "对项目「{project}」中所有已保存证据执行文献完整性检查。\n\n(1) DOI 验证：对每条 DOI 调用 research_citation_verify，确认引用存在；\n(2) 时间线一致性：检查引用的发表年份是否与论文声称的时间范围一致（引用 2020 年论文来支撑 2019 年的发现 = 时间线异常）；\n(3) 掠夺性期刊信号：检查期刊名是否与 Beall's List / Cabell's Blacklist 中的已知模式匹配；\n(4) 撤稿信号：通过 Crossref API 检查文献的 update-to-type 字段是否为 'retraction'（如果 Crossref 返回撤稿信息）；\n(5) 输出：逐条信号报告，每条标注 CLEAN / ADVISORY / HIGH-WARN，附带信号类型和证据来源。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",

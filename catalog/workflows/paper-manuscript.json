@@ -51,7 +51,7 @@
         "files"
       ]
     },
-    "agent_guidance": "审阅前先用 verify_citation 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
+    "agent_guidance": "审阅前先用 research_citation_verify 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。",
     "checkpoints": []
   },
   {
@@ -94,7 +94,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -134,7 +134,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -186,7 +186,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -232,7 +232,7 @@
         }
       }
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -291,7 +291,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -370,7 +370,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -529,7 +529,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {
@@ -683,7 +683,7 @@
         "files"
       ]
     },
-    "agent_guidance": "写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。",
+    "agent_guidance": "写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。",
     "checkpoints": []
   },
   {

@@ -36,7 +36,7 @@
       "crossref",
       "openalex"
     ],
-    "prompt": "将研究兴趣「{interest}」转化为精确的研究问题。学科：{domain}。已知约束：{constraints}。\n\n(1) 用 PICO 框架结构化：Population（研究对象）、Intervention（干预/暴露）、Comparison（对照）、Outcome（结局）；(2) FINER 评分（每项 1-5 分）：可行性、趣味性、新颖性、伦理性、相关性；(3) 如果 Novelty < 3，先用 query_source 检索相关文献确认是否已有充分研究；(4) 界定研究范围——明确包含什么、排除什么、不回答什么。\n\n如果用户的研究兴趣还很模糊，使用 Socratic 五层引导而非直接给出答案。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "将研究兴趣「{interest}」转化为精确的研究问题。学科：{domain}。已知约束：{constraints}。\n\n(1) 用 PICO 框架结构化：Population（研究对象）、Intervention（干预/暴露）、Comparison（对照）、Outcome（结局）；(2) FINER 评分（每项 1-5 分）：可行性、趣味性、新颖性、伦理性、相关性；(3) 如果 Novelty < 3，先用 research_source_query 检索相关文献确认是否已有充分研究；(4) 界定研究范围——明确包含什么、排除什么、不回答什么。\n\n如果用户的研究兴趣还很模糊，使用 Socratic 五层引导而非直接给出答案。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",
@@ -58,7 +58,7 @@
         "interest"
       ]
     },
-    "agent_guidance": "如果用户兴趣模糊，先用 Socratic 五层引导（兴趣→文献→方法→论证→定位），不要直接给答案。研究问题必须用户自己说出来。FINER 总分 <15/25 时建议调整并说明原因。用 query_source 检索确认新颖性。",
+    "agent_guidance": "如果用户兴趣模糊，先用 Socratic 五层引导（兴趣→文献→方法→论证→定位），不要直接给答案。研究问题必须用户自己说出来。FINER 总分 <15/25 时建议调整并说明原因。用 research_source_query 检索确认新颖性。",
     "checkpoints": [
       {
         "after_stage": "question_design",
@@ -112,7 +112,7 @@
       "europe-pmc",
       "pubmed"
     ],
-    "prompt": "围绕研究问题「{research_question}」执行系统文献检索。数据库：{databases}。时间范围：{date_range}。研究类型：{study_types}。\n\n(1) 检索策略：将研究问题分解为概念组，为每组列出同义词，用布尔逻辑组合检索式。\n(2) 逐库检索：用 query_source 工具在每个数据库执行检索，每库保留前 10 条结果。\n(3) 筛选：对每条结果，根据标题和摘要判断是否纳入。排除标准按 PRISMA 逐条标注排除原因。\n(4) 质量分级：对纳入的文献用 verify_citation 验证 DOI，按来源质量分级标注。\n(5) 保存：用 save_evidence 将纳入文献保存到证据库，标注来源标识符和质量等级。\n(6) 输出：检索报告 + PRISMA 流程图（识别→筛选→合格→纳入的数量）+ 注释书目。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "围绕研究问题「{research_question}」执行系统文献检索。数据库：{databases}。时间范围：{date_range}。研究类型：{study_types}。\n\n(1) 检索策略：将研究问题分解为概念组，为每组列出同义词，用布尔逻辑组合检索式。\n(2) 逐库检索：用 research_source_query 工具在每个数据库执行检索，每库保留前 10 条结果。\n(3) 筛选：对每条结果，根据标题和摘要判断是否纳入。排除标准按 PRISMA 逐条标注排除原因。\n(4) 质量分级：对纳入的文献用 research_citation_verify 验证 DOI，按来源质量分级标注。\n(5) 保存：用 research_evidence_save 将纳入文献保存到证据库，标注来源标识符和质量等级。\n(6) 输出：检索报告 + PRISMA 流程图（识别→筛选→合格→纳入的数量）+ 注释书目。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -138,7 +138,7 @@
         "research_question"
       ]
     },
-    "agent_guidance": "用 query_source 工具逐库检索。对每条有 DOI 的纳入文献调用 verify_citation 验证存在性。用 save_evidence 保存，标注 identifier_type 和 grade。按证据等级金字塔标注质量。输出 PRISMA 流程图数量。检索式和命中数必须记录——可重复性是系统综述的硬要求。",
+    "agent_guidance": "用 research_source_query 工具逐库检索。对每条有 DOI 的纳入文献调用 research_citation_verify 验证存在性。用 research_evidence_save 保存，标注 identifier_type 和 grade。按证据等级金字塔标注质量。输出 PRISMA 流程图数量。检索式和命中数必须记录——可重复性是系统综述的硬要求。",
     "checkpoints": [
       {
         "after_stage": "search_strategy",
@@ -175,7 +175,7 @@
       "citation-hygiene",
       "ai-failure-modes"
     ],
-    "prompt": "对项目「{project}」中的所有已保存证据执行来源验证。\n\n(1) 用 list_evidence 列出全部证据条目；(2) 对每条有 DOI 的条目调用 verify_citation 验证存在性——exists=false 的条目标注为[编造引用]并建议删除；(3) 按证据等级金字塔为每条来源标注等级（系统综述 > RCT > 队列 > 病例对照 > 横断面 > 案例报告 > 专家意见）；(4) 检查期刊名称是否在掠夺性期刊特征列表中（审稿周期 <2 周、处理费不透明、编委会跨领域、名称模仿知名期刊）；(5) 输出来源验证报告：每条证据的验证状态、证据等级、质量标注。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "对项目「{project}」中的所有已保存证据执行来源验证。\n\n(1) 用 research_evidence_list 列出全部证据条目；(2) 对每条有 DOI 的条目调用 research_citation_verify 验证存在性——exists=false 的条目标注为[编造引用]并建议删除；(3) 按证据等级金字塔为每条来源标注等级（系统综述 > RCT > 队列 > 病例对照 > 横断面 > 案例报告 > 专家意见）；(4) 检查期刊名称是否在掠夺性期刊特征列表中（审稿周期 <2 周、处理费不透明、编委会跨领域、名称模仿知名期刊）；(5) 输出来源验证报告：每条证据的验证状态、证据等级、质量标注。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -186,7 +186,7 @@
         }
       }
     },
-    "agent_guidance": "逐条调用 verify_citation 验证 DOI/PMID。exists=false 标注为[编造引用]。掠夺性期刊检测信号：审稿周期 <2 周、APC 不透明、编委会跨领域、期刊名模仿知名期刊。来源验证报告必须逐条列出，不得抽样。",
+    "agent_guidance": "逐条调用 research_citation_verify 验证 DOI/PMID。exists=false 标注为[编造引用]。掠夺性期刊检测信号：审稿周期 <2 周、APC 不透明、编委会跨领域、期刊名模仿知名期刊。来源验证报告必须逐条列出，不得抽样。",
     "checkpoints": []
   },
   {
@@ -222,7 +222,7 @@
       "evidence-synthesis",
       "scientific-critical-thinking"
     ],
-    "prompt": "围绕研究问题「{research_question}」，对项目「{project}」中的证据进行综合分析。综合类型：{synthesis_type}。\n\n(1) 用 list_evidence 列出全部已保存证据；(2) 按主题分组——将证据按研究内容归类，不按论文逐条列举；(3) 识别共识：多篇独立研究得出一致结论的发现，标注支持的研究数量和证据等级；(4) 识别分歧：结论矛盾的研究，分析矛盾原因（方法差异、人群差异、时间差异、测量工具差异）；(5) 提取研究空白：已有研究未覆盖的问题、方法论缺陷、人群遗漏；(6) 输出：按主题组织的综合报告，每个主题标注[实证]/[推论]/[缺失]，以研究空白结尾。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "围绕研究问题「{research_question}」，对项目「{project}」中的证据进行综合分析。综合类型：{synthesis_type}。\n\n(1) 用 research_evidence_list 列出全部已保存证据；(2) 按主题分组——将证据按研究内容归类，不按论文逐条列举；(3) 识别共识：多篇独立研究得出一致结论的发现，标注支持的研究数量和证据等级；(4) 识别分歧：结论矛盾的研究，分析矛盾原因（方法差异、人群差异、时间差异、测量工具差异）；(5) 提取研究空白：已有研究未覆盖的问题、方法论缺陷、人群遗漏；(6) 输出：按主题组织的综合报告，每个主题标注[实证]/[推论]/[缺失]，以研究空白结尾。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",
@@ -355,7 +355,7 @@
       "pubmed",
       "clinicaltrials"
     ],
-    "prompt": "按 PRISMA 2020 标准执行系统综述。研究问题：{research_question}。项目：{project}。\n\nStep 1 — 检索策略：分解 PICO 元素为概念组，列出同义词，构建布尔检索式。\nStep 2 — 系统检索：用 query_source 在至少 3 个数据库检索，每库保留前 10 条。\nStep 3 — 两轮筛选：标题/摘要初筛（排除明显不符合的）→ 全文复筛（逐条排除并标注原因）。\nStep 4 — 数据提取：标准化表（作者/年份/国家/设计/样本量/干预/对照/结局/效应量/CI）。\nStep 5 — 偏倚风险评估：RCT 用 RoB 2 五域，非随机用 ROBINS-I 七域。\nStep 6 — 综合：定量综合（效应量 + I² 异质性）或叙述性综合。\nStep 7 — 报告：按 PRISMA 2020 检查表 27 项，附 PRISMA 流程图。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "按 PRISMA 2020 标准执行系统综述。研究问题：{research_question}。项目：{project}。\n\nStep 1 — 检索策略：分解 PICO 元素为概念组，列出同义词，构建布尔检索式。\nStep 2 — 系统检索：用 research_source_query 在至少 3 个数据库检索，每库保留前 10 条。\nStep 3 — 两轮筛选：标题/摘要初筛（排除明显不符合的）→ 全文复筛（逐条排除并标注原因）。\nStep 4 — 数据提取：标准化表（作者/年份/国家/设计/样本量/干预/对照/结局/效应量/CI）。\nStep 5 — 偏倚风险评估：RCT 用 RoB 2 五域，非随机用 ROBINS-I 七域。\nStep 6 — 综合：定量综合（效应量 + I² 异质性）或叙述性综合。\nStep 7 — 报告：按 PRISMA 2020 检查表 27 项，附 PRISMA 流程图。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "direct",
     "input_schema": {
       "type": "object",
@@ -373,7 +373,7 @@
         "research_question"
       ]
     },
-    "agent_guidance": "PRISMA 系统综述硬规则：至少 3 个数据库 + 灰色文献。两轮独立筛选，分歧第三位解决。排除原因逐条记录。偏倚风险评估按研究类型选工具。I²>50% 用随机效应模型。每步输出可追溯记录。用 verify_citation 验证纳入文献的 DOI。",
+    "agent_guidance": "PRISMA 系统综述硬规则：至少 3 个数据库 + 灰色文献。两轮独立筛选，分歧第三位解决。排除原因逐条记录。偏倚风险评估按研究类型选工具。I²>50% 用随机效应模型。每步输出可追溯记录。用 research_citation_verify 验证纳入文献的 DOI。",
     "checkpoints": [
       {
         "after_stage": "search_strategy",
@@ -453,7 +453,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "深度研究全流程规则：(1) Socratic 模式下每层只提问不代答；(2) 系统检索用 query_source 工具逐库执行；(3) 每条纳入文献用 verify_citation 验证 DOI；(4) 用 save_evidence 保存，标注 identifier_type 和 grade；(5) 证据综合按主题组织，标注[实证]/[推论]/[缺失]；(6) 研究简报是交给论文写作的 Material Passport 输入——包含 RQ Brief + 综合报告 + 注释书目。每阶段完成后暂停等待用户确认。",
+    "agent_guidance": "深度研究全流程规则：(1) Socratic 模式下每层只提问不代答；(2) 系统检索用 research_source_query 工具逐库执行；(3) 每条纳入文献用 research_citation_verify 验证 DOI；(4) 用 research_evidence_save 保存，标注 identifier_type 和 grade；(5) 证据综合按主题组织，标注[实证]/[推论]/[缺失]；(6) 研究简报是交给论文写作的 Material Passport 输入——包含 RQ Brief + 综合报告 + 注释书目。每阶段完成后暂停等待用户确认。",
     "checkpoints": [
       {
         "after_stage": "question",

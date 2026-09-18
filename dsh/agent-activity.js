@@ -98,12 +98,16 @@ export function agentActivityRoute({ logger } = {}) {
             readCallLogs({ limit, since, runId }),
             readCheckpoints(runId),
           ])
-          return reply(res, 200, { ok: true, calls, checkpoints })
+          // 产物是调用日志的只读投影，避免为摘要再维护一份可能漂移的存储。
+          const artifacts = calls.filter(call => call.ok !== false && call.artifact_kind).map(call => ({
+            id: call.id, kind: call.artifact_kind, tool: call.tool, summary: call.result_summary, at: call.at,
+          }))
+          return reply(res, 200, { ok: true, calls, checkpoints, artifacts })
         }
 
         if (req.method === 'POST') {
           const body = await readBody(req)
-          if (body?.action !== 'approve_checkpoint') {
+          if (body?.action !== 'research_run_checkpoint_approve') {
             return reply(res, 400, { ok: false, error: 'unsupported_action' })
           }
           const result = await recordApproval(body.run_id, body.stage, { note: body.note })

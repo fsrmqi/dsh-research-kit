@@ -342,7 +342,7 @@
       "citation-hygiene",
       "latex-hardening"
     ],
-    "prompt": "检查论文（{paper_file}）中所有引用的合规性。引用格式：{citation_format}。\n\n(1) 逐条验证引用：每条 in-text citation 是否有对应的 reference list 条目，反之亦然；(2) 对每条有 DOI 的引用调用 verify_citation 工具验证 DOI 是否有效；(3) 检查引用格式是否符合指定标准（APA 7.0 的作者-年份格式、IEEE 的编号格式等）；(4) 检查文献列表的字母排序/编号连续性；(5) 标注不一致或缺失，输出引用审计报告。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "检查论文（{paper_file}）中所有引用的合规性。引用格式：{citation_format}。\n\n(1) 逐条验证引用：每条 in-text citation 是否有对应的 reference list 条目，反之亦然；(2) 对每条有 DOI 的引用调用 research_citation_verify 工具验证 DOI 是否有效；(3) 检查引用格式是否符合指定标准（APA 7.0 的作者-年份格式、IEEE 的编号格式等）；(4) 检查文献列表的字母排序/编号连续性；(5) 标注不一致或缺失，输出引用审计报告。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",
@@ -360,7 +360,7 @@
         "paper_file"
       ]
     },
-    "agent_guidance": "对每条 DOI 引用调用 verify_citation 工具验证存在性。返回 exists=false 时标注为[编造引用]并建议删除。返回 claim_supported=false 时标注为[引用不支持此论断]。检查引用格式一致性。",
+    "agent_guidance": "对每条 DOI 引用调用 research_citation_verify 工具验证存在性。返回 exists=false 时标注为[编造引用]并建议删除。返回 claim_supported=false 时标注为[引用不支持此论断]。检查引用格式一致性。",
     "checkpoints": []
   },
   {
@@ -662,7 +662,7 @@
         "topic"
       ]
     },
-    "agent_guidance": "十阶段流水线规则：(1) 每阶段完成后暂停等待用户确认（IRON RULE）；(2) Stage 2.5/4.5 完整性检查和 Stage 3/3' 评审决定是 MANDATORY 检查点；(3) Stage 2.5 完整性检查：对每条 DOI 引用调用 verify_citation，运行 AI 失败模式七项清单；(4) Stage 2 起草时使用防泄露协议和声明强度阶梯；(5) Stage 3 五维评审独立执行，魔鬼代言人 CRITICAL 必须显式裁定；(6) 修改循环最多 2 轮；(7) Stage 5 定稿前必须通过终完整性检查。",
+    "agent_guidance": "十阶段流水线规则：(1) 每阶段完成后暂停等待用户确认（IRON RULE）；(2) Stage 2.5/4.5 完整性检查和 Stage 3/3' 评审决定是 MANDATORY 检查点；(3) Stage 2.5 完整性检查：对每条 DOI 引用调用 research_citation_verify，运行 AI 失败模式七项清单；(4) Stage 2 起草时使用防泄露协议和声明强度阶梯；(5) Stage 3 五维评审独立执行，魔鬼代言人 CRITICAL 必须显式裁定；(6) 修改循环最多 2 轮；(7) Stage 5 定稿前必须通过终完整性检查。",
     "checkpoints": [
       {
         "after_stage": "research",
@@ -735,7 +735,7 @@
       "data-integrity",
       "reproducibility"
     ],
-    "prompt": "对论文（{paper_file}）执行完整性验证。检查类型：{check_type}。\n\n(1) 引用验证：对每条 DOI/PMID 引用调用 verify_citation 工具，验证存在性和声明支持性。exists=false 标注为[编造引用]。claim_supported=false 标注为[引用不支持此论断]。\n(2) 实验声明对齐：对每条声称的实验结果，检查用户是否提供了对应的原始数据、日志或运行记录。可疑的整数效应量（恰好 0.5、恰好 2x 基线）标记为可疑。\n(3) AI 失败模式七项清单：逐条检查——代码 bug 冒充结果、幻觉引用、幻觉实验数据、捷径依赖、方法伪造、框架锁定、bug 当发现。\n(4) 数据声明检查：论文是否提供了数据获取方式？是否讨论了局限性？是否包含利益冲突声明？\n\n输出：完整性验证报告，每项检查标注 PASS / FAIL / UNVERIFIABLE。任何 FAIL 必须修复后重新验证（最多 3 轮），之后进入记录的用户决策。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "对论文（{paper_file}）执行完整性验证。检查类型：{check_type}。\n\n(1) 引用验证：对每条 DOI/PMID 引用调用 research_citation_verify 工具，验证存在性和声明支持性。exists=false 标注为[编造引用]。claim_supported=false 标注为[引用不支持此论断]。\n(2) 实验声明对齐：对每条声称的实验结果，检查用户是否提供了对应的原始数据、日志或运行记录。可疑的整数效应量（恰好 0.5、恰好 2x 基线）标记为可疑。\n(3) AI 失败模式七项清单：逐条检查——代码 bug 冒充结果、幻觉引用、幻觉实验数据、捷径依赖、方法伪造、框架锁定、bug 当发现。\n(4) 数据声明检查：论文是否提供了数据获取方式？是否讨论了局限性？是否包含利益冲突声明？\n\n输出：完整性验证报告，每项检查标注 PASS / FAIL / UNVERIFIABLE。任何 FAIL 必须修复后重新验证（最多 3 轮），之后进入记录的用户决策。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",
@@ -753,7 +753,7 @@
         "paper_file"
       ]
     },
-    "agent_guidance": "完整性验证是阻断性检查——FAIL 不得进入下一阶段。对每条 DOI 引用调用 verify_citation 工具。运行 AI 失败模式七项清单。可疑的整数效应量和完全相同的置信区间是代码 bug 的信号。",
+    "agent_guidance": "完整性验证是阻断性检查——FAIL 不得进入下一阶段。对每条 DOI 引用调用 research_citation_verify 工具。运行 AI 失败模式七项清单。可疑的整数效应量和完全相同的置信区间是代码 bug 的信号。",
     "checkpoints": [
       {
         "after_stage": "integrity_check",

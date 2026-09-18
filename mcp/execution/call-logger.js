@@ -12,6 +12,9 @@ const MAX_LOG_SIZE = 5 * 1024 * 1024
 let writeQueue = Promise.resolve()
 
 const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params'])
+const ARTIFACT_KINDS = {
+  research_figure_generate: 'figure', research_review_output: 'review-report', research_review_claims: 'claim-audit', research_review_anomalies: 'anomaly-report', research_review_writing: 'quality-report',
+}
 
 async function ensureDir() {
   if (!existsSync(LOG_DIR)) await mkdir(LOG_DIR, { recursive: true })
@@ -55,6 +58,7 @@ async function logCall({ tool, params, result, duration_ms, error }) {
   const entry = {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     tool: String(tool || 'unknown'),
+    artifact_kind: ARTIFACT_KINDS[tool] || '',
     // 运行标识是关联键，不是研究内容；单列保存，活动路由不需要解析已脱敏的 params。
     run_id: typeof params?.run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(params.run_id) ? params.run_id : '',
     params: summarizeParams(params),

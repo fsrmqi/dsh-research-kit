@@ -19,7 +19,7 @@ import { wrap, err } from '../execution/wrapper.js'
 
 const tools = [
   {
-    name: 'search_workflows',
+    name: 'research_catalog_search',
     description: 'Search the catalog of 317+ research workflows by keyword, category, or tags. Returns workflow summaries with input schemas.',
     inputSchema: {
       query: z.string().optional().describe('Search keyword (matches name, description, tags, category, prompt text)'),
@@ -46,10 +46,10 @@ const tools = [
   },
 
   {
-    name: 'compose_workflow',
+    name: 'research_workflow_compose',
     description: 'Fill in a workflow\'s parameters and generate the final prompt. Returns the composed prompt with missing params, limitations, and suggested skills/sources.',
     inputSchema: {
-      workflow_id: z.string().describe('Workflow ID from search_workflows'),
+      workflow_id: z.string().describe('Workflow ID from research_catalog_search'),
       params: z.record(z.string()).optional().describe('Parameter key-value pairs to fill into the workflow template'),
       skill_ids: z.array(z.string()).optional().describe('Additional skill/guidance module IDs to attach'),
       source_ids: z.array(z.string()).optional().describe('Additional data source IDs to attach'),
@@ -79,7 +79,7 @@ const tools = [
   },
 
   {
-    name: 'query_source',
+    name: 'research_source_query',
     description: 'Query a scientific data source (Crossref, PubMed via EuropePMC, OpenAlex, Semantic Scholar, arXiv, ClinicalTrials.gov). Returns structured results with identifiers.',
     inputSchema: {
       source_id: z.string().describe('Data source ID (e.g. crossref, openalex, semantic-scholar, europe-pmc, arxiv, clinicaltrials)'),
@@ -101,7 +101,7 @@ const tools = [
   },
 
   {
-    name: 'verify_citation',
+    name: 'research_citation_verify',
     description: 'Verify a citation exists and optionally check if a claim is supported by the source. Supports DOI, PMID, arXiv ID.',
     inputSchema: {
       identifier: z.string().describe('DOI (10.xxxx/xxx), PMID (number), or arXiv ID (e.g. 2301.00001)'),
@@ -122,7 +122,7 @@ const tools = [
   },
 
   {
-    name: 'save_evidence',
+    name: 'research_evidence_save',
     description: 'Save an evidence entry (paper metadata + user note) to the evidence vault. Only saves metadata, never full text.',
     inputSchema: {
       identifier_type: z.enum(['doi', 'pmid', 'pmcid', 'nct', 'arxiv', 'url', 'none']).describe('Type of stable identifier'),
@@ -149,7 +149,7 @@ const tools = [
   },
 
   {
-    name: 'list_evidence',
+    name: 'research_evidence_list',
     description: 'List saved evidence entries, filterable by project, identifier type, and grade.',
     inputSchema: {
       project: z.string().optional().describe('Filter by project name'),
@@ -169,10 +169,10 @@ const tools = [
   },
 
   {
-    name: 'grade_evidence',
+    name: 'research_evidence_grade',
     description: 'Grade an evidence entry as empirical, inference, or missing based on source reliability and content analysis.',
     inputSchema: {
-      evidence_id: z.string().describe('Evidence entry ID from save_evidence'),
+      evidence_id: z.string().describe('Evidence entry ID from research_evidence_save'),
       project: z.string().optional().describe('Project name'),
     },
     async execute({ evidence_id, project }) {
@@ -199,7 +199,48 @@ const tools = [
   },
 
   {
-    name: 'export_passport',
+    name: 'research_run_start',
+    description: 'Start a traceable research run from a catalog workflow. Creates the Material Passport and initializes its human checkpoints in one call. Use this as the default run entry point; research_run_export remains for explicit state snapshots later in the workflow.',
+    inputSchema: {
+      workflow_id: z.string().describe('Catalog workflow ID to run'),
+      project: z.string().optional().default('default').describe('Project name for this research run'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional caller-chosen run ID; generated when omitted.'),
+      current_stage: z.string().optional().default('research_planning').describe('Initial workflow stage'),
+      constraints: z.array(z.string()).optional().describe('Research constraints to carry in the new passport'),
+    },
+    async execute({ workflow_id, project, run_id, current_stage, constraints }) {
+      const workflow = itemById(workflow_id)
+      if (!workflow || workflow.type !== 'workflow') return err(`工作流 "${workflow_id}" 不存在。`)
+      try {
+        const passport = await exportPassport({
+          run_id,
+          project,
+          current_stage,
+          constraints,
+          pending: [{ stage: current_stage, workflow_id, note: `已启动工作流：${workflow.name}` }],
+        })
+        const checkpoint_state = await initializeCheckpoints(passport.run_id, workflow, [])
+        return wrap({
+          run_id: passport.run_id,
+          project: project || 'default',
+          current_stage,
+          workflow: { id: workflow.id, name: workflow.name, category: workflow.category },
+          checkpoint_state,
+          passport: { yaml: passport.passport_yaml, hash: passport.hash },
+          recommended_tools: ['research_workflow_compose', 'research_source_query', 'research_run_checkpoint_status'],
+        }, {
+          source: 'research-run-starter',
+          confidence: 'verified',
+          disclaimer: '创建运行和检查点不代表研究步骤已经执行；每项研究结论仍需人工核验。',
+        })
+      } catch (e) {
+        return err(`启动研究运行失败：${e.message}`)
+      }
+    },
+  },
+
+  {
+    name: 'research_run_export',
     description: 'Export a Material Passport (cross-session research state snapshot) as YAML.',
     inputSchema: {
       project: z.string().optional().describe('Project name'),
@@ -228,7 +269,7 @@ const tools = [
   },
 
   {
-    name: 'import_passport',
+    name: 'research_run_import',
     description: 'Import a Material Passport to resume a multi-step research pipeline from a saved state.',
     inputSchema: {
       passport_yaml: z.string().describe('The YAML content of the Material Passport to import'),
@@ -244,7 +285,7 @@ const tools = [
   },
 
   {
-    name: 'link_evidence',
+    name: 'research_evidence_link',
     description: 'Link an evidence entry to a research asset for traceability.',
     inputSchema: {
       evidence_id: z.string().describe('Evidence entry ID'),
@@ -262,7 +303,7 @@ const tools = [
   },
 
   {
-    name: 'generate_figure',
+    name: 'research_figure_generate',
     description: 'Generate a publication-quality matplotlib script using a pre-built paper style. Returns the Python script to execute.',
     inputSchema: {
       style: z.string().optional().describe('Style name (required for single figure; optional when panels is provided)'),
@@ -282,6 +323,7 @@ const tools = [
         rows: z.number().int().optional(),
         cols: z.number().int().optional(),
       }).optional().describe('Subplot grid layout (default: auto)'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
     },
     async execute({ style, data, title, xlabel, ylabel, figsize, dpi, apa_style, panels, layout }) {
       return generateFigure(style, data, { title, xlabel, ylabel, figsize, dpi, apa_style, panels, layout })
@@ -289,7 +331,7 @@ const tools = [
   },
 
   {
-    name: 'list_figure_styles',
+    name: 'research_figure_list_styles',
     description: 'List all available paper figure styles with their type and color palettes.',
     inputSchema: {},
     async execute() {
@@ -299,10 +341,10 @@ const tools = [
   },
 
   {
-    name: 'checkpoint_status',
+    name: 'research_run_checkpoint_status',
     description: 'Get the checkpoint state for a research pipeline run.',
     inputSchema: {
-      run_id: z.string().describe('Run ID from export_passport'),
+      run_id: z.string().describe('Run ID from research_run_export'),
     },
     async execute({ run_id }) {
       const state = await getCheckpointState(run_id)
@@ -311,7 +353,7 @@ const tools = [
   },
 
   {
-    name: 'approve_checkpoint',
+    name: 'research_run_checkpoint_approve',
     description: 'Approve a checkpoint to allow the agent to continue to the next stage.',
     inputSchema: {
       run_id: z.string().describe('Run ID'),
@@ -329,11 +371,45 @@ const tools = [
   },
 
   {
-    name: 'claim_audit',
+    name: 'research_review_output',
+    description: 'Review a research draft in one pass: citation-claim alignment, textual anomalies, academic writing quality, and protected hedging. Use this as the default draft-review entry point; the individual research_review_* tools remain available for focused follow-up.',
+    inputSchema: {
+      text: z.string().min(100).describe('The draft, section, or review text to assess'),
+      max_claims: z.number().int().min(1).max(50).optional().default(20).describe('Max cited claims to audit'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
+    },
+    async execute({ text, max_claims }) {
+      const [claims, anomalies, writing, hedging] = await Promise.all([
+        auditClaims(text, { max_claims }),
+        detectTextAnomalies(text),
+        checkWritingQuality(text),
+        checkHedgingPhrases(text),
+      ])
+      return wrap({
+        claims: claims.data,
+        anomalies: anomalies.data,
+        writing: writing.data,
+        hedging: hedging.data,
+        next_actions: [
+          '优先修复未找到或不支持的引用声明，再复核全文。',
+          '逐条确认高风险矛盾与缺失要素，避免将模式信号直接当作结论。',
+          '修改表述时保留保护性限制语；删除它们会改变声明强度。',
+        ],
+      }, {
+        source: 'research-output-review',
+        confidence: 'mixed',
+        disclaimer: '汇总审阅包含 API 核验与规则检查；所有建议均需研究者人工确认。',
+      })
+    },
+  },
+
+  {
+    name: 'research_review_claims',
     description: 'Audit all unique claim-citation pairs in a text. Verifies each cited reference exists and whether the abstract supports the specific claim. Same DOI with different claims is audited separately.',
     inputSchema: {
       text: z.string().min(20).describe('The text to audit (paper draft, review, etc.)'),
       max_claims: z.number().int().min(1).max(50).optional().default(20).describe('Max claims to audit'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
     },
     async execute({ text, max_claims }) {
       return auditClaims(text, { max_claims })
@@ -341,7 +417,7 @@ const tools = [
   },
 
   {
-    name: 'link_literature',
+    name: 'research_literature_link',
     description: 'Discover citation relationships between saved evidence entries using the OpenAlex reference graph.',
     inputSchema: {
       project: z.string().optional().describe('Project name'),
@@ -357,10 +433,11 @@ const tools = [
   },
 
   {
-    name: 'anomaly_detect',
+    name: 'research_review_anomalies',
     description: 'Detect textual anomalies: redundant patterns, contradictions, silence zones (missing elements like limitations or sample size). Based on literature-review methodology.',
     inputSchema: {
       text: z.string().min(50).describe('The text to analyze (paper draft, review, abstract, etc.)'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
     },
     async execute({ text }) {
       return detectTextAnomalies(text)
@@ -368,10 +445,11 @@ const tools = [
   },
 
   {
-    name: 'check_writing_quality',
+    name: 'research_review_writing',
     description: 'Check academic writing quality: flagged terms, throat-clearing openers, punctuation patterns, sentence length. Not a humanizer.',
     inputSchema: {
       text: z.string().min(100).describe('The text to check (paper draft, section, paragraph)'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID for activity traceability.'),
     },
     async execute({ text }) {
       return checkWritingQuality(text)
@@ -379,7 +457,7 @@ const tools = [
   },
 
   {
-    name: 'generate_disclosure',
+    name: 'research_disclosure_generate',
     description: 'Generate a venue-specific AI use disclosure statement. Supports 15 journal/conference policies (Nature, ICLR, ACL, Science, NEJM, etc.).',
     inputSchema: {
       target_journal: z.string().describe('Target journal or conference name'),
@@ -392,7 +470,7 @@ const tools = [
   },
 
   {
-    name: 'list_disclosure_policies',
+    name: 'research_disclosure_list_policies',
     description: 'List all supported journal/conference AI disclosure policies with their placement requirements.',
     inputSchema: {},
     async execute() {
@@ -402,7 +480,7 @@ const tools = [
   },
 
   {
-    name: 'check_hedging_phrases',
+    name: 'research_review_hedging',
     description: 'Detect protected hedging phrases (may/might/suggests/初步/可能) that must not be silently removed during revision. Deleting them changes the paper\'s epistemic stance.',
     inputSchema: {
       text: z.string().min(20).describe('The text to check (abstract, section, revision)'),
@@ -413,7 +491,7 @@ const tools = [
   },
 
   {
-    name: 'fetch_openalex_metadata',
+    name: 'research_metadata_openalex_fetch',
     description: 'Fetch full metadata (title, abstract, authors, journal, citations) from OpenAlex by DOI or search query. Optionally save results to evidence store.',
     inputSchema: {
       dois: z.array(z.string()).optional().describe('Array of DOIs to fetch'),

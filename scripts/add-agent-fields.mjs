@@ -39,16 +39,16 @@ function inferInputSchema(entry) {
 function inferAgentGuidance(entry) {
   const name = entry.name || ''
   if (/审阅|评审|review/i.test(name)) {
-    return '审阅前先用 verify_citation 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。'
+    return '审阅前先用 research_citation_verify 检查论文中关键引用的 DOI 是否存在且支持对应 claim。输出按 [实证]/[推论]/[缺失] 分级标注每条意见。'
   }
   if (/文献|综述|literature/i.test(name)) {
-    return '检索文献时使用 query_source 工具查询 Crossref/OpenAlex/Semantic Scholar。保存关键来源到证据库（save_evidence），标注来源标识符。综述中每条引用须标注 [实证]/[推论]/[缺失] 分级。'
+    return '检索文献时使用 research_source_query 工具查询 Crossref/OpenAlex/Semantic Scholar。保存关键来源到证据库（research_evidence_save），标注来源标识符。综述中每条引用须标注 [实证]/[推论]/[缺失] 分级。'
   }
   if (/统计|数据分析|statistical/i.test(name)) {
     return '分析结论须区分统计显著性与实际意义。样本量不足时标注为 [缺失]。不得将 p 值作为效应量大小的证据。'
   }
   if (/撰写|写作|write|draft/i.test(name)) {
-    return '写入正文前先核实所有引用（verify_citation）。无法核验的引用用 [待补充] 标记，禁止编造。'
+    return '写入正文前先核实所有引用（research_citation_verify）。无法核验的引用用 [待补充] 标记，禁止编造。'
   }
   return '基于已提供材料或已核验来源工作；无法确认时标记为待核验；不得编造数据、引用、结论。'
 }

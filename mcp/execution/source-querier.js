@@ -135,7 +135,7 @@ async function querySource(sourceId, query, limit = 5) {
       total: 0,
       source_name: sourceId,
       availability: 'requires-host-mcp',
-      fallback_guidance: `数据源 "${sourceId}" 不在本插件的直查适配器中。请通过宿主的 Web 或已连接 MCP 能力查询，并将结果通过 save_evidence 保存。`,
+      fallback_guidance: `数据源 "${sourceId}" 不在本插件的直查适配器中。请通过宿主的 Web 或已连接 MCP 能力查询，并将结果通过 research_evidence_save 保存。`,
     }
   }
 
