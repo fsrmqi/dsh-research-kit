@@ -3,6 +3,9 @@
 // 保证拆分前后各分组在界面中的先后与组内相对顺序完全不变。
 // 新增分片必须在此登记：构建器与校验器以「分片总数 == 聚合总数」断言拦截遗漏。
 import paperManuscript from './paper-manuscript.json' with { type: 'json' }
+import paperWriting from './paper-writing.json' with { type: 'json' }
+import deepResearch from './deep-research.json' with { type: 'json' }
+import submission from './submission.json' with { type: 'json' }
 import literature from './literature.json' with { type: 'json' }
 import dataAnalysis from './data-analysis.json' with { type: 'json' }
 import researchDesign from './research-design.json' with { type: 'json' }
@@ -30,6 +33,9 @@ import engineering from './engineering.json' with { type: 'json' }
 
 const workflows = [
   ...paperManuscript,
+  ...paperWriting,
+  ...deepResearch,
+  ...submission,
   ...literature,
   ...dataAnalysis,
   ...researchDesign,

@@ -1,0 +1,480 @@
+[
+  {
+    "id": "research-question-formulate",
+    "type": "workflow",
+    "name": "研究问题构建",
+    "description": "将模糊研究兴趣转化为精确的 FINER 评分研究问题，用 PICO 框架结构化，界定研究范围和边界。",
+    "category": "研究设计",
+    "tags": [
+      "研究问题",
+      "PICO",
+      "FINER"
+    ],
+    "placeholders": [
+      {
+        "key": "interest",
+        "label": "研究兴趣或模糊主题",
+        "required": true
+      },
+      {
+        "key": "domain",
+        "label": "学科领域",
+        "required": false
+      },
+      {
+        "key": "constraints",
+        "label": "已知约束（时间/经费/数据可得性）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "research-question-design",
+      "socratic-research-guide",
+      "hypothesis-generation"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "openalex"
+    ],
+    "prompt": "将研究兴趣「{interest}」转化为精确的研究问题。学科：{domain}。已知约束：{constraints}。\n\n(1) 用 PICO 框架结构化：Population（研究对象）、Intervention（干预/暴露）、Comparison（对照）、Outcome（结局）；(2) FINER 评分（每项 1-5 分）：可行性、趣味性、新颖性、伦理性、相关性；(3) 如果 Novelty < 3，先用 query_source 检索相关文献确认是否已有充分研究；(4) 界定研究范围——明确包含什么、排除什么、不回答什么。\n\n如果用户的研究兴趣还很模糊，使用 Socratic 五层引导而非直接给出答案。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "interest": {
+          "type": "string",
+          "description": "研究兴趣或模糊主题"
+        },
+        "domain": {
+          "type": "string",
+          "description": "学科领域"
+        },
+        "constraints": {
+          "type": "string",
+          "description": "已知约束"
+        }
+      },
+      "required": [
+        "interest"
+      ]
+    },
+    "agent_guidance": "如果用户兴趣模糊，先用 Socratic 五层引导（兴趣→文献→方法→论证→定位），不要直接给答案。研究问题必须用户自己说出来。FINER 总分 <15/25 时建议调整并说明原因。用 query_source 检索确认新颖性。",
+    "checkpoints": [
+      {
+        "after_stage": "question_design",
+        "action": "confirm_research_question",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "literature-search-systematic",
+    "type": "workflow",
+    "name": "系统文献检索",
+    "description": "设计检索式、跨数据库执行系统检索、设置纳入/排除标准、筛选文献、保存到证据库、生成 PRISMA 流程图。",
+    "category": "研究设计",
+    "tags": [
+      "文献检索",
+      "系统综述",
+      "PRISMA"
+    ],
+    "placeholders": [
+      {
+        "key": "research_question",
+        "label": "研究问题",
+        "required": true
+      },
+      {
+        "key": "databases",
+        "label": "目标数据库（默认 crossref + openalex + semantic-scholar）",
+        "required": false
+      },
+      {
+        "key": "date_range",
+        "label": "时间范围（如 2020-2026）",
+        "required": false
+      },
+      {
+        "key": "study_types",
+        "label": "研究类型限定（如 RCT、队列研究）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "systematic-search-strategy",
+      "source-quality-hierarchy",
+      "systematic-literature-review"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "openalex",
+      "semantic-scholar",
+      "europe-pmc",
+      "pubmed"
+    ],
+    "prompt": "围绕研究问题「{research_question}」执行系统文献检索。数据库：{databases}。时间范围：{date_range}。研究类型：{study_types}。\n\n(1) 检索策略：将研究问题分解为概念组，为每组列出同义词，用布尔逻辑组合检索式。\n(2) 逐库检索：用 query_source 工具在每个数据库执行检索，每库保留前 10 条结果。\n(3) 筛选：对每条结果，根据标题和摘要判断是否纳入。排除标准按 PRISMA 逐条标注排除原因。\n(4) 质量分级：对纳入的文献用 verify_citation 验证 DOI，按来源质量分级标注。\n(5) 保存：用 save_evidence 将纳入文献保存到证据库，标注来源标识符和质量等级。\n(6) 输出：检索报告 + PRISMA 流程图（识别→筛选→合格→纳入的数量）+ 注释书目。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "research_question": {
+          "type": "string",
+          "description": "研究问题"
+        },
+        "databases": {
+          "type": "string",
+          "description": "目标数据库"
+        },
+        "date_range": {
+          "type": "string",
+          "description": "时间范围"
+        },
+        "study_types": {
+          "type": "string",
+          "description": "研究类型限定"
+        }
+      },
+      "required": [
+        "research_question"
+      ]
+    },
+    "agent_guidance": "用 query_source 工具逐库检索。对每条有 DOI 的纳入文献调用 verify_citation 验证存在性。用 save_evidence 保存，标注 identifier_type 和 grade。按证据等级金字塔标注质量。输出 PRISMA 流程图数量。检索式和命中数必须记录——可重复性是系统综述的硬要求。",
+    "checkpoints": [
+      {
+        "after_stage": "search_strategy",
+        "action": "confirm_search_strategy",
+        "required": true
+      },
+      {
+        "after_stage": "screening",
+        "action": "confirm_included_studies",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "source-verify",
+    "type": "workflow",
+    "name": "来源验证与质量分级",
+    "description": "验证已保存证据的来源可靠性：DOI/PMID 有效性、掠夺性期刊检测、利益冲突检查、证据等级标注。",
+    "category": "研究设计",
+    "tags": [
+      "来源验证",
+      "证据等级",
+      "掠夺性期刊"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "项目名（对应证据库项目）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "source-quality-hierarchy",
+      "citation-hygiene",
+      "ai-failure-modes"
+    ],
+    "prompt": "对项目「{project}」中的所有已保存证据执行来源验证。\n\n(1) 用 list_evidence 列出全部证据条目；(2) 对每条有 DOI 的条目调用 verify_citation 验证存在性——exists=false 的条目标注为[编造引用]并建议删除；(3) 按证据等级金字塔为每条来源标注等级（系统综述 > RCT > 队列 > 病例对照 > 横断面 > 案例报告 > 专家意见）；(4) 检查期刊名称是否在掠夺性期刊特征列表中（审稿周期 <2 周、处理费不透明、编委会跨领域、名称模仿知名期刊）；(5) 输出来源验证报告：每条证据的验证状态、证据等级、质量标注。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        }
+      }
+    },
+    "agent_guidance": "逐条调用 verify_citation 验证 DOI/PMID。exists=false 标注为[编造引用]。掠夺性期刊检测信号：审稿周期 <2 周、APC 不透明、编委会跨领域、期刊名模仿知名期刊。来源验证报告必须逐条列出，不得抽样。",
+    "checkpoints": []
+  },
+  {
+    "id": "research-synthesis",
+    "type": "workflow",
+    "name": "证据综合",
+    "description": "将多篇文献的发现按主题整合为知识框架：识别共识与分歧、解决矛盾、提取主题、发现研究空白。",
+    "category": "研究设计",
+    "tags": [
+      "证据综合",
+      "文献综述",
+      "知识整合"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "项目名（对应证据库项目）",
+        "required": false
+      },
+      {
+        "key": "research_question",
+        "label": "研究问题",
+        "required": true
+      },
+      {
+        "key": "synthesis_type",
+        "label": "综合类型（narrative=叙述性 / meta-analysis=定量 / scoping=范围综述）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "cross-source-synthesis",
+      "evidence-synthesis",
+      "scientific-critical-thinking"
+    ],
+    "prompt": "围绕研究问题「{research_question}」，对项目「{project}」中的证据进行综合分析。综合类型：{synthesis_type}。\n\n(1) 用 list_evidence 列出全部已保存证据；(2) 按主题分组——将证据按研究内容归类，不按论文逐条列举；(3) 识别共识：多篇独立研究得出一致结论的发现，标注支持的研究数量和证据等级；(4) 识别分歧：结论矛盾的研究，分析矛盾原因（方法差异、人群差异、时间差异、测量工具差异）；(5) 提取研究空白：已有研究未覆盖的问题、方法论缺陷、人群遗漏；(6) 输出：按主题组织的综合报告，每个主题标注[实证]/[推论]/[缺失]，以研究空白结尾。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        },
+        "research_question": {
+          "type": "string",
+          "description": "研究问题"
+        },
+        "synthesis_type": {
+          "type": "string",
+          "description": "综合类型"
+        }
+      },
+      "required": [
+        "research_question"
+      ]
+    },
+    "agent_guidance": "按主题而非按论文组织综合。共识发现标注支持的研究数量和质量等级。分歧发现分析矛盾原因。综合中每条声明标注[实证]/[推论]/[缺失]。研究空白是综合的最终产出——它直接决定论文的贡献定位。",
+    "checkpoints": [
+      {
+        "after_stage": "synthesis",
+        "action": "confirm_synthesis",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "socratic-research",
+    "type": "workflow",
+    "name": "Socratic 研究引导",
+    "description": "通过五层苏格拉底式提问引导用户从模糊兴趣到明确研究设计，Agent 只提问不代答。",
+    "category": "研究设计",
+    "tags": [
+      "Socratic",
+      "研究引导",
+      "研究设计"
+    ],
+    "placeholders": [
+      {
+        "key": "interest",
+        "label": "你的研究兴趣或模糊想法",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "socratic-research-guide",
+      "research-question-design"
+    ],
+    "prompt": "用户表达了研究兴趣：「{interest}」。使用 Socratic 五层引导帮助用户自己发现研究方向。\n\nLayer 1 — 兴趣澄清：问用户对什么最好奇，注意到了什么现象。\nLayer 2 — 文献初步：问用户知道哪些主要发现，有没有未回答完的文献。\nLayer 3 — 方法论选择：问用户倾向定量还是定性，研究对象是谁。\nLayer 4 — 论证构建：问用户如果假设被否定怎么解释，结论对谁有用。\nLayer 5 — 贡献定位：问用户研究在文献中处于什么位置，一句话概括贡献。\n\n每层结束时总结用户回答，过渡到下一层。Agent 只提问——用户必须自己说出研究问题。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "interest": {
+          "type": "string",
+          "description": "研究兴趣或模糊想法"
+        }
+      },
+      "required": [
+        "interest"
+      ]
+    },
+    "agent_guidance": "Socratic 模式规则：只提问，不代答。给选项或反例引导思考。用户回答后先总结核心再追问深一层。一个回合最多两个问题。用户必须自己说出研究问题——Agent 可以帮它精确化但不替它选择。每层结束做小结。",
+    "checkpoints": [
+      {
+        "after_stage": "layer1",
+        "action": "confirm_interest",
+        "required": false
+      },
+      {
+        "after_stage": "layer2",
+        "action": "confirm_literature",
+        "required": false
+      },
+      {
+        "after_stage": "layer3",
+        "action": "confirm_method",
+        "required": false
+      },
+      {
+        "after_stage": "layer4",
+        "action": "confirm_argument",
+        "required": false
+      },
+      {
+        "after_stage": "layer5",
+        "action": "confirm_research_question",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "prisma-systematic-review",
+    "type": "workflow",
+    "name": "PRISMA 系统综述",
+    "description": "按 PRISMA 2020 标准执行完整系统综述：方案注册→系统检索→两轮筛选→数据提取→偏倚风险评估→综合→报告。",
+    "category": "研究设计",
+    "tags": [
+      "PRISMA",
+      "系统综述",
+      "Meta-analysis"
+    ],
+    "placeholders": [
+      {
+        "key": "research_question",
+        "label": "研究问题（PICO 格式）",
+        "required": true
+      },
+      {
+        "key": "project",
+        "label": "项目名",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "prisma-protocol",
+      "risk-of-bias",
+      "systematic-search-strategy",
+      "cross-source-synthesis",
+      "source-quality-hierarchy"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "openalex",
+      "europe-pmc",
+      "pubmed",
+      "clinicaltrials"
+    ],
+    "prompt": "按 PRISMA 2020 标准执行系统综述。研究问题：{research_question}。项目：{project}。\n\nStep 1 — 检索策略：分解 PICO 元素为概念组，列出同义词，构建布尔检索式。\nStep 2 — 系统检索：用 query_source 在至少 3 个数据库检索，每库保留前 10 条。\nStep 3 — 两轮筛选：标题/摘要初筛（排除明显不符合的）→ 全文复筛（逐条排除并标注原因）。\nStep 4 — 数据提取：标准化表（作者/年份/国家/设计/样本量/干预/对照/结局/效应量/CI）。\nStep 5 — 偏倚风险评估：RCT 用 RoB 2 五域，非随机用 ROBINS-I 七域。\nStep 6 — 综合：定量综合（效应量 + I² 异质性）或叙述性综合。\nStep 7 — 报告：按 PRISMA 2020 检查表 27 项，附 PRISMA 流程图。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "research_question": {
+          "type": "string",
+          "description": "研究问题"
+        },
+        "project": {
+          "type": "string",
+          "description": "项目名"
+        }
+      },
+      "required": [
+        "research_question"
+      ]
+    },
+    "agent_guidance": "PRISMA 系统综述硬规则：至少 3 个数据库 + 灰色文献。两轮独立筛选，分歧第三位解决。排除原因逐条记录。偏倚风险评估按研究类型选工具。I²>50% 用随机效应模型。每步输出可追溯记录。用 verify_citation 验证纳入文献的 DOI。",
+    "checkpoints": [
+      {
+        "after_stage": "search_strategy",
+        "action": "confirm_protocol",
+        "required": true
+      },
+      {
+        "after_stage": "screening",
+        "action": "confirm_included",
+        "required": true
+      },
+      {
+        "after_stage": "quality_assessment",
+        "action": "confirm_quality",
+        "required": true
+      },
+      {
+        "after_stage": "synthesis",
+        "action": "confirm_synthesis",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "deep-research-pipeline",
+    "type": "workflow",
+    "name": "深度研究全流程",
+    "description": "从模糊兴趣到研究简报的完整研究流程：Socratic引导→研究问题→系统检索→来源验证→证据综合→研究简报。输出可直接交给论文写作阶段。",
+    "category": "研究设计",
+    "tags": [
+      "深度研究",
+      "全流程",
+      "研究简报"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "研究主题或模糊兴趣",
+        "required": true
+      },
+      {
+        "key": "mode",
+        "label": "模式（socratic=引导式 / full=自动执行）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "socratic-research-guide",
+      "research-question-design",
+      "systematic-search-strategy",
+      "source-quality-hierarchy",
+      "cross-source-synthesis",
+      "scientific-writing"
+    ],
+    "suggestedDatabaseIds": [
+      "crossref",
+      "openalex",
+      "semantic-scholar",
+      "europe-pmc",
+      "pubmed"
+    ],
+    "prompt": "执行深度研究全流程。主题：{topic}。模式：{mode}。\n\n如果模式为 socratic：先用 Socratic 五层引导帮用户明确研究问题，然后自动进入检索和综合阶段。\n如果模式为 full：直接从研究问题构建开始，自动执行全部步骤。\n\n流程：\nPhase 1 — 研究问题：PICO 结构化 + FINER 评分 + 范围界定\nPhase 2 — 系统检索：检索式设计 + 跨库执行 + 筛选 + 保存到证据库\nPhase 3 — 来源验证：DOI 验证 + 质量分级 + 掠夺性期刊检测\nPhase 4 — 证据综合：按主题分组 + 共识/分歧分析 + 研究空白识别\nPhase 5 — 研究简报：RQ Brief + 综合报告 + 注释书目——这是交给论文写作阶段的 Material Passport 输入\n\n每阶段完成后暂停等待用户确认。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "direct",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "研究主题"
+        },
+        "mode": {
+          "type": "string",
+          "description": "模式"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "深度研究全流程规则：(1) Socratic 模式下每层只提问不代答；(2) 系统检索用 query_source 工具逐库执行；(3) 每条纳入文献用 verify_citation 验证 DOI；(4) 用 save_evidence 保存，标注 identifier_type 和 grade；(5) 证据综合按主题组织，标注[实证]/[推论]/[缺失]；(6) 研究简报是交给论文写作的 Material Passport 输入——包含 RQ Brief + 综合报告 + 注释书目。每阶段完成后暂停等待用户确认。",
+    "checkpoints": [
+      {
+        "after_stage": "question",
+        "action": "confirm_rq",
+        "required": true
+      },
+      {
+        "after_stage": "search",
+        "action": "confirm_search",
+        "required": true
+      },
+      {
+        "after_stage": "verification",
+        "action": "confirm_verification",
+        "required": true
+      },
+      {
+        "after_stage": "synthesis",
+        "action": "confirm_synthesis",
+        "required": true
+      }
+    ]
+  }
+]

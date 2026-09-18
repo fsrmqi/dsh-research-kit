@@ -482,5 +482,352 @@
       "异常结果经过独立验证"
     ],
     "availability": "prompt-guidance"
+  },
+  {
+    "id": "style-calibration",
+    "type": "skill",
+    "name": "风格校准",
+    "description": "从作者过往作品学习语言风格（句长节奏、词汇偏好、引用整合风格），作为软指导应用于论文写作。学科规范始终优先。",
+    "category": "论文写作",
+    "tags": [
+      "写作风格",
+      "个性化",
+      "学术论文"
+    ],
+    "guidance": "分析作者过往写作样本，提取六个维度：句长分布、段落长度、词汇偏好（模糊限制语、连接词、报告动词）、引用整合风格（叙述型 vs 括号型）、修饰词风格（简约 vs 详尽）、语域转换（方法节 vs 讨论节）。写作时按优先级应用：学科规范 > 目标期刊规范 > 作者个人风格。",
+    "promptFragment": "如果用户提供了写作样本，先提取风格画像（6 维度：句长节奏、段落长度、词汇偏好、引用整合风格、修饰词风格、语域转换），并在写作中作为软指导应用。学科规范始终优先于个人风格；冲突时在草稿元数据中记录冲突，通知用户一次。",
+    "checklist": [
+      "收集 3+ 写作样本",
+      "提取 6 维度风格画像",
+      "应用优先级：学科 > 期刊 > 个人",
+      "冲突记录并通知用户一次"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "writing-quality-check",
+    "type": "skill",
+    "name": "写作质量检查",
+    "description": "检测学术写作中的模糊/过度使用词汇、标点干扰、废话开头、结构模式和句长问题。目标是提高写作清晰度，不是规避 AI 检测。",
+    "category": "论文写作",
+    "tags": [
+      "写作质量",
+      "学术写作",
+      "清晰度"
+    ],
+    "guidance": "检查五类问题：(A) 高频模糊术语（delve, tapestry, landscape, pivotal, crucial, foster, leverage 等 26 个）——问'这里这是最精确的词吗'；(B) 标点模式——破折号是否打断论证，分号是否过载，冒号列表是否碎化论证；(C) 废话开头——'In the realm of', 'It's important to note', 'In today's rapidly evolving' 等 12 种应删除；(D) 结构模式——'三要素强迫症'（每个论证都恰好三个子点）、同义词轮换（同一概念换词）、二元对比过度使用、镜像结构（每段结构完全相同）；(E) 句长与可读性——句长应匹配含义和读者需求，不是机械平均。",
+    "promptFragment": "自审草稿时逐段检查：(A) 高频模糊术语——如果术语是学科标准术语则豁免；(B) 破折号/分号/冒号列表是否打断论证；(C) 删除废话开头和元叙述（'This section will discuss' → 直接讨论）；(D) 检查三要素强迫症、同义词轮换、镜像结构；(E) 句长应匹配含义。这不是人类化工具，是清晰度工具。",
+    "checklist": [
+      "检查 26 个高频模糊术语",
+      "检查标点是否打断论证",
+      "删除废话开头",
+      "检查结构模式",
+      "句长匹配含义"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "anti-leakage-protocol",
+    "type": "skill",
+    "name": "防泄露协议",
+    "description": "当用户提供研究材料时，写作 Agent 应主要从这些材料构建论文，而非从 LLM 参数记忆填充。防止方法伪造、隐性知识泄露和无意识抄袭。",
+    "category": "论文写作",
+    "tags": [
+      "知识隔离",
+      "防编造",
+      "写作纪律"
+    ],
+    "guidance": "当用户提供了实质性研究材料（文献综述、实验数据、已有草稿）时，激活知识隔离指令：优先使用会话材料而非参数记忆；论文中每条事实性声明必须可追溯到文献目录或用户提供的数据；材料不覆盖的主题标注为 [MATERIAL GAP] 而非从记忆填充；不引入文献目录中不存在的引用；方法节只描述用户材料中记录的内容。这不是禁止使用语言技能——学术惯例、写作风格、逻辑论证可以自由使用，限制仅适用于事实内容。",
+    "promptFragment": "知识隔离指令：论文基于本会话提供的研究材料撰写。优先规则：(1) 事实性声明优先使用会话材料；(2) 每条声明必须可追溯到文献目录或用户数据；(3) 材料不覆盖的主题标注 [MATERIAL GAP]；(4) 不引入目录中不存在的引用；(5) 方法节只描述用户材料中记录的实验程序。语言技能和学术写作知识不受限制。",
+    "checklist": [
+      "事实性声明优先使用会话材料",
+      "每条声明可追溯",
+      "缺口标注 [MATERIAL GAP]",
+      "不引入目录外引用",
+      "方法节只描述已记录程序"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "claim-strength-ladder",
+    "type": "skill",
+    "name": "声明强度阶梯",
+    "description": "学术声明有有序强度等级。修改时不得在未经作者授权的情况下静默移动声明的强度等级——无论是加强还是弱化。",
+    "category": "论文写作",
+    "tags": [
+      "学术诚信",
+      "修改纪律",
+      "防过度声明"
+    ],
+    "guidance": "声明强度阶梯从弱到强：is consistent with / may suggest < is associated with / correlates with < predicts < contributes to < affects / influences / leads to < causes / determines / demonstrates / proves。修改规则：不得静默移动声明在阶梯上的位置（双向）；不得删除因果设计的限定语（如'观察性设计不能建立因果关系'）；不得删除范围限定语（'在本样本中'）；不得删除状态限定语（'初步的'）；不得删除阴性结果。不是移动的情况：保持相同动词和模糊限制语的重排；不改变动词等级的强调调整；同一等级内的描述词替换。",
+    "promptFragment": "声明强度阶梯规则：修改论文时，不得静默移动声明的认识论强度——双向都算。如果原文说 'is associated with'，不得改为 'causes' 或 'leads to'（向上移动）。如果原文说 'predicts'，不得改为 'is associated with'（向下移动同样歪曲作者意图）。不得删除设计限定语、范围限定语或阴性结果。",
+    "checklist": [
+      "识别每条声明的强度等级",
+      "修改时保持等级不变",
+      "删除限定语需要授权",
+      "阴性结果不得静默删除"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "latex-hardening",
+    "type": "skill",
+    "name": "LaTeX 硬化",
+    "description": "论文定稿时的 LaTeX 输出规范：引用格式转换（APA 7.0 / Chicago / MLA / IEEE / Vancouver）、公式渲染、图表集成、期刊模板适配。",
+    "category": "论文写作",
+    "tags": [
+      "LaTeX",
+      "引用格式",
+      "排版"
+    ],
+    "guidance": "论文定稿时，将 Markdown 草稿转换为 LaTeX：使用正确的文档类（article/revtex/elsarticle/IEEEtran 等）；公式用 $...$ 或 equation 环境；图表用 figure/table 环境配合 \\includegraphics；引用用 biblatex 或 natbib；确保所有引用在 .bib 文件中有对应条目且格式正确；交叉引用使用 \\label/\\ref；处理特殊字符转义（% $ & # _ { } ~ ^ \\）。支持格式转换：APA 7.0 ↔ Chicago ↔ MLA ↔ IEEE ↔ Vancouver。",
+    "promptFragment": "LaTeX 输出规则：选择正确的文档类和宏包；公式用数学环境；图表用浮动环境并使用 \\label/\\ref 交叉引用；所有引用在 .bib 中有对应条目；转义特殊字符（% $ & # _ { } ~ ^ \\）。引用格式转换时保持元数据完整：作者、年份、标题、期刊、卷号、页码、DOI。",
+    "checklist": [
+      "选择正确文档类",
+      "公式用数学环境",
+      "图表用浮动环境",
+      "引用与 .bib 一致",
+      "特殊字符转义",
+      "交叉引用使用 \\label/\\ref"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "research-question-design",
+    "type": "skill",
+    "name": "研究问题构建",
+    "description": "将模糊研究兴趣转化为精确的研究问题，使用 FINER 标准评分（Feasible / Interesting / Novel / Ethical / Relevant），界定研究范围和边界。",
+    "category": "研究设计",
+    "tags": [
+      "研究问题",
+      "FINER",
+      "研究设计"
+    ],
+    "guidance": "研究问题构建流程：(1) 识别用户的研究兴趣背后的核心张力或矛盾；(2) 用 PICO 框架（Population, Intervention, Comparison, Outcome）结构化研究问题；(3) 用 FINER 标准评分：可行性（样本/时间/经费是否够）、趣味性（领域内是否关心）、新颖性（是否已有充分研究）、伦理性（是否通过 IRB）、相关性（对实践或理论是否有影响）；(4) 界定研究范围——明确包含什么、排除什么、不回答什么。",
+    "promptFragment": "研究问题设计规则：使用 PICO 框架结构化研究问题。FINER 评分每项 1-5 分：可行性（数据可得性、时间预算、技术能力）、趣味性（领域热度、争议性）、新颖性（文献检索确认无重复）、伦理性（IRB 合规、知情同意）、相关性（理论贡献或实践影响）。总分 <15/25 时建议调整。明确声明研究范围边界——包含什么、排除什么、不回答什么。",
+    "checklist": [
+      "PICO 结构化",
+      "FINER 五维评分",
+      "总分 >= 15/25",
+      "研究范围明确界定"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "systematic-search-strategy",
+    "type": "skill",
+    "name": "系统文献检索策略",
+    "description": "设计结构化检索式，跨数据库执行系统检索，设置纳入/排除标准，生成 PRISMA 流程图。",
+    "category": "研究设计",
+    "tags": [
+      "文献检索",
+      "系统综述",
+      "PRISMA"
+    ],
+    "guidance": "检索策略设计：(1) 将研究问题分解为概念组（如 PICO 各元素）；(2) 为每个概念组列出同义词、上位词、下位词；(3) 用布尔逻辑组合（AND 连接概念组，OR 连接同义词）；(4) 选择 3-5 个数据库（PubMed、Web of Science、Scopus、Embase、CNKI 等）；(5) 设置纳入/排除标准（时间范围、语言、研究类型、样本量）；(6) 记录每个数据库的检索结果数量和筛选过程；(7) 生成 PRISMA 流程图（识别→筛选→合格→纳入）。",
+    "promptFragment": "系统检索规则：(1) 分解研究问题为概念组，为每组列出同义词/上位词/下位词；(2) 布尔组合检索式，适配不同数据库语法；(3) 明确纳入/排除标准（PICO + 时间 + 语言 + 研究类型）；(4) 每个数据库记录检索式和命中数；(5) 筛选分两轮：标题/摘要初筛 → 全文复筛；排除原因逐条记录；(6) 用 PRISMA 流程图报告筛选过程。",
+    "checklist": [
+      "概念组分解",
+      "同义词列表",
+      "布尔检索式",
+      "纳入/排除标准",
+      "PRISMA 流程图",
+      "筛选记录"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "source-quality-hierarchy",
+    "type": "skill",
+    "name": "来源质量分级",
+    "description": "按证据等级金字塔评估来源质量，检测掠夺性期刊和利益冲突，为每条证据标注质量等级。",
+    "category": "研究设计",
+    "tags": [
+      "证据等级",
+      "来源质量",
+      "掠夺性期刊"
+    ],
+    "guidance": "证据等级金字塔从高到低：(1) 系统综述/Meta-analysis（最高）；(2) RCT；(3) 队列研究；(4) 病例对照研究；(5) 横断面研究；(6) 案例报告/病例系列；(7) 专家意见/评论（最低）。每个研究设计内部再按期刊影响因子、同行评审严格度、样本量、随访时间细分。掠夺性期刊检测信号：出版社在 Beall's List 或类似名单上、审稿周期异常短（<2周）、论文处理费高昂且不透明、编委会成员来自无关领域、期刊名称模仿知名期刊。利益冲突检测：检查作者披露、资助来源、商业关联。",
+    "promptFragment": "来源质量分级规则：按证据等级金字塔标注每条来源的等级（系统综述 > RCT > 队列 > 病例对照 > 横断面 > 案例报告 > 专家意见）。检查期刊是否在掠夺性期刊名单上（Beall's List、Cabell's Blacklist）。检查作者利益冲突披露和资助来源。质量等级标注为 [实证]/[推论]/[缺失] 的基础上进一步标注证据等级。",
+    "checklist": [
+      "标注证据等级",
+      "检查掠夺性期刊",
+      "检查利益冲突",
+      "按质量分级排序"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "cross-source-synthesis",
+    "type": "skill",
+    "name": "跨来源综合",
+    "description": "将多篇文献的发现整合为一致的知识框架：识别共识与分歧、解决矛盾、提取主题、发现研究空白。",
+    "category": "研究设计",
+    "tags": [
+      "证据综合",
+      "文献综述",
+      "知识整合"
+    ],
+    "guidance": "跨来源综合方法：(1) 按主题（而非按论文）组织综合——每个主题下整合多篇相关文献的发现；(2) 识别共识：多篇独立研究得出一致结论的发现，标注证据强度；(3) 识别分歧：结论矛盾的研究，分析矛盾原因（方法差异、人群差异、时间差异）；(4) 矛盾解决策略：如果高质量研究支持 A，低质量研究支持 B，倾向 A 但记录争议；(5) 主题提取：用开放式编码从文献中提取重复出现的主题；(6) 研究空白：已有研究未覆盖的问题、方法论缺陷、人群遗漏。",
+    "promptFragment": "跨来源综合规则：(1) 按主题而非按论文组织——'Smith 和 Jones 都发现 X' 而非 'Smith 发现 X。Jones 发现 X。'；(2) 共识发现标注支持的研究数量和质量等级；(3) 分歧发现分析矛盾原因并如实报告；(4) 综合时保持证据等级标注——[实证] 级共识 > [推论] 级单一来源 > [缺失] 级未覆盖区域；(5) 最后列出研究空白作为未来研究方向。",
+    "checklist": [
+      "按主题组织",
+      "共识与分歧分开标注",
+      "矛盾原因分析",
+      "研究空白识别"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "socratic-research-guide",
+    "type": "skill",
+    "name": "Socratic 研究引导",
+    "description": "通过五层苏格拉底式提问引导用户从模糊兴趣到明确研究设计：兴趣澄清→文献初步→方法论选择→论证构建→研究计划。",
+    "category": "研究设计",
+    "tags": [
+      "Socratic",
+      "研究引导",
+      "苏格拉底"
+    ],
+    "guidance": "五层 Socratic 引导框架：Layer 1 兴趣澄清——'你对这个话题的哪个方面最好奇？' '你注意到了什么现象让你觉得值得研究？'；Layer 2 文献初步——'你知道这个领域已经有哪些主要发现吗？' '有没有哪篇文献让你觉得还没回答完？'；Layer 3 方法论选择——'你倾向于用定量还是定性方法？为什么？' '你的研究对象是谁？怎么接触他们？'；Layer 4 论证构建——'如果你的假设被否定，你会怎么解释？' '你的研究结论对谁有用？'；Layer 5 贡献定位——'你的研究在已有文献中处于什么位置？' '你打算怎么用一句话概括你的贡献？'。每层结束时总结用户回答并过渡到下一层。Agent 只提问，不替用户做决定。",
+    "promptFragment": "Socratic 引导规则：使用五层提问框架引导用户自己发现研究方向。每层只提问，不直接给出答案——给选项或反例引导用户思考。Agent 的角色是 Q1 期刊编辑，不是学生的保姆。提问应短而锐利，一个回合最多两个问题。用户回答后先总结你听到的核心，再追问深一层。禁止替用户选择研究问题——用户必须自己说出研究问题。",
+    "checklist": [
+      "五层依次引导",
+      "只提问不代答",
+      "每层结束做总结",
+      "用户自己说出研究问题"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "prisma-protocol",
+    "type": "skill",
+    "name": "PRISMA 系统综述协议",
+    "description": "PRISMA 2020 声明的系统综述标准化流程：检索→筛选→数据提取→质量评估→综合→报告。",
+    "category": "研究设计",
+    "tags": [
+      "PRISMA",
+      "系统综述",
+      "Meta-analysis"
+    ],
+    "guidance": "PRISMA 2020 系统综述七步：(1) 方案注册（PROSPERO 或其他注册平台）；(2) 系统检索：至少 3 个数据库 + 灰色文献 + 手工检索参考文献；(3) 筛选：两轮独立筛选（标题/摘要 → 全文），分歧由第三位评审解决，记录排除原因；(4) 数据提取：标准化提取表（作者/年份/国家/研究设计/样本量/干预/对照/结局/效应量/置信区间）；(5) 质量评估：RCT 用 Cochrane RoB 2，非随机用 ROBINS-I，观察性用 Newcastle-Ottawa Scale；(6) 综合：定量综合（meta-analysis：固定效应或随机效应模型，I² 异质性检验）或叙述性综合；(7) 报告：按 PRISMA 2020 检查表 27 项逐条报告，附 PRISMA 流程图。",
+    "promptFragment": "PRISMA 系统综述规则：至少 3 个数据库 + 灰色文献。两轮独立筛选，分歧第三位解决。数据提取用标准化表格。质量评估按研究类型选 RoB 2 / ROBINS-I / Newcastle-Ottawa。定量综合做异质性检验（I²），I²>50% 用随机效应模型。按 PRISMA 2020 27 项检查表报告。",
+    "checklist": [
+      "方案注册",
+      "多数据库检索",
+      "两轮独立筛选",
+      "标准化数据提取",
+      "质量评估",
+      "PRISMA 流程图"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "risk-of-bias",
+    "type": "skill",
+    "name": "偏倚风险评估",
+    "description": "使用 Cochrane RoB 2（RCT）和 ROBINS-I（非随机研究）评估纳入研究的偏倚风险，生成交通灯可视化。",
+    "category": "研究设计",
+    "tags": [
+      "偏倚风险",
+      "RoB 2",
+      "ROBINS-I"
+    ],
+    "guidance": "RoB 2（RCT）评估五个域：(1) 随机化过程偏倚（分配序列生成、分配隐藏）；(2) 偏离预期干预偏倚（受试者/施试者/结局评估者盲法）；(3) 缺失结局数据偏倚（缺失比例、缺失原因、分析方法）；(4) 结局测量偏倚（测量工具、评估者盲法）；(5) 选择性报告偏倚（预设结局 vs 报告结局）。每个域判定 Low risk / Some concerns / High risk。ROBINS-I（非随机）评估七个域：加上混杂偏倚和参与者选择偏倚。整体偏倚风险 = 各域中最高等级。",
+    "promptFragment": "偏倚风险评估规则：RCT 用 RoB 2 五域，非随机用 ROBINS-I 七域。每个域独立判定 Low/Some concerns/High。整体偏倚 = 最高域等级。结果用交通灯矩阵可视化：绿=Low，黄=Some concerns，红=High。高偏倚风险的研究在综合分析中降权或做敏感性分析。",
+    "checklist": [
+      "选择正确的评估工具",
+      "逐域独立评估",
+      "整体偏倚=最高域",
+      "交通灯可视化",
+      "高偏倚研究敏感性分析"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "apa-figure-standards",
+    "type": "skill",
+    "name": "APA 7.0 图表规范",
+    "description": "APA 7.0 论文图表格式标准：字号、颜色、标题格式、色彩无障碍方案和图表类型选择决策树。",
+    "category": "论文写作",
+    "tags": [
+      "APA",
+      "图表",
+      "可视化",
+      "色彩无障碍"
+    ],
+    "guidance": "APA 7.0 图表规范：(1) 图标签 bold 10-12pt，标题 italic 10-12pt，轴标签 plain 8-10pt，图例 8-9pt，注释 8-9pt；(2) 标题格式：Figure N（bold）换行 描述性标题（italic）换行 Note.（如需解释）；(3) 色彩无障碍：连续数据用 Viridis（#440154→#FDE725），分类数据用 ColorBrewer 或 Okabe-Ito（#E69F00, #56B4E9, #009E73, #F0E442, #0072B2, #D55E00, #CC79A7）；(4) 图表必须自解释——不看正文也能理解；(5) 每张图必须在正文中被引用（'As shown in Figure 1...'）。",
+    "promptFragment": "APA 图表规则：标签 bold，标题 italic，轴标签 sentence case。色彩使用 Okabe-Ito 色盲安全调色板（#E69F00 橙, #56B4E9 蓝, #009E73 绿, #F0E442 黄, #0072B2 深蓝, #D55E00 红, #CC79A7 粉紫）。图表自解释，每张图在正文中被引用。",
+    "checklist": [
+      "字号符合 APA",
+      "标题格式正确",
+      "色盲安全配色",
+      "图表自解释",
+      "正文中被引用"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "journal-submission-checklist",
+    "type": "skill",
+    "name": "投稿前检查清单",
+    "description": "论文投稿前的 15 项检查：期刊选择、稿件准备、必需组件、格式合规。",
+    "category": "论文写作",
+    "tags": [
+      "投稿",
+      "检查清单",
+      "期刊"
+    ],
+    "guidance": "投稿前逐项检查：(1) 期刊范围匹配——论文主题是否在期刊范围内；(2) 掠夺性期刊检查——用 Beall's List / DOAJ / Cabells 验证；(3) 字数/页数限制；(4) 引用格式是否符合期刊要求；(5) 图表分辨率和格式要求（通常 300 DPI TIFF/EPS/PDF）；(6) 双盲评审匿名化（如需）；(7) 作者信息页与正文分离；(8) Running head 和行号（如需）。必需组件：Cover letter、Title page、Abstract（150-250 词）、Keywords（5-7 个）、Main text、References、Tables、Figures、CRediT 作者贡献声明、利益冲突声明、数据可得性声明、资助声明、伦理声明（如适用）、AI 使用披露。",
+    "promptFragment": "投稿前逐项检查 15 项：(1) 期刊范围匹配；(2) 掠夺性期刊检查；(3) 字数限制；(4) 引用格式合规；(5) 图表分辨率 ≥300 DPI；(6) 双盲匿名化；(7) 作者信息分离；(8) Running head / 行号。必需组件：Cover letter、Title page、Abstract、Keywords、Main text、References、CRediT、COI、Data availability、Funding、Ethics、AI disclosure。缺任何一项不得提交。",
+    "checklist": [
+      "期刊范围匹配",
+      "掠夺性检查",
+      "字数合规",
+      "引用格式",
+      "图表分辨率",
+      "必需组件齐全"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "word-count-allocation",
+    "type": "skill",
+    "name": "论文字数分配",
+    "description": "按论文类型和目标字数，为各节分配合理的字数比例。使用空白分割法计数（与 Word 一致）。",
+    "category": "论文写作",
+    "tags": [
+      "字数",
+      "论文结构",
+      "写作规划"
+    ],
+    "guidance": "论文字数分配比例（按论文类型）：\nIMRaD 研究论文：Introduction 15-20%，Methods 25-30%，Results 25-30%，Discussion 20-25%。Abstract 通常 150-250 词单独计算。\n文献综述：Introduction 10%，Methods 10-15%（检索策略），Thematic sections 60-65%，Conclusions 10-15%。\n理论论文：Introduction 15-20%，Theoretical framework 30-35%，Analysis/Argument 35-40%，Implications 10-15%。\n会议论文（4 页）：Introduction 20%，Methods 20%，Results 30%，Discussion 20%，References 10%。\n字数计数使用空白分割法（len(text.split())），与 Microsoft Word 默认一致。Abstract 有独立字数限制（通常 150-250 词），不计入正文字数。",
+    "promptFragment": "字数分配规则：IMRaD 引言 15-20%、方法 25-30%、结果 25-30%、讨论 20-25%。综述引言 10%、方法 10-15%、主题节 60-65%、结论 10-15%。字数用空白分割法计算（与 Word 一致）。Abstract 单独计算（150-250 词）。",
+    "checklist": [
+      "确定论文类型",
+      "按比例分配各节字数",
+      "Abstract 单独计数"
+    ],
+    "availability": "prompt-guidance"
+  },
+  {
+    "id": "chart-type-decision",
+    "type": "skill",
+    "name": "图表类型选择",
+    "description": "根据数据结构选择最合适的图表类型：类别比较→柱状图、分布→箱线图/小提琴图、趋势→折线图、相关→散点图、meta→森林图。",
+    "category": "论文写作",
+    "tags": [
+      "图表",
+      "可视化",
+      "决策树"
+    ],
+    "guidance": "图表类型决策树：\n类别比较（组 vs 值）：≤7 组 → 柱状图；>7 组 → 水平柱状图；比例 → 堆叠柱状图（不要饼图）。\n分布：单变量跨组 → 箱线图；需要看分布形状 → 小提琴图；单组 → 直方图 + 密度曲线。\n趋势：单序列 → 折线图；多序列（≤5）→ 多线图；>5 → 小多面板。\n相关：两变量 → 散点图 + 回归线；多变量 → 相关性热力图。\nMeta-analysis：效应量 → 森林图；偏倚检查 → 漏斗图。\n概念框架 → 概念图/网络图。\n不确定时选最简单的图表传达信息。永远不要用饼图。",
+    "promptFragment": "图表类型选择：类别比较用柱状图（≤7 组）或水平柱状图（>7 组），不要饼图。分布用箱线图/小提琴图。趋势用折线图。相关用散点图+回归线。多变量相关用热力图。Meta-analysis 用森林图/漏斗图。不确定时选最简单的图表。",
+    "checklist": [
+      "数据类型匹配图表类型",
+      "避免饼图",
+      "不确定选最简单的"
+    ],
+    "availability": "prompt-guidance"
   }
 ]

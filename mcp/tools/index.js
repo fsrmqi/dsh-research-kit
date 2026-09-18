@@ -11,6 +11,8 @@ import { generateFigure, listFigureStyles } from '../execution/figure-generator.
 import { auditClaims } from '../execution/claim-auditor.js'
 import { linkLiterature } from '../execution/literature-linker.js'
 import { detectTextAnomalies } from '../execution/anomaly-detector.js'
+import { checkWritingQuality } from '../execution/writing-quality.js'
+import { generateDisclosureStatement, listDisclosurePolicies } from '../execution/disclosure-generator.js'
 import { wrap, err } from '../execution/wrapper.js'
 
 const tools = [
@@ -265,9 +267,10 @@ const tools = [
       ylabel: z.string().optional().describe('Y-axis label'),
       figsize: z.array(z.number()).length(2).optional().describe('Figure size [width, height] in inches'),
       dpi: z.number().int().optional().default(300).describe('Output DPI'),
+      apa_style: z.boolean().optional().describe('Apply APA 7.0 formatting: colorblind-safe Okabe-Ito palette, sans-serif fonts, APA font sizes'),
     },
-    async execute({ style, data, title, xlabel, ylabel, figsize, dpi }) {
-      return generateFigure(style, data, { title, xlabel, ylabel, figsize, dpi })
+    async execute({ style, data, title, xlabel, ylabel, figsize, dpi, apa_style }) {
+      return generateFigure(style, data, { title, xlabel, ylabel, figsize, dpi, apa_style })
     },
   },
 
@@ -347,6 +350,40 @@ const tools = [
     },
     async execute({ text }) {
       return detectTextAnomalies(text)
+    },
+  },
+
+  {
+    name: 'check_writing_quality',
+    description: 'Check academic writing quality: flagged terms, throat-clearing openers, punctuation patterns, sentence length. Not a humanizer.',
+    inputSchema: {
+      text: z.string().min(100).describe('The text to check (paper draft, section, paragraph)'),
+    },
+    async execute({ text }) {
+      return checkWritingQuality(text)
+    },
+  },
+
+  {
+    name: 'generate_disclosure',
+    description: 'Generate a venue-specific AI use disclosure statement. Supports 15 journal/conference policies (Nature, ICLR, ACL, Science, NEJM, etc.).',
+    inputSchema: {
+      target_journal: z.string().describe('Target journal or conference name'),
+      ai_use_description: z.string().describe('What AI was used for (e.g. "literature search and language editing")'),
+      tool_name: z.string().optional().describe('Name of the AI tool used (e.g. "ChatGPT-4")'),
+    },
+    async execute({ target_journal, ai_use_description, tool_name }) {
+      return generateDisclosureStatement({ target_journal, ai_use_description, tool_name })
+    },
+  },
+
+  {
+    name: 'list_disclosure_policies',
+    description: 'List all supported journal/conference AI disclosure policies with their placement requirements.',
+    inputSchema: {},
+    async execute() {
+      const policies = listDisclosurePolicies()
+      return wrap({ policies }, { source: 'disclosure-generator', confidence: 'verified' })
     },
   },
 ]

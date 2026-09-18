@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 17 个科研 Tool（文献检索、引用验证、证据管理、图表生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 20 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 ## 前置条件
 
@@ -71,7 +71,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 17 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 20 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -217,6 +217,9 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `claim_audit` | 文本级 claim-source 对齐审计 |
 | `link_literature` | 发现证据间互引关系 |
 | `anomaly_detect` | 检测冗余模式、矛盾表述与缺失要素 |
+| `check_writing_quality` | 学术写作质量检查（模糊术语、废话开头、标点、句长） |
+| `generate_disclosure` | 按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊） |
+| `list_disclosure_policies` | 列出支持的期刊 AI 披露政策 |
 
 ---
 

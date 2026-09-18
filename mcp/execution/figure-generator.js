@@ -308,14 +308,37 @@ function generateFigure(styleName, data, options = {}) {
   }
   const validationError = validateData(styleName, data)
   if (validationError) return err(validationError)
-  const styleConfig = STYLES[styleName]
+  let styleConfig = STYLES[styleName]
+  if (options.apa_style) {
+    styleConfig = {
+      ...styleConfig,
+      rcParams: {
+        ...styleConfig.rcParams,
+        'font.family': 'sans-serif',
+        'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans'],
+        'text.usetex': false,
+        'axes.labelsize': 10,
+        'axes.titlesize': 11,
+        'xtick.labelsize': 9,
+        'ytick.labelsize': 9,
+        'legend.fontsize': 9,
+        'figure.dpi': 300,
+      },
+      colors: {
+        ...styleConfig.colors,
+        palette: ['#0077BB', '#33BBEE', '#009988', '#EE7733', '#CC3311', '#EE3377', '#BBBBBB', '#000000'],
+      },
+    }
+  }
   return wrap({
     style: styleName,
     description: styleConfig.description,
     figure_type: styleConfig.figure_type,
     script: buildScript(styleName, styleConfig, data, options),
     filename: `output_${styleName}.png`,
-    instructions: '将 script 保存为 .py 文件并在安装 matplotlib 的环境中执行；LaTeX 风格还需安装 texlive。',
+    instructions: options.apa_style
+      ? '已按 APA 7.0 格式生成：Okabe-Ito 色盲安全调色板、sans-serif 字体、APA 字号。保存为 .py 执行生成 PNG。图表标题格式：Figure N + 描述性标题（italic） + Note.'
+      : '将 script 保存为 .py 文件并在安装 matplotlib 的环境中执行；LaTeX 风格还需安装 texlive。',
   }, { source: 'figure-generator', confidence: 'verified' })
 }
 

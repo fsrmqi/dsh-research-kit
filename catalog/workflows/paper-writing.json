@@ -1,0 +1,765 @@
+[
+  {
+    "id": "paper-intake",
+    "type": "workflow",
+    "name": "论文配置面谈",
+    "description": "确定论文类型、学科、目标期刊、引用格式、输出格式、语言和字数目标，生成论文配置记录。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "配置",
+      "面谈"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题或研究问题",
+        "required": true
+      },
+      {
+        "key": "paper_type",
+        "label": "论文类型（研究论文/综述/理论论文/案例研究/会议论文/政策简报）",
+        "required": false
+      },
+      {
+        "key": "discipline",
+        "label": "学科领域",
+        "required": false
+      },
+      {
+        "key": "target_journal",
+        "label": "目标期刊（可选）",
+        "required": false
+      },
+      {
+        "key": "citation_format",
+        "label": "引用格式（APA 7.0/Chicago/MLA/IEEE/Vancouver，默认 APA）",
+        "required": false
+      },
+      {
+        "key": "output_format",
+        "label": "输出格式（Markdown/LaTeX/DOCX/PDF）",
+        "required": false
+      },
+      {
+        "key": "word_count",
+        "label": "目标字数",
+        "required": false
+      },
+      {
+        "key": "writing_samples",
+        "label": "风格校准样本（@文件 引用 3+ 篇过往作品，可选）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "style-calibration",
+      "venue-templates"
+    ],
+    "prompt": "进行论文配置面谈。主题：{topic}。论文类型：{paper_type}。学科：{discipline}。目标期刊：{target_journal}。引用格式：{citation_format}。输出格式：{output_format}。目标字数：{word_count}。\n\n生成一份「论文配置记录」，包含：论文类型与结构模板选择、学科写作规范、目标期刊投稿要求（如有）、引用格式规范、字数分配方案、输出格式计划。如果提供了风格校准样本（{writing_samples}），先提取六维风格画像再纳入配置记录。配置记录必须经用户确认后才能进入下一阶段。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "论文主题或研究问题"
+        },
+        "paper_type": {
+          "type": "string",
+          "description": "论文类型"
+        },
+        "discipline": {
+          "type": "string",
+          "description": "学科领域"
+        },
+        "target_journal": {
+          "type": "string",
+          "description": "目标期刊"
+        },
+        "citation_format": {
+          "type": "string",
+          "description": "引用格式"
+        },
+        "output_format": {
+          "type": "string",
+          "description": "输出格式"
+        },
+        "word_count": {
+          "type": "string",
+          "description": "目标字数"
+        },
+        "writing_samples": {
+          "type": "string",
+          "description": "风格校准样本文件"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "生成论文配置记录后必须暂停等待用户确认。这是 Phase 0 IRON RULE。",
+    "checkpoints": [
+      {
+        "after_stage": "intake",
+        "action": "confirm_configuration",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "paper-structure",
+    "type": "workflow",
+    "name": "论文结构设计",
+    "description": "基于配置记录选择论文结构模板（IMRaD/综述/理论/案例研究），设计详细大纲，分配字数，建立论据映射。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "结构",
+      "大纲"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题",
+        "required": true
+      },
+      {
+        "key": "paper_type",
+        "label": "论文类型",
+        "required": false
+      },
+      {
+        "key": "key_findings",
+        "label": "核心发现或论点（如有）",
+        "required": false
+      },
+      {
+        "key": "word_count",
+        "label": "目标字数",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "writing-quality-check"
+    ],
+    "prompt": "为论文「{topic}」设计结构。论文类型：{paper_type}。核心发现/论点：{key_findings}。目标字数：{word_count}。\n\n选择适合的结构模板（IMRaD / 文献综述 / 理论论文 / 案例研究），输出：(1) 各节标题与子节标题；(2) 每节的目标字数分配；(3) 每节需要的证据类型与来源提示；(4) 节间的逻辑衔接说明。大纲需经用户确认后才能进入论证构建阶段。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "论文主题"
+        },
+        "paper_type": {
+          "type": "string",
+          "description": "论文类型"
+        },
+        "key_findings": {
+          "type": "string",
+          "description": "核心发现"
+        },
+        "word_count": {
+          "type": "string",
+          "description": "目标字数"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "设计大纲后暂停等待用户确认。用户可以要求调整结构。大纲应包含每节的证据映射——明确每一节需要什么类型的证据以及从哪里获取。",
+    "checkpoints": [
+      {
+        "after_stage": "architecture",
+        "action": "approve_outline",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "paper-argument",
+    "type": "workflow",
+    "name": "论证构建",
+    "description": "构建论文的论证蓝图：声明-证据链、逻辑流、反向论证处理、证据-声明强度对齐。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "论证",
+      "逻辑"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题",
+        "required": true
+      },
+      {
+        "key": "outline",
+        "label": "已确认的论文大纲（@文件 引用）",
+        "required": false
+      },
+      {
+        "key": "evidence",
+        "label": "已保存的证据条目（@文件 或使用证据库）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "claim-strength-ladder",
+      "scientific-critical-thinking",
+      "anti-leakage-protocol"
+    ],
+    "prompt": "为论文「{topic}」构建论证蓝图。参考大纲（{outline}）和已有证据（{evidence}）。\n\n输出论证蓝图：(1) 核心论点（thesis statement）及支撑子论点；(2) 每个子论点的声明-证据链（Claim → Evidence → Reasoning → Implication）；(3) 声明强度标注（按照强度阶梯：is consistent with < is associated with < predicts < contributes to < affects < causes）；(4) 反向论证（counter-arguments）及其回应策略；(5) 逻辑流检查——各论证之间是否存在逻辑断裂。使用防泄露协议：所有证据声明必须可追溯到已保存的证据条目，不足之处标注 [MATERIAL GAP]。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "论文主题"
+        },
+        "outline": {
+          "type": "string",
+          "description": "论文大纲"
+        },
+        "evidence": {
+          "type": "string",
+          "description": "证据条目"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "构建论证蓝图时，每条声明标注强度等级（使用声明强度阶梯）。使用防泄露协议——证据必须来自已保存的证据条目，不足标注 [MATERIAL GAP]。反向论证必须包含最强反驳。",
+    "checkpoints": []
+  },
+  {
+    "id": "paper-draft",
+    "type": "workflow",
+    "name": "论文全文起草",
+    "description": "按大纲和论证蓝图逐节撰写论文全文，应用风格校准和写作质量检查，跟踪字数。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "起草",
+      "全文"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题",
+        "required": true
+      },
+      {
+        "key": "outline",
+        "label": "已确认的大纲（@文件）",
+        "required": true
+      },
+      {
+        "key": "argument_blueprint",
+        "label": "论证蓝图（@文件）",
+        "required": false
+      },
+      {
+        "key": "style_profile",
+        "label": "风格画像（如有）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "writing-quality-check",
+      "anti-leakage-protocol",
+      "claim-strength-ladder",
+      "style-calibration"
+    ],
+    "prompt": "按大纲（{outline}）和论证蓝图（{argument_blueprint}）为论文「{topic}」撰写全文。风格画像：{style_profile}。\n\n逐节起草：(1) 每节按字数分配控制篇幅；(2) 应用风格画像作为软指导（学科规范优先）；(3) 每节完成后执行写作质量自检（模糊术语、废话开头、标点、结构模式）；(4) 方法节只描述已记录的实验程序（防泄露协议）；(5) 每条声明标注强度等级（声明强度阶梯）；(6) 材料不足之处标注 [MATERIAL GAP] 而非从记忆填充。\n\n输出完整草稿和自检报告。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "论文主题"
+        },
+        "outline": {
+          "type": "string",
+          "description": "大纲"
+        },
+        "argument_blueprint": {
+          "type": "string",
+          "description": "论证蓝图"
+        },
+        "style_profile": {
+          "type": "string",
+          "description": "风格画像"
+        }
+      },
+      "required": [
+        "topic",
+        "outline"
+      ]
+    },
+    "agent_guidance": "起草时：(1) 逐节写，每节完成后做写作质量自检；(2) 防泄露——所有事实内容来自会话材料；(3) 声明强度阶梯——不静默升降声明强度；(4) 风格画像作为软指导，学科规范优先；(5) 每节标注字数。(6) 不写废话开头，不使用高频模糊术语（除非是学科标准术语）。(7) 方法节只描述已记录程序。",
+    "checkpoints": [
+      {
+        "after_stage": "drafting",
+        "action": "review_draft",
+        "required": false
+      }
+    ]
+  },
+  {
+    "id": "paper-citation-check",
+    "type": "workflow",
+    "name": "引用合规检查",
+    "description": "验证论文中所有引用的格式合规性、文献列表完整性和 DOI 有效性。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "引用",
+      "合规"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文草稿（@文件）",
+        "required": true
+      },
+      {
+        "key": "citation_format",
+        "label": "引用格式（默认 APA 7.0）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "citation-hygiene",
+      "latex-hardening"
+    ],
+    "prompt": "检查论文（{paper_file}）中所有引用的合规性。引用格式：{citation_format}。\n\n(1) 逐条验证引用：每条 in-text citation 是否有对应的 reference list 条目，反之亦然；(2) 对每条有 DOI 的引用调用 verify_citation 工具验证 DOI 是否有效；(3) 检查引用格式是否符合指定标准（APA 7.0 的作者-年份格式、IEEE 的编号格式等）；(4) 检查文献列表的字母排序/编号连续性；(5) 标注不一致或缺失，输出引用审计报告。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文草稿"
+        },
+        "citation_format": {
+          "type": "string",
+          "description": "引用格式"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "对每条 DOI 引用调用 verify_citation 工具验证存在性。返回 exists=false 时标注为[编造引用]并建议删除。返回 claim_supported=false 时标注为[引用不支持此论断]。检查引用格式一致性。",
+    "checkpoints": []
+  },
+  {
+    "id": "paper-abstract",
+    "type": "workflow",
+    "name": "双语摘要撰写",
+    "description": "基于论文全文撰写双语摘要（中文+英文），提取关键词。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "摘要",
+      "双语"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文全文（@文件）",
+        "required": true
+      },
+      {
+        "key": "language_pair",
+        "label": "语言对（默认：中文+英文）",
+        "required": false
+      },
+      {
+        "key": "max_words",
+        "label": "摘要字数限制（默认 250）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing"
+    ],
+    "prompt": "为论文（{paper_file}）撰写双语摘要。语言对：{language_pair}。字数限制：{max_words}。\n\n摘要结构：(1) 研究目的（1-2 句）；(2) 方法概述（1-2 句）；(3) 核心发现（2-3 句）；(4) 结论与意义（1-2 句）。两种语言的摘要应内容一致但不必逐句对应——每种语言应符合该语言的学术写作惯例。同时提取 4-6 个关键词。摘要不得包含论文中未出现的结论或数据。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文全文"
+        },
+        "language_pair": {
+          "type": "string",
+          "description": "语言对"
+        },
+        "max_words": {
+          "type": "string",
+          "description": "字数限制"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "摘要只能包含论文正文中已有的内容和结论。不得引入论文中未讨论的新观点。关键词应反映论文核心概念而非宽泛领域标签。",
+    "checkpoints": []
+  },
+  {
+    "id": "paper-review",
+    "type": "workflow",
+    "name": "五维模拟评审",
+    "description": "模拟国际期刊五席评审：期刊匹配审稿人 + 方法学审稿人 + 领域审稿人 + 跨学科审稿人 + 魔鬼代言人，输出编辑决定信和修改路线图。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "评审",
+      "模拟"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文草稿（@文件）",
+        "required": true
+      },
+      {
+        "key": "target_journal",
+        "label": "目标期刊（可选）",
+        "required": false
+      },
+      {
+        "key": "discipline",
+        "label": "学科领域",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "peer-review",
+      "peer-review-ethics",
+      "scientific-critical-thinking"
+    ],
+    "prompt": "对论文（{paper_file}）执行五维模拟评审。目标期刊：{target_journal}。学科：{discipline}。\n\nPhase 0 — 领域分析与审稿人配置：识别论文的学科、研究范式、方法类型、目标期刊层级。动态配置 4 个审稿人身份 + 固定魔鬼代言人。\n\nPhase 1 — 五维并行评审：\n(1) 期刊匹配审稿人：期刊匹配度、原创性、读者相关性\n(2) 方法学审稿人：研究设计、抽样策略、统计分析、可重复性\n(3) 领域审稿人：文献覆盖、理论框架、学科贡献\n(4) 跨学科审稿人：跨学科连接、实际应用、政策含义\n(5) 魔鬼代言人：核心论点挑战、逻辑谬误检测、最强反驳、选择性引用检测、确认偏误检测\n\nPhase 2 — 编辑综合：整合 5 份报告，识别共识与分歧，输出编辑决定信（Accept/Minor/Major/Reject）和不可变的修改路线图。魔鬼代言人的 CRITICAL 发现必须在编辑决定中显式裁定。\n\n规则：审稿人不得修改论文原文，只输出独立评审报告。每位审稿人的报告独立生成，不交叉引用其他审稿人的内容。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文草稿"
+        },
+        "target_journal": {
+          "type": "string",
+          "description": "目标期刊"
+        },
+        "discipline": {
+          "type": "string",
+          "description": "学科"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "五席评审独立执行，不交叉引用。魔鬼代言人重点挑战核心论点——检测逻辑谬误、确认偏误、过度概括。编辑综合时魔鬼代言人的 CRITICAL 发现必须显式裁定。审稿人只读不写——不得修改论文原文。",
+    "checkpoints": [
+      {
+        "after_stage": "field_analysis",
+        "action": "confirm_reviewers",
+        "required": true
+      },
+      {
+        "after_stage": "review",
+        "action": "review_decision",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "paper-revision-coach",
+    "type": "workflow",
+    "name": "修改教练",
+    "description": "解析审稿意见，生成结构化修改路线图，指导用户逐条回应审稿人的意见。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "修改",
+      "审稿意见"
+    ],
+    "placeholders": [
+      {
+        "key": "review_comments",
+        "label": "审稿意见（@文件 或粘贴）",
+        "required": true
+      },
+      {
+        "key": "paper_file",
+        "label": "论文原文（@文件）",
+        "required": true
+      }
+    ],
+    "suggestedSkillIds": [
+      "peer-review",
+      "scientific-writing",
+      "claim-strength-ladder"
+    ],
+    "prompt": "解析审稿意见（{review_comments}），为论文（{paper_file}）生成修改路线图。\n\n(1) 将非结构化的审稿意见分解为逐条结构化条目：每条标注来源（哪位审稿人）、类别（方法/统计/写作/文献/理论/伦理）、严重程度（Critical/Major/Minor）、涉及的论文章节；\n(2) 生成不可变的修改路线图：每条意见对应一个修改项，包含：要修改什么、怎么修改、需要什么额外材料；\n(3) 对魔鬼代言人提出的 CRITICAL 挑战，单独标注并要求用户显式裁定：[will_address] / [wont_address] / [not_on_point]；\n(4) 使用声明强度阶梯检查：修改过程中不得静默升降声明的认识论强度；\n(5) 输出：修改路线图 + 回应审稿人信函草稿。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "review_comments": {
+          "type": "string",
+          "description": "审稿意见"
+        },
+        "paper_file": {
+          "type": "string",
+          "description": "论文原文"
+        }
+      },
+      "required": [
+        "review_comments",
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "修改路线图是不可变的——一旦生成不得隐式更改。魔鬼代言人 CRITICAL 挑战必须由用户显式裁定。修改过程中使用声明强度阶梯防止静默升降声明强度。回应审稿人信函应逐条对应审稿意见，态度礼貌但立场清晰。",
+    "checkpoints": [
+      {
+        "after_stage": "roadmap",
+        "action": "confirm_roadmap",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "paper-format",
+    "type": "workflow",
+    "name": "论文格式转换",
+    "description": "将论文转换为 LaTeX/DOCX/PDF，适配期刊模板，处理引用格式转换。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "格式",
+      "LaTeX"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文草稿（@文件）",
+        "required": true
+      },
+      {
+        "key": "output_format",
+        "label": "目标格式（LaTeX/DOCX/PDF）",
+        "required": false
+      },
+      {
+        "key": "target_template",
+        "label": "期刊模板（如有）",
+        "required": false
+      },
+      {
+        "key": "citation_format",
+        "label": "目标引用格式",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "latex-hardening",
+      "venue-templates"
+    ],
+    "prompt": "将论文（{paper_file}）转换为 {output_format} 格式。期刊模板：{target_template}。引用格式：{citation_format}。\n\n(1) 如果输出 LaTeX：选择正确的文档类和宏包；公式用数学环境；图表用浮动环境配合 \\includegraphics；引用用 biblatex/natbib；确保所有引用在 .bib 中有对应条目；转义特殊字符。\n(2) 如果输出 DOCX：说明使用 Pandoc 转换的命令行，或直接生成兼容格式。\n(3) 如果需要引用格式转换（如 APA → IEEE）：逐条转换，保持元数据完整（作者、年份、标题、期刊、卷号、页码、DOI）。\n(4) 如果提供了期刊模板，按模板调整格式。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文草稿"
+        },
+        "output_format": {
+          "type": "string",
+          "description": "目标格式"
+        },
+        "target_template": {
+          "type": "string",
+          "description": "期刊模板"
+        },
+        "citation_format": {
+          "type": "string",
+          "description": "引用格式"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "格式转换时保持内容不变——不得修改论证或结论。引用格式转换时逐条检查元数据完整性。LaTeX 输出确保编译通过（可用 latexmk 检查）。",
+    "checkpoints": []
+  },
+  {
+    "id": "paper-pipeline",
+    "type": "workflow",
+    "name": "十阶段论文流水线",
+    "description": "完整论文写作流水线：研究→写作→完整性检查→评审→修改→复审→终审→定稿。每阶段完成后暂停等待用户确认。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "流水线",
+      "完整流程"
+    ],
+    "placeholders": [
+      {
+        "key": "topic",
+        "label": "论文主题或研究问题",
+        "required": true
+      },
+      {
+        "key": "entry_stage",
+        "label": "入口阶段（1=从研究开始 / 2=已有研究材料 / 2.5=已有论文草稿 / 4=已收到审稿意见）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "scientific-writing",
+      "writing-quality-check",
+      "anti-leakage-protocol",
+      "claim-strength-ladder",
+      "style-calibration",
+      "latex-hardening",
+      "citation-hygiene",
+      "peer-review",
+      "ai-failure-modes"
+    ],
+    "prompt": "启动十阶段论文流水线。主题：{topic}。入口阶段：{entry_stage}。\n\n十阶段流程：\nStage 1 — 研究：检索文献、综合证据、识别研究空白\nStage 2 — 写作：配置→结构→论证→起草→引用→摘要\nStage 2.5 — 完整性检查：验证引用、检查实验声明、运行 AI 失败模式清单\nStage 3 — 五维评审：模拟审稿\nStage 4 — 修改：按修改路线图修改论文\nStage 3' — 复审：验证修改是否回应了审稿意见\nStage 4' — 再修改（如需要）\nStage 4.5 — 终完整性检查：最终验证全部声明和引用\nStage 5 — 定稿：格式转换、双语摘要、投稿包\nStage 6 — 过程记录：生成人机协作过程文档\n\n每阶段完成后必须暂停等待用户确认才能进入下一阶段。完整性检查（Stage 2.5/4.5）和评审决定（Stage 3/3'）是 MANDATORY 检查点，不可跳过。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "论文主题"
+        },
+        "entry_stage": {
+          "type": "string",
+          "description": "入口阶段"
+        }
+      },
+      "required": [
+        "topic"
+      ]
+    },
+    "agent_guidance": "十阶段流水线规则：(1) 每阶段完成后暂停等待用户确认（IRON RULE）；(2) Stage 2.5/4.5 完整性检查和 Stage 3/3' 评审决定是 MANDATORY 检查点；(3) Stage 2.5 完整性检查：对每条 DOI 引用调用 verify_citation，运行 AI 失败模式七项清单；(4) Stage 2 起草时使用防泄露协议和声明强度阶梯；(5) Stage 3 五维评审独立执行，魔鬼代言人 CRITICAL 必须显式裁定；(6) 修改循环最多 2 轮；(7) Stage 5 定稿前必须通过终完整性检查。",
+    "checkpoints": [
+      {
+        "after_stage": "research",
+        "action": "confirm_research",
+        "required": true
+      },
+      {
+        "after_stage": "write",
+        "action": "confirm_draft",
+        "required": true
+      },
+      {
+        "after_stage": "integrity",
+        "action": "confirm_integrity",
+        "required": true
+      },
+      {
+        "after_stage": "review",
+        "action": "confirm_review",
+        "required": true
+      },
+      {
+        "after_stage": "revise",
+        "action": "confirm_revision",
+        "required": true
+      },
+      {
+        "after_stage": "re_review",
+        "action": "confirm_re_review",
+        "required": true
+      },
+      {
+        "after_stage": "final_integrity",
+        "action": "confirm_final_integrity",
+        "required": true
+      },
+      {
+        "after_stage": "finalize",
+        "action": "confirm_final_paper",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "paper-integrity",
+    "type": "workflow",
+    "name": "完整性验证",
+    "description": "对论文执行完整性检查：引用验证、实验声明对齐、AI 失败模式清单、数据声明检查。",
+    "category": "论文写作",
+    "tags": [
+      "论文写作",
+      "完整性",
+      "验证"
+    ],
+    "placeholders": [
+      {
+        "key": "paper_file",
+        "label": "论文草稿（@文件）",
+        "required": true
+      },
+      {
+        "key": "check_type",
+        "label": "检查类型（pre-review=评审前 / final=终审前）",
+        "required": false
+      }
+    ],
+    "suggestedSkillIds": [
+      "ai-failure-modes",
+      "citation-hygiene",
+      "data-integrity",
+      "reproducibility"
+    ],
+    "prompt": "对论文（{paper_file}）执行完整性验证。检查类型：{check_type}。\n\n(1) 引用验证：对每条 DOI/PMID 引用调用 verify_citation 工具，验证存在性和声明支持性。exists=false 标注为[编造引用]。claim_supported=false 标注为[引用不支持此论断]。\n(2) 实验声明对齐：对每条声称的实验结果，检查用户是否提供了对应的原始数据、日志或运行记录。可疑的整数效应量（恰好 0.5、恰好 2x 基线）标记为可疑。\n(3) AI 失败模式七项清单：逐条检查——代码 bug 冒充结果、幻觉引用、幻觉实验数据、捷径依赖、方法伪造、框架锁定、bug 当发现。\n(4) 数据声明检查：论文是否提供了数据获取方式？是否讨论了局限性？是否包含利益冲突声明？\n\n输出：完整性验证报告，每项检查标注 PASS / FAIL / UNVERIFIABLE。任何 FAIL 必须修复后重新验证（最多 3 轮），之后进入记录的用户决策。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "paper_file": {
+          "type": "string",
+          "description": "论文草稿"
+        },
+        "check_type": {
+          "type": "string",
+          "description": "检查类型"
+        }
+      },
+      "required": [
+        "paper_file"
+      ]
+    },
+    "agent_guidance": "完整性验证是阻断性检查——FAIL 不得进入下一阶段。对每条 DOI 引用调用 verify_citation 工具。运行 AI 失败模式七项清单。可疑的整数效应量和完全相同的置信区间是代码 bug 的信号。",
+    "checkpoints": [
+      {
+        "after_stage": "integrity_check",
+        "action": "acknowledge_result",
+        "required": true
+      }
+    ]
+  }
+]
