@@ -131,11 +131,12 @@ const tools = [
       url: z.string().optional().describe('URL link to the source'),
       note: z.string().optional().describe('Your note about this evidence'),
       project: z.string().optional().default('default').describe('Project name for organizing evidence'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID; links this evidence to a run without changing deduplication.'),
       grade_hint: z.enum(['empirical', 'inference', 'missing', 'ungraded']).optional().describe('Suggested evidence grade'),
     },
-    async execute({ identifier_type, identifier, title, url, note, project, grade_hint }) {
+    async execute({ identifier_type, identifier, title, url, note, project, run_id, grade_hint }) {
       try {
-        const result = await saveEvidence({ identifier_type, identifier, title, url, note, project, grade_hint })
+        const result = await saveEvidence({ identifier_type, identifier, title, url, note, project, run_id, grade_hint })
         return wrap(result, {
           source: 'evidence-store',
           confidence: 'verified',
@@ -154,11 +155,12 @@ const tools = [
       project: z.string().optional().describe('Filter by project name'),
       identifier_type: z.string().optional().describe('Filter by identifier type (doi, pmid, etc.)'),
       grade: z.enum(['empirical', 'inference', 'missing', 'ungraded']).optional().describe('Filter by evidence grade'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Filter evidence linked to one research run.'),
       limit: z.number().int().min(1).max(200).default(50).describe('Max results'),
     },
-    async execute({ project, identifier_type, grade, limit }) {
+    async execute({ project, identifier_type, grade, run_id, limit }) {
       try {
-        const result = await listEvidence({ project, identifier_type, grade, limit })
+        const result = await listEvidence({ project, identifier_type, grade, run_id, limit })
         return wrap(result, { source: 'evidence-store', confidence: 'verified' })
       } catch (e) {
         return err(`检索失败：${e.message}`)
@@ -201,6 +203,7 @@ const tools = [
     description: 'Export a Material Passport (cross-session research state snapshot) as YAML.',
     inputSchema: {
       project: z.string().optional().describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Reuse an existing Research Kit run ID; otherwise a new ID is generated.'),
       workflow_id: z.string().optional().describe('Workflow ID; used to initialize required checkpoints'),
       current_stage: z.string().describe('Current pipeline stage (e.g. literature_search, evidence_extraction, synthesis)'),
       completed: z.array(z.object({ stage: z.string(), tool: z.string(), summary: z.string() })).optional().describe('Completed steps'),

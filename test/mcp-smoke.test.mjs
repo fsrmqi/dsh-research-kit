@@ -74,3 +74,15 @@ test('MCP 边界：save_evidence 后能被 list_evidence 读回', async () => {
   assert.equal(listed.data.entries.length, 1)
   assert.equal(listed.data.entries[0].identifier, '10.9999/smoke-test')
 })
+
+test('MCP 边界：passport、checkpoint 与证据可复用同一研究运行 ID', async () => {
+  const runId = 'run-smoke-link'
+  const passport = await callTool('export_passport', {
+    run_id: runId, project: 'mcp-run-test', current_stage: 'screening', workflow_id: 'review-paper', completed: [{ stage: 'screening', tool: 'query_source', summary: '候选来源已取得' }],
+  })
+  assert.equal(passport.data.run_id, runId)
+  assert.equal(passport.data.checkpoint_state.run_id, runId)
+  await callTool('save_evidence', { identifier_type: 'doi', identifier: '10.9999/run-smoke', title: 'Run evidence', project: 'mcp-run-test', run_id: runId })
+  const listed = await callTool('list_evidence', { project: 'mcp-run-test', run_id: runId })
+  assert.equal(listed.data.entries.length, 1)
+})

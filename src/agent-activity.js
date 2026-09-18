@@ -82,7 +82,7 @@ function CheckpointBanner({ cp, onApprove, busy }) {
   ])
 }
 
-export function AgentActivityPanel({ sessionId }) {
+export function AgentActivityPanel({ sessionId, runId = '' }) {
   const [expanded, setExpanded] = React.useState(false)
   const [calls, setCalls] = React.useState([])
   const [checkpoints, setCheckpoints] = React.useState([])
@@ -94,6 +94,7 @@ export function AgentActivityPanel({ sessionId }) {
     try {
       const params = new URLSearchParams({ limit: '50' })
       if (latestAt.current) params.set('since', latestAt.current)
+      if (runId) params.set('run_id', runId)
       const res = await fetch(`${AGENT_ACTIVITY_PATH}?${params}`)
       if (!res.ok) { setError(`HTTP ${res.status}`); return }
       const data = await res.json()
@@ -106,7 +107,13 @@ export function AgentActivityPanel({ sessionId }) {
         setCheckpoints(data.checkpoints || [])
       }
     } catch { /* fetch error: keep last state */ }
-  }, [])
+  }, [runId])
+
+  React.useEffect(() => {
+    latestAt.current = null
+    setCalls([])
+    setCheckpoints([])
+  }, [runId])
 
   React.useEffect(() => {
     if (!expanded || typeof document === 'undefined' || document.visibilityState === 'hidden') return undefined
@@ -153,7 +160,7 @@ export function AgentActivityPanel({ sessionId }) {
       },
     }, [
       h('span', { key: 'chevron', style: { fontSize: 11, color: C.muted, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▸'),
-      h('span', { key: 'title', style: { fontSize: 13, fontWeight: 600 } }, 'Agent 活动'),
+      h('span', { key: 'title', style: { fontSize: 13, fontWeight: 600 } }, runId ? '当前研究运行活动' : 'Agent 活动'),
       pendingCheckpoints.length > 0 && h(Badge, { key: 'cp-badge', color: '#F39C12' }, `${pendingCheckpoints.length} 待确认`),
       calls.length > 0 && h('span', { key: 'count', style: { marginLeft: 'auto', fontSize: 11, color: C.muted } }, `${calls.length} 条记录`),
     ]),
@@ -161,7 +168,7 @@ export function AgentActivityPanel({ sessionId }) {
       error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
       ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
       calls.length === 0 && !error
-        ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
+        ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
         : h('div', { key: 'calls', style: { maxHeight: 300, overflowY: 'auto' } },
             calls.map(call => h(CallEntry, { key: call.id, call }))
           ),

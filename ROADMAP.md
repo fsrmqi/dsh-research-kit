@@ -136,7 +136,7 @@
 
 **背景**：四个分区能力集合各自完整，但闭环动线只存在于文档里——产品中没有任何一条线把四层串起来（用户走查结论：空间不在「缺功能」，在「断链」）。本主题收纳跨分区动线类工作，避免它们散落在各分区条目里失焦。
 
-**基础设施第一片（已落地 · 2026-09-18）**：新增 `research-context-store`，提供跨分区一致的「当前项目 + 最小研究运行」上下文。工作流写入、发送或复制时创建不含 Prompt/原始内容的运行记录（草稿 / 活跃等 UI 状态），并同步既有证据库项目选择；控制台导航显示当前项目与活跃运行。它不替代 MCP passport、checkpoint 或调用日志，也不把“写入输入框”表述为工具已执行。
+**基础设施第一片（已落地 · 2026-09-18）**：新增 `research-context-store`，提供跨分区一致的「当前项目 + 最小研究运行」上下文。工作流写入、发送或复制时创建不含 Prompt/原始内容的运行记录（草稿 / 活跃等 UI 状态），并同步既有证据库项目选择；控制台导航显示当前项目与活跃运行。工作流 Prompt 会带入格式受限的 `run_id` 协作指令；MCP `save_evidence` / `list_evidence` 与 `export_passport` 可消费该可选关联键，checkpoint 与 Agent 活动面板据此收敛到同一次运行。`run_id` 不参与证据去重，也不把“写入输入框”表述为工具已执行。
 
 **第一切片（已落地 · 2026-09-12，待 MANUAL-QA 现场核对 L1–L3）：P5「资产-证据互链」最小闭环。**
 - 数据模型：link 关系（assetId ↔ evidenceId）落**证据库侧**新增 IndexedDB link 表（`evidence-vault-store` 版本 1 → 2，`onupgradeneeded` 按 `objectStoreNames.contains` 守卫创建，老库平滑升级——已由「v1 老库升级不丢数据」专项测试钉住）；不扩展 vendored asset provider 契约（避开 METHOD-WORKSHOP 工件治理）。

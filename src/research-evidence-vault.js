@@ -5,7 +5,7 @@ import {
   Segmented, EmptyState, Spinner, Notice,
 } from './ui.js'
 import { createEvidenceVaultStore } from './evidence-vault-store.js'
-import { currentResearchContext, setResearchProject } from './research-context-store.js'
+import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
   statusCounts, filterEvidence, detectIdentifier,
@@ -62,6 +62,7 @@ function fileEvidenceInput(entry) {
     status: entry.status || 'unverified',
     grade: entry.grade || 'ungraded',
     agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
+    runId: entry.run_id || entry.runId || '',
   }
 }
 
@@ -77,6 +78,7 @@ function vaultEvidenceFileEntry(entry) {
     grade: entry.grade || 'ungraded',
     status: entry.status || 'unverified',
     source: 'dsh-ui',
+    run_id: entry.runId || '',
     saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
   }
 }
@@ -155,7 +157,11 @@ async function persistEvidenceEntryToFile(entry) {
 }
 
 export async function saveEvidenceEntry(input, options) {
-  const result = await evidenceVaultStore().save(input, options)
+  const result = await evidenceVaultStore().save({
+    ...input,
+    // UI 保存默认归入当前运行；没有运行时保持空值，兼容既有项目级证据。
+    runId: input?.runId || activeResearchRun()?.id || '',
+  }, options)
   await persistEvidenceEntryToFile(result.entry)
   publishEvidenceVault()
   return result

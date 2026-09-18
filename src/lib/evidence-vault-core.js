@@ -65,6 +65,11 @@ function clampText(value, max) {
   return text.length > max ? text.slice(0, max) : text
 }
 
+function normalizeRunId(value) {
+  const id = String(value || '').trim()
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(id) ? id : ''
+}
+
 // 只接受 http(s) 与协议相对链接。宿主页面里渲染 <a href>，必须挡掉 javascript: 等注入。
 function safeUrl(value) {
   const text = String(value || '').trim()
@@ -100,6 +105,7 @@ export function normalizeEvidenceEntry(input = {}) {
     status,
     grade,
     agentProduced: input.agentProduced === true,
+    runId: normalizeRunId(input.runId || input.run_id),
   }
 }
 

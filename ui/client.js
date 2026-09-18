@@ -6078,6 +6078,11 @@ window.__ModuleLoader__.load({
       return text.length > max ? text.slice(0, max) : text
     }
 
+    function normalizeRunId(value) {
+      const id = String(value || '').trim()
+      return /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(id) ? id : ''
+    }
+
     // 只接受 http(s) 与协议相对链接。宿主页面里渲染 <a href>，必须挡掉 javascript: 等注入。
     function safeUrl(value) {
       const text = String(value || '').trim()
@@ -6113,6 +6118,7 @@ window.__ModuleLoader__.load({
         status,
         grade,
         agentProduced: input.agentProduced === true,
+        runId: normalizeRunId(input.runId || input.run_id),
       }
     }
 
@@ -8119,6 +8125,7 @@ window.__ModuleLoader__.load({
         status: entry.status || 'unverified',
         grade: entry.grade || 'ungraded',
         agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
+        runId: entry.run_id || entry.runId || '',
       }
     }
 
@@ -8134,6 +8141,7 @@ window.__ModuleLoader__.load({
         grade: entry.grade || 'ungraded',
         status: entry.status || 'unverified',
         source: 'dsh-ui',
+        run_id: entry.runId || '',
         saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
       }
     }
@@ -8212,7 +8220,11 @@ window.__ModuleLoader__.load({
     }
 
     async function saveEvidenceEntry(input, options) {
-      const result = await evidenceVaultStore().save(input, options)
+      const result = await evidenceVaultStore().save({
+        ...input,
+        // UI 保存默认归入当前运行；没有运行时保持空值，兼容既有项目级证据。
+        runId: input?.runId || activeResearchRun()?.id || '',
+      }, options)
       await persistEvidenceEntryToFile(result.entry)
       publishEvidenceVault()
       return result
@@ -11227,14 +11239,17 @@ window.__ModuleLoader__.load({
           stages: taskPlan?.stages || [], status,
         })
       }
+      const runPrompt = (run, prompt) => run
+        ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 save_evidence、export_passport），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
+        : prompt
       const write = () => {
         if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
         if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
         if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法写入。')
         try {
           composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
-          inputActions.setDraft(finalPrompt)
           const run = recordUse('draft')
+          inputActions.setDraft(runPrompt(run, finalPrompt))
           setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
         }
         catch (error) { setNotice(error.message) }
@@ -11245,17 +11260,17 @@ window.__ModuleLoader__.load({
         if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法发送。')
         try {
           composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
-          inputActions.setDraft(finalPrompt)
-          await inputActions.submit()
           const run = recordUse('active')
+          inputActions.setDraft(runPrompt(run, finalPrompt))
+          await inputActions.submit()
           setNotice(`已发送到当前会话。研究运行${run ? `「${run.workflowName}」已开始` : '已开始'}。`)
         } catch (error) { setNotice(error.message) }
       }
       const copyPrompt = async () => {
         if (!workflow || !String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
         try {
-          await navigator.clipboard.writeText(finalPrompt)
-          recordUse('draft')
+          const run = recordUse('draft')
+          await navigator.clipboard.writeText(runPrompt(run, finalPrompt))
           setNotice('已复制提示词到剪贴板，并创建草稿研究运行；可粘贴到任意会话使用。')
         } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
       }
@@ -11870,7 +11885,7 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    function AgentActivityPanel({ sessionId }) {
+    function AgentActivityPanel({ sessionId, runId = '' }) {
       const [expanded, setExpanded] = React.useState(false)
       const [calls, setCalls] = React.useState([])
       const [checkpoints, setCheckpoints] = React.useState([])
@@ -11882,6 +11897,7 @@ window.__ModuleLoader__.load({
         try {
           const params = new URLSearchParams({ limit: '50' })
           if (latestAt.current) params.set('since', latestAt.current)
+          if (runId) params.set('run_id', runId)
           const res = await fetch(`${AGENT_ACTIVITY_PATH}?${params}`)
           if (!res.ok) { setError(`HTTP ${res.status}`); return }
           const data = await res.json()
@@ -11894,7 +11910,13 @@ window.__ModuleLoader__.load({
             setCheckpoints(data.checkpoints || [])
           }
         } catch { /* fetch error: keep last state */ }
-      }, [])
+      }, [runId])
+
+      React.useEffect(() => {
+        latestAt.current = null
+        setCalls([])
+        setCheckpoints([])
+      }, [runId])
 
       React.useEffect(() => {
         if (!expanded || typeof document === 'undefined' || document.visibilityState === 'hidden') return undefined
@@ -11941,7 +11963,7 @@ window.__ModuleLoader__.load({
           },
         }, [
           h('span', { key: 'chevron', style: { fontSize: 11, color: C.muted, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▸'),
-          h('span', { key: 'title', style: { fontSize: 13, fontWeight: 600 } }, 'Agent 活动'),
+          h('span', { key: 'title', style: { fontSize: 13, fontWeight: 600 } }, runId ? '当前研究运行活动' : 'Agent 活动'),
           pendingCheckpoints.length > 0 && h(Badge, { key: 'cp-badge', color: '#F39C12' }, `${pendingCheckpoints.length} 待确认`),
           calls.length > 0 && h('span', { key: 'count', style: { marginLeft: 'auto', fontSize: 11, color: C.muted } }, `${calls.length} 条记录`),
         ]),
@@ -11949,7 +11971,7 @@ window.__ModuleLoader__.load({
           error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
           ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
           calls.length === 0 && !error
-            ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
+            ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
             : h('div', { key: 'calls', style: { maxHeight: 300, overflowY: 'auto' } },
                 calls.map(call => h(CallEntry, { key: call.id, call }))
               ),
@@ -12059,7 +12081,7 @@ window.__ModuleLoader__.load({
           ]),
         ]),
         h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
-        h(AgentActivityPanel, { key: 'agent-activity', sessionId }),
+        h(AgentActivityPanel, { key: 'agent-activity', sessionId, runId: researchContext.activeRunId }),
       ])
     }
 

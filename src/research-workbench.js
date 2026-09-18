@@ -262,14 +262,17 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
       stages: taskPlan?.stages || [], status,
     })
   }
+  const runPrompt = (run, prompt) => run
+    ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 save_evidence、export_passport），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
+    : prompt
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
     if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法写入。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
-      inputActions.setDraft(finalPrompt)
       const run = recordUse('draft')
+      inputActions.setDraft(runPrompt(run, finalPrompt))
       setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
     }
     catch (error) { setNotice(error.message) }
@@ -280,17 +283,17 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法发送。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
-      inputActions.setDraft(finalPrompt)
-      await inputActions.submit()
       const run = recordUse('active')
+      inputActions.setDraft(runPrompt(run, finalPrompt))
+      await inputActions.submit()
       setNotice(`已发送到当前会话。研究运行${run ? `「${run.workflowName}」已开始` : '已开始'}。`)
     } catch (error) { setNotice(error.message) }
   }
   const copyPrompt = async () => {
     if (!workflow || !String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
     try {
-      await navigator.clipboard.writeText(finalPrompt)
-      recordUse('draft')
+      const run = recordUse('draft')
+      await navigator.clipboard.writeText(runPrompt(run, finalPrompt))
       setNotice('已复制提示词到剪贴板，并创建草稿研究运行；可粘贴到任意会话使用。')
     } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
   }

@@ -106,6 +106,6 @@ export function ResearchConsole(props) {
       ]),
     ]),
     h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
-    h(AgentActivityPanel, { key: 'agent-activity', sessionId }),
+    h(AgentActivityPanel, { key: 'agent-activity', sessionId, runId: researchContext.activeRunId }),
   ])
 }

@@ -55,6 +55,8 @@ async function logCall({ tool, params, result, duration_ms, error }) {
   const entry = {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     tool: String(tool || 'unknown'),
+    // 运行标识是关联键，不是研究内容；单列保存，活动路由不需要解析已脱敏的 params。
+    run_id: typeof params?.run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(params.run_id) ? params.run_id : '',
     params: summarizeParams(params),
     ok: !error,
     error: error ? String(error).slice(0, 300) : null,

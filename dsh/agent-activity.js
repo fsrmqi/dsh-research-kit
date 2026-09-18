@@ -34,7 +34,7 @@ function readBody(req) {
   })
 }
 
-async function readCallLogs({ limit = 50, since } = {}) {
+async function readCallLogs({ limit = 50, since, runId } = {}) {
   if (!existsSync(LOG_FILE)) return []
   let handle
   try {
@@ -51,7 +51,8 @@ async function readCallLogs({ limit = 50, since } = {}) {
     const records = text.split('\n').filter(Boolean).map(line => {
       try { return JSON.parse(line) } catch { return null }
     }).filter(Boolean)
-    const filtered = since ? records.filter(record => record.at > since) : records
+    const sinceFiltered = since ? records.filter(record => record.at > since) : records
+    const filtered = runId ? sinceFiltered.filter(record => record.run_id === runId) : sinceFiltered
     return filtered.slice(-Math.min(limit, 200)).reverse()
   } catch {
     return []
@@ -60,7 +61,7 @@ async function readCallLogs({ limit = 50, since } = {}) {
   }
 }
 
-async function readCheckpoints() {
+async function readCheckpoints(runId) {
   if (!existsSync(CHECKPOINT_DIR)) return []
   try {
     const files = (await readdir(CHECKPOINT_DIR)).filter(file => file.endsWith('.json'))
@@ -76,6 +77,7 @@ async function readCheckpoints() {
       .sort((a, b) => b.mtime - a.mtime)
       .slice(0, MAX_CHECKPOINT_FILES)
       .map(item => item.state)
+      .filter(state => !runId || state.run_id === runId)
   } catch {
     return []
   }
@@ -90,9 +92,11 @@ export function agentActivityRoute({ logger } = {}) {
           const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`)
           const limit = Math.max(1, Math.min(parseInt(url.searchParams.get('limit'), 10) || 50, 200))
           const since = url.searchParams.get('since') || null
+          const runId = url.searchParams.get('run_id') || ''
+          if (runId && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(runId)) return reply(res, 400, { ok: false, error: 'invalid_run_id' })
           const [calls, checkpoints] = await Promise.all([
-            readCallLogs({ limit, since }),
-            readCheckpoints(),
+            readCallLogs({ limit, since, runId }),
+            readCheckpoints(runId),
           ])
           return reply(res, 200, { ok: true, calls, checkpoints })
         }

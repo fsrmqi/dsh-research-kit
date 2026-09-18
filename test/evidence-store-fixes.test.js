@@ -53,6 +53,17 @@ test('listEvidence：返回最新的 N 条，而不是最旧的 N 条', async ()
   assert.ok(ids.includes('10.9999/4'), '应包含倒数第二条')
 })
 
+test('run_id：可关联和筛选证据，但不改变同项目来源去重', async () => {
+  const project = 'run-linked-evidence'
+  await saveEvidence({ project, run_id: 'run-alpha', identifier_type: 'doi', identifier: '10.9999/run-linked', title: 'Run linked' })
+  const duplicate = await saveEvidence({ project, run_id: 'run-beta', identifier_type: 'doi', identifier: '10.9999/run-linked', title: 'Run linked again' })
+  assert.equal(duplicate.saved, false, '运行关联不能绕过同项目证据去重')
+  const listed = await listEvidence({ project, run_id: 'run-alpha' })
+  assert.equal(listed.entries.length, 1)
+  assert.equal(listed.entries[0].run_id, 'run-alpha')
+  assert.equal((await listEvidence({ project, run_id: 'run-beta' })).entries.length, 0)
+})
+
 test('mergeProjectEntries：无法解析的 JSONL 行不应永久丢失', async () => {
   const project = 'parse-error'
   // 先正常入库一条

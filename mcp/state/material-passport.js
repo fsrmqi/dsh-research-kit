@@ -11,6 +11,13 @@ function makeRunId() {
   return crypto.randomBytes(6).toString('hex')
 }
 
+function validRunId(value) {
+  const id = String(value || '').trim()
+  if (!id) return ''
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(id)) throw new Error('run_id 格式不合法。')
+  return id
+}
+
 function computeHash(passport) {
   return crypto.createHash('sha256').update(JSON.stringify(passport, null, 0)).digest('hex').slice(0, 12)
 }
@@ -100,9 +107,9 @@ function fromYaml(text) {
   return passport
 }
 
-async function exportPassport({ project, current_stage, completed, pending, constraints, evidence_ids }) {
+async function exportPassport({ run_id, project, current_stage, completed, pending, constraints, evidence_ids }) {
   const passport = {
-    run_id: makeRunId(),
+    run_id: validRunId(run_id) || makeRunId(),
     created_at: new Date().toISOString(),
     project: project || 'default',
     current_stage: current_stage || 'unknown',

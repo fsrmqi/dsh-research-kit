@@ -174,7 +174,7 @@ export async function clearAllProjectEntries() {
   return cleared
 }
 
-async function saveEvidence({ identifier_type, identifier, title, url, note, project, grade_hint }) {
+async function saveEvidence({ identifier_type, identifier, title, url, note, project, grade_hint, run_id }) {
   const entry = {
     id: makeId(),
     identifier_type: identifier_type || 'none',
@@ -187,6 +187,9 @@ async function saveEvidence({ identifier_type, identifier, title, url, note, pro
     status: 'unverified',
     source: 'mcp-agent',
     saved_at: new Date().toISOString(),
+    // run_id 是可选关联，不参与项目内来源去重；同一文献可在同一研究运行中多次
+    // 被引用，但仍应只保存一条证据元数据。
+    run_id: typeof run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(run_id) ? run_id : '',
   }
 
   const result = await mergeProjectEntries(entry.project, [entry])
@@ -197,11 +200,12 @@ async function saveEvidence({ identifier_type, identifier, title, url, note, pro
   return { saved: true, id: entry.id, dedup_status: 'new' }
 }
 
-async function listEvidence({ project, identifier_type, grade, limit } = {}) {
+async function listEvidence({ project, identifier_type, grade, run_id, limit } = {}) {
   const projectName = safeProjectName(project)
   let entries = await readProjectEntries(projectName)
   if (identifier_type) entries = entries.filter(entry => entry.identifier_type === identifier_type)
   if (grade) entries = entries.filter(entry => entry.grade === grade)
+  if (run_id) entries = entries.filter(entry => entry.run_id === run_id)
   // 按 saved_at 倒序（最新在前），再取前 N 条，与兄弟读取方一致
   const sorted = [...entries].sort((a, b) => new Date(b.saved_at || '') - new Date(a.saved_at || ''))
   const max = Math.max(1, Math.min(Number(limit) || 50, 200))
