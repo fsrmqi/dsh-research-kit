@@ -5,6 +5,7 @@ import {
   Segmented, EmptyState, Spinner, Notice,
 } from './ui.js'
 import { createEvidenceVaultStore } from './evidence-vault-store.js'
+import { currentResearchContext, setResearchProject } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
   statusCounts, filterEvidence, detectIdentifier,
@@ -198,11 +199,18 @@ export function listAssetEvidenceLinks(filter) {
 // 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
 // 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
 export function getActiveProject() {
-  return evidenceVaultStore().getActiveProject()
+  const store = evidenceVaultStore()
+  const stored = store.getActiveProject()
+  const project = currentResearchContext().project
+  // 首次升级时保留旧证据库的项目选择；之后研究上下文成为跨分区共享入口。
+  if (!project && stored) { setResearchProject(stored); return stored }
+  if (project && project !== stored) store.setActiveProject(project)
+  return project || stored
 }
 
 export function setActiveProject(project) {
   const next = evidenceVaultStore().setActiveProject(project)
+  setResearchProject(next)
   publishEvidenceVault()
   return next
 }

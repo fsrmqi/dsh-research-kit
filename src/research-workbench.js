@@ -6,6 +6,8 @@ import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { fetchHostCapabilitiesSummary } from './host-capabilities-client.js'
 import { DatabaseQueryPanel } from './database-query-panel.js'
+import { getActiveProject } from './research-evidence-vault.js'
+import { startResearchRun } from './research-context-store.js'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import {
@@ -249,18 +251,27 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const listEntries = isSpecialView ? specialRows : items.map(item => ({ item }))
   const listGroups = groupEntriesByCategory(listEntries)
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
-  const recordUse = () => {
+  const recordUse = (status = 'draft') => {
     if (!workflow) return
     // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
     setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
     if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
+    return startResearchRun({
+      project: getActiveProject(), sessionId, workflowId: workflow.id, workflowName: workflow.name,
+      stages: taskPlan?.stages || [], status,
+    })
   }
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
     if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法写入。')
-    try { composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }); inputActions.setDraft(finalPrompt); recordUse(); setNotice('已写入当前会话输入框，可继续编辑后发送。') }
+    try {
+      composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
+      inputActions.setDraft(finalPrompt)
+      const run = recordUse('draft')
+      setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
+    }
     catch (error) { setNotice(error.message) }
   }
   const send = async () => {
@@ -271,16 +282,16 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
       inputActions.setDraft(finalPrompt)
       await inputActions.submit()
-      recordUse()
-      setNotice('已发送到当前会话。')
+      const run = recordUse('active')
+      setNotice(`已发送到当前会话。研究运行${run ? `「${run.workflowName}」已开始` : '已开始'}。`)
     } catch (error) { setNotice(error.message) }
   }
   const copyPrompt = async () => {
     if (!workflow || !String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
     try {
       await navigator.clipboard.writeText(finalPrompt)
-      recordUse()
-      setNotice('已复制提示词到剪贴板；可粘贴到任意会话使用。')
+      recordUse('draft')
+      setNotice('已复制提示词到剪贴板，并创建草稿研究运行；可粘贴到任意会话使用。')
     } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
   }
   const openHistoryEntry = row => {

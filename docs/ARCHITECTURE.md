@@ -86,6 +86,7 @@ dsh-research-kit/
 │   ├── catalog.js                   # 资源读取、搜索、查询、Prompt 组装（纯函数）
 │   ├── catalog-storage.js           # 收藏与使用历史的 CatalogStorage 接口
 │   ├── research-selection-store.js  # 会话级资源选择（仅存于当前会话）
+│   ├── research-context-store.js    # 跨分区研究上下文：当前项目 + 最小研究运行元数据（不保存 Prompt 或原始内容）
 │   ├── evidence-store.js            # 本会话证据索引（只读汇总）
 │   ├── evidence-vault-store.js      # 证据库持久化：IndexedDB schema v2（entries + 资产-证据 link 表，守卫式升级）+ 内存降级 + 项目隔离 / 去重 / 备份
 │   ├── knowledge-store.js           # 自动沉淀知识库持久化：节点/关系双 store，稳定 id 去重合并、冲突并列（IndexedDB + 内存降级）
@@ -158,6 +159,7 @@ dsh-research-kit/
 | `src/catalog.js` | 纯函数、数据校验、搜索、Prompt 组装 | 访问 DOM、网络、`localStorage`。 |
 | `src/catalog-storage.js` | 收藏/历史读写、变更通知，隔离 localStorage | 存参数值或完整 Prompt；网络访问。 |
 | `src/research-selection-store.js` | 会话级资源选择的读写与广播 | 跨会话持久化。 |
+| `src/research-context-store.js` | 跨分区的当前项目与研究运行元数据；只保存工作流身份、阶段、状态和时间，不保存 Prompt、检索词、文件或模型输出 | 替代证据、资产、知识或 MCP 的领域存储；声称某个运行已执行工具。 |
 | `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
 | `src/evidence-vault-store.js` | 证据库持久化：IndexedDB schema v2（条目 + 资产-证据 link 表，守卫式升级）、按项目隔离与去重、备份序列化，并提供内存降级；link 的建立/解除/端点删除联动 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目或自动建立 link。 |
 | `src/lib/asset-evidence-links.js` | 资产-证据互链纯逻辑：稳定 link id、候选推导（同项目 / 共同标签 / 知识链种子）、图谱边转换 | 自动建立 link；把候选当成已确认事实；在候选里携带笔记或全文。 |

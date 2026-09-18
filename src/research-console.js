@@ -4,6 +4,7 @@ import { Page, Segmented } from './ui.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { AgentActivityPanel } from './agent-activity.js'
+import { currentResearchContext, setResearchProject, subscribeResearchContext, activeResearchRun } from './research-context-store.js'
 
 // 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
 // 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
@@ -43,6 +44,7 @@ const META_LINE = { margin: 0, fontSize: 12, lineHeight: 1.55 }
 export function ResearchConsole(props) {
   const { sessionId, inputActions } = props
   const [section, setSection] = React.useState(readStoredSection)
+  const [researchContext, setResearchContext] = React.useState(currentResearchContext)
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -66,6 +68,7 @@ export function ResearchConsole(props) {
       host.style.removeProperty('--rk-console-nav-h')
     }
   }, [])
+  React.useEffect(() => subscribeResearchContext(setResearchContext), [])
   const current = findConsoleSection(section)
   const select = id => {
     setSection(normalizeConsoleSection(id))
@@ -90,6 +93,16 @@ export function ResearchConsole(props) {
         h('p', { key: 'position', style: { ...META_LINE, color: C.slate, fontWeight: 650 } }, `定位：${current.position}`),
         h('p', { key: 'purpose', style: { ...META_LINE, color: C.muted } }, `核心用途：${current.purpose}`),
         h('p', { key: 'boundary', style: { ...META_LINE, color: C.muted } }, `职责边界：${current.boundary}`),
+        h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
+          h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
+          h('input', {
+            key: 'project', value: researchContext.project,
+            onChange: event => setResearchProject(event?.target?.value || ''),
+            placeholder: '未命名项目', 'aria-label': '当前研究项目',
+            style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
+          }),
+          activeResearchRun() ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeResearchRun().workflowName || '未命名工作流'} · ${activeResearchRun().status}`) : null,
+        ]),
       ]),
     ]),
     h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),

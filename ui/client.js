@@ -4136,6 +4136,115 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 研究上下文是各分区的最小共同语言：只保存项目名和运行元数据，绝不保存
+    // Prompt、文件内容、检索词或模型输出。它不替代证据库/资产库，只负责回答
+    // 「当前正在为哪个项目、通过哪一次研究运行工作」。
+
+    const RESEARCH_CONTEXT_KEY = 'dsh-research-kit.research-context.v1'
+    const RESEARCH_RUNS_KEY = 'dsh-research-kit.research-runs.v1'
+    const MAX_RESEARCH_RUNS = 80
+
+    let contextMemory = { project: '', activeRunId: '' }
+    const contextListeners = new Set()
+
+    function safeStorageGet(key) {
+      try { return globalThis.localStorage?.getItem(key) || '' } catch { return '' }
+    }
+
+    function safeStorageSet(key, value) {
+      try { globalThis.localStorage?.setItem(key, value) } catch { /* 私有模式下仅保留进程内状态 */ }
+    }
+
+    function normalizeProject(value) {
+      return String(value || '').trim().slice(0, 100)
+    }
+
+    function normalizeContext(value) {
+      return {
+        project: normalizeProject(value?.project),
+        activeRunId: String(value?.activeRunId || '').trim(),
+      }
+    }
+
+    function readContext() {
+      try {
+        const raw = safeStorageGet(RESEARCH_CONTEXT_KEY)
+        if (raw) contextMemory = normalizeContext(JSON.parse(raw))
+      } catch { /* 损坏的偏好不应阻断工作台 */ }
+      return { ...contextMemory }
+    }
+
+    function publishContext() {
+      const value = { ...contextMemory }
+      for (const listener of contextListeners) { try { listener(value) } catch {} }
+      return value
+    }
+
+    function currentResearchContext() {
+      return readContext()
+    }
+
+    function setResearchContext(next = {}) {
+      contextMemory = normalizeContext({ ...readContext(), ...next })
+      safeStorageSet(RESEARCH_CONTEXT_KEY, JSON.stringify(contextMemory))
+      return publishContext()
+    }
+
+    function setResearchProject(project) {
+      return setResearchContext({ project: normalizeProject(project) })
+    }
+
+    function subscribeResearchContext(listener) {
+      contextListeners.add(listener)
+      return () => contextListeners.delete(listener)
+    }
+
+    function readRuns() {
+      try {
+        const rows = JSON.parse(safeStorageGet(RESEARCH_RUNS_KEY) || '[]')
+        return Array.isArray(rows) ? rows.filter(row => row && typeof row === 'object') : []
+      } catch { return [] }
+    }
+
+    function writeRuns(runs) {
+      safeStorageSet(RESEARCH_RUNS_KEY, JSON.stringify(runs.slice(0, MAX_RESEARCH_RUNS)))
+      return runs.slice(0, MAX_RESEARCH_RUNS)
+    }
+
+    function runId() {
+      return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    }
+
+    // 运行只在用户明确使用工作流时创建。copy/draft/active 是 UI 事实，不代表模型
+    // 或工具已经执行；真正的执行证据仍来自 MCP 调用日志与 checkpoint。
+    function startResearchRun({ project, sessionId = '', workflowId, workflowName, stages = [], status = 'draft', now = Date.now() } = {}) {
+      const context = currentResearchContext()
+      const resolvedProject = normalizeProject(project === undefined ? context.project : project)
+      const run = {
+        id: runId(), project: resolvedProject, sessionId: String(sessionId || ''),
+        workflowId: String(workflowId || ''), workflowName: String(workflowName || ''),
+        stages: (Array.isArray(stages) ? stages : []).map(label => String(label)).filter(Boolean).slice(0, 30),
+        status: ['draft', 'active', 'waiting_review', 'completed', 'failed'].includes(status) ? status : 'draft',
+        createdAt: now, updatedAt: now,
+      }
+      writeRuns([run, ...readRuns()])
+      setResearchContext({ project: resolvedProject, activeRunId: run.id })
+      return run
+    }
+
+    function activeResearchRun() {
+      const context = currentResearchContext()
+      return readRuns().find(run => run.id === context.activeRunId) || null
+    }
+
+    function listResearchRuns({ project, sessionId } = {}) {
+      return readRuns().filter(run =>
+        (project === undefined || run.project === normalizeProject(project)) &&
+        (sessionId === undefined || run.sessionId === String(sessionId || ''))
+      )
+    }
+
+
     const MAX_QUERIES = 30
     const MAX_WORKFLOWS = 30
 
@@ -8147,11 +8256,18 @@ window.__ModuleLoader__.load({
     // 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
     // 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
     function getActiveProject() {
-      return evidenceVaultStore().getActiveProject()
+      const store = evidenceVaultStore()
+      const stored = store.getActiveProject()
+      const project = currentResearchContext().project
+      // 首次升级时保留旧证据库的项目选择；之后研究上下文成为跨分区共享入口。
+      if (!project && stored) { setResearchProject(stored); return stored }
+      if (project && project !== stored) store.setActiveProject(project)
+      return project || stored
     }
 
     function setActiveProject(project) {
       const next = evidenceVaultStore().setActiveProject(project)
+      setResearchProject(next)
       publishEvidenceVault()
       return next
     }
@@ -11100,18 +11216,27 @@ window.__ModuleLoader__.load({
       const listEntries = isSpecialView ? specialRows : items.map(item => ({ item }))
       const listGroups = groupEntriesByCategory(listEntries)
       // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
-      const recordUse = () => {
+      const recordUse = (status = 'draft') => {
         if (!workflow) return
         // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
         setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
         evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
         if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
+        return startResearchRun({
+          project: getActiveProject(), sessionId, workflowId: workflow.id, workflowName: workflow.name,
+          stages: taskPlan?.stages || [], status,
+        })
       }
       const write = () => {
         if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
         if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
         if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法写入。')
-        try { composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }); inputActions.setDraft(finalPrompt); recordUse(); setNotice('已写入当前会话输入框，可继续编辑后发送。') }
+        try {
+          composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
+          inputActions.setDraft(finalPrompt)
+          const run = recordUse('draft')
+          setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
+        }
         catch (error) { setNotice(error.message) }
       }
       const send = async () => {
@@ -11122,16 +11247,16 @@ window.__ModuleLoader__.load({
           composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
           inputActions.setDraft(finalPrompt)
           await inputActions.submit()
-          recordUse()
-          setNotice('已发送到当前会话。')
+          const run = recordUse('active')
+          setNotice(`已发送到当前会话。研究运行${run ? `「${run.workflowName}」已开始` : '已开始'}。`)
         } catch (error) { setNotice(error.message) }
       }
       const copyPrompt = async () => {
         if (!workflow || !String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
         try {
           await navigator.clipboard.writeText(finalPrompt)
-          recordUse()
-          setNotice('已复制提示词到剪贴板；可粘贴到任意会话使用。')
+          recordUse('draft')
+          setNotice('已复制提示词到剪贴板，并创建草稿研究运行；可粘贴到任意会话使用。')
         } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
       }
       const openHistoryEntry = row => {
@@ -11872,6 +11997,7 @@ window.__ModuleLoader__.load({
     function ResearchConsole(props) {
       const { sessionId, inputActions } = props
       const [section, setSection] = React.useState(readStoredSection)
+      const [researchContext, setResearchContext] = React.useState(currentResearchContext)
       const navRef = React.useRef(null)
       // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
       // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -11895,6 +12021,7 @@ window.__ModuleLoader__.load({
           host.style.removeProperty('--rk-console-nav-h')
         }
       }, [])
+      React.useEffect(() => subscribeResearchContext(setResearchContext), [])
       const current = findConsoleSection(section)
       const select = id => {
         setSection(normalizeConsoleSection(id))
@@ -11919,6 +12046,16 @@ window.__ModuleLoader__.load({
             h('p', { key: 'position', style: { ...META_LINE, color: C.slate, fontWeight: 650 } }, `定位：${current.position}`),
             h('p', { key: 'purpose', style: { ...META_LINE, color: C.muted } }, `核心用途：${current.purpose}`),
             h('p', { key: 'boundary', style: { ...META_LINE, color: C.muted } }, `职责边界：${current.boundary}`),
+            h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
+              h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
+              h('input', {
+                key: 'project', value: researchContext.project,
+                onChange: event => setResearchProject(event?.target?.value || ''),
+                placeholder: '未命名项目', 'aria-label': '当前研究项目',
+                style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
+              }),
+              activeResearchRun() ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeResearchRun().workflowName || '未命名工作流'} · ${activeResearchRun().status}`) : null,
+            ]),
           ]),
         ]),
         h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
