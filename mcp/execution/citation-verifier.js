@@ -90,7 +90,8 @@ async function fetchArxiv(arxivId) {
 
 function keywordOverlap(text, claim) {
   const stop = new Set(['the','a','an','is','are','was','were','in','on','of','to','for','with','by','that','this','and','or','not','it','as','at','from','be','has','have','had','can','could','may','might','will','would','do','does','did','but','if','then','than','so','such','no','nor','only','its','their','our','your','these','those','which','who','whom','what','when','where','how','why','been','being','also','between','into','through','during','before','after','above','below','up','down','out','off','over','under','again','further','once','here','there','all','any','both','each','few','more','most','other','some','own','same','too','very','just','because','until','while','about','against'])
-  const tokenize = s => String(s).toLowerCase().replace(/[^\w\s]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !stop.has(w))
+  // 保留 CJK 字符和其他 Unicode 字母，只移除标点符号和特殊字符
+  const tokenize = s => String(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(w => w.length > 2 && !stop.has(w))
   const textWords = new Set(tokenize(text))
   const claimWords = tokenize(claim)
   if (!claimWords.length) return { matched: 0, total: 0, ratio: 0, matched_terms: [] }

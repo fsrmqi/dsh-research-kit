@@ -30,7 +30,7 @@ function pythonLiteral(value, indent = 0) {
 }
 
 function isNumberArray(value) {
-  return Array.isArray(value) && value.length > 0 && value.every(item => Number.isFinite(Number(item)))
+  return Array.isArray(value) && value.length > 0 && value.every(item => typeof item === 'number' && Number.isFinite(item))
 }
 
 function validateData(styleName, data) {
@@ -55,27 +55,34 @@ function validateData(styleName, data) {
       if (series.x.length !== series.mean.length || series.mean.length !== series.std.length) return `series.${name} 的 x/mean/std 必须等长。`
     }
   }
-  if (styleName === 'line_training_curve' || styleName === 'line_loss_with_inset') {
+  if (styleName === 'line_loss_with_inset') {
     if (!data.series || typeof data.series !== 'object' || !Object.keys(data.series).length) return `${styleName} 需要 series 对象。`
     for (const [name, series] of Object.entries(data.series)) {
       if (!isNumberArray(series.x) || !isNumberArray(series.y)) return `series.${name} 需要 x/y 数组。`
       if (series.x.length !== series.y.length) return `series.${name} 的 x/y 必须等长。`
     }
-  }
-  if (styleName === 'scatter_tsne_cluster') {
-    if (!data.clusters || typeof data.clusters !== 'object' || !Object.keys(data.clusters).length) return 'scatter_tsne_cluster 需要 clusters 对象。'
-    for (const [name, cluster] of Object.entries(data.clusters)) {
-      if (!isNumberArray(cluster.x) || !isNumberArray(cluster.y)) return `clusters.${name} 需要 x/y 数组。`
-      if (cluster.x.length !== cluster.y.length) return `clusters.${name} 的 x/y 必须等长。`
+    // zoom 显式 null → Python None.get() 报错
+    if (data.zoom !== undefined && data.zoom !== null) {
+      if (typeof data.zoom !== 'object') return 'zoom 必须是对象或省略。'
+    } else if (data.zoom === null) {
+      return 'zoom 不能为 null，请省略该字段。'
     }
   }
+
   if (styleName === 'scatter_broken_axis') {
     if (!data.series || typeof data.series !== 'object' || !Object.keys(data.series).length) return 'scatter_broken_axis 需要 series 对象。'
     for (const [name, series] of Object.entries(data.series)) {
       if (!isNumberArray(series.x) || !isNumberArray(series.y)) return `series.${name} 需要 x/y 数组。`
       if (series.x.length !== series.y.length) return `series.${name} 的 x/y 必须等长。`
     }
+    // break_x 显式 null → Python None
+    if (data.break_x !== undefined && data.break_x !== null) {
+      if (typeof data.break_x !== 'number') return 'break_x 必须是数字或省略。'
+    } else if (data.break_x === null) {
+      return 'break_x 不能为 null，请省略该字段。'
+    }
   }
+
   if (styleName === 'radar_dual_series') {
     if (!Array.isArray(data.categories) || data.categories.length < 3) return 'radar_dual_series 至少需要 3 个 categories。'
     if (!data.series || typeof data.series !== 'object' || Object.keys(data.series).length < 1) return 'radar_dual_series 需要 series。'
@@ -83,7 +90,19 @@ function validateData(styleName, data) {
       if (!isNumberArray(series.values)) return `series.${name}.values 必须是非空数值数组。`
       if (series.values.length !== data.categories.length) return `series.${name}.values 必须与 categories 等长。`
     }
+    // vmin/vmax 显式 null → Python None
+    if (data.vmin !== undefined && data.vmin !== null) {
+      if (typeof data.vmin !== 'number') return 'vmin 必须是数字或省略。'
+    } else if (data.vmin === null) {
+      return 'vmin 不能为 null，请省略该字段。'
+    }
+    if (data.vmax !== undefined && data.vmax !== null) {
+      if (typeof data.vmax !== 'number') return 'vmax 必须是数字或省略。'
+    } else if (data.vmax === null) {
+      return 'vmax 不能为 null，请省略该字段。'
+    }
   }
+
   return null
 }
 
@@ -100,8 +119,14 @@ ax.bar(x - gap / 2 - bar_w / 2, baseline, width=bar_w, color=STYLE_COLORS['basel
 ax.bar(x + gap / 2 + bar_w / 2, method, width=bar_w, color=STYLE_COLORS['method'], label='Method', zorder=2)
 for i in range(len(categories)):
     ratio = ((method[i] - baseline[i]) / baseline[i] * 100) if baseline[i] != 0 else (method[i] - baseline[i])
-    ax.annotate(f'+{ratio:.1f}%', xy=(x[i] + gap / 2 + bar_w / 2, method[i]), ha='center', va='bottom',
-                fontsize=9.5, fontweight='bold', color=STYLE_COLORS['delta'])
+    # 负增益标注不带前导 +，baseline==0 时用绝对值且不带 % 符号
+    if baseline[i] == 0:
+        ax.annotate(f'{method[i]:+.1f}', xy=(x[i] + gap / 2 + bar_w / 2, method[i]), ha='center', va='bottom',
+                    fontsize=9.5, fontweight='bold', color=STYLE_COLORS['delta'])
+    else:
+        sign = '+' if method[i] >= baseline[i] else ''
+        ax.annotate(f'{sign}{ratio:.1f}%', xy=(x[i] + gap / 2 + bar_w / 2, method[i]), ha='center', va='bottom',
+                    fontsize=9.5, fontweight='bold', color=STYLE_COLORS['delta'])
     ax.plot([x[i] - gap / 2 - bar_w / 2, x[i] + gap / 2 + bar_w / 2], [baseline[i], baseline[i]],
             color='black', linestyle='--', linewidth=0.8, zorder=1)
 ax.set_xticks(x)
@@ -151,32 +176,64 @@ for side, spine in ax.spines.items():
 ax.legend(framealpha=0, edgecolor='none')
 `
 
-  if (styleName === 'line_loss_with_inset') return `
+  if (styleName === 'line_training_curve') return `
 ax = fig.add_subplot(111)
 all_x = np.concatenate([np.asarray(s['x'], dtype=float) for s in DATA['series'].values()])
 all_y = np.concatenate([np.asarray(s['y'], dtype=float) for s in DATA['series'].values()])
 for name, series in DATA['series'].items():
     ax.plot(series['x'], series['y'], color=series.get('color', '#1F77B4'), linewidth=1.5, label=name)
+# line_training_curve 是折线图，不使用极坐标或 categories
+# 可选的 zoom inset 若存在则添加局部放大
 zoom = DATA.get('zoom', {})
-x_span = float(np.max(all_x) - np.min(all_x)) or 1.0
-y_span = float(np.max(all_y) - np.min(all_y)) or 1.0
-zx1 = float(zoom.get('x1', np.min(all_x) + x_span * 0.55))
-zx2 = float(zoom.get('x2', np.max(all_x)))
-zy1 = float(zoom.get('y1', np.min(all_y)))
-zy2 = float(zoom.get('y2', np.min(all_y) + y_span * 0.45))
-rect = mpatches.Rectangle((zx1, zy1), zx2 - zx1, zy2 - zy1, fill=False, linestyle='--',
-                           edgecolor='#333333', linewidth=1.0, zorder=5)
-ax.add_patch(rect)
-ax_inset = fig.add_axes([0.63, 0.18, 0.27, 0.31])
+if zoom and isinstance(zoom, dict):
+    zx1 = float(zoom.get('x1', np.min(all_x) + np.ptp(all_x) * 0.55))
+    zx2 = float(zoom.get('x2', np.max(all_x)))
+    zy1 = float(zoom.get('y1', np.min(all_y)))
+    zy2 = float(zoom.get('y2', np.min(all_y) + np.ptp(all_y) * 0.45))
+    rect = mpatches.Rectangle((zx1, zy1), zx2 - zx1, zy2 - zy1, fill=False, linestyle='--',
+                               edgecolor='#333333', linewidth=1.0, zorder=5)
+    ax.add_patch(rect)
+    ax_inset = fig.add_axes([0.63, 0.18, 0.27, 0.31])
+    for name, series in DATA['series'].items():
+        ax_inset.plot(series['x'], series['y'], color=series.get('color', '#1F77B4'), linewidth=1.2, label=name)
+    ax_inset.set_xlim(zx1, zx2)
+    ax_inset.set_ylim(zy1, zy2)
+    for spine in ax_inset.spines.values():
+        spine.set_linewidth(1.2)
+    connector = ConnectionPatch(xyA=(zx2, zy2), coordsA=ax.transData, xyB=(zx1, zy2), coordsB=ax_inset.transData,
+                                 color='#333333', linewidth=0.8, linestyle='--')
+    fig.add_artist(connector)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+ax.grid(True, color='#E0E0E0', linewidth=0.6, linestyle=':', zorder=0)
+ax.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='#DDDDDD')
+`
+
+  if (styleName === 'line_loss_with_inset') return `
+ax = fig.add_subplot(111)
+all_x = np.concatenate([np.asarray(s['x'], dtype=float) for s in DATA['series'].values()])
+all_y = np.concatenate([np.asarray(s['y'], dtype=float) for s in DATA['series'].values()])
 for name, series in DATA['series'].items():
-    ax_inset.plot(series['x'], series['y'], color=series.get('color', '#1F77B4'), linewidth=1.2, label=name)
-ax_inset.set_xlim(zx1, zx2)
-ax_inset.set_ylim(zy1, zy2)
-for spine in ax_inset.spines.values():
-    spine.set_linewidth(1.2)
-connector = ConnectionPatch(xyA=(zx2, zy2), coordsA=ax.transData, xyB=(zx1, zy2), coordsB=ax_inset.transData,
-                             color='#333333', linewidth=0.8, linestyle='--')
-fig.add_artist(connector)
+    ax.plot(series['x'], series['y'], color=series.get('color', '#2CA02C'), linewidth=1.5, label=name)
+zoom = DATA.get('zoom', {})
+if zoom and isinstance(zoom, dict):
+    zx1 = float(zoom.get('x1', np.min(all_x) + np.ptp(all_x) * 0.55))
+    zx2 = float(zoom.get('x2', np.max(all_x)))
+    zy1 = float(zoom.get('y1', np.min(all_y)))
+    zy2 = float(zoom.get('y2', np.min(all_y) + np.ptp(all_y) * 0.45))
+    rect = mpatches.Rectangle((zx1, zy1), zx2 - zx1, zy2 - zy1, fill=False, linestyle='--',
+                               edgecolor='#333333', linewidth=1.0, zorder=5)
+    ax.add_patch(rect)
+    ax_inset = fig.add_axes([0.63, 0.18, 0.27, 0.31])
+    for name, series in DATA['series'].items():
+        ax_inset.plot(series['x'], series['y'], color=series.get('color', '#1F77B4'), linewidth=1.2, label=name)
+    ax_inset.set_xlim(zx1, zx2)
+    ax_inset.set_ylim(zy1, zy2)
+    for spine in ax_inset.spines.values():
+        spine.set_linewidth(1.2)
+    connector = ConnectionPatch(xyA=(zx2, zy2), coordsA=ax.transData, xyB=(zx1, zy2), coordsB=ax_inset.transData,
+                                 color='#333333', linewidth=0.8, linestyle='--')
+    fig.add_artist(connector)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 ax.grid(True, color='#E0E0E0', linewidth=0.6, linestyle=':', zorder=0)
@@ -205,7 +262,7 @@ ax.legend(frameon=True, facecolor='white', edgecolor='#CCCCCC', markerscale=1.0)
 
   if (styleName === 'scatter_broken_axis') return `
 all_x = np.concatenate([np.asarray(s['x'], dtype=float) for s in DATA['series'].values()])
-break_x = float(DATA.get('break_x', np.median(all_x)))
+break_x = DATA.get('break_x', np.median(all_x))
 ax1 = fig.add_axes([0.08, 0.16, 0.58, 0.74])
 ax2 = fig.add_axes([0.71, 0.16, 0.21, 0.74])
 for name, series in DATA['series'].items():
@@ -233,7 +290,7 @@ ax1.legend(loc='lower right', frameon=True, facecolor='white', edgecolor='#CCCCC
 ax = ax1
 `
 
-  return `
+  if (styleName === 'radar_dual_series') return `
 ax = fig.add_subplot(111, projection='polar')
 ax.set_theta_zero_location('N')
 ax.set_theta_direction(-1)
@@ -267,6 +324,9 @@ ax.set_xticks(angles)
 ax.set_xticklabels(categories, fontsize=9)
 ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.05), frameon=False)
 `
+
+  // 未覆盖的风格应报错，而不是落到 radar 模板
+  throw new Error(`不支持的风格 "${styleName}"。可用风格：${Object.keys(STYLES).join(', ')}`)
 }
 
 function buildScript(styleName, styleConfig, data, options) {
@@ -303,11 +363,26 @@ print('Saved output_${styleName}.png')
 }
 
 function generateFigure(styleName, data, options = {}) {
+  console.log('DEBUG generateFigure called:', styleName, JSON.stringify(options))
   if (!STYLE_NAMES.includes(styleName)) {
     return err(`未知风格 \"${styleName}\"。可用风格：${STYLE_NAMES.join(', ')}`)
   }
   const validationError = validateData(styleName, data)
   if (validationError) return err(validationError)
+  // dpi/figsize 校验也放在这里，统一走 err() 路径
+  const { dpi, figsize } = options
+  if (dpi !== undefined) {
+    console.log('DEBUG: dpi check - value:', dpi, 'type:', typeof dpi, 'isFinite:', Number.isFinite(dpi), '<=0:', dpi <= 0)
+    if (typeof dpi !== 'number' || !Number.isFinite(dpi) || dpi <= 0) {
+      return err('dpi 必须是正数')
+    }
+  }
+  if (figsize?.[0] !== undefined && (typeof figsize[0] !== 'number' || !Number.isFinite(figsize[0]) || figsize[0] <= 0)) {
+    return err('figsize[0] 必须是正数')
+  }
+  if (figsize?.[1] !== undefined && (typeof figsize[1] !== 'number' || !Number.isFinite(figsize[1]) || figsize[1] <= 0)) {
+    return err('figsize[1] 必须是正数')
+  }
   let styleConfig = STYLES[styleName]
   if (options.apa_style) {
     styleConfig = {

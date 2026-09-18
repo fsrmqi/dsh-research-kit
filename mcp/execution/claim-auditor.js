@@ -14,7 +14,8 @@ const CITATION_PATTERNS = [
 function extractClaims(text) {
   const claims = []
   const raw = String(text || '')
-  const seen = new Set()
+  const seenIdentifiers = new Map() // identifier -> first match info
+  
   for (const pattern of CITATION_PATTERNS) {
     pattern.regex.lastIndex = 0
     let match
@@ -23,15 +24,22 @@ function extractClaims(text) {
       if (!identifier) continue
       const cleaned = identifier.replace(/[).,;]+$/, '').trim()
       if (!cleaned) continue
+      
+      // 去重：同一 identifier 只保留第一次出现
+      const lowerId = cleaned.toLowerCase()
+      if (seenIdentifiers.has(lowerId)) continue
+      seenIdentifiers.set(lowerId, true)
+      
       // Extract surrounding context: 200 chars before and after the citation match
       const start = Math.max(0, match.index - 200)
       const end = Math.min(raw.length, match.index + match[0].length + 200)
-      const context = raw.slice(start, end).replace(/\s+/g, ' ').trim()
+      let context = raw.slice(start, end).replace(/\s+/g, ' ').trim()
+      
+      // 归一化换行和多余空白
+      context = context.replace(/\n+/g, ' ').replace(/\r/g, '').trim()
+      
       const claimText = context.replace(match[0], ' ').replace(/\s+/g, ' ').trim()
       if (claimText.length > 10) {
-        const key = `${pattern.type}:${cleaned.toLowerCase()}:${claimText.slice(0, 180).toLowerCase()}`
-        if (seen.has(key)) continue
-        seen.add(key)
         claims.push({
           claim: claimText.slice(0, 300),
           citation: cleaned,
@@ -41,6 +49,7 @@ function extractClaims(text) {
       }
     }
   }
+  
   return claims
 }
 

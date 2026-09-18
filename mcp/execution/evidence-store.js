@@ -71,9 +71,11 @@ function makeId() {
 function dedupKey(entry) {
   if (entry.identifier_type === 'doi') return `doi:${String(entry.identifier || '').toLowerCase()}`
   if (entry.identifier_type === 'pmid') return `pmid:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.identifier_type === 'pmcid') return `pmcid:${String(entry.identifier || '').toLowerCase()}`
   if (entry.identifier_type === 'arxiv') return `arxiv:${String(entry.identifier || '').toLowerCase()}`
   if (entry.identifier_type === 'nct') return `nct:${String(entry.identifier || '').toLowerCase()}`
   if (entry.url) return `url:${String(entry.url).replace(/\/$/, '').toLowerCase()}`
+  if (entry.identifier_type === 'none' && entry.identifier) return `identifier:${String(entry.identifier).toLowerCase()}`
   return `title:${String(entry.title || '').slice(0, 80).toLowerCase()}`
 }
 
@@ -200,8 +202,10 @@ async function listEvidence({ project, identifier_type, grade, limit } = {}) {
   let entries = await readProjectEntries(projectName)
   if (identifier_type) entries = entries.filter(entry => entry.identifier_type === identifier_type)
   if (grade) entries = entries.filter(entry => entry.grade === grade)
+  // 按 saved_at 倒序（最新在前），再取前 N 条，与兄弟读取方一致
+  const sorted = [...entries].sort((a, b) => new Date(b.saved_at || '') - new Date(a.saved_at || ''))
   const max = Math.max(1, Math.min(Number(limit) || 50, 200))
-  return { entries: entries.slice(0, max), total: entries.length, project: projectName }
+  return { entries: sorted.slice(0, max), total: entries.length, project: projectName }
 }
 
 async function linkEvidence(evidenceId, assetId, project) {

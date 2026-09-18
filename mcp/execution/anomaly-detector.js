@@ -17,10 +17,10 @@ const CONTRADICTION_PAIRS = [
 ]
 
 const SILENCE_PATTERNS = [
-  { pattern: /\b(?:limitation|limitazione|drawback|caveat)\b/i, label: '局限性提及', description: '检测到局限性讨论', isGood: true },
-  { pattern: /\b(?:replication|reproducib|replicat)\w*/i, label: '可重复性提及', description: '检测到可重复性讨论', isGood: true },
-  { pattern: /\b(?:fail|failed|negative result|no significant)\b/i, label: '阴性结果', description: '包含阴性结果讨论', isGood: true },
-  { pattern: /\b(?:conflict of interest|competing interest|COI)\b/i, label: '利益冲突声明', description: '包含利益冲突声明', isGood: true },
+  { pattern: /(?:limitation|limitazione|drawback|caveat|局限性|不足|局限)/i, label: '局限性提及', description: '检测到局限性讨论', isGood: true },
+  { pattern: /(?:replication|reproducib|replicat)/i, label: '可重复性提及', description: '检测到可重复性讨论', isGood: true },
+  { pattern: /(?:fail|failed|negative result|no significant|阴性结果|未显著)/i, label: '阴性结果', description: '包含阴性结果讨论', isGood: true },
+  { pattern: /(?:conflict of interest|competing interest|COI|利益冲突)/i, label: '利益冲突声明', description: '包含利益冲突声明', isGood: true },
 ]
 
 const MISSING_ELEMENTS = [

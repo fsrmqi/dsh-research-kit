@@ -116,7 +116,7 @@ function checkQuality(text) {
     long_sentences_over_40_words: longSentences,
   }
 
-  return { flaggedTerms, throatClearing, punctuationIssues, summary }
+  return { flagged_terms: flaggedTerms, throat_clearing: throatClearing, punctuation_issues: punctuationIssues, summary }
 }
 
 async function checkWritingQuality(text) {

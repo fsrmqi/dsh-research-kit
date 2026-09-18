@@ -1,5 +1,6 @@
 
 const PEER_REVIEWED_TYPES = new Set(['doi', 'pmid', 'pmcid', 'nct'])
+const TRACEABLE_TYPES = new Set(['arxiv', 'url', 'github', 'dataset'])
 const INFERENCE_KEYWORDS = ['可能', '暗示', '推测', '或许', '大概', 'may', 'might', 'suggest', 'imply', 'infer', 'possibly', 'likely', 'presumably', 'hypothesize']
 const STRONG_CLAIM_KEYWORDS = ['证明', '证实', '结果表明', 'conclude', 'demonstrate', 'confirm', 'prove', 'show that', 'establish']
 
@@ -29,11 +30,11 @@ function gradeEvidence(entry) {
     }
   }
 
-  if (hasIdentifier && hasInferenceLanguage) {
+  if (TRACEABLE_TYPES.has(identifierType) && hasIdentifier) {
     return {
       grade: 'inference',
-      confidence: 0.6,
-      reasoning: '来源有标识符可追溯，但内容包含推断性用语（如"可能""暗示"），应标注为推论而非实证。',
+      confidence: hasInferenceLanguage ? 0.6 : 0.65,
+      reasoning: `来源有 ${identifierType.toUpperCase()} 标识符可追溯，${hasInferenceLanguage ? '但内容包含推断性用语，应标注为推论而非实证。' : '内容可直接追溯原文。'}`,
     }
   }
 
