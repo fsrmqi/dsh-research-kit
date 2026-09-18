@@ -38,7 +38,7 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 21)
+  assert.equal(tools.length, 22)
   for (const expected of ['search_workflows', 'save_evidence', 'generate_figure', 'approve_checkpoint']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
