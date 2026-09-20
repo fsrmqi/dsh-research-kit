@@ -14,7 +14,11 @@ function formatTime(iso) {
   } catch { return '' }
 }
 
-function CallEntry({ call }) {
+function activityKey(call) {
+  return String(call?.id || `${call?.at || ''}:${call?.tool || ''}:${call?.result_summary || call?.error || ''}`)
+}
+
+const CallEntry = React.memo(function CallEntry({ call }) {
   const label = toolLabel(call.tool)
   const isError = call.ok === false
   return h('div', {
@@ -36,9 +40,9 @@ function CallEntry({ call }) {
       style: { fontSize: 10, color: C.muted, flexShrink: 0, opacity: 0.7 },
     }, call.duration_ms != null ? `${call.duration_ms}ms` : ''),
   ])
-}
+})
 
-function CheckpointBanner({ cp, onApprove, busy }) {
+const CheckpointBanner = React.memo(function CheckpointBanner({ cp, onApprove, busy }) {
   const pendingStages = Object.entries(cp.checkpoints || {}).filter(([, v]) => !v.approved)
   if (!pendingStages.length) return null
   return h('div', {
@@ -65,7 +69,7 @@ function CheckpointBanner({ cp, onApprove, busy }) {
       ])
     ),
   ])
-}
+})
 
 export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
   const [expanded, setExpanded] = React.useState(false)
@@ -90,7 +94,15 @@ export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
         setError(null)
         if (data.calls.length) {
           latestAt.current = data.calls[0].at
-          setCalls(prev => [...data.calls, ...prev].slice(0, 100))
+          setCalls(prev => {
+            const seen = new Set()
+            return [...data.calls, ...prev].filter(call => {
+              const key = activityKey(call)
+              if (seen.has(key)) return false
+              seen.add(key)
+              return true
+            }).slice(0, 100)
+          })
 
           // 方案 A：runId 为空时，从 MCP 调用日志自动捕获最近的 research_run_start 的 run_id
           if (!runId && onRunDetected) {

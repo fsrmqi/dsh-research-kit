@@ -168,11 +168,20 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
   const evidenceRefreshVersion = React.useRef(0)
+  const assetRefreshVersion = React.useRef(0)
+  const knowledgeRefreshVersion = React.useRef(0)
 
   React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
   React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
-  React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
-  React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
+  const refreshAssets = React.useCallback(() => {
+    if (!assetProvider?.list) return
+    const version = ++assetRefreshVersion.current
+    assetProvider.list().then(rows => {
+      if (version === assetRefreshVersion.current) setAssets(rows || [])
+    }).catch(() => {})
+  }, [assetProvider])
+  React.useEffect(() => { refreshAssets() }, [refreshAssets])
+  React.useEffect(() => assetProvider?.onChange?.(refreshAssets) || undefined, [assetProvider, refreshAssets])
   const refreshSavedEvidence = React.useCallback(() => {
     const version = ++evidenceRefreshVersion.current
     const selectedProject = projectFilter || undefined
@@ -199,12 +208,19 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   }, [vault, projectFilter])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
   const refreshKnowledge = React.useCallback(() => {
+    const version = ++knowledgeRefreshVersion.current
     const store = knowledgeStore()
     setKnowledgeDegraded(store.isDegraded())
     setLastDeposition(lastDepositionSummary())
     Promise.all([store.listNodes(), store.listClaims()])
-      .then(([nodes, claims]) => { setKnowledgeNodes(nodes || []); setKnowledgeClaims(claims || []) })
-      .catch(() => { setKnowledgeNodes([]); setKnowledgeClaims([]) })
+      .then(([nodes, claims]) => {
+        if (version !== knowledgeRefreshVersion.current) return
+        setKnowledgeNodes(nodes || []); setKnowledgeClaims(claims || [])
+      })
+      .catch(() => {
+        if (version !== knowledgeRefreshVersion.current) return
+        setKnowledgeNodes([]); setKnowledgeClaims([])
+      })
   }, [])
   React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
   React.useEffect(() => onAutoDepositChange(value => setAutoDeposit(value)), [])
@@ -264,22 +280,31 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
     assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
   }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
-  const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
-  const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
-  const renderGraph = React.useMemo(() => {
-    if (layout.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return { nodes: layout.nodes, routes, hidden: 0 }
-    const priority = new Set([view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : ''].filter(Boolean))
+  // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
+  const highlighted = React.useMemo(() => {
+    if (view.mode === 'all') return null
+    if (view.mode === 'path') return view.from && view.to ? new Set(findEvidencePath(graph, view.from, view.to)) : null
+    if (!view.focus) return null
+    return evidenceNeighborhood(graph, view.focus, view.mode)
+  }, [view, graph])
+  // 性能裁剪必须发生在布局和路由之前；否则虽然 DOM 只有 300 个节点，CPU 仍会计算全图。
+  // 完整图保留在 graph 中，仅在用户导出时按需布局。
+  const interactiveGraph = React.useMemo(() => {
+    if (graph.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return graph
+    const priority = new Set([
+      ...(highlighted || []), view.focus, view.from, view.to, selectedKnowledgeId,
+      selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : '',
+    ].filter(Boolean))
     const nodes = [
-      ...layout.nodes.filter(node => priority.has(node.id)),
-      ...layout.nodes.filter(node => !priority.has(node.id)),
+      ...graph.nodes.filter(node => priority.has(node.id)),
+      ...graph.nodes.filter(node => !priority.has(node.id)),
     ].slice(0, GRAPH_RENDER_NODE_LIMIT)
     const ids = new Set(nodes.map(node => node.id))
-    return {
-      nodes,
-      routes: routes.filter(route => ids.has(route.from) && ids.has(route.to)),
-      hidden: layout.nodes.length - nodes.length,
-    }
-  }, [layout, routes, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+    return { ...graph, nodes, edges: graph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)) }
+  }, [graph, highlighted, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+  const layout = React.useMemo(() => layoutEvidenceGraph(interactiveGraph), [interactiveGraph])
+  const routes = React.useMemo(() => routeEvidenceEdges(interactiveGraph, layout), [interactiveGraph, layout])
+  const hiddenNodeCount = graph.nodes.length - interactiveGraph.nodes.length
 
   const scale = view.scale
   const viewWidth = layout.width / scale
@@ -361,15 +386,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     applyView({ focus: nodeId })
   }
 
-  // highlighted 为 null 表示「全部可见」；非 null 时不在集合里的节点降透明度而
-  // 不是被移除——移除会让用户失去参照物，不知道自己看到的是全图的哪一部分。
-  const highlighted = React.useMemo(() => {
-    if (view.mode === 'all') return null
-    if (view.mode === 'path') return view.from && view.to ? new Set(findEvidencePath(graph, view.from, view.to)) : null
-    if (!view.focus) return null
-    return evidenceNeighborhood(graph, view.focus, view.mode)
-  }, [view, graph])
-
   // ── 结论追溯面板（点击知识节点展开）────────────────────────────────────────
   const selectedKnowledge = React.useMemo(
     () => knowledgeNodes.find(node => node.id === selectedKnowledgeId) || null,
@@ -445,7 +461,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     onWheel,
     style: { display: 'block', touchAction: 'none', cursor: 'grab', background: C.surfaceAlt, borderRadius: 12 }
   }, [
-    ...renderGraph.routes.map(route => h('path', {
+    ...routes.map(route => h('path', {
       key: route.key,
       className: flowing ? 'rk-graph-edge rk-graph-edge-flow' : 'rk-graph-edge',
       d: route.d,
@@ -456,7 +472,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       opacity: highlighted && !(highlighted.has(route.from) && highlighted.has(route.to)) ? 0.18 : 1
     })),
     h('defs', { key: 'defs' }, h('marker', { id: 'rk-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' }, h('path', { d: 'M0,0 L0,6 L7,3 z', fill: C.lineStrong }))),
-    ...renderGraph.nodes.map(node => {
+    ...layout.nodes.map(node => {
       const marked = view.focus === node.id || node.id === view.from || node.id === view.to
       const dim = highlighted ? !highlighted.has(node.id) : false
       return h('a', {
@@ -538,7 +554,9 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
 
   const exportGraph = format => {
     const theme = readGraphTheme()
-    const svg = buildGraphSvgMarkup(layout, routes, theme)
+    const exportLayout = hiddenNodeCount ? layoutEvidenceGraph(graph) : layout
+    const exportRoutes = hiddenNodeCount ? routeEvidenceEdges(graph, exportLayout) : routes
+    const svg = buildGraphSvgMarkup(exportLayout, exportRoutes, theme)
     if (format === 'svg') downloadGraphFile(svg, 'image/svg+xml', 'research-evidence-chain.svg')
     else downloadGraphFile(`<!doctype html><meta charset="utf-8"><title>科研证据链路</title><style>body{margin:0;padding:28px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:17px;margin:0 0 6px}p{margin:0 0 18px;opacity:.7}</style><h1>科研证据链路</h1><p>${GRAPH_EXPORT_SCOPE}</p>${svg}`, 'text/html', 'research-evidence-chain.html')
     setExportOpen(false)
@@ -669,8 +687,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     ]) : null,
     knowledgeDegraded ? h(Notice, { key: 'knowledge-degraded', tone: 'warn', icon: 'shield', style: { margin: '10px var(--rk-gutter) 0' } },
       '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
-    renderGraph.hidden ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
-      `当前图谱共有 ${layout.nodes.length} 个节点；为保持交互流畅，画布只渲染前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderGraph.hidden} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
+    hiddenNodeCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
+      `当前图谱共有 ${graph.nodes.length} 个节点；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${hiddenNodeCount} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
     // 图例：只列图上实际出现的节点类型，随图动态增减；自动沉淀开启时附带最近一次沉淀摘要。
     graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
       [

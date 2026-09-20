@@ -214,11 +214,13 @@ export async function openReplayWindow(trace, title) {
   try {
     template = await loadArchifyTemplate()
   } catch (error) {
+    if (popup.closed) return null
     popup.document.open()
     popup.document.write(`<!doctype html><meta charset="utf-8"><title>回放加载失败</title><p style="font:14px system-ui;padding:24px">${escapeXml(error?.message || error)}</p>`)
     popup.document.close()
     return popup
   }
+  if (popup.closed) return null
   const steps = (trace || [])
   const nodes = archifyLayoutRow(steps.map((step, i) => ({
     id: `s${i}`,

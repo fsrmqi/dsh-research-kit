@@ -254,14 +254,18 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   }
   const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
   // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
-  const specialRows = type === 'favorites'
+  const specialRows = React.useMemo(() => type === 'favorites'
     ? favorites.map(itemById).filter(Boolean).map(item => ({ item }))
     : type === 'history'
       ? history.map(row => ({ row, item: itemById(row.id) })).filter(entry => entry.item)
-      : null
+      : null,
+  [type, favorites, history])
   const isSpecialView = Boolean(specialRows)
-  const listEntries = isSpecialView ? specialRows : items.map(item => ({ item }))
-  const listGroups = groupEntriesByCategory(listEntries)
+  const listEntries = React.useMemo(
+    () => isSpecialView ? specialRows : items.map(item => ({ item })),
+    [isSpecialView, specialRows, items],
+  )
+  const listGroups = React.useMemo(() => groupEntriesByCategory(listEntries), [listEntries])
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
   const recordUse = (status = 'draft') => {
     if (!workflow) return
@@ -321,11 +325,15 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     setQuery('')
     setSelectedId(item.id)
   }
+  const catalogCounts = React.useMemo(() => catalog.reduce((counts, item) => {
+    counts[item.type] = (counts[item.type] || 0) + 1
+    return counts
+  }, {}), [])
   const typeTabs = [
     { value: 'all', label: `全部 ${catalog.length}` },
-    { value: 'workflow', label: `工作流程 ${catalog.filter(item => item.type === 'workflow').length}` },
-    { value: 'skill', label: `技能 ${catalog.filter(item => item.type === 'skill').length}` },
-    { value: 'database', label: `数据库 ${catalog.filter(item => item.type === 'database').length}` },
+    { value: 'workflow', label: `工作流程 ${catalogCounts.workflow || 0}` },
+    { value: 'skill', label: `技能 ${catalogCounts.skill || 0}` },
+    { value: 'database', label: `数据库 ${catalogCounts.database || 0}` },
     { value: 'favorites', label: `★ 收藏 ${favorites.length}` },
     { value: 'history', label: `历史 ${history.length}` },
   ]

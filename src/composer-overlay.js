@@ -132,18 +132,19 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const [mode, setMode] = React.useState(null)
   const [query, setQuery] = React.useState('')
+  const deferredQuery = React.useDeferredValue(query)
   const [resourceType, setResourceType] = React.useState('all')
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [resourceIds, setResourceIds] = React.useState(() => selection.get())
   const [launchWorkflow, setLaunchWorkflow] = React.useState(null)
   const popoverRef = React.useRef(null)
   const [popoverHeight, setPopoverHeight] = React.useState(null)
-  const [, setCatalogVersion] = React.useState(0)
+  const [catalogVersion, setCatalogVersion] = React.useState(0)
+  // 目录可能由默认工作台先加载完成；浮层关闭时也要订阅版本变化，否则首次打开时
+  // useMemo 仍会保留挂载阶段基于空目录算出的分类与计数。
+  React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
   React.useEffect(() => {
-    if (!mode) return undefined
-    const dispose = subscribeCatalog(() => setCatalogVersion(value => value + 1))
-    loadBrowserCatalog().catch(() => {})
-    return dispose
+    if (mode) loadBrowserCatalog().catch(() => {})
   }, [mode])
   // 浮层贴住输入卡片上沿，而不是钉在视口左下角：
   // 槽位锚点是卡片顶边的零高条，绝对定位即与触发按钮同宽同轴；
@@ -208,21 +209,35 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [mode, launchWorkflow])
-  if (!mode && !launchWorkflow) return null
   const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
-  const rows = searchCatalog({ query, type: listType })
+  const rows = React.useMemo(() => searchCatalog({ query: deferredQuery, type: listType })
     .filter(item => mode !== 'resources' || item.type !== 'workflow')
-    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory)
+    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory),
+  [deferredQuery, listType, mode, workflowCategory, catalogVersion])
   const toggle = id => selection.toggle(id)
   const close = () => setMode(null)
   const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
-  const recommendedWorkflows = recommendedWorkflowsForResources(resourceIds).slice(0, 4)
-  const workflowCategories = unique(catalog.filter(item => item.type === 'workflow').map(item => item.category))
+  const recommendedWorkflows = React.useMemo(
+    () => recommendedWorkflowsForResources(resourceIds).slice(0, 4),
+    [resourceIds, catalogVersion],
+  )
+  const catalogMeta = React.useMemo(() => {
+    const workflowCategories = new Set()
+    const counts = { resource: 0, database: 0, skill: 0 }
+    for (const item of catalog) {
+      if (item.type === 'workflow') workflowCategories.add(item.category)
+      else counts.resource++
+      if (item.type === 'database') counts.database++
+      if (item.type === 'skill') counts.skill++
+    }
+    return { workflowCategories: [...workflowCategories], counts }
+  }, [catalogVersion])
   const resourceTabs = [
-    { value: 'all', label: `全部（${catalog.filter(item => item.type !== 'workflow').length}）` },
-    { value: 'database', label: `数据库（${catalog.filter(item => item.type === 'database').length}）` },
-    { value: 'skill', label: `技能（${catalog.filter(item => item.type === 'skill').length}）` },
+    { value: 'all', label: `全部（${catalogMeta.counts.resource}）` },
+    { value: 'database', label: `数据库（${catalogMeta.counts.database}）` },
+    { value: 'skill', label: `技能（${catalogMeta.counts.skill}）` },
   ]
+  if (!mode && !launchWorkflow) return null
   const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
   return h(React.Fragment, null, [
     mode ? h('section', {
@@ -257,7 +272,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
         }),
         mode === 'resources'
           ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-          : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
+          : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: catalogMeta.workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
       ]),
       h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
         mode === 'workflows' && rows.length ? h('div', {

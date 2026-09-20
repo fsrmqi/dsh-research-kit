@@ -396,7 +396,7 @@ DSH 加载 ui/client.js
   → ModuleLoader 执行 researchKitApply(ctx)
   → 在 conversation.view 注册“科研工作台”
   → 用户打开工作台
-  → 并发加载目录 JSON 与 PromptKit 同源脚本（各消费者共享单例 Promise）
+  → 默认「发现」分区只加载目录 JSON；进入依赖资产 provider 的分区时再加载 PromptKit 同源脚本（各消费者共享单例 Promise）
   → ResearchWorkbench 从已加载 catalog 数据读取资源
   → searchCatalog({ query, type }) 返回列表
   → itemById(selectedId) 返回右侧详情
@@ -709,7 +709,7 @@ type ResearchDatabase = BaseItem & {
 1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记）；
 2. 移除主包源码的 ESM import/export；
 3. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的 `ui/client.js`；
-4. 生成 `ui/catalog-data.json`，目录不再内联进主 JS；Node half 通过同源路由提供并设置短时缓存；
+4. 生成 `ui/catalog-data.json`，目录不再内联进主 JS；Node half 通过同源路由提供强 ETag 与 `Cache-Control: no-cache`，版本变化立即重验证、未变化返回 304；
 5. 将 SHA 锁定的 PromptKit 快照改写为独立 `ui/promptkit.js`，由同源脚本路由按需加载，所有消费者共享单例 Promise；
 6. archify viewer 模板不进入主包，只在用户悬停、聚焦或点击「弹出回放窗口」后从 `/dsh-research-kit/archify-template` 预取并复用。
 

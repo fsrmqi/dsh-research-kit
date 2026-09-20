@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { staticArtifactRoute } from './static-artifact-route.js'
 
 export const PROMPTKIT_CLIENT_PATH = '/dsh-research-kit/promptkit-client'
 
@@ -6,18 +7,5 @@ export const PROMPTKIT_CLIENT_PATH = '/dsh-research-kit/promptkit-client'
 const client = readFileSync(new URL('../ui/promptkit.js', import.meta.url), 'utf8')
 
 export function promptKitClientRoute() {
-  return {
-    kind: 'exact', path: PROMPTKIT_CLIENT_PATH,
-    handler(req, res) {
-      if (req.method !== 'GET') {
-        res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' })
-        return res.end(JSON.stringify({ ok: false, error: 'method_not_allowed' }))
-      }
-      res.writeHead(200, {
-        'content-type': 'text/javascript; charset=utf-8',
-        'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
-      })
-      return res.end(client)
-    },
-  }
+  return staticArtifactRoute({ path: PROMPTKIT_CLIENT_PATH, body: client, contentType: 'text/javascript; charset=utf-8' })
 }

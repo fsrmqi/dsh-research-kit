@@ -12,6 +12,8 @@ const LOG_FILE = path.join(os.homedir(), '.dsh-research-kit', 'logs', 'calls.jso
 const CHECKPOINT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'checkpoints')
 const MAX_TAIL_BYTES = 512 * 1024
 const MAX_CHECKPOINT_FILES = 20
+let logSnapshot = { size: -1, mtimeMs: -1, records: [] }
+const checkpointSnapshots = new Map()
 
 function reply(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' })
@@ -42,17 +44,22 @@ async function readCallLogs({ limit = 50, since, runId } = {}) {
     handle = await open(LOG_FILE, 'r')
     const info = await handle.stat()
     const size = info.size
-    const length = Math.min(size, MAX_TAIL_BYTES)
-    const position = size - length
-    const buffer = Buffer.alloc(length)
-    await handle.read(buffer, 0, length, position)
-    let text = buffer.toString('utf8')
-    // 只读文件尾部时，第一行可能是半行；直接丢弃，避免把截断 JSON 当作有效记录。
-    if (position > 0 && text.includes('\n')) text = text.slice(text.indexOf('\n') + 1)
-    const records = text.split('\n').filter(Boolean).map(line => {
-      try { return JSON.parse(line) } catch { return null }
-    }).filter(Boolean)
-    const sinceFiltered = since ? records.filter(record => record.at > since) : records
+    let records = logSnapshot.records
+    if (size !== logSnapshot.size || info.mtimeMs !== logSnapshot.mtimeMs) {
+      const length = Math.min(size, MAX_TAIL_BYTES)
+      const position = size - length
+      const buffer = Buffer.alloc(length)
+      await handle.read(buffer, 0, length, position)
+      let text = buffer.toString('utf8')
+      // 只读文件尾部时，第一行可能是半行；直接丢弃，避免把截断 JSON 当作有效记录。
+      if (position > 0 && text.includes('\n')) text = text.slice(text.indexOf('\n') + 1)
+      records = text.split('\n').filter(Boolean).map(line => {
+        try { return JSON.parse(line) } catch { return null }
+      }).filter(Boolean)
+      logSnapshot = { size, mtimeMs: info.mtimeMs, records }
+    }
+    // 时间戳采用闭区间，避免同一毫秒写入多条记录时漏项；浏览器按稳定 key 去重。
+    const sinceFiltered = since ? records.filter(record => record.at >= since) : records
     const filtered = runId ? sinceFiltered.filter(record => record.run_id === runId) : sinceFiltered
     return filtered.slice(-Math.min(limit, 200)).reverse()
   } catch {
@@ -66,11 +73,17 @@ async function readCheckpoints(runId) {
   if (!existsSync(CHECKPOINT_DIR)) return []
   try {
     const files = (await readdir(CHECKPOINT_DIR)).filter(file => file.endsWith('.json'))
+    const liveFiles = new Set(files)
+    for (const file of checkpointSnapshots.keys()) { if (!liveFiles.has(file)) checkpointSnapshots.delete(file) }
     const loaded = await Promise.all(files.map(async file => {
       try {
         const full = path.join(CHECKPOINT_DIR, file)
-        const [state, info] = await Promise.all([readFile(full, 'utf8'), stat(full)])
-        return { state: JSON.parse(state), mtime: info.mtimeMs }
+        const info = await stat(full)
+        const cached = checkpointSnapshots.get(file)
+        if (cached?.mtimeMs === info.mtimeMs && cached?.size === info.size) return cached.value
+        const value = { state: JSON.parse(await readFile(full, 'utf8')), mtime: info.mtimeMs }
+        checkpointSnapshots.set(file, { mtimeMs: info.mtimeMs, size: info.size, value })
+        return value
       } catch { return null }
     }))
     return loaded

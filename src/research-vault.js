@@ -47,10 +47,17 @@ const EMPTY_FORM = {
   rationale: '', nextAction: '', verificationStatus: 'pending', verificationEvidence: ''
 }
 
+const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderItem }) {
+  return h('div', { style: { display: 'grid', gap: 12 } }, items.map(renderItem))
+}, (previous, next) => previous.items === next.items
+  && previous.dependencies.length === next.dependencies.length
+  && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
+
 export function ResearchVault({ assetProvider, inputActions, embedded = false }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
+  const deferredQuery = React.useDeferredValue(query)
   const [filter, setFilter] = React.useState('all')
   const [form, setForm] = React.useState(EMPTY_FORM)
   const [formOpen, setFormOpen] = React.useState(false)
@@ -70,11 +77,24 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
   const [checkedCandidates, setCheckedCandidates] = React.useState({})
   const [linkBusy, setLinkBusy] = React.useState(false)
+  const linkRefreshVersion = React.useRef(0)
+  const assetRefreshVersion = React.useRef(0)
 
   const refreshLinks = React.useCallback(() => {
-    evidenceVaultStore().list().then(rows => setEvidenceEntries(rows || [])).catch(() => setEvidenceEntries([]))
-    evidenceVaultStore().listAssetEvidenceLinks().then(rows => setAssetLinks(rows || [])).catch(() => setAssetLinks([]))
-    knowledgeStore().listNodes().then(rows => setKnowledgeNodes(rows || [])).catch(() => setKnowledgeNodes([]))
+    const version = ++linkRefreshVersion.current
+    Promise.all([
+      evidenceVaultStore().list(),
+      evidenceVaultStore().listAssetEvidenceLinks(),
+      knowledgeStore().listNodes(),
+    ]).then(([entries, links, nodes]) => {
+      if (version !== linkRefreshVersion.current) return
+      setEvidenceEntries(entries || [])
+      setAssetLinks(links || [])
+      setKnowledgeNodes(nodes || [])
+    }).catch(() => {
+      if (version !== linkRefreshVersion.current) return
+      setEvidenceEntries([]); setAssetLinks([]); setKnowledgeNodes([])
+    })
   }, [])
   React.useEffect(() => { refreshLinks() }, [refreshLinks])
   React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
@@ -83,14 +103,21 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
 
   const refresh = React.useCallback(() => {
     if (!assetProvider?.list) { setLoading(false); return }
-    assetProvider.list().then(rows => { setAssets(rows || []); setLoading(false) }).catch(error => { setError(error?.message || error); setLoading(false) })
+    const version = ++assetRefreshVersion.current
+    assetProvider.list().then(rows => {
+      if (version !== assetRefreshVersion.current) return
+      setAssets(rows || []); setLoading(false)
+    }).catch(error => {
+      if (version !== assetRefreshVersion.current) return
+      setError(error?.message || error); setLoading(false)
+    })
   }, [assetProvider])
   React.useEffect(() => { refresh() }, [refresh])
   React.useEffect(() => assetProvider?.onChange?.(refresh) || undefined, [refresh])
 
   const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
   const byId = React.useMemo(() => new Map(assets.map(item => [item.id, item])), [assets])
-  const filtered = React.useMemo(() => filterAssets(assets, { query, filter }), [assets, query, filter])
+  const filtered = React.useMemo(() => filterAssets(assets, { query: deferredQuery, filter }), [assets, deferredQuery, filter])
   const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
   const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
@@ -314,7 +341,11 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
       text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
       hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
     }) : null,
-    tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+    tab === 'assets' ? h(MemoizedAssetList, {
+      key: 'list',
+      items: filtered,
+      dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
+      renderItem: item => h(Card, {
       key: item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
@@ -422,7 +453,8 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
             '没有推导出候选证据；可在「证据库」子模块保存来源后回来关联（同项目或知识链同源的条目会出现在这里）。'),
         ]
       })()) : null,
-    ]))) : null,
+    ]),
+    }) : null,
     tab === 'assets' && notice ? h(Notice, {
       key: 'notice',
       tone: notice.startsWith('⚠️') ? 'warn' : 'info',

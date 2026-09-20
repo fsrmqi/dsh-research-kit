@@ -4422,11 +4422,21 @@ window.__ModuleLoader__.load({
 
     const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
     const EVIDENCE_SYNC_FRESH_MS = 8_000
+    const EVIDENCE_SYNC_CACHE_LIMIT = 64
     const evidenceSyncInFlight = new Map()
     const evidenceSyncFreshUntil = new Map()
 
     function evidenceSyncScope(project) {
       return String(project || '*')
+    }
+
+    function pruneEvidenceSyncCache(now = Date.now()) {
+      for (const [scope, until] of evidenceSyncFreshUntil) {
+        if (until <= now) evidenceSyncFreshUntil.delete(scope)
+      }
+      while (evidenceSyncFreshUntil.size > EVIDENCE_SYNC_CACHE_LIMIT) {
+        evidenceSyncFreshUntil.delete(evidenceSyncFreshUntil.keys().next().value)
+      }
     }
 
     function invalidateEvidenceSync(project) {
@@ -4541,13 +4551,16 @@ window.__ModuleLoader__.load({
 
     function syncEvidenceVaultWithFiles(project, { force = false } = {}) {
       const scope = evidenceSyncScope(project)
-      if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > Date.now()) {
+      const now = Date.now()
+      pruneEvidenceSyncCache(now)
+      if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > now) {
         return Promise.resolve({ skipped: false, cached: true, imported: 0, exported: 0 })
       }
       if (evidenceSyncInFlight.has(scope)) return evidenceSyncInFlight.get(scope)
       const task = performEvidenceVaultSync(project)
         .then(result => {
           evidenceSyncFreshUntil.set(scope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
+          pruneEvidenceSyncCache()
           return result
         })
         .finally(() => evidenceSyncInFlight.delete(scope))
@@ -5335,18 +5348,19 @@ window.__ModuleLoader__.load({
       const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
       const [mode, setMode] = React.useState(null)
       const [query, setQuery] = React.useState('')
+      const deferredQuery = React.useDeferredValue(query)
       const [resourceType, setResourceType] = React.useState('all')
       const [workflowCategory, setWorkflowCategory] = React.useState('all')
       const [resourceIds, setResourceIds] = React.useState(() => selection.get())
       const [launchWorkflow, setLaunchWorkflow] = React.useState(null)
       const popoverRef = React.useRef(null)
       const [popoverHeight, setPopoverHeight] = React.useState(null)
-      const [, setCatalogVersion] = React.useState(0)
+      const [catalogVersion, setCatalogVersion] = React.useState(0)
+      // 目录可能由默认工作台先加载完成；浮层关闭时也要订阅版本变化，否则首次打开时
+      // useMemo 仍会保留挂载阶段基于空目录算出的分类与计数。
+      React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
       React.useEffect(() => {
-        if (!mode) return undefined
-        const dispose = subscribeCatalog(() => setCatalogVersion(value => value + 1))
-        loadBrowserCatalog().catch(() => {})
-        return dispose
+        if (mode) loadBrowserCatalog().catch(() => {})
       }, [mode])
       // 浮层贴住输入卡片上沿，而不是钉在视口左下角：
       // 槽位锚点是卡片顶边的零高条，绝对定位即与触发按钮同宽同轴；
@@ -5411,21 +5425,35 @@ window.__ModuleLoader__.load({
         document.addEventListener('pointerdown', onPointerDown)
         return () => document.removeEventListener('pointerdown', onPointerDown)
       }, [mode, launchWorkflow])
-      if (!mode && !launchWorkflow) return null
       const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
-      const rows = searchCatalog({ query, type: listType })
+      const rows = React.useMemo(() => searchCatalog({ query: deferredQuery, type: listType })
         .filter(item => mode !== 'resources' || item.type !== 'workflow')
-        .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory)
+        .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory),
+      [deferredQuery, listType, mode, workflowCategory, catalogVersion])
       const toggle = id => selection.toggle(id)
       const close = () => setMode(null)
       const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
-      const recommendedWorkflows = recommendedWorkflowsForResources(resourceIds).slice(0, 4)
-      const workflowCategories = unique(catalog.filter(item => item.type === 'workflow').map(item => item.category))
+      const recommendedWorkflows = React.useMemo(
+        () => recommendedWorkflowsForResources(resourceIds).slice(0, 4),
+        [resourceIds, catalogVersion],
+      )
+      const catalogMeta = React.useMemo(() => {
+        const workflowCategories = new Set()
+        const counts = { resource: 0, database: 0, skill: 0 }
+        for (const item of catalog) {
+          if (item.type === 'workflow') workflowCategories.add(item.category)
+          else counts.resource++
+          if (item.type === 'database') counts.database++
+          if (item.type === 'skill') counts.skill++
+        }
+        return { workflowCategories: [...workflowCategories], counts }
+      }, [catalogVersion])
       const resourceTabs = [
-        { value: 'all', label: `全部（${catalog.filter(item => item.type !== 'workflow').length}）` },
-        { value: 'database', label: `数据库（${catalog.filter(item => item.type === 'database').length}）` },
-        { value: 'skill', label: `技能（${catalog.filter(item => item.type === 'skill').length}）` },
+        { value: 'all', label: `全部（${catalogMeta.counts.resource}）` },
+        { value: 'database', label: `数据库（${catalogMeta.counts.database}）` },
+        { value: 'skill', label: `技能（${catalogMeta.counts.skill}）` },
       ]
+      if (!mode && !launchWorkflow) return null
       const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
       return h(React.Fragment, null, [
         mode ? h('section', {
@@ -5460,7 +5488,7 @@ window.__ModuleLoader__.load({
             }),
             mode === 'resources'
               ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-              : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
+              : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: catalogMeta.workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
           ]),
           h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
             mode === 'workflows' && rows.length ? h('div', {
@@ -5590,10 +5618,17 @@ window.__ModuleLoader__.load({
       rationale: '', nextAction: '', verificationStatus: 'pending', verificationEvidence: ''
     }
 
+    const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderItem }) {
+      return h('div', { style: { display: 'grid', gap: 12 } }, items.map(renderItem))
+    }, (previous, next) => previous.items === next.items
+      && previous.dependencies.length === next.dependencies.length
+      && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
+
     function ResearchVault({ assetProvider, inputActions, embedded = false }) {
       const [assets, setAssets] = React.useState([])
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
+      const deferredQuery = React.useDeferredValue(query)
       const [filter, setFilter] = React.useState('all')
       const [form, setForm] = React.useState(EMPTY_FORM)
       const [formOpen, setFormOpen] = React.useState(false)
@@ -5613,11 +5648,24 @@ window.__ModuleLoader__.load({
       const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
       const [checkedCandidates, setCheckedCandidates] = React.useState({})
       const [linkBusy, setLinkBusy] = React.useState(false)
+      const linkRefreshVersion = React.useRef(0)
+      const assetRefreshVersion = React.useRef(0)
 
       const refreshLinks = React.useCallback(() => {
-        evidenceVaultStore().list().then(rows => setEvidenceEntries(rows || [])).catch(() => setEvidenceEntries([]))
-        evidenceVaultStore().listAssetEvidenceLinks().then(rows => setAssetLinks(rows || [])).catch(() => setAssetLinks([]))
-        knowledgeStore().listNodes().then(rows => setKnowledgeNodes(rows || [])).catch(() => setKnowledgeNodes([]))
+        const version = ++linkRefreshVersion.current
+        Promise.all([
+          evidenceVaultStore().list(),
+          evidenceVaultStore().listAssetEvidenceLinks(),
+          knowledgeStore().listNodes(),
+        ]).then(([entries, links, nodes]) => {
+          if (version !== linkRefreshVersion.current) return
+          setEvidenceEntries(entries || [])
+          setAssetLinks(links || [])
+          setKnowledgeNodes(nodes || [])
+        }).catch(() => {
+          if (version !== linkRefreshVersion.current) return
+          setEvidenceEntries([]); setAssetLinks([]); setKnowledgeNodes([])
+        })
       }, [])
       React.useEffect(() => { refreshLinks() }, [refreshLinks])
       React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
@@ -5626,14 +5674,21 @@ window.__ModuleLoader__.load({
 
       const refresh = React.useCallback(() => {
         if (!assetProvider?.list) { setLoading(false); return }
-        assetProvider.list().then(rows => { setAssets(rows || []); setLoading(false) }).catch(error => { setError(error?.message || error); setLoading(false) })
+        const version = ++assetRefreshVersion.current
+        assetProvider.list().then(rows => {
+          if (version !== assetRefreshVersion.current) return
+          setAssets(rows || []); setLoading(false)
+        }).catch(error => {
+          if (version !== assetRefreshVersion.current) return
+          setError(error?.message || error); setLoading(false)
+        })
       }, [assetProvider])
       React.useEffect(() => { refresh() }, [refresh])
       React.useEffect(() => assetProvider?.onChange?.(refresh) || undefined, [refresh])
 
       const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
       const byId = React.useMemo(() => new Map(assets.map(item => [item.id, item])), [assets])
-      const filtered = React.useMemo(() => filterAssets(assets, { query, filter }), [assets, query, filter])
+      const filtered = React.useMemo(() => filterAssets(assets, { query: deferredQuery, filter }), [assets, deferredQuery, filter])
       const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
       const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
@@ -5857,7 +5912,11 @@ window.__ModuleLoader__.load({
           text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
           hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
         }) : null,
-        tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+        tab === 'assets' ? h(MemoizedAssetList, {
+          key: 'list',
+          items: filtered,
+          dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
+          renderItem: item => h(Card, {
           key: item.id,
           interactive: true,
           style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
@@ -5965,7 +6024,8 @@ window.__ModuleLoader__.load({
                 '没有推导出候选证据；可在「证据库」子模块保存来源后回来关联（同项目或知识链同源的条目会出现在这里）。'),
             ]
           })()) : null,
-        ]))) : null,
+        ]),
+        }) : null,
         tab === 'assets' && notice ? h(Notice, {
           key: 'notice',
           tone: notice.startsWith('⚠️') ? 'warn' : 'info',
@@ -6131,11 +6191,20 @@ window.__ModuleLoader__.load({
       const frameRef = React.useRef(null)
       const dragRef = React.useRef(null)
       const evidenceRefreshVersion = React.useRef(0)
+      const assetRefreshVersion = React.useRef(0)
+      const knowledgeRefreshVersion = React.useRef(0)
 
       React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
       React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
-      React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
-      React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
+      const refreshAssets = React.useCallback(() => {
+        if (!assetProvider?.list) return
+        const version = ++assetRefreshVersion.current
+        assetProvider.list().then(rows => {
+          if (version === assetRefreshVersion.current) setAssets(rows || [])
+        }).catch(() => {})
+      }, [assetProvider])
+      React.useEffect(() => { refreshAssets() }, [refreshAssets])
+      React.useEffect(() => assetProvider?.onChange?.(refreshAssets) || undefined, [assetProvider, refreshAssets])
       const refreshSavedEvidence = React.useCallback(() => {
         const version = ++evidenceRefreshVersion.current
         const selectedProject = projectFilter || undefined
@@ -6162,12 +6231,19 @@ window.__ModuleLoader__.load({
       }, [vault, projectFilter])
       React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
       const refreshKnowledge = React.useCallback(() => {
+        const version = ++knowledgeRefreshVersion.current
         const store = knowledgeStore()
         setKnowledgeDegraded(store.isDegraded())
         setLastDeposition(lastDepositionSummary())
         Promise.all([store.listNodes(), store.listClaims()])
-          .then(([nodes, claims]) => { setKnowledgeNodes(nodes || []); setKnowledgeClaims(claims || []) })
-          .catch(() => { setKnowledgeNodes([]); setKnowledgeClaims([]) })
+          .then(([nodes, claims]) => {
+            if (version !== knowledgeRefreshVersion.current) return
+            setKnowledgeNodes(nodes || []); setKnowledgeClaims(claims || [])
+          })
+          .catch(() => {
+            if (version !== knowledgeRefreshVersion.current) return
+            setKnowledgeNodes([]); setKnowledgeClaims([])
+          })
       }, [])
       React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
       React.useEffect(() => onAutoDepositChange(value => setAutoDeposit(value)), [])
@@ -6227,22 +6303,31 @@ window.__ModuleLoader__.load({
         // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
         assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
       }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
-      const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
-      const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
-      const renderGraph = React.useMemo(() => {
-        if (layout.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return { nodes: layout.nodes, routes, hidden: 0 }
-        const priority = new Set([view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : ''].filter(Boolean))
+      // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
+      const highlighted = React.useMemo(() => {
+        if (view.mode === 'all') return null
+        if (view.mode === 'path') return view.from && view.to ? new Set(findEvidencePath(graph, view.from, view.to)) : null
+        if (!view.focus) return null
+        return evidenceNeighborhood(graph, view.focus, view.mode)
+      }, [view, graph])
+      // 性能裁剪必须发生在布局和路由之前；否则虽然 DOM 只有 300 个节点，CPU 仍会计算全图。
+      // 完整图保留在 graph 中，仅在用户导出时按需布局。
+      const interactiveGraph = React.useMemo(() => {
+        if (graph.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return graph
+        const priority = new Set([
+          ...(highlighted || []), view.focus, view.from, view.to, selectedKnowledgeId,
+          selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : '',
+        ].filter(Boolean))
         const nodes = [
-          ...layout.nodes.filter(node => priority.has(node.id)),
-          ...layout.nodes.filter(node => !priority.has(node.id)),
+          ...graph.nodes.filter(node => priority.has(node.id)),
+          ...graph.nodes.filter(node => !priority.has(node.id)),
         ].slice(0, GRAPH_RENDER_NODE_LIMIT)
         const ids = new Set(nodes.map(node => node.id))
-        return {
-          nodes,
-          routes: routes.filter(route => ids.has(route.from) && ids.has(route.to)),
-          hidden: layout.nodes.length - nodes.length,
-        }
-      }, [layout, routes, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+        return { ...graph, nodes, edges: graph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)) }
+      }, [graph, highlighted, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+      const layout = React.useMemo(() => layoutEvidenceGraph(interactiveGraph), [interactiveGraph])
+      const routes = React.useMemo(() => routeEvidenceEdges(interactiveGraph, layout), [interactiveGraph, layout])
+      const hiddenNodeCount = graph.nodes.length - interactiveGraph.nodes.length
 
       const scale = view.scale
       const viewWidth = layout.width / scale
@@ -6324,15 +6409,6 @@ window.__ModuleLoader__.load({
         applyView({ focus: nodeId })
       }
 
-      // highlighted 为 null 表示「全部可见」；非 null 时不在集合里的节点降透明度而
-      // 不是被移除——移除会让用户失去参照物，不知道自己看到的是全图的哪一部分。
-      const highlighted = React.useMemo(() => {
-        if (view.mode === 'all') return null
-        if (view.mode === 'path') return view.from && view.to ? new Set(findEvidencePath(graph, view.from, view.to)) : null
-        if (!view.focus) return null
-        return evidenceNeighborhood(graph, view.focus, view.mode)
-      }, [view, graph])
-
       // ── 结论追溯面板（点击知识节点展开）────────────────────────────────────────
       const selectedKnowledge = React.useMemo(
         () => knowledgeNodes.find(node => node.id === selectedKnowledgeId) || null,
@@ -6408,7 +6484,7 @@ window.__ModuleLoader__.load({
         onWheel,
         style: { display: 'block', touchAction: 'none', cursor: 'grab', background: C.surfaceAlt, borderRadius: 12 }
       }, [
-        ...renderGraph.routes.map(route => h('path', {
+        ...routes.map(route => h('path', {
           key: route.key,
           className: flowing ? 'rk-graph-edge rk-graph-edge-flow' : 'rk-graph-edge',
           d: route.d,
@@ -6419,7 +6495,7 @@ window.__ModuleLoader__.load({
           opacity: highlighted && !(highlighted.has(route.from) && highlighted.has(route.to)) ? 0.18 : 1
         })),
         h('defs', { key: 'defs' }, h('marker', { id: 'rk-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' }, h('path', { d: 'M0,0 L0,6 L7,3 z', fill: C.lineStrong }))),
-        ...renderGraph.nodes.map(node => {
+        ...layout.nodes.map(node => {
           const marked = view.focus === node.id || node.id === view.from || node.id === view.to
           const dim = highlighted ? !highlighted.has(node.id) : false
           return h('a', {
@@ -6501,7 +6577,9 @@ window.__ModuleLoader__.load({
 
       const exportGraph = format => {
         const theme = readGraphTheme()
-        const svg = buildGraphSvgMarkup(layout, routes, theme)
+        const exportLayout = hiddenNodeCount ? layoutEvidenceGraph(graph) : layout
+        const exportRoutes = hiddenNodeCount ? routeEvidenceEdges(graph, exportLayout) : routes
+        const svg = buildGraphSvgMarkup(exportLayout, exportRoutes, theme)
         if (format === 'svg') downloadGraphFile(svg, 'image/svg+xml', 'research-evidence-chain.svg')
         else downloadGraphFile(`<!doctype html><meta charset="utf-8"><title>科研证据链路</title><style>body{margin:0;padding:28px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:17px;margin:0 0 6px}p{margin:0 0 18px;opacity:.7}</style><h1>科研证据链路</h1><p>${GRAPH_EXPORT_SCOPE}</p>${svg}`, 'text/html', 'research-evidence-chain.html')
         setExportOpen(false)
@@ -6632,8 +6710,8 @@ window.__ModuleLoader__.load({
         ]) : null,
         knowledgeDegraded ? h(Notice, { key: 'knowledge-degraded', tone: 'warn', icon: 'shield', style: { margin: '10px var(--rk-gutter) 0' } },
           '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
-        renderGraph.hidden ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
-          `当前图谱共有 ${layout.nodes.length} 个节点；为保持交互流畅，画布只渲染前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderGraph.hidden} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
+        hiddenNodeCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
+          `当前图谱共有 ${graph.nodes.length} 个节点；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${hiddenNodeCount} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
         // 图例：只列图上实际出现的节点类型，随图动态增减；自动沉淀开启时附带最近一次沉淀摘要。
         graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
           [
@@ -7516,11 +7594,13 @@ window.__ModuleLoader__.load({
       try {
         template = await loadArchifyTemplate()
       } catch (error) {
+        if (popup.closed) return null
         popup.document.open()
         popup.document.write(`<!doctype html><meta charset="utf-8"><title>回放加载失败</title><p style="font:14px system-ui;padding:24px">${escapeXml(error?.message || error)}</p>`)
         popup.document.close()
         return popup
       }
+      if (popup.closed) return null
       const steps = (trace || [])
       const nodes = archifyLayoutRow(steps.map((step, i) => ({
         id: `s${i}`,
@@ -7796,14 +7876,18 @@ window.__ModuleLoader__.load({
       }
       const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
       // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
-      const specialRows = type === 'favorites'
+      const specialRows = React.useMemo(() => type === 'favorites'
         ? favorites.map(itemById).filter(Boolean).map(item => ({ item }))
         : type === 'history'
           ? history.map(row => ({ row, item: itemById(row.id) })).filter(entry => entry.item)
-          : null
+          : null,
+      [type, favorites, history])
       const isSpecialView = Boolean(specialRows)
-      const listEntries = isSpecialView ? specialRows : items.map(item => ({ item }))
-      const listGroups = groupEntriesByCategory(listEntries)
+      const listEntries = React.useMemo(
+        () => isSpecialView ? specialRows : items.map(item => ({ item })),
+        [isSpecialView, specialRows, items],
+      )
+      const listGroups = React.useMemo(() => groupEntriesByCategory(listEntries), [listEntries])
       // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
       const recordUse = (status = 'draft') => {
         if (!workflow) return
@@ -7863,11 +7947,15 @@ window.__ModuleLoader__.load({
         setQuery('')
         setSelectedId(item.id)
       }
+      const catalogCounts = React.useMemo(() => catalog.reduce((counts, item) => {
+        counts[item.type] = (counts[item.type] || 0) + 1
+        return counts
+      }, {}), [])
       const typeTabs = [
         { value: 'all', label: `全部 ${catalog.length}` },
-        { value: 'workflow', label: `工作流程 ${catalog.filter(item => item.type === 'workflow').length}` },
-        { value: 'skill', label: `技能 ${catalog.filter(item => item.type === 'skill').length}` },
-        { value: 'database', label: `数据库 ${catalog.filter(item => item.type === 'database').length}` },
+        { value: 'workflow', label: `工作流程 ${catalogCounts.workflow || 0}` },
+        { value: 'skill', label: `技能 ${catalogCounts.skill || 0}` },
+        { value: 'database', label: `数据库 ${catalogCounts.database || 0}` },
         { value: 'favorites', label: `★ 收藏 ${favorites.length}` },
         { value: 'history', label: `历史 ${history.length}` },
       ]
@@ -8744,7 +8832,11 @@ window.__ModuleLoader__.load({
       } catch { return '' }
     }
 
-    function CallEntry({ call }) {
+    function activityKey(call) {
+      return String(call?.id || `${call?.at || ''}:${call?.tool || ''}:${call?.result_summary || call?.error || ''}`)
+    }
+
+    const CallEntry = React.memo(function CallEntry({ call }) {
       const label = toolLabel(call.tool)
       const isError = call.ok === false
       return h('div', {
@@ -8766,9 +8858,9 @@ window.__ModuleLoader__.load({
           style: { fontSize: 10, color: C.muted, flexShrink: 0, opacity: 0.7 },
         }, call.duration_ms != null ? `${call.duration_ms}ms` : ''),
       ])
-    }
+    })
 
-    function CheckpointBanner({ cp, onApprove, busy }) {
+    const CheckpointBanner = React.memo(function CheckpointBanner({ cp, onApprove, busy }) {
       const pendingStages = Object.entries(cp.checkpoints || {}).filter(([, v]) => !v.approved)
       if (!pendingStages.length) return null
       return h('div', {
@@ -8795,7 +8887,7 @@ window.__ModuleLoader__.load({
           ])
         ),
       ])
-    }
+    })
 
     function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       const [expanded, setExpanded] = React.useState(false)
@@ -8820,7 +8912,15 @@ window.__ModuleLoader__.load({
             setError(null)
             if (data.calls.length) {
               latestAt.current = data.calls[0].at
-              setCalls(prev => [...data.calls, ...prev].slice(0, 100))
+              setCalls(prev => {
+                const seen = new Set()
+                return [...data.calls, ...prev].filter(call => {
+                  const key = activityKey(call)
+                  if (seen.has(key)) return false
+                  seen.add(key)
+                  return true
+                }).slice(0, 100)
+              })
 
               // 方案 A：runId 为空时，从 MCP 调用日志自动捕获最近的 research_run_start 的 run_id
               if (!runId && onRunDetected) {
@@ -8983,8 +9083,11 @@ window.__ModuleLoader__.load({
       const [section, setSection] = React.useState(readStoredSection)
       const [researchContext, setResearchContext] = React.useState(currentResearchContext)
       const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
-      const [resourcesLoaded, setResourcesLoaded] = React.useState(() => catalogReady() && promptKitReady())
-      const [resourceError, setResourceError] = React.useState('')
+      const [catalogLoaded, setCatalogLoaded] = React.useState(catalogReady)
+      const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
+      const [catalogError, setCatalogError] = React.useState('')
+      const [promptKitError, setPromptKitError] = React.useState('')
+      const current = findConsoleSection(section)
       const navRef = React.useRef(null)
       // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
       // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -9012,15 +9115,23 @@ window.__ModuleLoader__.load({
       React.useEffect(() => {
         let active = true
         const markReady = () => {
-          if (active && catalogReady() && promptKitReady()) { setResourcesLoaded(true); setResourceError('') }
+          if (active && catalogReady()) { setCatalogLoaded(true); setCatalogError('') }
         }
         const dispose = subscribeCatalog(markReady)
-        Promise.all([loadBrowserCatalog(), loadPromptKit()]).then(markReady)
-          .catch(error => { if (active) setResourceError(error?.message || String(error)) })
+        loadBrowserCatalog().then(markReady)
+          .catch(error => { if (active) setCatalogError(error?.message || String(error)) })
         return () => { active = false; dispose() }
       }, [])
+      React.useEffect(() => {
+        if (current.id === 'catalog' || promptKitLoaded) return undefined
+        let active = true
+        loadPromptKit().then(PromptKit => {
+          ensureResearchProviders(PromptKit)
+          if (active) { setPromptKitLoaded(true); setPromptKitError('') }
+        }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
+        return () => { active = false }
+      }, [current.id, promptKitLoaded])
       React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
-      const current = findConsoleSection(section)
       const activeRun = activeResearchRun()
       const commitProject = () => {
         const normalized = String(projectDraft || '').trim().slice(0, 100)
@@ -9032,6 +9143,7 @@ window.__ModuleLoader__.load({
       }
       const navOptions = RESEARCH_CONSOLE_SECTIONS.map(item => ({ value: item.id, label: item.label }))
       const view = SECTION_VIEWS[current.id]
+      const resourceError = catalogError || (current.id === 'catalog' ? '' : promptKitError)
       return h(Page, { style: { padding: 0 } }, [
         h(GlobalStyle, { key: 'global-style' }),
         h('div', {
@@ -9063,7 +9175,7 @@ window.__ModuleLoader__.load({
             ]),
           ]),
         ]),
-        h('div', { key: 'section', 'data-section': current.id }, resourcesLoaded
+        h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
           ? (view ? view(props) : null)
           : resourceError
             ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)

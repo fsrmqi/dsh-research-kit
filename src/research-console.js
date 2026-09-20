@@ -3,6 +3,7 @@ import { h, C, GlobalStyle } from './theme.js'
 import { Page, Segmented, Spinner, Notice } from './ui.js'
 import { catalogReady, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
+import { ensureResearchProviders } from '../dsh/prompt-studio-glue.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { AgentActivityPanel } from './agent-activity.js'
@@ -48,8 +49,11 @@ export function ResearchConsole(props) {
   const [section, setSection] = React.useState(readStoredSection)
   const [researchContext, setResearchContext] = React.useState(currentResearchContext)
   const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
-  const [resourcesLoaded, setResourcesLoaded] = React.useState(() => catalogReady() && promptKitReady())
-  const [resourceError, setResourceError] = React.useState('')
+  const [catalogLoaded, setCatalogLoaded] = React.useState(catalogReady)
+  const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
+  const [catalogError, setCatalogError] = React.useState('')
+  const [promptKitError, setPromptKitError] = React.useState('')
+  const current = findConsoleSection(section)
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -77,15 +81,23 @@ export function ResearchConsole(props) {
   React.useEffect(() => {
     let active = true
     const markReady = () => {
-      if (active && catalogReady() && promptKitReady()) { setResourcesLoaded(true); setResourceError('') }
+      if (active && catalogReady()) { setCatalogLoaded(true); setCatalogError('') }
     }
     const dispose = subscribeCatalog(markReady)
-    Promise.all([loadBrowserCatalog(), loadPromptKit()]).then(markReady)
-      .catch(error => { if (active) setResourceError(error?.message || String(error)) })
+    loadBrowserCatalog().then(markReady)
+      .catch(error => { if (active) setCatalogError(error?.message || String(error)) })
     return () => { active = false; dispose() }
   }, [])
+  React.useEffect(() => {
+    if (current.id === 'catalog' || promptKitLoaded) return undefined
+    let active = true
+    loadPromptKit().then(PromptKit => {
+      ensureResearchProviders(PromptKit)
+      if (active) { setPromptKitLoaded(true); setPromptKitError('') }
+    }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
+    return () => { active = false }
+  }, [current.id, promptKitLoaded])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
-  const current = findConsoleSection(section)
   const activeRun = activeResearchRun()
   const commitProject = () => {
     const normalized = String(projectDraft || '').trim().slice(0, 100)
@@ -97,6 +109,7 @@ export function ResearchConsole(props) {
   }
   const navOptions = RESEARCH_CONSOLE_SECTIONS.map(item => ({ value: item.id, label: item.label }))
   const view = SECTION_VIEWS[current.id]
+  const resourceError = catalogError || (current.id === 'catalog' ? '' : promptKitError)
   return h(Page, { style: { padding: 0 } }, [
     h(GlobalStyle, { key: 'global-style' }),
     h('div', {
@@ -128,7 +141,7 @@ export function ResearchConsole(props) {
         ]),
       ]),
     ]),
-    h('div', { key: 'section', 'data-section': current.id }, resourcesLoaded
+    h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
       ? (view ? view(props) : null)
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)

@@ -5,7 +5,7 @@ import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-lo
 let researchMethodProvider = null
 let researchAssetProvider = null
 
-function ensureResearchProviders(PromptKit = getPromptKit()) {
+export function ensureResearchProviders(PromptKit = getPromptKit()) {
   if (!researchMethodProvider) researchMethodProvider = new PromptKit.StaticMethodProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
   if (!researchAssetProvider) researchAssetProvider = new PromptKit.StaticAssetProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
   return { researchMethodProvider, researchAssetProvider }

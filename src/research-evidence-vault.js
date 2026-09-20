@@ -42,11 +42,21 @@ function publishEvidenceVault() {
 
 const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
 const EVIDENCE_SYNC_FRESH_MS = 8_000
+const EVIDENCE_SYNC_CACHE_LIMIT = 64
 const evidenceSyncInFlight = new Map()
 const evidenceSyncFreshUntil = new Map()
 
 function evidenceSyncScope(project) {
   return String(project || '*')
+}
+
+function pruneEvidenceSyncCache(now = Date.now()) {
+  for (const [scope, until] of evidenceSyncFreshUntil) {
+    if (until <= now) evidenceSyncFreshUntil.delete(scope)
+  }
+  while (evidenceSyncFreshUntil.size > EVIDENCE_SYNC_CACHE_LIMIT) {
+    evidenceSyncFreshUntil.delete(evidenceSyncFreshUntil.keys().next().value)
+  }
 }
 
 export function invalidateEvidenceSync(project) {
@@ -161,13 +171,16 @@ async function performEvidenceVaultSync(project) {
 
 export function syncEvidenceVaultWithFiles(project, { force = false } = {}) {
   const scope = evidenceSyncScope(project)
-  if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > Date.now()) {
+  const now = Date.now()
+  pruneEvidenceSyncCache(now)
+  if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > now) {
     return Promise.resolve({ skipped: false, cached: true, imported: 0, exported: 0 })
   }
   if (evidenceSyncInFlight.has(scope)) return evidenceSyncInFlight.get(scope)
   const task = performEvidenceVaultSync(project)
     .then(result => {
       evidenceSyncFreshUntil.set(scope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
+      pruneEvidenceSyncCache()
       return result
     })
     .finally(() => evidenceSyncInFlight.delete(scope))
