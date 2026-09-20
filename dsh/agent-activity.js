@@ -2,14 +2,14 @@
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import { dataPath } from '../mcp/paths.js'
 import { recordApproval } from '../mcp/state/checkpoint-manager.js'
 import { buildRunOverview } from '../mcp/state/run-overview.js'
 
 export const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
 
-const LOG_FILE = path.join(os.homedir(), '.dsh-research-kit', 'logs', 'calls.jsonl')
-const CHECKPOINT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'checkpoints')
+const LOG_FILE = dataPath('logs', 'calls.jsonl')
+const CHECKPOINT_DIR = dataPath('checkpoints')
 const MAX_TAIL_BYTES = 512 * 1024
 const MAX_CHECKPOINT_FILES = 20
 let logSnapshot = { size: -1, mtimeMs: -1, records: [] }

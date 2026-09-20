@@ -8461,8 +8461,8 @@ window.__ModuleLoader__.load({
         name: 'research_metadata_openalex_fetch',
         category: 'metadata', tier: 'fine', access: 'external', requiresConfirmation: false,
         helpRoute: null, labelZh: '获取 OpenAlex 元数据',
-        summaryZh: '通过 DOI 或检索词获取 OpenAlex 完整元数据',
-        example: "{ dois: ['10.1038/s41586-020-2649-2'], save_to_evidence: false }",
+        summaryZh: '通过 DOI 或检索词获取 OpenAlex 完整元数据；引用列表默认只返回数量，需显式开启才返回全量',
+        example: "{ dois: ['10.1038/s41586-020-2649-2'], save_to_evidence: false, include_references: false }",
         artifactKind: '',
       },
       {
@@ -8479,6 +8479,18 @@ window.__ModuleLoader__.load({
 
     function toolMeta(name) {
       return REGISTRY_BY_NAME.get(String(name || '')) || null
+    }
+
+    function toolAnnotations(name) {
+      const meta = toolMeta(name)
+      if (!meta) return undefined
+      return {
+        title: meta.labelZh,
+        readOnlyHint: meta.access === 'read-only',
+        destructiveHint: false,
+        idempotentHint: meta.access === 'read-only',
+        openWorldHint: meta.access === 'external',
+      }
     }
 
     function toolLabel(name) {
