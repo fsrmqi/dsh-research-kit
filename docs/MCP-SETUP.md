@@ -2,6 +2,8 @@
 
 本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 31 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
+> **从 9/18 之前的版本升级？** 14 个 Tool 已统一改名为 `research_` 前缀（例：`verify_citation` → `research_citation_verify`）。若你的宿主配置、脚本或提示词里写死了旧工具名，请按 [CHANGELOG](../CHANGELOG.md) 的「变更」首条更新——该条含完整的新旧名对照表。本包尚未发布到 npm，此前的安装都来自 git（本地目录或钉 commit）。
+
 ## 前置条件
 
 | 依赖 | 版本 | 用途 |

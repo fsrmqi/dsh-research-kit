@@ -167,10 +167,15 @@ dsh-research-kit/
 ├── scripts/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
+│   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
 │   ├── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
+│   ├── sync-tool-docs.mjs           # 从工具注册表生成 MCP-SETUP 的工具表与最短路径（--check 入 npm run check）
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
-│   └── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
+│   ├── add-agent-fields.mjs         # 一次性迁移脚本：为工作流条目批量补 tool_mode / input_schema 字段
+│   ├── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
+│   └── lib/
+│       └── catalog-entries.mjs      # 分片与聚合入口的两路读取（目录校验与文档统计校验共用）
 ├── test/                            # 345 项测试（41 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
@@ -322,7 +327,7 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 ![科学数据源的两条查询路径：插件直查与 Agent 回退](assets/data-source-paths.svg)
 
 - **插件直查**（`available-in-plugin`，11 个）：由插件 Node half 的 `/dsh-research-kit/query` 路由完成，所有网络请求经 DSH `ctx.web.fetch()` 发出，浏览器侧不持有密钥、插件不持有任何 API Key。适配器覆盖 PubMed、Crossref、OpenAlex、Semantic Scholar、Europe PMC、ClinicalTrials.gov、openFDA、UniProt、PubChem、GBIF、iNaturalist；候选结果带来源链接与稳定标识符，可直接写入输入框。
-- **Agent 回退**（`requires-mcp` / `reference-only`，111 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
+- **Agent 回退**（`requires-mcp` / `reference-only`，118 个）：详情页提供显式的「让 Agent 核验并继续查询」，插件通过当前会话 `inputActions.setDraft()` 与 `inputActions.submit()` 提交带来源约束的任务，由 DSH Agent 使用自己已配置的 Web / MCP / 文件工具完成多步检索。需要订阅、API Key、受控数据协议或专用 MCP 的来源，在完成对应凭据或连接器配置前一律走这条路径。
 
 两条路径的目录标注与实现由 `scripts/validate-catalog-lib.mjs` 的**双向契约**守护：实现了适配器就必须标 `available-in-plugin`（否则用户看到「需要 MCP」而实际能查，属于少报能力），标了就必须有适配器（否则是虚假承诺）。**任何一条路径都不得伪造查询结果。**
 
@@ -531,7 +536,7 @@ type BaseItem = {
   type: 'workflow' | 'skill' | 'database'
   name: string             // 面向用户的简短中文名称
   description: string      // 一句明确用途，不得承诺未接入能力
-  category: string         // 当前受控分类名称（工作流 24 个类目见 README「目录内容」；新增流程族先建分片再迁入）
+  category: string         // 当前受控分类名称（工作流 28 个类目见 README「目录内容」；新增流程族先建分片再迁入）
   tags: string[]           // 搜索同义词和学科标签
 }
 ```

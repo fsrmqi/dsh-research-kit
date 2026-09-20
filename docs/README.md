@@ -8,6 +8,7 @@
 | --- | --- |
 | 知道这个插件是什么、值不值得装 | [../README.md](../README.md) · [English](../README.en.md) |
 | 装起来并跑通一次任务 | [../README.md](../README.md) 的「安装」「使用」两节 |
+| 把 MCP Server 接进 Codex / Claude Code / Zed / DSH（让 Agent 直接调用工具） | [MCP-SETUP.md](MCP-SETUP.md) |
 | 知道它**不**做什么、边界在哪 | [PRODUCT.md](PRODUCT.md) |
 | 改代码：加工作流 / 技能 / 数据源 | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | 搭本地开发环境、跑测试 | [DEVELOPMENT.md](DEVELOPMENT.md) |
@@ -24,7 +25,7 @@
 | 层 | 回答什么问题 | 文档 | 语言 |
 | --- | --- | --- | --- |
 | 门面 | 这是什么？要不要用？ | [README.md](../README.md) · [README.en.md](../README.en.md) | 中 / 英 |
-| 使用 | 怎么用？边界在哪？ | README 使用流程 · [PRODUCT.md](PRODUCT.md) | 中文 |
+| 使用 | 怎么用？边界在哪？ | README 使用流程 · [MCP-SETUP.md](MCP-SETUP.md) · [PRODUCT.md](PRODUCT.md) | 中文 |
 | 贡献 | 我能改什么？怎么改？ | [CONTRIBUTING.md](../CONTRIBUTING.md) · [DEVELOPMENT.md](DEVELOPMENT.md) | 中文 |
 | 原理 | 为什么这样设计？ | [ARCHITECTURE.md](ARCHITECTURE.md) · [METHOD-WORKSHOP.md](METHOD-WORKSHOP.md) | 中文 |
 | 验证 | 我怎么确认它是好的？ | [MANUAL-QA.md](MANUAL-QA.md) | 中文 |

@@ -61,7 +61,7 @@ Deliberate trade-offs:
 ## Capabilities
 
 **🧪 349 human-reviewed research workflows**
-Across twenty-four workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
+Across 28 workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
 
 **🧩 109 skill entries: 46 guidance modules + 63 capability entries**
 Guidance modules work as prompt guidance — scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication, plus method modules for experimental design, hypothesis generation, scientific brainstorming, critical thinking, statistical power, systematic literature review, scientific visualization, uncertainty & units, clinical report drafts, venue compliance, peer-review comments, and grant writing, and three domain modules: agricultural experiment design, crop genomics & breeding evidence, and bioinformatics workflow governance — toggled at launch to fold into the workflow prompt. Capability entries are catalogued under an honest "requires host capability" status — bulk RNA-seq, Nextflow, Benchling/DNAnexus integrations, literature API search, docx/pdf production and other execution-side skills — stating the required toolchain, credentials and data-egress boundaries with a pre-use checklist; they inject no prompt fragment and execute nothing themselves.
@@ -106,7 +106,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- - **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 31 `research_*` tools (literature search and verification, evidence inventory and grading, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+- **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 31 `research_*` tools (literature search and verification, evidence inventory and grading, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
 
@@ -218,7 +218,7 @@ Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
 Database detail pages can query a first batch of public sources directly: PubMed, Crossref, OpenAlex, Semantic Scholar, Europe PMC, ClinicalTrials.gov, openFDA, UniProt, PubChem, GBIF and iNaturalist. These 11 entries are marked `available-in-plugin` in the catalog, and their detail page reads "queryable directly by the plugin". Candidate results show source links and stable identifiers and can be written into the composer, or you can explicitly click "Let the agent verify and continue" — that button invokes the current DSH session's agent, which then uses the web/MCP/file tools it already has to complete a multi-step search.
 
-The remaining 111 sources are marked `requires-mcp` or `reference-only`, state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. Catalog labels and the query implementation are cross-checked by `npm run check` in both directions (an adapter must be labelled, and a label must have an adapter), so the capability shown in the UI cannot drift from what is actually implemented. **The plugin never fabricates a search result.**
+The remaining 118 sources are marked `requires-mcp` or `reference-only`, state the MCP, subscription, API key or data-use agreement they require, and offer the same controlled agent fallback. Catalog labels and the query implementation are cross-checked by `npm run check` in both directions (an adapter must be labelled, and a label must have an adapter), so the capability shown in the UI cannot drift from what is actually implemented. **The plugin never fabricates a search result.**
 
 ## Compatibility & status
 
@@ -244,6 +244,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | Document | Contents |
 | --- | --- |
 | [docs/README.md](docs/README.md) | **Documentation index and recommended reading order** |
+| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 31 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
 | [Architecture & data contracts](docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
 | [Development guide](docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
 | [Manual QA checklist](docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |
