@@ -12,12 +12,12 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import { dataPath } from '../paths.js'
 import { loadPassport } from './material-passport.js'
 import { itemById } from '../../src/catalog.js'
 
-const PASSPORT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'passports')
-const CHECKPOINT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'checkpoints')
+const PASSPORT_DIR = dataPath('passports')
+const CHECKPOINT_DIR = dataPath('checkpoints')
 const RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/
 
 // 按工作流 checkpoint 顺序推导阶段推进：已批准的闸门即已完成的阶段，

@@ -1,14 +1,9 @@
 
 import { saveEvidence } from './evidence-store.js'
 import { wrap, err } from './wrapper.js'
+import { fetchJsonWithRetry } from './http-client.js'
 
 const SELECT_FIELDS = 'id,doi,title,display_name,publication_year,authorships,abstract_inverted_index,type,primary_location,cited_by_count,referenced_works'
-
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
-  if (!res.ok) throw new Error(`OpenAlex API returned HTTP ${res.status}`)
-  return res.json()
-}
 
 function reconstructAbstract(invertedIndex) {
   if (!invertedIndex || typeof invertedIndex !== 'object') return ''
@@ -20,7 +15,8 @@ function reconstructAbstract(invertedIndex) {
   return words.filter(Boolean).join(' ')
 }
 
-function normalizeWork(work) {
+function normalizeWork(work, { includeReferences = false } = {}) {
+  const references = work.referenced_works || []
   return {
     doi: work.doi?.replace('https://doi.org/', '') || '',
     title: work.title || work.display_name || '',
@@ -31,25 +27,26 @@ function normalizeWork(work) {
     abstract: reconstructAbstract(work.abstract_inverted_index),
     cited_by_count: work.cited_by_count || 0,
     openalex_id: work.id || '',
-    referenced_works: work.referenced_works || [],
+    referenced_works_count: references.length,
+    ...(includeReferences ? { referenced_works: references } : {}),
     url: work.doi || '',
   }
 }
 
-async function fetchOpenAlexWork(doi) {
+async function fetchOpenAlexWork(doi, { includeReferences = false } = {}) {
   const cleanDoi = String(doi || '').trim().replace(/^https?:\/\/doi\.org\//i, '')
-  const data = await fetchJson(`https://api.openalex.org/works/doi:${encodeURIComponent(cleanDoi)}?select=${SELECT_FIELDS}`)
-  return normalizeWork(data)
+  const data = await fetchJsonWithRetry(`https://api.openalex.org/works/doi:${encodeURIComponent(cleanDoi)}?select=${SELECT_FIELDS}`)
+  return normalizeWork(data, { includeReferences })
 }
 
-async function searchOpenAlex(query, limit = 10) {
-  const data = await fetchJson(`https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}&select=${SELECT_FIELDS}`)
-  return (data.results || []).map(normalizeWork)
+async function searchOpenAlex(query, limit = 10, { includeReferences = false } = {}) {
+  const data = await fetchJsonWithRetry(`https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}&select=${SELECT_FIELDS}`)
+  return (data.results || []).map(work => normalizeWork(work, { includeReferences }))
 }
 
-async function fetchMetadata({ dois, query, limit, project, save_to_evidence }) {
+async function fetchMetadata({ dois, query, limit, project, save_to_evidence, include_references }) {
   if (query) {
-    const results = await searchOpenAlex(query, limit || 10)
+    const results = await searchOpenAlex(query, limit || 10, { includeReferences: include_references })
     return { mode: 'search', query, results, total: results.length }
   }
   if (!Array.isArray(dois) || !dois.length) {
@@ -59,7 +56,7 @@ async function fetchMetadata({ dois, query, limit, project, save_to_evidence }) 
   const errors = []
   for (const doi of dois.slice(0, 20)) {
     try {
-      results.push(await fetchOpenAlexWork(doi))
+      results.push(await fetchOpenAlexWork(doi, { includeReferences: include_references }))
     } catch (e) {
       errors.push({ doi, error: e.message })
     }

@@ -117,8 +117,9 @@ dsh-research-kit/
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
 ├── mcp/                           # MCP Server：31 个 research_* 工具的注册、实现与执行层
-│   ├── server.js                  # MCP 进程入口：注册工具、转发调用、状态查询
+│   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
 │   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
+│   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）
 │   ├── tools/
 │   │   └── index.js               # 31 个工具实现（参数校验、编排、外呼学术 API）
 │   ├── state/                     # 运行状态与产物
@@ -138,6 +139,8 @@ dsh-research-kit/
 │       ├── figure-generator.js    # 多面板 matplotlib 图表脚本生成（8 个风格）
 │       ├── figure-styles/index.js  # 图表风格模板（精确 rcParams）
 │       ├── hedging-phrases.js      # 限制语词典
+│       ├── http-client.js          # 共享外呼客户端：User-Agent、Retry-After、指数退避与短时熔断
+│       ├── identifiers.js          # 稳定标识符归一化（DOI / PMID / arXiv / OpenAlex）
 │       ├── literature-linker.js    # 证据互引关系发现
 │       ├── openalex-fetcher.js     # OpenAlex 元数据获取
 │       ├── source-querier.js      # 多数据源直查适配器

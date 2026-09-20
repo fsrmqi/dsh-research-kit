@@ -2,12 +2,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
-// MCP 工具会往 ~/.dsh-research-kit 写证据库与调用日志，测试必须落到沙箱目录，
+// MCP 工具会往 DSH_RESEARCH_KIT_HOME 写证据库与调用日志，测试必须落到沙箱目录，
 // 否则会污染用户真实数据（还会触发日志轮转，把真实历史转走）。
 let home
 let client
@@ -19,7 +20,7 @@ test.before(async () => {
     command: process.execPath,
     args: ['mcp/server.js'],
     cwd: path.resolve(import.meta.dirname, '..'),
-    env: { ...process.env, HOME: home, USERPROFILE: home, NODE_OPTIONS: '' },
+    env: { ...process.env, HOME: home, USERPROFILE: home, DSH_RESEARCH_KIT_HOME: path.join(home, 'data'), NODE_OPTIONS: '' },
   })
   client = new Client({ name: 'smoke-test', version: '0.1.0' })
   await client.connect(transport)
@@ -42,6 +43,27 @@ test('MCP 边界：server 能启动并注册全部工具', async () => {
   for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_evidence_save_batch', 'research_evidence_grade_apply', 'research_usage_stats', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
+})
+
+test('MCP 边界：工具 annotations 暴露只读、外呼与写入语义', async () => {
+  const { tools } = await client.listTools()
+  const readTool = tools.find(tool => tool.name === 'research_catalog_search')
+  const writeTool = tools.find(tool => tool.name === 'research_evidence_save')
+  const externalTool = tools.find(tool => tool.name === 'research_literature_search')
+  assert.equal(readTool.annotations.readOnlyHint, true)
+  assert.equal(readTool.annotations.openWorldHint, false)
+  assert.equal(writeTool.annotations.readOnlyHint, false)
+  assert.equal(writeTool.annotations.destructiveHint, false)
+  assert.equal(externalTool.annotations.openWorldHint, true)
+})
+
+test('MCP 边界：结构化业务错误必须带 isError，且输出保持紧凑 JSON', async () => {
+  const result = await client.callTool({ name: 'research_workflow_compose', arguments: { workflow_id: 'not-exists' } })
+  assert.equal(result.isError, true)
+  const parsed = JSON.parse(result.content[0].text)
+  assert.equal(parsed.error, true)
+  assert.equal(parsed.code, 'TOOL_ERROR')
+  assert.equal(result.content[0].text, JSON.stringify(parsed))
 })
 
 test('MCP 边界：research_catalog_search 命中中文查询，且 schema 默认值真的生效', async () => {
@@ -141,6 +163,7 @@ test('MCP 边界：research_evidence_save 后能被 research_evidence_list 读�
   const listed = await callTool('research_evidence_list', { project: 'mcp-test' })
   assert.equal(listed.data.entries.length, 1)
   assert.equal(listed.data.entries[0].identifier, '10.9999/smoke-test')
+  assert.ok(existsSync(path.join(home, 'data', 'evidence', 'mcp-test', 'entries.jsonl')), 'DSH_RESEARCH_KIT_HOME 应重定向证据库')
 })
 
 test('MCP 边界：passport、checkpoint 与证据可复用同一研究运行 ID', async () => {

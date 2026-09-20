@@ -2,10 +2,10 @@
 import { writeFile, readFile, mkdir, readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import { dataPath } from '../paths.js'
 import crypto from 'node:crypto'
 
-const PASSPORT_DIR = path.join(os.homedir(), '.dsh-research-kit', 'passports')
+const PASSPORT_DIR = dataPath('passports')
 
 function makeRunId() {
   return crypto.randomBytes(6).toString('hex')

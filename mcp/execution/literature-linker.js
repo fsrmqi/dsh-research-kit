@@ -1,15 +1,10 @@
 
 import { listEvidence } from './evidence-store.js'
 import { wrap } from './wrapper.js'
-
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
-  if (!res.ok) throw new Error(`API returned HTTP ${res.status}`)
-  return res.json()
-}
+import { fetchJsonWithRetry } from './http-client.js'
 
 async function lookupOpenAlex(doi) {
-  const data = await fetchJson(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=id,referenced_works,cited_by_count`)
+  const data = await fetchJsonWithRetry(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}?select=id,referenced_works,cited_by_count`)
   return { openalexId: data.id, references: data.referenced_works || [], citedByCount: data.cited_by_count || 0 }
 }
 

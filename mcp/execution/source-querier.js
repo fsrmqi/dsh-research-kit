@@ -1,3 +1,4 @@
+import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
 
 const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
@@ -27,12 +28,6 @@ function makeSource(id, title, url, meta = '', summary = '') {
   return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) }
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
-  if (!res.ok) throw new Error(`数据源返回 HTTP ${res.status}`)
-  return res.json()
-}
-
 function rateLimitExceeded(sourceId) {
   const now = Date.now()
   const bucket = (rateBuckets.get(sourceId) || []).filter(at => now - at < RATE_LIMIT_WINDOW_MS)
@@ -46,23 +41,9 @@ function rateLimitExceeded(sourceId) {
   return false
 }
 
-async function fetchWithRetry(url, accept) {
-  let response
-  try {
-    response = await fetch(url, { headers: { Accept: accept }, signal: AbortSignal.timeout(15_000) })
-  } catch (error) {
-    throw error
-  }
-  if (response.status === 429) {
-    await new Promise(resolve => setTimeout(resolve, 1_200))
-    response = await fetch(url, { headers: { Accept: accept }, signal: AbortSignal.timeout(15_000) })
-  }
-  return response
-}
-
 const ADAPTERS = {
   crossref: {
-    url: (q, n) => `https://api.crossref.org/works?query=${encodeURIComponent(q)}&rows=${n}&select=DOI,title,author,published-print,published-online,container-title,URL,abstract`,
+    url: (q, n) => crossrefUrl(`https://api.crossref.org/works?query=${encodeURIComponent(q)}&rows=${n}&select=DOI,title,author,published-print,published-online,container-title,URL,abstract`),
     parse: data => (data.message?.items || []).map(item => makeSource(
       item.DOI, item.title?.[0], item.URL || `https://doi.org/${item.DOI}`,
       [item.author?.[0]?.family, item['container-title']?.[0], item['published-print']?.['date-parts']?.[0]?.[0] || item['published-online']?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · '),
@@ -95,7 +76,7 @@ const ADAPTERS = {
     )),
   },
   arxiv: {
-    url: (q, n) => `http://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(q)}&max_results=${n}`,
+    url: (q, n) => `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(q)}&max_results=${n}`,
     parse: xml => {
       const entries = String(xml).split('<entry>').slice(1)
       return entries.map(entry => {
@@ -159,9 +140,9 @@ async function querySource(sourceId, query, limit = 5) {
 
   const request = (async () => {
     const url = adapter.url(normalizedQuery, normalizedLimit)
-    const raw = await fetchWithRetry(url, adapter.isXml ? 'application/xml' : 'application/json')
-    if (!raw.ok) throw new Error(`数据源 "${sourceId}" 返回 HTTP ${raw.status}`)
-    const body = adapter.isXml ? await raw.text() : await raw.json()
+    const body = adapter.isXml
+      ? await fetchTextWithRetry(url, { accept: 'application/xml' })
+      : await fetchJsonWithRetry(url)
     const sources = adapter.parse(body)
     const result = {
       sources,

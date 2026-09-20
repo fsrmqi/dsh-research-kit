@@ -20,11 +20,11 @@ import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
 import { fetchOpenAlexMetadata } from '../execution/openalex-fetcher.js'
 import { wrap, err } from '../execution/wrapper.js'
 import { contract } from '../execution/contract.js'
+import { stableIdentifier } from '../execution/identifiers.js'
 
 function sourceIdentity(source) {
-  const identifier = String(source?.id || '').trim()
-  const identifierType = detectIdentifierType(identifier)
-  if (identifierType) return `${identifierType}:${identifier.toLowerCase()}`
+  const stable = stableIdentifier(source?.id, source?.url)
+  if (stable) return stable.key
   const url = String(source?.url || '').trim().replace(/\/$/, '').toLowerCase()
   if (url) return `url:${url}`
   return `title:${String(source?.title || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)}`
@@ -35,12 +35,18 @@ function mergeLiteratureResults(results) {
   for (const { sourceId, result } of results) {
     for (const item of result.sources || []) {
       const key = sourceIdentity(item)
+      const stable = stableIdentifier(item.id, item.url)
       const existing = merged.get(key)
       if (existing) {
         existing.found_in = [...new Set([...existing.found_in, sourceId])]
         continue
       }
-      merged.set(key, { ...item, found_in: [sourceId], identifier_type: detectIdentifierType(item.id) || 'none' })
+      merged.set(key, {
+        ...item,
+        id: stable?.value || item.id,
+        found_in: [sourceId],
+        identifier_type: stable?.type || detectIdentifierType(item.id) || 'none',
+      })
     }
   }
   return [...merged.values()]
@@ -996,9 +1002,10 @@ const tools = [
       limit: z.number().int().min(1).max(50).optional().default(10).describe('Max results for search mode'),
       project: z.string().optional().describe('Project name for evidence saving'),
       save_to_evidence: z.boolean().optional().describe('Save fetched metadata to evidence store'),
+      include_references: z.boolean().optional().default(false).describe('Include the full referenced_works array; disabled by default to keep responses compact'),
     },
-    async execute({ dois, query, limit, project, save_to_evidence }) {
-      return fetchOpenAlexMetadata({ dois, query, limit, project, save_to_evidence })
+    async execute({ dois, query, limit, project, save_to_evidence, include_references }) {
+      return fetchOpenAlexMetadata({ dois, query, limit, project, save_to_evidence, include_references })
     },
   },
 ]

@@ -124,7 +124,8 @@ function parseServerOf(name) {
 // 返回 { ok, available, ... }：available=false 是「部署里没有可用的 Memory Center MCP」
 // 或参数无法可靠合成，属于如实降级而非错误；available=true 时 text/sources 供增强器
 // 预览与注入。安全边界：本路由只代为执行 `mcp__` 前缀的工具，绝不触碰原生工具。
-export function memorySearchRoute({ tools, logger } = {}) {
+export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS } = {}) {
+  const requestTimeoutMs = Math.max(1, Number(timeoutMs) || EXEC_TIMEOUT_MS)
   return {
     kind: 'exact', path: MEMORY_SEARCH_PATH,
     async handler(req, res) {
@@ -135,9 +136,9 @@ export function memorySearchRoute({ tools, logger } = {}) {
         throw error
       }
       const query = String(body.query || '').trim()
-      const server = String(body.server || DEFAULT_MEMORY_SERVER)
-      const limit = Math.max(1, Math.min(Number(body.limit) || 8, 20))
       const explicitTool = String(body.tool || '').trim()
+      const server = String(body.server || (explicitTool ? parseServerOf(explicitTool) || '' : '') || DEFAULT_MEMORY_SERVER)
+      const limit = Math.max(1, Math.min(Number(body.limit) || 8, 20))
       if (!query) return reply(res, 400, { ok: false, error: 'empty_query' })
       if (query.length > MAX_QUERY_CHARS) return reply(res, 400, { ok: false, error: 'query_too_long' })
       if (explicitTool && !explicitTool.startsWith('mcp__')) {
@@ -153,6 +154,13 @@ export function memorySearchRoute({ tools, logger } = {}) {
       if (explicitTool) {
         const found = schemas.find(schema => schema?.name === explicitTool)
         if (!found) return reply(res, 200, { ok: true, available: false, reason: 'tool-not-found', tool: explicitTool })
+        if (parseServerOf(found.name) !== server) {
+          return reply(res, 400, {
+            ok: false,
+            error: 'tool_server_mismatch',
+            message: `工具 ${found.name} 属于 MCP 服务器 ${parseServerOf(found.name)}，与请求的 ${server} 不一致。`,
+          })
+        }
         tool = { name: found.name, description: found.description || '', parameters: found.parameters }
       } else {
         const picked = pickMemoryTool(schemas, server)
@@ -184,10 +192,20 @@ export function memorySearchRoute({ tools, logger } = {}) {
         })
       }
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), EXEC_TIMEOUT_MS)
+      let timeout
       try {
         const callId = `rk-memory-${Date.now()}-${++callCounter}`
-        const result = await tools.execute({ callId, name: tool.name, arguments: planned.args, signal: controller.signal })
+        const execution = Promise.resolve(tools.execute({ callId, name: tool.name, arguments: planned.args, signal: controller.signal }))
+        execution.catch(() => {})
+        const timeoutPromise = new Promise((_, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort()
+            const error = new Error('Memory Center 检索超时，请稍后重试。')
+            error.code = 'MEMORY_SEARCH_TIMEOUT'
+            reject(error)
+          }, requestTimeoutMs)
+        })
+        const result = await Promise.race([execution, timeoutPromise])
         const text = memoryTextOf(result)
         if (result?.isError) {
           return reply(res, 200, { ok: true, available: false, reason: 'tool-error', tool: tool.name, message: text || '检索工具返回错误。' })
@@ -201,7 +219,9 @@ export function memorySearchRoute({ tools, logger } = {}) {
           sources: [{ kind: 'memory', label: `Memory Center · ${server}/${tool.name}` }],
         })
       } catch (error) {
-        const message = controller.signal.aborted ? 'Memory Center 检索超时，请稍后重试。' : `Memory Center 检索失败：${error?.message || error}`
+        const message = controller.signal.aborted || error?.code === 'MEMORY_SEARCH_TIMEOUT'
+          ? 'Memory Center 检索超时，请稍后重试。'
+          : `Memory Center 检索失败：${error?.message || error}`
         return reply(res, 200, { ok: true, available: false, reason: 'execute-failed', tool: tool.name, message })
       } finally {
         clearTimeout(timeout)

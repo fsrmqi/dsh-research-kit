@@ -1,3 +1,4 @@
+import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
 
 const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
@@ -15,12 +16,6 @@ function cacheSet(key, data) {
   while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value)
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
-  if (!res.ok) throw new Error(`API returned HTTP ${res.status}`)
-  return res.json()
-}
-
 function detectIdentifierType(raw) {
   const value = String(raw || '').trim()
   if (/^10\.\d{4,9}\//i.test(value)) return 'doi'
@@ -32,7 +27,7 @@ function detectIdentifierType(raw) {
 }
 
 async function fetchCrossref(doi) {
-  const data = await fetchJson(`https://api.crossref.org/works/${encodeURIComponent(doi)}`)
+  const data = await fetchJsonWithRetry(crossrefUrl(`https://api.crossref.org/works/${encodeURIComponent(doi)}`))
   const item = data.message
   return {
     identifier: item.DOI,
@@ -48,7 +43,7 @@ async function fetchCrossref(doi) {
 }
 
 async function fetchPubmed(pmid) {
-  const data = await fetchJson(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`)
+  const data = await fetchJsonWithRetry(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`)
   const item = data.result?.[pmid]
   if (!item) throw new Error('PubMed 未返回该 PMID 的记录。')
   return {
@@ -66,8 +61,7 @@ async function fetchPubmed(pmid) {
 
 async function fetchArxiv(arxivId) {
   const cleanId = arxivId.replace(/v\d+$/i, '')
-  const res = await fetch(`http://export.arxiv.org/api/query?id_list=${cleanId}`, { signal: AbortSignal.timeout(15_000) })
-  const xml = await res.text()
+  const xml = await fetchTextWithRetry(`https://export.arxiv.org/api/query?id_list=${cleanId}`, { accept: 'application/xml' })
   const titleMatch = xml.match(/<title>([^<]+)<\/title>/)
   const entries = xml.split('<entry>').slice(1)
   if (!entries.length) throw new Error('arXiv 未返回该 ID 的记录。')

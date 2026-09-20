@@ -2,7 +2,7 @@
 
 本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 31 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
-接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。
+接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。工具会同时暴露 MCP annotations（只读、外呼、幂等提示），业务错误统一带 `isError`，大结果默认使用紧凑 JSON。
 
 ![MCP 工具地图：四类宿主经同一 stdio 服务调用按能力域分组的 research_* 工具](assets/mcp-tools-map.svg)
 
@@ -16,24 +16,9 @@
 | npm | >= 10 | 安装依赖 |
 | LaTeX（可选） | texlive / MacTeX | 生成图表脚本中的 `text.usetex` |
 
-## 启动方式
+## 启动方式与本地数据
 
-MCP Server 支持三种启动方式，选择一种即可：
-
-### 方式 A：npx（推荐，零安装）
-
-```bash
-npx dsh-research-kit-mcp
-```
-
-### 方式 B：全局安装
-
-```bash
-npm install -g dsh-research-kit
-dsh-research-kit-mcp
-```
-
-### 方式 C：本地克隆
+当前包尚未发布到 npm，请先使用本地克隆：
 
 ```bash
 git clone https://github.com/fsrmqi/dsh-research-kit.git
@@ -42,7 +27,20 @@ npm install
 node mcp/server.js
 ```
 
-以下配置示例以方式 A（npx）为准。如果用方式 B 或 C，把 `command` 换成对应启动命令。
+可选环境变量：
+
+| 变量 | 默认 | 用途 |
+|------|------|------|
+| `DSH_RESEARCH_KIT_HOME` | `~/.dsh-research-kit` | 证据库、护照、检查点与调用日志的数据根目录，可用于项目隔离或多实例并行 |
+| `DSH_RESEARCH_KIT_CONTACT_EMAIL` | 空 | 作为 User-Agent 联系方式，并附加到 Crossref 请求的 `mailto` 参数 |
+
+```bash
+DSH_RESEARCH_KIT_HOME=/path/to/data \
+DSH_RESEARCH_KIT_CONTACT_EMAIL=you@example.com \
+node mcp/server.js
+```
+
+以下配置示例统一假设仓库已克隆到 `/absolute/path/to/dsh-research-kit`。
 
 ---
 
@@ -51,14 +49,6 @@ node mcp/server.js
 ### Codex CLI
 
 编辑 `~/.codex/config.toml`，添加：
-
-```toml
-[mcp_servers.dsh-research-kit]
-command = "npx"
-args = ["-y", "dsh-research-kit-mcp"]
-```
-
-如果用本地克隆：
 
 ```toml
 [mcp_servers.dsh-research-kit]
@@ -71,8 +61,8 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 1. 打开 Codex Desktop -> Settings -> MCP Servers
 2. 点击 Add Server
 3. Name: `dsh-research-kit`
-4. Command: `npx`
-5. Args: `-y dsh-research-kit-mcp`
+4. Command: `node`
+5. Args: `/absolute/path/to/dsh-research-kit/mcp/server.js`
 6. 保存并重启会话
 
 ### 验证
@@ -91,8 +81,8 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 {
   "mcpServers": {
     "dsh-research-kit": {
-      "command": "npx",
-      "args": ["-y", "dsh-research-kit-mcp"]
+      "command": "node",
+      "args": ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
     }
   }
 }
@@ -106,8 +96,8 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 {
   "mcpServers": {
     "dsh-research-kit": {
-      "command": "npx",
-      "args": ["-y", "dsh-research-kit-mcp"]
+      "command": "node",
+      "args": ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
     }
   }
 }
@@ -128,8 +118,8 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
   "context_servers": {
     "dsh-research-kit": {
       "source": "custom",
-      "command": "npx",
-      "args": ["-y", "dsh-research-kit-mcp"]
+      "command": "node",
+      "args": ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
     }
   }
 }
@@ -161,8 +151,8 @@ dsh-research-kit 本身就是 DSH 插件。MCP Server 可以在 DSH 内以两种
 {
   "mcpServers": {
     "dsh-research-kit": {
-      "command": "npx",
-      "args": ["-y", "dsh-research-kit-mcp"]
+      "command": "node",
+      "args": ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
     }
   }
 }
@@ -269,6 +259,6 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_literature_link` | 发现证据间互引关系 |
 | `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（默认入口） |
 | `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
-| `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据 |
+| `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据；引用列表默认只返回数量，需显式开启才返回全量 |
 | `research_usage_stats` | 工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据） |
 <!-- tool-table:end -->

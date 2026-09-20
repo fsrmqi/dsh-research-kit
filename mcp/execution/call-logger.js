@@ -2,10 +2,10 @@
 import { appendFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import { dataPath } from '../paths.js'
 import { artifactKindOf } from '../tool-registry.js'
 
-const LOG_DIR = path.join(os.homedir(), '.dsh-research-kit', 'logs')
+const LOG_DIR = dataPath('logs')
 const LOG_FILE = path.join(LOG_DIR, 'calls.jsonl')
 const ROTATED_FILE = `${LOG_FILE}.1`
 const MAX_LOG_SIZE = 5 * 1024 * 1024

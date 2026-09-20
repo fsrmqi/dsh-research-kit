@@ -2,9 +2,9 @@
 import { appendFile, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import os from 'node:os'
+import { dataPath } from '../paths.js'
 
-const BASE_DIR = path.join(os.homedir(), '.dsh-research-kit', 'evidence')
+const BASE_DIR = dataPath('evidence')
 const LOCK_TIMEOUT_MS = 2_000
 const LOCK_STALE_MS = 5_000
 

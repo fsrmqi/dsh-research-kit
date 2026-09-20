@@ -174,10 +174,20 @@ test('路由：正常检索、无服务器、参数不可合成、工具报错�
 })
 
 test('路由安全与降级：只代执行 mcp__ 工具；宿主无 tools 服务时如实降级；非法输入 400', async () => {
-  const route = memorySearchRoute({ tools: { schemas: () => [], execute: async () => { throw new Error('never') } } })
+  const route = memorySearchRoute({
+    tools: {
+      schemas: () => [{ name: 'mcp__memory-center__search' }, { name: 'mcp__pubmed__search' }],
+      execute: async () => { throw new Error('never') },
+    },
+  })
   let run = post(route, { query: 'x', tool: 'bash' })
   await run.done
   assert.equal((await run.done).status, 400, '非 mcp__ 工具直接拒绝')
+  run = post(route, { query: 'x', server: 'memory-center', tool: 'mcp__pubmed__search' })
+  await run.done
+  const mismatch = await run.done
+  assert.equal(mismatch.status, 400)
+  assert.equal(mismatch.body.error, 'tool_server_mismatch')
   run = post(route, { query: '' })
   await run.done
   assert.equal((await run.done).status, 400)
@@ -189,6 +199,22 @@ test('路由安全与降级：只代执行 mcp__ 工具；宿主无 tools 服务
   let pending = makeReply()
   memorySearchRoute({}).handler({ method: 'GET' }, pending.res)
   assert.equal((await pending.done).status, 405)
+})
+
+test('路由：宿主忽略 AbortSignal 时仍有硬超时，不会挂起请求', async () => {
+  const route = memorySearchRoute({
+    timeoutMs: 10,
+    tools: {
+      schemas: () => [{ name: 'mcp__memory-center__search', parameters: { properties: { query: { type: 'string' } }, required: ['query'] } }],
+      execute: () => new Promise(() => {}),
+    },
+  })
+  const run = post(route, { query: '水稻' })
+  const result = await run.done
+  assert.equal(result.status, 200)
+  assert.equal(result.body.available, false)
+  assert.equal(result.body.reason, 'execute-failed')
+  assert.match(result.body.message, /超时/)
 })
 
 test('路由：请求体超过 32KB 时在解析前拒绝，且不执行 MCP 工具', async () => {
