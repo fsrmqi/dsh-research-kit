@@ -244,6 +244,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | Document | Contents |
 | --- | --- |
 | [docs/README.md](docs/README.md) | **Documentation index and recommended reading order** |
+| [Paper workflow handbook](docs/PAPER-WORKFLOW.md) | End-to-end paper work: the nine stages, literature search paths, submission packages, and the MCP operation chain (Chinese only) |
 | [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 31 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
 | [Architecture & data contracts](docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
 | [Development guide](docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |

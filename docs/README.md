@@ -8,6 +8,7 @@
 | --- | --- |
 | 知道这个插件是什么、值不值得装 | [../README.md](../README.md) · [English](../README.en.md) |
 | 装起来并跑通一次任务 | [../README.md](../README.md) 的「安装」「使用」两节 |
+| 写论文：从选题、检索到投稿该怎么走 | [PAPER-WORKFLOW.md](PAPER-WORKFLOW.md) |
 | 把 MCP Server 接进 Codex / Claude Code / Zed / DSH（让 Agent 直接调用工具） | [MCP-SETUP.md](MCP-SETUP.md) |
 | 知道它**不**做什么、边界在哪 | [PRODUCT.md](PRODUCT.md) |
 | 改代码：加工作流 / 技能 / 数据源 | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
@@ -25,7 +26,7 @@
 | 层 | 回答什么问题 | 文档 | 语言 |
 | --- | --- | --- | --- |
 | 门面 | 这是什么？要不要用？ | [README.md](../README.md) · [README.en.md](../README.en.md) | 中 / 英 |
-| 使用 | 怎么用？边界在哪？ | README 使用流程 · [MCP-SETUP.md](MCP-SETUP.md) · [PRODUCT.md](PRODUCT.md) | 中文 |
+| 使用 | 怎么用？边界在哪？ | README 使用流程 · [PAPER-WORKFLOW.md](PAPER-WORKFLOW.md) · [MCP-SETUP.md](MCP-SETUP.md) · [PRODUCT.md](PRODUCT.md) | 中文 |
 | 贡献 | 我能改什么？怎么改？ | [CONTRIBUTING.md](../CONTRIBUTING.md) · [DEVELOPMENT.md](DEVELOPMENT.md) | 中文 |
 | 原理 | 为什么这样设计？ | [ARCHITECTURE.md](ARCHITECTURE.md) · [METHOD-WORKSHOP.md](METHOD-WORKSHOP.md) | 中文 |
 | 验证 | 我怎么确认它是好的？ | [MANUAL-QA.md](MANUAL-QA.md) | 中文 |
@@ -51,6 +52,7 @@
 | `mcp-tools-map.svg` | MCP 工具地图：四类宿主 / 单一 stdio 服务 / 能力域分组 / 写操作需确认 | MCP-SETUP 开篇 |
 | `availability-ladder.svg` | 数据源可用性四档标注及各自的保证机制 | README「数据库查询」（中文）、PRODUCT §2 |
 | `contributor-map.svg` | 贡献落点地图：改什么 → 落到哪 → 谁在守门，附两条红线与三处登记 | CONTRIBUTING 开篇 |
+| `paper-lifecycle.svg` | 论文流水线十阶段与八个人工确认闸门（蛇形 + 强制检查点标注） | PAPER-WORKFLOW §0 |
 
 改图时的四条要求：**①** 保持手写 SVG，不引入构建步骤——`ui/client.js` 之外的产物越多，维护面越大；**②** 图里不写会随内容增长的统计数字（条目数、数据源数、直查来源数），一律改用无数量的措辞——图是随仓库分发的静态文件，写死数字后每加一条资源就要回来改图，实际已因此漂移（`architecture.svg` 曾停在 128 项，而当时真实值已是 441 项）。**设计与结构性数字不受此限**（四个分区、五个步骤、两条受控路由），它们描述的是设计不变量，不随目录增长而变；统计数字只写在能被校验的文本文档里（README / PRODUCT / ARCHITECTURE），且必须与实测一致；**③** 改完在真实浏览器里渲染核对一遍排版，确认无文字溢出、无元素重叠——手写坐标最容易在这里出错；**④** 每张图必须至少被一处文档引用，且文档里的每条 `assets/*.svg` 引用都必须指向真实文件——双向完整性由 `npm run check` 的 `scripts/check-doc-assets.mjs` 校验（只加图不引用，或删了文件忘改引用，都会直接失败）。
 

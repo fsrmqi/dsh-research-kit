@@ -555,16 +555,33 @@ type Placeholder = {
   hint?: string            // 输入提示；不能假装为默认事实
 }
 
+type WorkflowCheckpoint = {
+  after_stage: string      // 阶段标识，须与 agent_guidance 描述的阶段一致
+  action: string           // 审批动作名，进入研究运行的检查点状态
+  required: boolean        // true 表示不可跳过
+}
+
 type Workflow = BaseItem & {
   type: 'workflow'
   prompt: string
   placeholders: Placeholder[]
+  input_schema: object     // 由 placeholders 派生的 JSON Schema（requiresFiles 时追加 files 数组）
   requiresFiles?: boolean
   suggestedSkillIds?: string[]
   suggestedDatabaseIds?: string[]
   limitations?: string[]
+  tool_mode: 'guided' | 'direct'      // 检索类意图信号，只在 research_catalog_search 结果中返回
+  agent_guidance: string              // 给宿主 Agent 的工具调用与标注分级指导
+  checkpoints: WorkflowCheckpoint[]   // 人工闸门，由 research_run_start 初始化
 }
 ```
+
+后四个字段（`input_schema` / `tool_mode` / `agent_guidance` / `checkpoints`）由一次性迁移脚本 `scripts/add-agent-fields.mjs` 批量补入，是把「目录条目」接到「MCP 工具」的桥。它们的语义必须按下面理解，否则容易误当成执行开关：
+
+- **`input_schema` 不是第二份真相。** 它是 `placeholders` 的机器可读投影（`hint || label` 作 description，必填项进入 `required`），MCP 侧的 `research_workflow_compose` 用它接收参数。人读表单仍以 `placeholders` 为准。
+- **`tool_mode` 不改变执行方式。** 插件从不执行工作流；它只是 `research_catalog_search` 返回给宿主 Agent 的一个意图信号（检索/查询类倾向 `direct`，其余 `guided`），由启发式规则推断而来。
+- **`agent_guidance` 与 `checkpoints` 只经 MCP 路径交付。** 两者由 `research_workflow_compose` 随组装结果返回；`checkpoints` 再由 `research_run_start` 实例化为某个研究运行的待确认闸门。界面路径启动工作流**不创建研究运行**，因此没有检查点——界面侧的「Agent 活动面板」展示并审批的是 MCP 侧创建的运行。
+- **这四个字段目前不在目录校验范围内**（`scripts/validate-catalog-lib.mjs` 只检查 `id` / `placeholders` / `prompt` 的一致性）。改动它们不会让 `npm run check` 失败，见 [ROADMAP.md](../ROADMAP.md)。
 
 约束：
 

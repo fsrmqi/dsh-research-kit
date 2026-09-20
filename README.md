@@ -248,6 +248,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | 文档 | 内容 |
 | --- | --- |
 | [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序** |
+| [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿的完整走法：九阶段、三条查询路径、投稿包清单、MCP 操作链 |
 | [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 31 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |

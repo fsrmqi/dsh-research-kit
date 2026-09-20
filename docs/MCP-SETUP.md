@@ -241,9 +241,9 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | Tool | 功能 |
 |------|------|
 | `research_help` | MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作（默认入口） |
-| `research_catalog_search` | 搜索 349 条工作流目录（默认入口） |
+| `research_catalog_search` | 搜索科研工作流目录：按关键词、分类或标签筛选（默认入口） |
 | `research_workflow_compose` | 填参数生成 Prompt（默认入口） |
-| `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等 6 个数据源 |
+| `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等公开数据源 |
 | `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存（默认入口） |
 | `research_citation_verify` | 验证 DOI / PMID / arXiv 是否存在 + claim 支持 |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
@@ -260,14 +260,14 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_run_checkpoint_status` | 查看管道检查点状态 |
 | `research_run_checkpoint_approve` | 审批检查点继续执行 |
 | `research_figure_generate` | 按论文风格生成 matplotlib 脚本（默认入口） |
-| `research_figure_list_styles` | 列出 8 个可用图表风格 |
+| `research_figure_list_styles` | 列出全部可用的论文图表风格 |
 | `research_review_output` | 默认审阅入口：聚合声明引用、异常、写作与限制语检查（默认入口） |
 | `research_review_claims` | 文本级 claim-source 对齐审计 |
 | `research_review_anomalies` | 检测冗余模式、矛盾表述与缺失要素 |
 | `research_review_writing` | 学术写作质量检查（模糊术语、废话开头、标点、句长） |
 | `research_review_hedging` | 检测保护性模糊限制语（不可静默删除） |
 | `research_literature_link` | 发现证据间互引关系 |
-| `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（支持 15 个期刊）（默认入口） |
+| `research_disclosure_generate` | 按期刊 AI 政策生成合规的 AI 使用披露声明（默认入口） |
 | `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 | `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据 |
 | `research_usage_stats` | 工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据） |

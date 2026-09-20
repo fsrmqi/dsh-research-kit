@@ -15,7 +15,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadCatalogEntries } from './lib/catalog-entries.mjs'
-import { toolCount } from '../mcp/tool-registry.js'
+import { TOOL_REGISTRY, toolCount } from '../mcp/tool-registry.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const errors = []
@@ -29,6 +29,13 @@ const total = workflows.length + skills.length + resources.length
 const guidance = skills.filter(s => s.availability === 'prompt-guidance').length
 const capability = skills.filter(s => s.availability === 'requires-host-capability').length
 const families = readdirSync(resolve(root, 'catalog/workflows')).filter(f => f.endsWith('.json')).length
+
+// 论文工作手册用的派生量：按类目切分，而不是按分片数——类目是读者在界面里筛选时看到的口径。
+const PAPER_CATEGORIES = ['论文与手稿', '论文写作']
+const paperWorkflows = workflows.filter(w => PAPER_CATEGORIES.includes(w.category)).length
+const paperFileWorkflows = workflows.filter(w => PAPER_CATEGORIES.includes(w.category) && w.requiresFiles).length
+const literatureWorkflows = workflows.filter(w => w.category === '文献研究').length
+const literatureResources = resources.filter(r => r.category === '文献研究').length
 
 const read = rel => readFileSync(resolve(root, rel), 'utf8')
 const cache = new Map()
@@ -79,6 +86,11 @@ const rules = [
 
   { file: 'docs/MCP-SETUP.md', re: /直接调用 (\d+) 个科研 Tool/, expect: [toolCount], label: 'MCP 工具数' },
   { file: 'docs/MCP-SETUP.md', re: /应列出 (\d+) 个 dsh-research-kit 的 Tool/, expect: [toolCount], label: 'MCP 工具数' },
+
+  { file: 'docs/PAPER-WORKFLOW.md', re: /两个类目合计 (\d+) 条论文类工作流/, expect: [paperWorkflows], label: '论文类工作流数' },
+  { file: 'docs/PAPER-WORKFLOW.md', re: /其中 (\d+) 条声明了材料依赖/, expect: [paperFileWorkflows], label: '论文类需文件工作流数' },
+  { file: 'docs/PAPER-WORKFLOW.md', re: /文献研究类目另有 (\d+) 条工作流、(\d+) 个数据源条目/, expect: [literatureWorkflows, literatureResources], label: '文献研究工作流数 / 数据源数' },
+  { file: 'docs/PAPER-WORKFLOW.md', re: /(\d+) 个 `research_\*` 工具/, expect: [toolCount], label: 'MCP 工具数' },
 ]
 
 const descChecks = [
@@ -108,6 +120,15 @@ for (const rule of rules) {
   })
   rule.hits = hits
   if (!hits.length) uncovered.push(`${rule.file}：${rule.label}`)
+}
+
+// 工具摘要里的数量词：注册表声明自己是「纯数据模块，无 Node 专属依赖」，因此无法
+// 从 catalog/ 或适配器清单派生任何规模数字，写死一个就必然随内容漂移。这不是假设——
+// 摘要曾写「列出 8 个可用图表风格」，而 mcp/execution/figure-styles 实际已有 11 个，
+// 且没有任何门禁看得见它。此处禁止在摘要里写数量词；要给出规模就让工具在调用时返回。
+for (const tool of TOOL_REGISTRY) {
+  const m = /(\d+)\s*(?:个|条|种|篇|类)/.exec(tool.summaryZh || '')
+  if (m) errors.push(`mcp/tool-registry.js 的 ${tool.name}.summaryZh 写死了数量「${m[0]}」——注册表无法派生目录规模，会随内容漂移；请改为不含数量的措辞`)
 }
 
 // 测试用例数：真值需运行测试套件，这里只查「各文档彼此一致」，抓的是 168/152 那类互相矛盾。

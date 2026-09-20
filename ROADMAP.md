@@ -53,6 +53,14 @@
 
 **同批交付的另两项可视化能力（不在本节的遗留清单内）**：工作台「组装回放」（`src/route-replay.js` + archify viewer 弹窗）与「研究结果解释图生成」工作流 + 出图工具链（`scripts/render-diagrams.mjs` / `validate-diagrams.mjs`）已随本次交付落地，细节见 [CHANGELOG](CHANGELOG.md)。本节的分区④ Viewer 只覆盖证据图谱，**不是**本仓库可视化能力的全部——按路线图判断可视化进度时不要只看本节。
 
+### 12. 工作流新增字段的契约校验
+
+**现状**：`scripts/add-agent-fields.mjs` 一次性为全部 349 条工作流补入了 `input_schema` / `tool_mode` / `agent_guidance` / `checkpoints` 四个字段，把目录条目接到 MCP 工具链上。但这四个字段**既不在 `scripts/validate-catalog-lib.mjs` 的校验范围内，也没有任何测试断言**——改坏、漏填或写错阶段名都不会让 `npm run check` 失败（同一批脚本 `sync-tool-docs.mjs`、`check-doc-stats.mjs` 都是事后才补上落点的，本项是同一类遗漏）。
+
+**要做**：按字段性质分成两类校验——`input_schema` 与 `placeholders` 是同一份字段的两种表示，应当断言逐字段一致（键集合、必填集合、`requiresFiles` 时追加 `files`）；`checkpoints[].required` 与 `after_stage` 属于流程语义，至少断言 `required` 为布尔、`after_stage` / `action` 非空且在条目内唯一。`tool_mode` 取值限定在两个枚举内。同时补进「三落点」纪律的登记清单。
+
+**门槛**：新增规则必须做反向验证——临时篡改一条工作流的字段，确认校验器以非零退出报出「文件 + 条目 id」；只加规则不做反向验证等于没加。
+
 ## 中期（需要上游支持或较大改动）
 
 ### 4. 研究资产库：本地证据库
