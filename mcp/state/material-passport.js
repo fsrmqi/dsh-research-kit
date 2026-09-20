@@ -22,42 +22,57 @@ function computeHash(passport) {
   return crypto.createHash('sha256').update(JSON.stringify(passport, null, 0)).digest('hex').slice(0, 12)
 }
 
+// JSON 字符串是 YAML 双引号标量的安全子集：换行、引号和反斜杠都会转义，
+// 不会逃逸到新的顶层字段。读取时仍兼容历史护照里的未加引号标量。
+function yamlScalar(value) {
+  return JSON.stringify(String(value ?? ''))
+}
+
+function parseYamlScalar(value) {
+  const raw = String(value ?? '').trim()
+  if (raw.startsWith('"')) {
+    try { return JSON.parse(raw) } catch { /* 兼容旧版未正确转义的双引号文本 */ }
+  }
+  return raw.replace(/^["']|["']$/g, '')
+}
+
 function toYaml(passport) {
   const lines = []
+  // run_id 已由 validRunId 限制为安全字符，保持历史输出格式供现有消费者识别。
   lines.push(`run_id: ${passport.run_id}`)
-  lines.push(`created_at: "${passport.created_at}"`)
-  lines.push(`project: ${passport.project}`)
-  if (passport.workflow_id) lines.push(`workflow_id: ${passport.workflow_id}`)
-  lines.push(`current_stage: ${passport.current_stage}`)
+  lines.push(`created_at: ${yamlScalar(passport.created_at)}`)
+  lines.push(`project: ${yamlScalar(passport.project)}`)
+  if (passport.workflow_id) lines.push(`workflow_id: ${yamlScalar(passport.workflow_id)}`)
+  lines.push(`current_stage: ${yamlScalar(passport.current_stage)}`)
   lines.push('')
   if (passport.completed?.length) {
     lines.push('completed:')
     for (const step of passport.completed) {
-      lines.push(`  - stage: ${step.stage}`)
-      lines.push(`    tool: ${step.tool}`)
-      lines.push(`    summary: "${step.summary}"`)
-      if (step.timestamp) lines.push(`    timestamp: "${step.timestamp}"`)
+      lines.push(`  - stage: ${yamlScalar(step.stage)}`)
+      lines.push(`    tool: ${yamlScalar(step.tool)}`)
+      lines.push(`    summary: ${yamlScalar(step.summary)}`)
+      if (step.timestamp) lines.push(`    timestamp: ${yamlScalar(step.timestamp)}`)
     }
   }
   if (passport.pending?.length) {
     lines.push('')
     lines.push('pending:')
     for (const step of passport.pending) {
-      lines.push(`  - stage: ${step.stage}`)
-      if (step.tool) lines.push(`    tool: ${step.tool}`)
-      if (step.workflow_id) lines.push(`    workflow_id: ${step.workflow_id}`)
-      if (step.note) lines.push(`    note: "${step.note}"`)
+      lines.push(`  - stage: ${yamlScalar(step.stage)}`)
+      if (step.tool) lines.push(`    tool: ${yamlScalar(step.tool)}`)
+      if (step.workflow_id) lines.push(`    workflow_id: ${yamlScalar(step.workflow_id)}`)
+      if (step.note) lines.push(`    note: ${yamlScalar(step.note)}`)
     }
   }
   if (passport.constraints?.length) {
     lines.push('')
     lines.push('constraints:')
-    for (const c of passport.constraints) lines.push(`  - "${c}"`)
+    for (const c of passport.constraints) lines.push(`  - ${yamlScalar(c)}`)
   }
   if (passport.evidence_ids?.length) {
     lines.push('')
     lines.push('evidence_ids:')
-    for (const id of passport.evidence_ids) lines.push(`  - "${id}"`)
+    for (const id of passport.evidence_ids) lines.push(`  - ${yamlScalar(id)}`)
   }
   return lines.join('\n') + '\n'
 }
@@ -80,14 +95,14 @@ function fromYaml(text) {
           passport[key] = []
         } else {
           section = null
-          passport[key] = value.replace(/^["']|["']$/g, '')
+          passport[key] = parseYamlScalar(value)
         }
       }
       continue
     }
 
     if (section === 'constraints' || section === 'evidence_ids') {
-      const value = trimmed.replace(/^-\s*/, '').replace(/^["']|["']$/g, '')
+      const value = parseYamlScalar(trimmed.replace(/^-\s*/, ''))
       if (value) passport[section].push(value)
       continue
     }
@@ -98,10 +113,10 @@ function fromYaml(text) {
         passport[section].push(currentItem)
         const rest = trimmed.slice(2)
         const kv = rest.match(/^(\w+):\s*(.*)/)
-        if (kv) currentItem[kv[1]] = kv[2].replace(/^["']|["']$/g, '')
+        if (kv) currentItem[kv[1]] = parseYamlScalar(kv[2])
       } else if (currentItem) {
         const kv = trimmed.match(/^(\w+):\s*(.*)/)
-        if (kv) currentItem[kv[1]] = kv[2].replace(/^["']|["']$/g, '')
+        if (kv) currentItem[kv[1]] = parseYamlScalar(kv[2])
       }
     }
   }

@@ -314,7 +314,11 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
       text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
       hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
     }) : null,
-    tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+    tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+      key: item.id,
+      interactive: true,
+      style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
+    }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
           h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),

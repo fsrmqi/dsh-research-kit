@@ -63,6 +63,17 @@ test('导航与实现一一对应：每个分区都挂载了组件，不存在�
   }
 })
 
+test('性能接线：项目输入延迟提交，目录检索可让位，图谱拖拽不逐事件重渲染', () => {
+  const consoleSource = readFileSync(new URL('../src/research-console.js', import.meta.url), 'utf8')
+  const workbenchSource = readFileSync(new URL('../src/research-workbench.js', import.meta.url), 'utf8')
+  const graphSource = readFileSync(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')
+  assert.match(consoleSource, /onChange:\s*event\s*=>\s*setProjectDraft/, '项目输入仍在每个字符上写全局上下文')
+  assert.match(consoleSource, /onBlur:\s*commitProject/, '项目输入失焦时未提交')
+  assert.match(workbenchSource, /React\.useDeferredValue\(query\)/, '目录检索没有让输入更新优先')
+  assert.match(graphSource, /requestAnimationFrame\(paint\)/, '图谱拖拽没有按动画帧合并 DOM 更新')
+  assert.match(graphSource, /\[vault, projectFilter\]/, '图谱证据刷新仍可能捕获陈旧项目筛选')
+})
+
 test('方法工坊装配当前对话与草稿写入，不装配记忆和跨会话摘要', () => {
   const glue = readFileSync(new URL('../dsh/prompt-studio-glue.js', import.meta.url), 'utf8')
   assert.match(glue, /const messages = React\.useMemo/, '方法工坊未从当前会话构造 messages')

@@ -9540,7 +9540,11 @@ window.__ModuleLoader__.load({
           text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
           hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
         }) : null,
-        tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+        tab === 'assets' ? h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+          key: item.id,
+          interactive: true,
+          style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
+        }, [
           h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
             h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
               h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -9778,6 +9782,7 @@ window.__ModuleLoader__.load({
       const [assets, setAssets] = React.useState([])
       const vault = React.useMemo(() => evidenceVaultStore(), [])
       const [savedEvidence, setSavedEvidence] = React.useState([])
+      const [evidenceProjects, setEvidenceProjects] = React.useState([])
       const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
       const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
       // 自动沉淀开关是显式 opt-in：默认关闭；状态持久在 localStorage，由 knowledge-deposition 读写。
@@ -9807,19 +9812,36 @@ window.__ModuleLoader__.load({
       const [exportOpen, setExportOpen] = React.useState(false)
       const frameRef = React.useRef(null)
       const dragRef = React.useRef(null)
+      const evidenceRefreshVersion = React.useRef(0)
 
       React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
       React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
       React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
       React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
       const refreshSavedEvidence = React.useCallback(() => {
-        syncEvidenceVaultWithFiles(projectFilter || undefined)
+        const version = ++evidenceRefreshVersion.current
+        const selectedProject = projectFilter || undefined
+        Promise.resolve()
+          .then(() => syncEvidenceVaultWithFiles(selectedProject))
           .catch(() => {})
-          .finally(() => {
-            vault.list({ project: projectFilter || undefined }).then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
+          .then(() => Promise.all([
+            vault.list({ project: selectedProject }),
+            vault.listProjects(),
+            listAssetEvidenceLinks({ project: selectedProject }),
+          ]))
+          .then(([rows, projects, links]) => {
+            if (version !== evidenceRefreshVersion.current) return
+            setSavedEvidence(rows || [])
+            setEvidenceProjects(projects || [])
+            setAssetEvidenceLinks(Array.isArray(links) ? links : [])
           })
-        listAssetEvidenceLinks({ project: projectFilter || undefined }).then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
-      }, [vault])
+          .catch(() => {
+            if (version !== evidenceRefreshVersion.current) return
+            setSavedEvidence([])
+            setEvidenceProjects([])
+            setAssetEvidenceLinks([])
+          })
+      }, [vault, projectFilter])
       React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
       const refreshKnowledge = React.useCallback(() => {
         const store = knowledgeStore()
@@ -9838,7 +9860,7 @@ window.__ModuleLoader__.load({
       }, [view])
 
       const applyView = React.useCallback(patch => setView(previous => ({ ...previous, ...patch })), [])
-      const resources = resourceIds.map(itemById).filter(Boolean)
+      const resources = React.useMemo(() => resourceIds.map(itemById).filter(Boolean), [resourceIds])
       // 项目筛选只作用于持久数据（证据/资产/知识都带 project）；会话记录本就属于当前会话，不参与。
       const visibleSavedEvidence = React.useMemo(
         () => (projectFilter ? savedEvidence.filter(item => (item.project || '') === projectFilter) : savedEvidence),
@@ -9860,12 +9882,12 @@ window.__ModuleLoader__.load({
           : knowledgeClaims
       ), [knowledgeClaims, visibleKnowledgeNodeIdSet, projectFilter])
       const projectOptions = React.useMemo(() => {
-        const names = new Set()
+        const names = new Set(evidenceProjects)
         for (const item of savedEvidence) { if (item.project) names.add(item.project) }
         for (const item of assets) { if (item.project) names.add(item.project) }
         for (const item of knowledgeNodes) { if (item.project) names.add(item.project) }
         return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-      }, [savedEvidence, assets, knowledgeNodes])
+      }, [evidenceProjects, savedEvidence, assets, knowledgeNodes])
       // 范围筛选：会话记录（资源/工作流/查询/计划，刷新即消失）与持久沉淀（证据/资产/知识）可分开看。
       const includeSession = scope !== 'persistent'
       const includePersistent = scope !== 'session'
@@ -9918,7 +9940,7 @@ window.__ModuleLoader__.load({
 
       const onPointerDown = event => {
         if (event.button !== 0) return
-        dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan } }
+        dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan }, pending: { ...pan }, frame: 0 }
         if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
       }
       const onPointerMove = event => {
@@ -9927,9 +9949,21 @@ window.__ModuleLoader__.load({
         const rect = frameRef.current && frameRef.current.getBoundingClientRect()
         if (!rect || !rect.width) return
         const unit = viewWidth / rect.width
-        setPan(clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale))
+        drag.pending = clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale)
+        const paint = () => {
+          drag.frame = 0
+          const next = drag.pending
+          frameRef.current?.setAttribute('viewBox', `${next.x} ${next.y} ${viewWidth} ${viewHeight}`)
+        }
+        if (!drag.frame) {
+          if (typeof requestAnimationFrame === 'function') drag.frame = requestAnimationFrame(paint)
+          else paint()
+        }
       }
       const onPointerUp = event => {
+        const drag = dragRef.current
+        if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
+        if (drag?.pending) setPan(drag.pending)
         dragRef.current = null
         if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {
           event.currentTarget.releasePointerCapture(event.pointerId)
@@ -11259,6 +11293,7 @@ window.__ModuleLoader__.load({
       const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
       const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
       const [query, setQuery] = React.useState('')
+      const deferredQuery = React.useDeferredValue(query)
       const [type, setType] = React.useState('all')
       const [workflowCategory, setWorkflowCategory] = React.useState('all')
       const [skillCategory, setSkillCategory] = React.useState('all')
@@ -11297,18 +11332,26 @@ window.__ModuleLoader__.load({
         }
       }, [])
       const activeCategory = type === 'workflow' ? workflowCategory : type === 'skill' ? skillCategory : type === 'database' ? databaseCategory : 'all'
-      const categories = type === 'workflow' || type === 'skill' || type === 'database'
-        ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
-        : []
-      const items = filterCatalogCategory(searchCatalog({ query, type }), type, activeCategory)
+      const categories = React.useMemo(() => (
+        type === 'workflow' || type === 'skill' || type === 'database'
+          ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
+          : []
+      ), [type])
+      const items = React.useMemo(
+        () => filterCatalogCategory(searchCatalog({ query: deferredQuery, type }), type, activeCategory),
+        [deferredQuery, type, activeCategory],
+      )
       // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
       const selected = selectedCatalogItem(items, selectedId)
       const workflow = selected?.type === 'workflow' ? selected : null
-      const suggestedSkills = workflow ? relatedItems(workflow.suggestedSkillIds || []).filter(item => item.promptFragment) : []
-      const sessionResources = sessionResourceIds.map(itemById).filter(Boolean)
-      const sessionSkillIds = uniqueIds(sessionResources.filter(item => item.type === 'skill').map(item => item.id))
-      const sessionDatabaseIds = sessionResources.filter(item => item.type === 'database').map(item => item.id)
-      const activeSkillIds = uniqueIds([...attachedSkills, ...sessionSkillIds])
+      const suggestedSkills = React.useMemo(
+        () => workflow ? relatedItems(workflow.suggestedSkillIds || []).filter(item => item.promptFragment) : [],
+        [workflow],
+      )
+      const sessionResources = React.useMemo(() => sessionResourceIds.map(itemById).filter(Boolean), [sessionResourceIds])
+      const sessionSkillIds = React.useMemo(() => uniqueIds(sessionResources.filter(item => item.type === 'skill').map(item => item.id)), [sessionResources])
+      const sessionDatabaseIds = React.useMemo(() => sessionResources.filter(item => item.type === 'database').map(item => item.id), [sessionResources])
+      const activeSkillIds = React.useMemo(() => uniqueIds([...attachedSkills, ...sessionSkillIds]), [attachedSkills, sessionSkillIds])
       const sciencePreset = scienceMode ? SCIENCE_MODE_PRESETS[scienceMode] : null
       // 科研模式下组装 Prompt 前统一前置纪律段（通用预设只有基础纪律）。
       const scienceAssemble = prompt => {
@@ -11317,8 +11360,11 @@ window.__ModuleLoader__.load({
         return `${preamble}\n\n${prompt}`
       }
       // 预览阶段保留必填字段的可读占位；写入和发送前才阻止缺失字段。
-      const composed = workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null
-      const assembled = composed ? scienceAssemble(composed.prompt) : ''
+      const composed = React.useMemo(
+        () => workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null,
+        [workflow, values, activeSkillIds, sessionDatabaseIds],
+      )
+      const assembled = React.useMemo(() => composed ? scienceAssemble(composed.prompt) : '', [composed, sciencePreset])
       const finalPrompt = editedPrompt ?? assembled
       const hasDraftAction = typeof inputActions?.setDraft === 'function'
       const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
@@ -11531,6 +11577,7 @@ window.__ModuleLoader__.load({
                   return h(ListRow, {
                     key: item.id,
                     active,
+                    style: { contentVisibility: 'auto', containIntrinsicSize: '0 72px' },
                     onClick: () => type === 'history' ? openHistoryEntry(row) : type === 'favorites' ? openFavoriteEntry(item) : setSelectedId(item.id),
                     trailing: h(StarButton, {
                       active: favorites.includes(item.id),
@@ -11733,7 +11780,7 @@ window.__ModuleLoader__.load({
         name: 'research_catalog_search',
         category: 'catalog', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'start', labelZh: '搜索工作流',
-        summaryZh: '搜索 317 条工作流目录',
+        summaryZh: '搜索 349 条工作流目录',
         example: "{ query: '审阅论文', limit: 2 }",
         artifactKind: '',
       },
@@ -12518,6 +12565,7 @@ window.__ModuleLoader__.load({
       const { sessionId, inputActions } = props
       const [section, setSection] = React.useState(readStoredSection)
       const [researchContext, setResearchContext] = React.useState(currentResearchContext)
+      const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
       const navRef = React.useRef(null)
       // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
       // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -12542,7 +12590,13 @@ window.__ModuleLoader__.load({
         }
       }, [])
       React.useEffect(() => subscribeResearchContext(setResearchContext), [])
+      React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
       const current = findConsoleSection(section)
+      const activeRun = activeResearchRun()
+      const commitProject = () => {
+        const normalized = String(projectDraft || '').trim().slice(0, 100)
+        if (normalized !== researchContext.project) setResearchProject(normalized)
+      }
       const select = id => {
         setSection(normalizeConsoleSection(id))
         persistSection(id)
@@ -12569,12 +12623,14 @@ window.__ModuleLoader__.load({
             h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
               h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
               h('input', {
-                key: 'project', value: researchContext.project,
-                onChange: event => setResearchProject(event?.target?.value || ''),
+                key: 'project', value: projectDraft,
+                onChange: event => setProjectDraft(event?.target?.value || ''),
+                onBlur: commitProject,
+                onKeyDown: event => { if (event.key === 'Enter') event.currentTarget.blur() },
                 placeholder: '未命名项目', 'aria-label': '当前研究项目',
                 style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
               }),
-              activeResearchRun() ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeResearchRun().workflowName || '未命名工作流'} · ${activeResearchRun().status}`) : null,
+              activeRun ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeRun.workflowName || '未命名工作流'} · ${activeRun.status}`) : null,
             ]),
           ]),
         ]),

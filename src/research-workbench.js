@@ -120,6 +120,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [query, setQuery] = React.useState('')
+  const deferredQuery = React.useDeferredValue(query)
   const [type, setType] = React.useState('all')
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
@@ -158,18 +159,26 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     }
   }, [])
   const activeCategory = type === 'workflow' ? workflowCategory : type === 'skill' ? skillCategory : type === 'database' ? databaseCategory : 'all'
-  const categories = type === 'workflow' || type === 'skill' || type === 'database'
-    ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
-    : []
-  const items = filterCatalogCategory(searchCatalog({ query, type }), type, activeCategory)
+  const categories = React.useMemo(() => (
+    type === 'workflow' || type === 'skill' || type === 'database'
+      ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
+      : []
+  ), [type])
+  const items = React.useMemo(
+    () => filterCatalogCategory(searchCatalog({ query: deferredQuery, type }), type, activeCategory),
+    [deferredQuery, type, activeCategory],
+  )
   // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
   const selected = selectedCatalogItem(items, selectedId)
   const workflow = selected?.type === 'workflow' ? selected : null
-  const suggestedSkills = workflow ? relatedItems(workflow.suggestedSkillIds || []).filter(item => item.promptFragment) : []
-  const sessionResources = sessionResourceIds.map(itemById).filter(Boolean)
-  const sessionSkillIds = uniqueIds(sessionResources.filter(item => item.type === 'skill').map(item => item.id))
-  const sessionDatabaseIds = sessionResources.filter(item => item.type === 'database').map(item => item.id)
-  const activeSkillIds = uniqueIds([...attachedSkills, ...sessionSkillIds])
+  const suggestedSkills = React.useMemo(
+    () => workflow ? relatedItems(workflow.suggestedSkillIds || []).filter(item => item.promptFragment) : [],
+    [workflow],
+  )
+  const sessionResources = React.useMemo(() => sessionResourceIds.map(itemById).filter(Boolean), [sessionResourceIds])
+  const sessionSkillIds = React.useMemo(() => uniqueIds(sessionResources.filter(item => item.type === 'skill').map(item => item.id)), [sessionResources])
+  const sessionDatabaseIds = React.useMemo(() => sessionResources.filter(item => item.type === 'database').map(item => item.id), [sessionResources])
+  const activeSkillIds = React.useMemo(() => uniqueIds([...attachedSkills, ...sessionSkillIds]), [attachedSkills, sessionSkillIds])
   const sciencePreset = scienceMode ? SCIENCE_MODE_PRESETS[scienceMode] : null
   // 科研模式下组装 Prompt 前统一前置纪律段（通用预设只有基础纪律）。
   const scienceAssemble = prompt => {
@@ -178,8 +187,11 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     return `${preamble}\n\n${prompt}`
   }
   // 预览阶段保留必填字段的可读占位；写入和发送前才阻止缺失字段。
-  const composed = workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null
-  const assembled = composed ? scienceAssemble(composed.prompt) : ''
+  const composed = React.useMemo(
+    () => workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null,
+    [workflow, values, activeSkillIds, sessionDatabaseIds],
+  )
+  const assembled = React.useMemo(() => composed ? scienceAssemble(composed.prompt) : '', [composed, sciencePreset])
   const finalPrompt = editedPrompt ?? assembled
   const hasDraftAction = typeof inputActions?.setDraft === 'function'
   const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
@@ -392,6 +404,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
               return h(ListRow, {
                 key: item.id,
                 active,
+                style: { contentVisibility: 'auto', containIntrinsicSize: '0 72px' },
                 onClick: () => type === 'history' ? openHistoryEntry(row) : type === 'favorites' ? openFavoriteEntry(item) : setSelectedId(item.id),
                 trailing: h(StarButton, {
                   active: favorites.includes(item.id),

@@ -6,6 +6,7 @@ import { extractClaims } from '../mcp/execution/claim-auditor.js'
 import { evaluateCheckpoints } from '../mcp/state/checkpoint-manager.js'
 import { generateFigure } from '../mcp/execution/figure-generator.js'
 import { safeProjectName } from '../mcp/execution/evidence-store.js'
+import { toYaml, fromYaml } from '../mcp/state/material-passport.js'
 
 test('异常检测：显著性矛盾在同一分段内触发，短文本返回完整结构', () => {
   const result = detectAnomalies('The difference is significant. The no significant difference was also noted.')
@@ -55,4 +56,34 @@ test('图表脚本：Python 字符串转义处理换行、反斜杠和引号', (
   assert.equal(result.error, undefined)
   assert.ok(result.data.script.includes("'A\\nB'"))
   assert.ok(result.data.script.includes("A\\nB \\\\ \\'quote\\'"))
+})
+
+test('Material Passport：用户文本中的换行和引号不能覆盖顶层状态', () => {
+  const passport = {
+    run_id: 'run-safe',
+    created_at: '2026-09-20T00:00:00.000Z',
+    project: '原项目',
+    current_stage: 'synthesis',
+    completed: [{
+      stage: 'search',
+      tool: 'research_literature_search',
+      summary: '第一行\ncurrent_stage: forged "quoted"',
+    }],
+    pending: [{ stage: 'review', note: '说明\nproject: changed' }],
+    constraints: ['必须核验\ncurrent_stage: forged'],
+    evidence_ids: ['ev-1'],
+  }
+  const parsed = fromYaml(toYaml(passport))
+  assert.equal(parsed.project, passport.project)
+  assert.equal(parsed.current_stage, passport.current_stage)
+  assert.equal(parsed.completed[0].summary, passport.completed[0].summary)
+  assert.equal(parsed.pending[0].note, passport.pending[0].note)
+  assert.deepEqual(parsed.constraints, passport.constraints)
+})
+
+test('Material Passport：继续读取旧版未加引号的标量', () => {
+  const parsed = fromYaml('run_id: old-run\nproject: legacy\ncurrent_stage: review\n')
+  assert.equal(parsed.run_id, 'old-run')
+  assert.equal(parsed.project, 'legacy')
+  assert.equal(parsed.current_stage, 'review')
 })

@@ -136,6 +136,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [assets, setAssets] = React.useState([])
   const vault = React.useMemo(() => evidenceVaultStore(), [])
   const [savedEvidence, setSavedEvidence] = React.useState([])
+  const [evidenceProjects, setEvidenceProjects] = React.useState([])
   const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
   const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
   // 自动沉淀开关是显式 opt-in：默认关闭；状态持久在 localStorage，由 knowledge-deposition 读写。
@@ -165,19 +166,36 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [exportOpen, setExportOpen] = React.useState(false)
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
+  const evidenceRefreshVersion = React.useRef(0)
 
   React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
   React.useEffect(() => { setRecords(evidence.get()); return evidence.subscribe(setRecords) }, [evidence])
   React.useEffect(() => { assetProvider?.list?.().then(rows => setAssets(rows || [])).catch(() => {}) }, [assetProvider])
   React.useEffect(() => assetProvider?.onChange?.(() => assetProvider.list().then(rows => setAssets(rows || [])).catch(() => {})) || undefined, [assetProvider])
   const refreshSavedEvidence = React.useCallback(() => {
-    syncEvidenceVaultWithFiles(projectFilter || undefined)
+    const version = ++evidenceRefreshVersion.current
+    const selectedProject = projectFilter || undefined
+    Promise.resolve()
+      .then(() => syncEvidenceVaultWithFiles(selectedProject))
       .catch(() => {})
-      .finally(() => {
-        vault.list({ project: projectFilter || undefined }).then(rows => setSavedEvidence(rows || [])).catch(() => setSavedEvidence([]))
+      .then(() => Promise.all([
+        vault.list({ project: selectedProject }),
+        vault.listProjects(),
+        listAssetEvidenceLinks({ project: selectedProject }),
+      ]))
+      .then(([rows, projects, links]) => {
+        if (version !== evidenceRefreshVersion.current) return
+        setSavedEvidence(rows || [])
+        setEvidenceProjects(projects || [])
+        setAssetEvidenceLinks(Array.isArray(links) ? links : [])
       })
-    listAssetEvidenceLinks({ project: projectFilter || undefined }).then(rows => setAssetEvidenceLinks(Array.isArray(rows) ? rows : [])).catch(() => setAssetEvidenceLinks([]))
-  }, [vault])
+      .catch(() => {
+        if (version !== evidenceRefreshVersion.current) return
+        setSavedEvidence([])
+        setEvidenceProjects([])
+        setAssetEvidenceLinks([])
+      })
+  }, [vault, projectFilter])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
   const refreshKnowledge = React.useCallback(() => {
     const store = knowledgeStore()
@@ -196,7 +214,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   }, [view])
 
   const applyView = React.useCallback(patch => setView(previous => ({ ...previous, ...patch })), [])
-  const resources = resourceIds.map(itemById).filter(Boolean)
+  const resources = React.useMemo(() => resourceIds.map(itemById).filter(Boolean), [resourceIds])
   // 项目筛选只作用于持久数据（证据/资产/知识都带 project）；会话记录本就属于当前会话，不参与。
   const visibleSavedEvidence = React.useMemo(
     () => (projectFilter ? savedEvidence.filter(item => (item.project || '') === projectFilter) : savedEvidence),
@@ -218,12 +236,12 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       : knowledgeClaims
   ), [knowledgeClaims, visibleKnowledgeNodeIdSet, projectFilter])
   const projectOptions = React.useMemo(() => {
-    const names = new Set()
+    const names = new Set(evidenceProjects)
     for (const item of savedEvidence) { if (item.project) names.add(item.project) }
     for (const item of assets) { if (item.project) names.add(item.project) }
     for (const item of knowledgeNodes) { if (item.project) names.add(item.project) }
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
-  }, [savedEvidence, assets, knowledgeNodes])
+  }, [evidenceProjects, savedEvidence, assets, knowledgeNodes])
   // 范围筛选：会话记录（资源/工作流/查询/计划，刷新即消失）与持久沉淀（证据/资产/知识）可分开看。
   const includeSession = scope !== 'persistent'
   const includePersistent = scope !== 'session'
@@ -276,7 +294,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
 
   const onPointerDown = event => {
     if (event.button !== 0) return
-    dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan } }
+    dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan }, pending: { ...pan }, frame: 0 }
     if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
   }
   const onPointerMove = event => {
@@ -285,9 +303,21 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     const rect = frameRef.current && frameRef.current.getBoundingClientRect()
     if (!rect || !rect.width) return
     const unit = viewWidth / rect.width
-    setPan(clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale))
+    drag.pending = clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale)
+    const paint = () => {
+      drag.frame = 0
+      const next = drag.pending
+      frameRef.current?.setAttribute('viewBox', `${next.x} ${next.y} ${viewWidth} ${viewHeight}`)
+    }
+    if (!drag.frame) {
+      if (typeof requestAnimationFrame === 'function') drag.frame = requestAnimationFrame(paint)
+      else paint()
+    }
   }
   const onPointerUp = event => {
+    const drag = dragRef.current
+    if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
+    if (drag?.pending) setPan(drag.pending)
     dragRef.current = null
     if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)

@@ -442,7 +442,6 @@ function generateFigure(styleName, data, options = {}) {
   if (options.panels && Array.isArray(options.panels) && options.panels.length > 1) {
     return generateMultiFigure(options, data)
   }
-  console.log('DEBUG generateFigure called:', styleName, JSON.stringify(options))
   if (!STYLE_NAMES.includes(styleName)) {
     return err(`未知风格 \"${styleName}\"。可用风格：${STYLE_NAMES.join(', ')}`)
   }
@@ -451,7 +450,6 @@ function generateFigure(styleName, data, options = {}) {
   // dpi/figsize 校验也放在这里，统一走 err() 路径
   const { dpi, figsize } = options
   if (dpi !== undefined) {
-    console.log('DEBUG: dpi check - value:', dpi, 'type:', typeof dpi, 'isFinite:', Number.isFinite(dpi), '<=0:', dpi <= 0)
     if (typeof dpi !== 'number' || !Number.isFinite(dpi) || dpi <= 0) {
       return err('dpi 必须是正数')
     }

@@ -45,6 +45,7 @@ export function ResearchConsole(props) {
   const { sessionId, inputActions } = props
   const [section, setSection] = React.useState(readStoredSection)
   const [researchContext, setResearchContext] = React.useState(currentResearchContext)
+  const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -69,7 +70,13 @@ export function ResearchConsole(props) {
     }
   }, [])
   React.useEffect(() => subscribeResearchContext(setResearchContext), [])
+  React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
   const current = findConsoleSection(section)
+  const activeRun = activeResearchRun()
+  const commitProject = () => {
+    const normalized = String(projectDraft || '').trim().slice(0, 100)
+    if (normalized !== researchContext.project) setResearchProject(normalized)
+  }
   const select = id => {
     setSection(normalizeConsoleSection(id))
     persistSection(id)
@@ -96,12 +103,14 @@ export function ResearchConsole(props) {
         h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
           h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
           h('input', {
-            key: 'project', value: researchContext.project,
-            onChange: event => setResearchProject(event?.target?.value || ''),
+            key: 'project', value: projectDraft,
+            onChange: event => setProjectDraft(event?.target?.value || ''),
+            onBlur: commitProject,
+            onKeyDown: event => { if (event.key === 'Enter') event.currentTarget.blur() },
             placeholder: '未命名项目', 'aria-label': '当前研究项目',
             style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
           }),
-          activeResearchRun() ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeResearchRun().workflowName || '未命名工作流'} · ${activeResearchRun().status}`) : null,
+          activeRun ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeRun.workflowName || '未命名工作流'} · ${activeRun.status}`) : null,
         ]),
       ]),
     ]),
