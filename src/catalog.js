@@ -5,8 +5,17 @@ import { resources, databaseMetadataConfig } from '../catalog/resources/index.js
 
 // 数据库的研究用途、访问方式与引用规范。原始目录仍保留上游类别；这里提供面向
 // 研究者的六个入口组，避免把遗传、临床、化学等都笼统归入“数据分析”。
-const DATABASE_GROUPS = databaseMetadataConfig.groups
-const RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseMetadataConfig.accessOverrides))
+export const CATALOG_DATA_PATH = '/dsh-research-kit/catalog-data'
+
+let workflowEntries = workflows
+let skillEntries = skills
+let resourceEntries = resources
+let databaseConfig = databaseMetadataConfig
+let DATABASE_GROUPS = databaseConfig.groups
+let RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides))
+let catalogIndex = new Map()
+let catalogLoadPromise = null
+const catalogListeners = new Set()
 
 const WORKFLOW_RECOMMENDATIONS = {
   '文献与引文': ['literature-search', 'literature-review', 'citation-analysis'],
@@ -24,7 +33,7 @@ const WORKFLOW_RECOMMENDATIONS = {
 export function databaseMetadata(databaseOrId) {
   const id = typeof databaseOrId === 'string' ? databaseOrId : databaseOrId?.id
   const record = DATABASE_GROUPS.find(group => group.ids.includes(id))
-  const database = typeof databaseOrId === 'object' ? databaseOrId : resources.find(item => item.id === id)
+  const database = typeof databaseOrId === 'object' ? databaseOrId : catalogIndex.get(id)
   return {
     group: record?.group || '其他研究数据源',
     dataKind: record?.dataKind || '研究数据与元数据',
@@ -43,11 +52,11 @@ export function databaseMetadata(databaseOrId) {
 export function recommendedWorkflowsForResources(resourceIds = []) {
   const workflowIds = new Set()
   for (const id of resourceIds) {
-    const item = resources.find(database => database.id === id)
+    const item = catalogIndex.get(id)
     if (!item) continue
     for (const workflowId of WORKFLOW_RECOMMENDATIONS[databaseMetadata(item).group] || []) workflowIds.add(workflowId)
   }
-  return [...workflowIds].map(id => workflows.find(workflow => workflow.id === id)).filter(Boolean)
+  return [...workflowIds].map(id => catalogIndex.get(id)).filter(item => item?.type === 'workflow')
 }
 
 function enrichItem(item) {
@@ -57,7 +66,53 @@ function enrichItem(item) {
 
 // 目录保留多学科能力，避免用户后续需要时丢失既有工作流；
 // 新增与默认推荐则优先服务作物遗传育种、生物信息学、基因组与论文科研链路。
-export const catalog = Object.freeze([...workflows, ...skills, ...resources].map(enrichItem))
+function rebuildCatalog() {
+  DATABASE_GROUPS = Array.isArray(databaseConfig.groups) ? databaseConfig.groups : []
+  RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides || {}))
+  catalog = Object.freeze([...workflowEntries, ...skillEntries, ...resourceEntries].map(enrichItem))
+  catalogIndex = new Map(catalog.map(item => [item.id, item]))
+}
+
+export let catalog = []
+rebuildCatalog()
+
+export function catalogReady() {
+  return catalog.length > 0
+}
+
+export function subscribeCatalog(listener) {
+  catalogListeners.add(listener)
+  return () => catalogListeners.delete(listener)
+}
+
+export function applyCatalogData(data = {}) {
+  if (!Array.isArray(data.workflows) || !Array.isArray(data.skills) || !Array.isArray(data.resources)) {
+    throw new Error('目录数据格式无效。')
+  }
+  workflowEntries = data.workflows
+  skillEntries = data.skills
+  resourceEntries = data.resources
+  databaseConfig = data.databaseMetadataConfig || { groups: [], accessOverrides: {} }
+  rebuildCatalog()
+  for (const listener of catalogListeners) { try { listener(catalog) } catch { /* 单个监听失败不影响目录就绪 */ } }
+  return catalog
+}
+
+// 源码/Node 入口直接使用静态目录；浏览器轻量产物以空数组启动，首次挂载时才拉取 JSON。
+// 同一个 Promise 被所有视图复用，避免控制台、输入框浮层和增强器并发重复请求。
+export function loadBrowserCatalog(fetcher = globalThis.fetch) {
+  if (catalogReady()) return Promise.resolve(catalog)
+  if (catalogLoadPromise) return catalogLoadPromise
+  if (typeof fetcher !== 'function') return Promise.reject(new Error('当前环境无法加载科研目录。'))
+  catalogLoadPromise = fetcher(CATALOG_DATA_PATH, { headers: { accept: 'application/json' } })
+    .then(response => {
+      if (!response.ok) throw new Error(`科研目录加载失败（HTTP ${response.status}）`)
+      return response.json()
+    })
+    .then(payload => applyCatalogData(payload?.data || payload))
+    .catch(error => { catalogLoadPromise = null; throw error })
+  return catalogLoadPromise
+}
 
 export function searchCatalog({ query = '', type = 'all' } = {}) {
   const normalized = String(query).trim().toLowerCase()
@@ -74,7 +129,7 @@ export function searchCatalog({ query = '', type = 'all' } = {}) {
 }
 
 export function itemById(id) {
-  return catalog.find(item => item.id === id) || null
+  return catalogIndex.get(id) || null
 }
 
 /** 从当前筛选结果中恢复选中项，绝不返回已被筛掉的历史选择。 */

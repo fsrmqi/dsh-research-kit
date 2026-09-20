@@ -4,7 +4,7 @@
 // 1. fs 直读（readShards）：递归枚举分片目录下的 *.json，不经过任何 JS 模块；
 //    校验器用它独立核对分片本身（文件漏登记、分片遗漏都会在这里显形）。
 // 2. ESM 入口加载（loadCatalogEntries）：动态 import 三个 index.js 聚合入口；
-//    构建器用它取得内联进浏览器产物的聚合数组 —— 分片必须先经入口登记才算真源。
+//    构建器用它生成独立的 ui/catalog-data.json —— 分片必须先经入口登记才算真源。
 //
 // 测试与校验器同时走两条路径比对：总数、ID 集合与逐条内容一致才放行。
 import { readdirSync, readFileSync } from 'node:fs'

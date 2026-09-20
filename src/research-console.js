@@ -1,6 +1,8 @@
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
-import { Page, Segmented } from './ui.js'
+import { Page, Segmented, Spinner, Notice } from './ui.js'
+import { catalogReady, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
+import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { AgentActivityPanel } from './agent-activity.js'
@@ -46,6 +48,8 @@ export function ResearchConsole(props) {
   const [section, setSection] = React.useState(readStoredSection)
   const [researchContext, setResearchContext] = React.useState(currentResearchContext)
   const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
+  const [resourcesLoaded, setResourcesLoaded] = React.useState(() => catalogReady() && promptKitReady())
+  const [resourceError, setResourceError] = React.useState('')
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -70,6 +74,16 @@ export function ResearchConsole(props) {
     }
   }, [])
   React.useEffect(() => subscribeResearchContext(setResearchContext), [])
+  React.useEffect(() => {
+    let active = true
+    const markReady = () => {
+      if (active && catalogReady() && promptKitReady()) { setResourcesLoaded(true); setResourceError('') }
+    }
+    const dispose = subscribeCatalog(markReady)
+    Promise.all([loadBrowserCatalog(), loadPromptKit()]).then(markReady)
+      .catch(error => { if (active) setResourceError(error?.message || String(error)) })
+    return () => { active = false; dispose() }
+  }, [])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
   const current = findConsoleSection(section)
   const activeRun = activeResearchRun()
@@ -114,7 +128,11 @@ export function ResearchConsole(props) {
         ]),
       ]),
     ]),
-    h('div', { key: 'section', 'data-section': current.id }, view ? view(props) : null),
+    h('div', { key: 'section', 'data-section': current.id }, resourcesLoaded
+      ? (view ? view(props) : null)
+      : resourceError
+        ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
+        : h(Spinner, { text: '正在加载科研工作台……' })),
     h(AgentActivityPanel, {
       key: 'agent-activity',
       sessionId,

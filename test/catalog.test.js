@@ -160,17 +160,15 @@ test('目录分片与聚合入口一致（防止只改产物不改源）', async
   assert.deepEqual(compareShardsWithEntries(loadCatalogFromDisk(), [...workflows, ...skills, ...resources]), [])
 })
 
-test('构建产物内联完整目录（分片 ↔ 入口 ↔ 产物三向断言）', async () => {
-  const { workflows, skills, resources } = await loadCatalogEntries()
+test('目录独立工件与聚合入口一致，主包只保留按需加载空壳', async () => {
+  const { workflows, skills, resources, databaseMetadataConfig } = await loadCatalogEntries()
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
-  const inline = name => {
-    const match = new RegExp(`^\\s*const ${name} = (\\[.*\\])$`, 'm').exec(bundle)
-    assert.ok(match, `构建产物缺少内联目录 ${name}`)
-    return JSON.parse(match[1])
-  }
-  assert.deepEqual(inline('workflows'), workflows, '产物内联的工作流与聚合入口不一致')
-  assert.deepEqual(inline('skills'), skills, '产物内联的技能与聚合入口不一致')
-  assert.deepEqual(inline('resources'), resources, '产物内联的数据源与聚合入口不一致')
+  const artifact = JSON.parse(readFileSync(new URL('../ui/catalog-data.json', import.meta.url), 'utf8'))
+  assert.deepEqual(artifact.data, { workflows, skills, resources, databaseMetadataConfig })
+  assert.match(bundle, /^\s*const workflows = \[\]$/m)
+  assert.ok(!bundle.includes('__ARCHIFY_VIEWER_TEMPLATE__'), '主包不应重新内联 Archify 模板')
+  assert.ok(!bundle.includes('const PromptKit = (React =>'), '主包不应重新内联 PromptKit')
+  assert.match(readFileSync(new URL('../ui/promptkit.js', import.meta.url), 'utf8'), /__DSH_RESEARCH_PROMPTKIT__/)
 })
 
 test('搜索命中新增工作流的模板正文关键词', () => {

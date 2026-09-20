@@ -1,5 +1,5 @@
 import React from 'react'
-import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources } from './catalog.js'
+import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
@@ -138,6 +138,13 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
   const [launchWorkflow, setLaunchWorkflow] = React.useState(null)
   const popoverRef = React.useRef(null)
   const [popoverHeight, setPopoverHeight] = React.useState(null)
+  const [, setCatalogVersion] = React.useState(0)
+  React.useEffect(() => {
+    if (!mode) return undefined
+    const dispose = subscribeCatalog(() => setCatalogVersion(value => value + 1))
+    loadBrowserCatalog().catch(() => {})
+    return dispose
+  }, [mode])
   // 浮层贴住输入卡片上沿，而不是钉在视口左下角：
   // 槽位锚点是卡片顶边的零高条，绝对定位即与触发按钮同宽同轴；
   // 可用高度按「卡片顶边 → 滚动区顶边」实测，随输入框行数、附件栏与窗口尺寸自适应。

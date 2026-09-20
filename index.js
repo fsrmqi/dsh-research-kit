@@ -5,6 +5,9 @@ import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
 import { evidenceSyncRoute } from './dsh/evidence-sync.js'
 import { agentActivityRoute } from './dsh/agent-activity.js'
+import { catalogDataRoute } from './dsh/catalog-data.js'
+import { archifyTemplateRoute } from './dsh/archify-template.js'
+import { promptKitClientRoute } from './dsh/promptkit-client.js'
 
 // 科研插件的唯一 Node half。公开数据源查询只经 DSH 的受控 web 服务出网；
 // 语义增强复用当前会话已建立的路由（sessionId → provider/model），浏览器端永不持有 API Key。
@@ -48,6 +51,9 @@ function createSessionRoutes(sessions) {
 
 export function apply(ctx) {
   const logger = ctx.logger?.('dsh-research-kit')
+  ctx.effect(() => ctx.webServer.register(catalogDataRoute()), 'dsh-research-kit catalog data')
+  ctx.effect(() => ctx.webServer.register(archifyTemplateRoute()), 'dsh-research-kit archify template')
+  ctx.effect(() => ctx.webServer.register(promptKitClientRoute()), 'dsh-research-kit promptkit client')
   ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases: resources, logger })), 'dsh-research-kit database query')
   // 会话模型路由：agent/created 记录、agent/disposed 删除，只存 provider/model 标识，不存任何 Key。
   const routes = createSessionRoutes(ctx.sessions)

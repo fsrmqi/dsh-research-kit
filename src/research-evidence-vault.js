@@ -41,6 +41,19 @@ function publishEvidenceVault() {
 }
 
 const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
+const EVIDENCE_SYNC_FRESH_MS = 8_000
+const evidenceSyncInFlight = new Map()
+const evidenceSyncFreshUntil = new Map()
+
+function evidenceSyncScope(project) {
+  return String(project || '*')
+}
+
+export function invalidateEvidenceSync(project) {
+  if (project) evidenceSyncFreshUntil.delete(evidenceSyncScope(project))
+  // 全量读取覆盖任意项目；任一项目写入后都必须让全量缓存失效。
+  evidenceSyncFreshUntil.delete('*')
+}
 
 function canUseFileSync() {
   return typeof window !== 'undefined' && typeof fetch === 'function'
@@ -119,7 +132,7 @@ async function postFileEvidenceEntries(entries) {
   }
 }
 
-export async function syncEvidenceVaultWithFiles(project) {
+async function performEvidenceVaultSync(project) {
   if (!canUseFileSync()) return { skipped: true, imported: 0, exported: 0 }
   const store = evidenceVaultStore()
   const fileEntries = await fetchFileEvidenceEntries(project)
@@ -146,10 +159,27 @@ export async function syncEvidenceVaultWithFiles(project) {
   return { skipped: false, imported, exported: missing.length }
 }
 
+export function syncEvidenceVaultWithFiles(project, { force = false } = {}) {
+  const scope = evidenceSyncScope(project)
+  if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > Date.now()) {
+    return Promise.resolve({ skipped: false, cached: true, imported: 0, exported: 0 })
+  }
+  if (evidenceSyncInFlight.has(scope)) return evidenceSyncInFlight.get(scope)
+  const task = performEvidenceVaultSync(project)
+    .then(result => {
+      evidenceSyncFreshUntil.set(scope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
+      return result
+    })
+    .finally(() => evidenceSyncInFlight.delete(scope))
+  evidenceSyncInFlight.set(scope, task)
+  return task
+}
+
 async function persistEvidenceEntryToFile(entry) {
   if (!canUseFileSync()) return false
   try {
     await postFileEvidenceEntries([vaultEvidenceFileEntry(entry)])
+    invalidateEvidenceSync(entry.project)
     return true
   } catch {
     return false
@@ -173,6 +203,7 @@ export async function removeEvidenceEntryFromFile(entry) {
   const response = await fetch(`${EVIDENCE_SYNC_PATH}?${query}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) })
   if (response.status === 404) return false
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  invalidateEvidenceSync(entry.project)
   return true
 }
 
@@ -181,6 +212,7 @@ export async function clearEvidenceEntriesFromFile(project) {
   const query = project ? '?all=1&project=' + encodeURIComponent(project) : '?all=1'
   const response = await fetch(`${EVIDENCE_SYNC_PATH}${query}`, { method: 'DELETE', signal: AbortSignal.timeout(5_000) })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  invalidateEvidenceSync(project)
   return true
 }
 
@@ -368,6 +400,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
 
   const counts = React.useMemo(() => statusCounts(entries), [entries])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+  const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
   const citedByIndex = React.useMemo(() => {
     const index = new Map()
@@ -380,7 +413,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   }, [links, assetTitlesById])
   // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
   // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
-  const selectedEntries = React.useMemo(() => entries.filter(item => selectedIds.includes(item.id)), [entries, selectedIds])
+  const selectedEntries = React.useMemo(() => entries.filter(item => selectedIdSet.has(item.id)), [entries, selectedIdSet])
   const canWrite = typeof inputActions?.setDraft === 'function'
   // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
   // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
@@ -437,7 +470,8 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       if (fresh.length) await store.importMany(fresh)
       setBackup('')
       setBackupOpen(false)
-      await syncEvidenceVaultWithFiles(project || undefined)
+      invalidateEvidenceSync(project || undefined)
+      await syncEvidenceVaultWithFiles(project || undefined, { force: true })
       publishEvidenceVault()
       const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
       const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
@@ -545,10 +579,14 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
       hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
     }) : null,
-    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, { key: item.id, interactive: true }, [
+    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+      key: item.id,
+      interactive: true,
+      style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
+    }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
-          h('input', { key: 'select', type: 'checkbox', checked: selectedIds.includes(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `勾选「${item.title}」写入 Prompt`, style: { accentColor: C.teal } }),
+          h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `勾选「${item.title}」写入 Prompt`, style: { accentColor: C.teal } }),
           item.url
             ? h('a', { key: 'title', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 15, fontWeight: 700, color: C.teal, lineHeight: 1.45 } }, item.title)
             : h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),

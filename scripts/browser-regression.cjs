@@ -6,17 +6,33 @@ const path = require('node:path');
 const repo = path.resolve(__dirname, '..');
 const artifacts = path.join(repo, 'browser-results');
 fs.mkdirSync(artifacts, { recursive: true });
+let catalogRequests=0, promptKitRequests=0, archifyRequests=0;
 const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>科研工作台回归验证</title><div id="root"></div><div id="composer" data-composer-card style="position:fixed;bottom:12px;left:12px;width:min(560px,calc(100vw - 24px));z-index:30000"></div>
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(()=>React)}};</script>
 <script src="/bundle"></script><script>
 const registered={}; plugin.apply({slots:{inject(n,fn){fn();return ()=>{}},register(o,c){registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
-ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions})));
+ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions}),React.createElement(registered['dsh-research-kit-draft-enhancer'],{sessionId:'qa',inputActions:actions})));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(registered['dsh-research-kit-console'],{sessionId:'qa',inputActions:{setDraft(s){window.draft=s},submit(){}}}));
 </script>`;
 const server = http.createServer((req,res)=>{
+ if(req.url==='/dsh-research-kit/catalog-data'){
+  catalogRequests++;
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  return res.end(fs.readFileSync(path.join(repo,'ui/catalog-data.json')));
+ }
+ if(req.url==='/dsh-research-kit/archify-template'){
+  archifyRequests++;
+  res.setHeader('Content-Type','text/html; charset=utf-8');
+  return res.end(fs.readFileSync(path.join(repo,'vendor/archify/template.html')));
+ }
+ if(req.url==='/dsh-research-kit/promptkit-client'){
+  promptKitRequests++;
+  res.setHeader('Content-Type','text/javascript; charset=utf-8');
+  return res.end(fs.readFileSync(path.join(repo,'ui/promptkit.js')));
+ }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
@@ -32,6 +48,10 @@ const server = http.createServer((req,res)=>{
   page.setDefaultTimeout(10000);
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
+  await page.getByRole('tab',{name:'方法工坊',exact:true}).click();
+  await page.getByRole('heading',{name:'方法工坊',exact:true}).waitFor();
+  await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();
+  console.log('PromptKit 延迟加载、方法工坊与输入框增强器挂载：通过');
   await page.getByRole('tab',{name:/工作流程/}).click();
   await page.getByRole('group',{name:'工作流程分类筛选'}).getByRole('button',{name:'生物信息学',exact:true}).click();
   assert.equal(await page.getByLabel('全部工作流程分类').inputValue(),'生物信息学');
@@ -58,6 +78,9 @@ const server = http.createServer((req,res)=>{
   assert.ok(ids.length>0);
   assert.equal(new Set(ids).size,ids.length);
   await popup.close();
+  assert.equal(catalogRequests,1,'科研目录应由所有视图共享一次请求');
+  assert.equal(promptKitRequests,1,'PromptKit 应由所有消费入口共享一次请求');
+  assert.equal(archifyRequests,1,'Archify 模板应只在回放窗口首次使用时请求一次');
   await page.getByRole('button',{name:'收起回放',exact:true}).click();
   console.log('回放自动完成、静态模式和独立窗口：通过');
   await page.getByLabel('提示词预览',{exact:true}).fill('手动编辑内容必须保留');

@@ -17,14 +17,14 @@
 ```bash
 cd dsh-research-kit
 
-npm run build   # 根据 src/ 与 catalog/ 生成 ui/client.js
+npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（345 项 / 41 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（349 项 / 42 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
 
-浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React 与 `ui/client.js`，通过插件槽位挂载工作台和输入框弹层。覆盖三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果，以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
+浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React、`ui/client.js` 及其延迟工件，通过插件槽位挂载工作台、方法工坊、输入框弹层与增强器。覆盖延迟资源单次请求、三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果，以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
 
 默认使用 Playwright Chromium；本机已有 Chrome 时可运行 `PLAYWRIGHT_CHANNEL=chrome npm run test:browser`。截图输出到已忽略的 `browser-results/`，失败时额外保存 `failure.png`；CI 在 push 和 pull request 时执行并上传截图。启动或断言失败会以非零状态退出，服务器与浏览器会在退出前关闭。此回归不替代真实 DSH profile 的集成验收。
 
@@ -33,7 +33,7 @@ npm run test:browser            # 加载生成产物，执行真实浏览器交�
 每次改动目录或浏览器源码后，统一执行：
 
 ```bash
-npm run build && npm run check && npm test && node --check ui/client.js
+npm run build && npm run check && npm test && node --check ui/client.js && node --check ui/promptkit.js
 ```
 
 > **新增源码模块必须登记两处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）与 `package.json` 的 `check` 脚本（逐文件 `node --check`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。两条规则互为补集：`files` 管「有没有拼进产物」，`check` 管「单文件语法是否成立」——**当前 `files` 中每个项目模块都已列入 `check`**（含 `src/catalog-category-filter.js`、`src/lib/archify-adapter.js`）。
@@ -103,7 +103,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 345 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 349 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

@@ -1,7 +1,15 @@
-// PromptKit 的嵌入产物在构建时以 PromptKit 命名空间注入到同一浏览器工厂。
-// Research Kit 使用独立 storagePrefix，避免污染或依赖独立 dsh-promptkit 的资产。
-const researchMethodProvider = new PromptKit.StaticMethodProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
-const researchAssetProvider = new PromptKit.StaticAssetProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
+import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
+
+// Provider 只在 PromptKit 首次加载后创建；独立 storagePrefix 避免污染或依赖独立
+// dsh-promptkit 的资产。三个消费入口共用这两个实例。
+let researchMethodProvider = null
+let researchAssetProvider = null
+
+function ensureResearchProviders(PromptKit = getPromptKit()) {
+  if (!researchMethodProvider) researchMethodProvider = new PromptKit.StaticMethodProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
+  if (!researchAssetProvider) researchAssetProvider = new PromptKit.StaticAssetProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
+  return { researchMethodProvider, researchAssetProvider }
+}
 
 // 方法工坊只需要草稿读写和当前对话原料；项目记忆与跨会话摘要仍归草稿增强器，
 // 避免两个入口争抢外部上下文。
@@ -11,7 +19,9 @@ class ResearchStudioComposer {
   write(text) { this.inputActions?.setDraft(String(text ?? '')) }
 }
 
-function ResearchPromptStudioHost(props) {
+function LoadedResearchPromptStudioHost(props) {
+  const PromptKit = getPromptKit()
+  ensureResearchProviders(PromptKit)
   const { sessionId, input, useInput, useChat, inputActions } = props
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
@@ -40,4 +50,22 @@ function ResearchPromptStudioHost(props) {
       storagePrefix: 'dsh-research-kit.promptkit.'
     })
   )
+}
+
+function ResearchPromptStudioHost(props) {
+  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+  const [error, setError] = React.useState('')
+  React.useEffect(() => {
+    let active = true
+    loadPromptKit().then(PromptKit => {
+      ensureResearchProviders(PromptKit)
+      if (active) setState('ready')
+    }).catch(reason => {
+      if (active) { setError(reason?.message || String(reason)); setState('error') }
+    })
+    return () => { active = false }
+  }, [])
+  if (state === 'error') return React.createElement(Notice, { tone: 'error' }, error)
+  if (state !== 'ready') return React.createElement(Spinner, { text: '正在加载研究方法工坊……' })
+  return React.createElement(LoadedResearchPromptStudioHost, props)
 }

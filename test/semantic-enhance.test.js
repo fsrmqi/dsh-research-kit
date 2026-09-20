@@ -7,6 +7,9 @@ import { HOST_CAPABILITIES_PATH } from '../dsh/host-capabilities.js'
 import { MEMORY_SEARCH_PATH } from '../dsh/memory-search.js'
 import { EVIDENCE_SYNC_PATH } from '../dsh/evidence-sync.js'
 import { AGENT_ACTIVITY_PATH } from '../dsh/agent-activity.js'
+import { CATALOG_DATA_PATH } from '../dsh/catalog-data.js'
+import { ARCHIFY_TEMPLATE_PATH } from '../dsh/archify-template.js'
+import { PROMPTKIT_CLIENT_PATH } from '../dsh/promptkit-client.js'
 
 // Node half 统一注册：index.js 应注册公开查询 + 语义增强（非流式/流式）三条路由，
 // 且会话模型路由随 agent/created 与 agent/disposed 增删。
@@ -28,7 +31,7 @@ function makeContext() {
   }
 }
 
-test('index.js 统一注册七条路由且不使用 dsh-promptkit 路径', () => {
+test('index.js 统一注册十条路由且不使用 dsh-promptkit 路径', () => {
   const { ctx, registered } = makeContext()
   apply(ctx)
   assert.deepEqual(registered.map(route => route.path).sort(), [
@@ -39,6 +42,9 @@ test('index.js 统一注册七条路由且不使用 dsh-promptkit 路径', () =>
     MEMORY_SEARCH_PATH,
     EVIDENCE_SYNC_PATH,
     AGENT_ACTIVITY_PATH,
+    CATALOG_DATA_PATH,
+    ARCHIFY_TEMPLATE_PATH,
+    PROMPTKIT_CLIENT_PATH,
   ].sort())
   assert.ok(registered.every(route => route.path.startsWith('/dsh-research-kit/')))
 })

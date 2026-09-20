@@ -135,7 +135,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 ```
 
-> 构建产物 `ui/client.js` 已提交到仓库——克隆后即可安装，无需本地构建。
+> 构建产物 `ui/client.js`、`ui/catalog-data.json` 与 `ui/promptkit.js` 已提交到仓库——克隆后即可安装，无需本地构建。
 
 安装后刷新浏览器，在会话中打开「科研工作台」，或使用输入框旁的「资源 / 工作流程」入口。卸载或关闭视图不会残留重复注册。
 
@@ -228,16 +228,16 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、345 项回归测试（41 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、349 项回归测试（42 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
 ## 开发
 
 ```bash
-npm run build   # 生成 ui/client.js（提交产物，勿手改）
+npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（345 项 / 41 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（349 项 / 42 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

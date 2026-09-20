@@ -6,10 +6,11 @@
 //      researchContext，供改写对齐术语与范围；@文件 引用由 QuickEnhancer 的草稿解析单独并入；
 //   2. 研究边界由服务端 system 指令统一执行（不编造引用/数据、保持研究范围、保密、待核验标记）；
 //   3. 增强结果写入前保留差异/恢复能力（QuickEnhancer 内置 undoDraft）。
-import { itemById } from '../src/catalog.js'
+import { itemById, loadBrowserCatalog, subscribeCatalog } from '../src/catalog.js'
 import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
 import { ResearchDepositButton } from '../src/composer-deposit-button.js'
+import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
 const ENHANCE_STREAM_PATH = '/dsh-research-kit/semantic-enhance/stream'
@@ -124,7 +125,9 @@ function researchContextSummary(sessionId) {
   } catch { return '' }
 }
 
-function ResearchDraftEnhancerHost(props) {
+function LoadedResearchDraftEnhancerHost(props) {
+  const PromptKit = getPromptKit()
+  ensureResearchProviders(PromptKit)
   const { sessionId, input, useInput, useChat, inputActions } = props
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
@@ -136,6 +139,11 @@ function ResearchDraftEnhancerHost(props) {
   const enhancer = React.useMemo(() => new ResearchSessionEnhancer(() => sessionId), [sessionId])
   // 会话资源选择变化时刷新上下文摘要；摘要每次增强时即时计算，避免过期引用。
   const [, setSelectionVersion] = React.useState(0)
+  React.useEffect(() => {
+    const dispose = subscribeCatalog(() => setSelectionVersion(value => value + 1))
+    loadBrowserCatalog().catch(() => {})
+    return dispose
+  }, [])
   React.useEffect(() => {
     const onChange = () => setSelectionVersion(value => value + 1)
     window.addEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onChange)
@@ -178,6 +186,7 @@ function ResearchDraftEnhancerHost(props) {
   return React.createElement(React.Fragment, null, [
     React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
     React.createElement(PromptKit.QuickEnhancer, {
+      key: 'promptkit-quick-enhancer',
       methodProvider: researchMethodProvider,
       assetProvider: researchAssetProvider,
       composer,
@@ -189,6 +198,19 @@ function ResearchDraftEnhancerHost(props) {
   ])
 }
 
+function ResearchDraftEnhancerHost(props) {
+  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+  React.useEffect(() => {
+    let active = true
+    loadPromptKit().then(PromptKit => {
+      ensureResearchProviders(PromptKit)
+      if (active) setState('ready')
+    }).catch(() => { if (active) setState('error') })
+    return () => { active = false }
+  }, [])
+  // 输入框右侧空间有限；加载失败时静默收起，控制台会给出完整错误提示。
+  return state === 'ready' ? React.createElement(LoadedResearchDraftEnhancerHost, props) : null
+}
+
 // 由 standalone-glue 统一注册为 conversation.input.right（顺序见 slot-registry.js）。
 // 优先级低于模型选择器与发送按钮；不得截获普通 Enter（QuickEnhancer 内部只拦截自身面板按键）。
-

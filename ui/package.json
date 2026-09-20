@@ -1,12 +1,12 @@
 {
   "name": "dsh-research-kit-ui",
   "version": "0.1.0",
-  "description": "Browser half of dsh-research-kit (research workbench) for DeepSeek Harness",
+  "description": "Browser half and lazy artifacts of dsh-research-kit for DeepSeek Harness",
   "license": "MIT",
   "type": "module",
   "main": "client.js",
   "exports": { ".": "./client.js" },
-  "files": ["client.js"],
+  "files": ["client.js", "catalog-data.json", "promptkit.js"],
   "dsh": {
     "client": {
       "platform": "web",

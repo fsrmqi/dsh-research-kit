@@ -49,6 +49,7 @@ const GRAPH_SCOPE_MODES = [
 // 提示弹窗与导出文件正文里——提示不是装饰，它是本能力的验收项之一。
 const GRAPH_EXPORT_SCOPE = '仅含图上已显示的节点标题、来源库、稳定标识符、核验状态与关系；不含笔记、全文、检索词、附件或输入框草稿。'
 const GRAPH_FRAME_HEIGHT = 520
+const GRAPH_RENDER_NODE_LIMIT = 300
 
 function graphKindColor(kind) { return EVIDENCE_NODE_COLORS[kind] || C.lineStrong }
 
@@ -247,7 +248,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const includePersistent = scope !== 'session'
   const graphResources = React.useMemo(() => {
     if (!includeSession) return []
-    const savedDatabases = catalog.filter(item => item.type === 'database' && visibleSavedEvidence.some(entry => entry.sourceDatabase === item.name))
+    const sourceNames = new Set(visibleSavedEvidence.map(entry => entry.sourceDatabase).filter(Boolean))
+    const savedDatabases = catalog.filter(item => item.type === 'database' && sourceNames.has(item.name))
     return [...new Map([...resources, ...savedDatabases].map(item => [item.id, item])).values()]
   }, [includeSession, resources, visibleSavedEvidence])
   const knowledgeInput = React.useMemo(() => ({ nodes: visibleKnowledgeNodes, claims: visibleKnowledgeClaims }), [visibleKnowledgeNodes, visibleKnowledgeClaims])
@@ -264,6 +266,20 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
   const layout = React.useMemo(() => layoutEvidenceGraph(graph), [graph])
   const routes = React.useMemo(() => routeEvidenceEdges(graph, layout), [graph, layout])
+  const renderGraph = React.useMemo(() => {
+    if (layout.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return { nodes: layout.nodes, routes, hidden: 0 }
+    const priority = new Set([view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : ''].filter(Boolean))
+    const nodes = [
+      ...layout.nodes.filter(node => priority.has(node.id)),
+      ...layout.nodes.filter(node => !priority.has(node.id)),
+    ].slice(0, GRAPH_RENDER_NODE_LIMIT)
+    const ids = new Set(nodes.map(node => node.id))
+    return {
+      nodes,
+      routes: routes.filter(route => ids.has(route.from) && ids.has(route.to)),
+      hidden: layout.nodes.length - nodes.length,
+    }
+  }, [layout, routes, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
 
   const scale = view.scale
   const viewWidth = layout.width / scale
@@ -429,7 +445,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     onWheel,
     style: { display: 'block', touchAction: 'none', cursor: 'grab', background: C.surfaceAlt, borderRadius: 12 }
   }, [
-    ...routes.map(route => h('path', {
+    ...renderGraph.routes.map(route => h('path', {
       key: route.key,
       className: flowing ? 'rk-graph-edge rk-graph-edge-flow' : 'rk-graph-edge',
       d: route.d,
@@ -440,7 +456,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       opacity: highlighted && !(highlighted.has(route.from) && highlighted.has(route.to)) ? 0.18 : 1
     })),
     h('defs', { key: 'defs' }, h('marker', { id: 'rk-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' }, h('path', { d: 'M0,0 L0,6 L7,3 z', fill: C.lineStrong }))),
-    ...layout.nodes.map(node => {
+    ...renderGraph.nodes.map(node => {
       const marked = view.focus === node.id || node.id === view.from || node.id === view.to
       const dim = highlighted ? !highlighted.has(node.id) : false
       return h('a', {
@@ -653,6 +669,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     ]) : null,
     knowledgeDegraded ? h(Notice, { key: 'knowledge-degraded', tone: 'warn', icon: 'shield', style: { margin: '10px var(--rk-gutter) 0' } },
       '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
+    renderGraph.hidden ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
+      `当前图谱共有 ${layout.nodes.length} 个节点；为保持交互流畅，画布只渲染前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderGraph.hidden} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
     // 图例：只列图上实际出现的节点类型，随图动态增减；自动沉淀开启时附带最近一次沉淀摘要。
     graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
       [

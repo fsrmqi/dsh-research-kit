@@ -152,11 +152,16 @@ dsh-research-kit/
 │   ├── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
 │   ├── host-capabilities.js         # 宿主能力探测：装配事实 + MCP 连接清单（Node half，只读）
 │   ├── memory-search.js             # Memory Center 检索：工具挑选、Schema 参数合成、代执行 mcp__ 工具（Node half）
+│   ├── catalog-data.js              # 目录 JSON 同源延迟路由
+│   ├── promptkit-client.js          # PromptKit 同源延迟脚本路由
+│   ├── archify-template.js          # Archify viewer 同源延迟模板路由
 │   ├── agent-activity.js           # Agent 活动面板：调用轨迹聚合、运行 ID 自动捕获与检查点确认桥接（HTTP handler）
 │   └── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
 ├── ui/
 │   ├── package.json                 # 浏览器子包元数据
-│   └── client.js                    # 构建生成的 DSH ModuleLoader 产物（勿手改）
+│   ├── client.js                    # 构建生成的 DSH ModuleLoader 主包（勿手改）
+│   ├── catalog-data.json            # 构建生成的目录延迟工件（勿手改）
+│   └── promptkit.js                 # 构建生成的 PromptKit 延迟工件（勿手改）
 ├── vendor/
 │   ├── promptkit-embed.js           # vendored 界面工件（SHA-256 锁定，勿手改）
 │   ├── archify/
@@ -165,7 +170,7 @@ dsh-research-kit/
 │   │   └── LICENSE                  # 上游许可证原文
 │   └── vendor-manifest.json         # 工件来源 commit 与校验和清单（当前 3 个工件）
 ├── scripts/
-│   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序与顶层重名断言）
+│   ├── build-client.mjs             # 生成主包与两份延迟工件（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
 │   ├── check-doc-assets.mjs         # 校验 docs/assets/ 的图与文档引用双向一致（死资产 / 断链，--verbose 列引用处）
@@ -177,7 +182,7 @@ dsh-research-kit/
 │   ├── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
 │   └── lib/
 │       └── catalog-entries.mjs      # 分片与聚合入口的两路读取（目录校验与文档统计校验共用）
-├── test/                            # 345 项测试（41 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 349 项测试（42 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json
@@ -211,10 +216,10 @@ dsh-research-kit/
 | `dsh/standalone-glue.js` | 将 DSH props 映射为组件 props、注册槽位（返回统一释放函数） | 处理领域业务、拼 Prompt。 |
 | `dsh/slot-registry.js` | 槽位 id / order / label 的纯数据声明 | 执行注册本身。 |
 | `dsh/prompt-studio-glue.js` / `prompt-enhancer-glue.js` | 为 vendored 组件与增强器提供宿主装配 | 修改 vendored 工件本身。 |
-| `dsh/database-query.js` / `semantic-enhance.js` / `host-capabilities.js` / `memory-search.js` | Node half 的四条受控路由 | 持久化状态、持有凭据、自行选择模型、代执行 `mcp__` 前缀之外的原生工具。 |
+| `dsh/*.js` 路由模块 | Node half 的查询、增强、同步、活动与延迟工件路由 | 持久化状态、持有凭据、自行选择模型、代执行 `mcp__` 前缀之外的原生工具。 |
 | `vendor/` | 存放经审查、SHA 锁定的工件快照 | 手工编辑；运行时从相邻目录加载。 |
-| `ui/client.js` | 仅为构建产物 | 手工编辑。 |
-| `index.js` | 保持插件 Node half 可被加载；仅注册 §1.2 的两条受控路由 | 持久化状态、持有凭据、自行选择模型或注册未经需求确认的路由。 |
+| `ui/client.js` / `catalog-data.json` / `promptkit.js` | 仅为构建产物 | 手工编辑。 |
+| `index.js` | 保持插件 Node half 可被加载；集中注册受控路由 | 持久化状态、持有凭据、自行选择模型或注册未经需求确认的路由。 |
 
 ### 2.2 统一视图的分区契约
 
@@ -391,12 +396,13 @@ DSH 加载 ui/client.js
   → ModuleLoader 执行 researchKitApply(ctx)
   → 在 conversation.view 注册“科研工作台”
   → 用户打开工作台
-  → ResearchWorkbench 从内联 catalog 数据读取资源
+  → 并发加载目录 JSON 与 PromptKit 同源脚本（各消费者共享单例 Promise）
+  → ResearchWorkbench 从已加载 catalog 数据读取资源
   → searchCatalog({ query, type }) 返回列表
   → itemById(selectedId) 返回右侧详情
 ```
 
-目录数据构建时内联进 `ui/client.js`，因此工作台首次使用不依赖网络请求。更新目录后必须重新执行 `npm run build`。
+目录数据构建为独立的 `ui/catalog-data.json`，工作台首次挂载后经同源 `/dsh-research-kit/catalog-data` 路由加载；并发消费者共享同一个 Promise。这样主 JS 不再解析 800KB 级目录对象。更新目录后必须重新执行 `npm run build`。
 
 ### 3.2 启动工作流
 
@@ -701,33 +707,34 @@ type ResearchDatabase = BaseItem & {
 `ui/client.js` 是适配 DSH `window.__ModuleLoader__` 的生成文件。构建脚本会：
 
 1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记）；
-2. 将目录数据内联；
-3. 移除源码 ESM import/export；
-4. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的浏览器模块；
-5. 注入 archify viewer 模板：`window.__ARCHIFY_VIEWER_TEMPLATE__ = <template.html 全文>`（`scripts/build-client.mjs` 末行），供浏览器侧组装解释图 HTML。这是 `files` 白名单之外的**第二条注入通道**——模板不进拼接作用域，只作为一个全局字符串常量存在。
+2. 移除主包源码的 ESM import/export；
+3. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的 `ui/client.js`；
+4. 生成 `ui/catalog-data.json`，目录不再内联进主 JS；Node half 通过同源路由提供并设置短时缓存；
+5. 将 SHA 锁定的 PromptKit 快照改写为独立 `ui/promptkit.js`，由同源脚本路由按需加载，所有消费者共享单例 Promise；
+6. archify viewer 模板不进入主包，只在用户悬停、聚焦或点击「弹出回放窗口」后从 `/dsh-research-kit/archify-template` 预取并复用。
 
-目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、构建产物内联数组与聚合入口逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
+目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、`ui/catalog-data.json` 与聚合入口逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
 
 因此**任何 `catalog/`、`src/`、`dsh/` 或构建脚本的改动**都必须重新构建并提交生成产物：
 
 ```bash
-npm run build && npm run check && npm test && node --check ui/client.js
+npm run build && npm run check && npm test && node --check ui/client.js && node --check ui/promptkit.js
 ```
 
 CI 会校验「重新构建后产物无 diff」，忘记重建会直接挂 CI。`scripts/build-client.mjs` 的 `files` 是显式白名单——**新增模块漏登记不会有任何构建报错**，产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。
 
-该白名单里现在**同时包含项目模块与一个 vendored 模块**，三者的处理方式不同，不要混为一谈：`vendor/promptkit-embed.js` 原样拼接（其内部声明都在 IIFE 内，不参与顶层符号检查）；`vendor/archify/template.html` 原样注入为全局字符串、不进作用域（见上面第 5 步）；`vendor/archify/i18n.mjs` 是 ESM 源码，**会经过 `strip()` 并参与拼接**，因此它虽来自 `vendor/`，也必须在 `files` 中登记并接受与项目模块相同的单文件语法检查；它排在 `src/lib/archify-adapter.js` 之前——适配层要用到它的文案符号。
+该白名单里包含项目模块与 `vendor/archify/i18n.mjs`；后者会经过 `strip()` 并参与主包拼接，因此也必须登记并接受单文件语法检查。`vendor/promptkit-embed.js` 不在白名单中，而是由构建器单独包装成 `ui/promptkit.js`；`vendor/archify/template.html` 则由 Node half 直接提供，二者都不参与主包顶层符号检查。
 
 「`files` 登记」与「`package.json` 的 `check` 登记」是互为补集的两条纪律：前者管「有没有拼进产物」，后者管「单文件语法是否成立」。当前 `files` 中每个项目模块都已列入 `check`。
 
 构建期另有两道硬断言，把「产物级、运行时才炸」的缺陷提前到构建：
 
 - `assertSymbolOrder`：关键符号的定义位置必须早于 `standalone-glue` 使用它们的位置——顺序错位在运行时表现为 `ReferenceError`；
-- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 `ids` 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。vendored 工件的主体不参与该检查：`vendor/promptkit-embed.js` 的内部声明都包在 `const PromptKit = (React => {…})` 作用域内，它唯一外露的符号是 `PromptKit`；`vendor/archify/i18n.mjs` 是例外——它经 `strip()` 直接拼进同一作用域，因此**参与**顶层重名检查。
+- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 ids 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀，不要依赖「两份内容一样，覆盖也无所谓」。独立 PromptKit 工件不参与此检查；`vendor/archify/i18n.mjs` 经 `strip()` 直接拼进主包，因此参与。
 
 **图门禁（在 `npm run check` 内，但在仓库内空转）。** `npm run check` 还包含 `node scripts/validate-diagrams.mjs --repo`：它按 10 条规则码校验 diagram IR，并给出 `supportedFixes`（与 `scripts/render-diagrams.mjs` 的产出对应）。**仓库内不预置任何 `*.diagram.json`**，因此该步实测输出 `checked: []`——它守护的是你产出或审阅 IR 的那一刻，不代表仓库里有被守护的图。凡提到这条门禁处都应带上这句限定，否则读者会去找一个并不存在的被守护文件。
 
-不要手工编辑 `ui/client.js`。如果需要引入依赖，先确认 DSH 浏览器模块是否可通过 `require()` 提供；未经验证不得把 npm 依赖直接留在浏览器源码中。
+不要手工编辑 `ui/client.js`、`ui/catalog-data.json` 或 `ui/promptkit.js`。如果需要引入依赖，先确认 DSH 浏览器模块是否可通过 `require()` 提供；未经验证不得把 npm 依赖直接留在浏览器源码中。
 
 ## 8. 后续扩展点
 

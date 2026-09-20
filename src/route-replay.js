@@ -10,6 +10,21 @@ import React from 'react'
 import { h, C } from './theme.js'
 import { buildArchifySvg, archifyApplyTemplate, archifyLayoutRow } from './lib/archify-adapter.js'
 
+export const ARCHIFY_TEMPLATE_PATH = '/dsh-research-kit/archify-template'
+let archifyTemplatePromise = null
+
+export function loadArchifyTemplate(fetcher = globalThis.fetch) {
+  if (archifyTemplatePromise) return archifyTemplatePromise
+  if (typeof fetcher !== 'function') return Promise.reject(new Error('当前环境无法加载回放模板。'))
+  archifyTemplatePromise = fetcher(ARCHIFY_TEMPLATE_PATH, { headers: { accept: 'text/html' } })
+    .then(response => {
+      if (!response.ok) throw new Error(`回放模板加载失败（HTTP ${response.status}）`)
+      return response.text()
+    })
+    .catch(error => { archifyTemplatePromise = null; throw error })
+  return archifyTemplatePromise
+}
+
 const STEP_MS = 620
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
@@ -155,7 +170,13 @@ export function RouteReplay({ trace, prompt }) {
       h('strong', { key: 't', style: { fontSize: 13 } }, '组装回放'),
       h('span', { key: 'h', style: { fontSize: 12, color: C.muted } }, '只回放本次真实的组装事实；发送与执行由你完成，结果需人工核验。'),
       h('span', { key: 'sp', style: { flex: 1 } }),
-      h('button', { key: 'popup', type: 'button', onClick: () => openReplayWindow(trace, '组装回放'), style: buttonStyle(C) }, '弹出回放窗口'),
+      h('button', {
+        key: 'popup', type: 'button',
+        onPointerEnter: () => { loadArchifyTemplate().catch(() => {}) },
+        onFocus: () => { loadArchifyTemplate().catch(() => {}) },
+        onClick: () => openReplayWindow(trace, '组装回放'),
+        style: buttonStyle(C),
+      }, '弹出回放窗口'),
       h('button', { key: 'mode', type: 'button', onClick: () => setStill(value => !value), style: buttonStyle(C) }, still ? '切到动画' : '切到静态'),
       !still ? h('button', { key: 'play', type: 'button', onClick: play, style: buttonStyle(C) }, '重新播放') : null,
       h('button', { key: 'export', type: 'button', onClick: exportSnapshot, style: buttonStyle(C) }, '导出快照'),
@@ -182,9 +203,22 @@ function buttonStyle(C) {
 // 弹出回放窗口：trace → archify viewer 契约（vendored 运行时）→ 独立浏览器窗口。
 // 窗口里获得完整 viewer 能力（视觉预设/章节故事/透镜/雷达/路线动画）；
 // 只回放本次组装事实，不注入任何未声明的内容。
-export function openReplayWindow(trace, title) {
-  const template = typeof window !== 'undefined' ? window.__ARCHIFY_VIEWER_TEMPLATE__ : null
-  if (!template) { alert('回放模板未就绪；请重新构建产物（npm run build）。'); return }
+export async function openReplayWindow(trace, title) {
+  if (typeof window === 'undefined') return null
+  // 必须在点击任务内先开窗，否则等待网络后再 window.open 会被浏览器当作非用户手势拦截。
+  const popup = window.open('', '_blank')
+  if (!popup) { alert('弹窗被浏览器拦截；请允许本站弹窗后重试。'); return null }
+  popup.document.write('<!doctype html><meta charset="utf-8"><title>正在加载组装回放…</title><p style="font:14px system-ui;padding:24px">正在加载组装回放…</p>')
+  popup.document.close()
+  let template
+  try {
+    template = await loadArchifyTemplate()
+  } catch (error) {
+    popup.document.open()
+    popup.document.write(`<!doctype html><meta charset="utf-8"><title>回放加载失败</title><p style="font:14px system-ui;padding:24px">${escapeXml(error?.message || error)}</p>`)
+    popup.document.close()
+    return popup
+  }
   const steps = (trace || [])
   const nodes = archifyLayoutRow(steps.map((step, i) => ({
     id: `s${i}`,
@@ -214,8 +248,8 @@ export function openReplayWindow(trace, title) {
     visualPreset: 'classic',
     guidedViews,
   })
-  const popup = window.open('', '_blank')
-  if (!popup) { alert('弹窗被浏览器拦截；请允许本站弹窗后重试。'); return }
+  popup.document.open()
   popup.document.write(html)
   popup.document.close()
+  return popup
 }

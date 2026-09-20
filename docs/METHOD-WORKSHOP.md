@@ -42,7 +42,7 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 | `src/lib/enhance-output.js` | 模型输出协议（`[DIAG]` + `===PROMPT===`）解析，Node/浏览器共用 |
 | `src/lib/vault-core.js` | 灵感资产纯逻辑（隐私边界、筛选） |
 | `src/research-vault.js` | 研究资产库管理视图 |
-| `scripts/build-client.mjs` | 把 vendored 工件与自有模块拼接为 `ui/client.js`（含工件内旧路径改写） |
+| `scripts/build-client.mjs` | 生成主包、目录工件与按需加载的 `ui/promptkit.js`（含工件内旧路径改写） |
 
 ## 3. vendored 工件：为什么要它、怎么维护
 
@@ -66,7 +66,7 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 
 ## 4. 命名空间纪律
 
-vendored 工件与自有模块最终处于**同一个 JavaScript 工厂作用域**，因此每次新增模块都要检查顶层冲突：
+主包内的自有模块处于**同一个 JavaScript 工厂作用域**，因此每次新增模块都要检查顶层冲突；PromptKit 则在独立同源脚本的 IIFE 中导出命名空间：
 
 | 维度 | 规则 |
 | --- | --- |
@@ -82,12 +82,12 @@ vendored 工件与自有模块最终处于**同一个 JavaScript 工厂作用域
 
 ### 拼接顺序
 
-`vendor/promptkit-embed.js` 必须排在自有模块之前——后续 glue 通过 `PromptKit` 命名空间引用其组件与 provider。
+`src/promptkit-loader.js` 必须排在两处 glue 之前；它用单例 Promise 加载 `ui/promptkit.js`，后续 glue 通过加载器取得 `PromptKit` 命名空间与共享 provider。
 
 ```text
-PromptKit embed
-→ catalog / state / theme
+catalog / state / theme
 → UI 组件层
+→ PromptKit loader
 → PromptStudio glue
 → standalone glue
 ```
@@ -102,7 +102,7 @@ PromptKit embed
 ### 任何改动后必须运行
 
 ```bash
-npm run build && npm run check && npm test && node --check ui/client.js
+npm run build && npm run check && npm test && node --check ui/client.js && node --check ui/promptkit.js
 git diff --check
 ```
 
@@ -173,7 +173,7 @@ export const inject = ['webServer', 'web', 'llm', 'sessions']
 
 ## 10. 已知风险
 
-- 构建产物 `ui/client.js` 现为 **2.3 MB**（2,396,255 B），其中 vendored 工件约占 1.36 MB：promptkit 工件 637 KiB + archify 模板 756 KiB（后者整段作为字符串注入，供浏览器侧组装解释图 HTML）。引入新功能前先比较加载体积与 DSH 首屏时间。
+- 主包 `ui/client.js` 当前约 **550 KB**（gzip 约 **161 KB**）。目录是独立 `ui/catalog-data.json`（约 842 KB），PromptKit 是按需加载的 `ui/promptkit.js`（约 660 KB），Archify 模板只在打开完整回放窗口时加载。`scripts/check-client-budget.mjs` 会阻止主包、gzip、目录或 PromptKit 工件超过预算；引入新功能前仍需比较首屏解析与首次功能加载时间。
 - 工件的全局 CSS 与 `--pk-*` 变量可能与宿主或本仓库的 `--rk-*` 相互影响，改动视觉层时需在真实宿主复核。
 - 两个入口可能同时监听键盘、外部点击与 `storage` 事件；所有新事件必须命名空间化。
 - DSH 的 slot props 与模型路由随版本变化，真实 profile 验证不可省略。

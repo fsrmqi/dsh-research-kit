@@ -19,12 +19,13 @@ export function researchKitApply(ctx) {
   const disposers = [registerResearchSlots(ctx, components)]
   // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
   // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
-  try {
-    disposers.push(attachKnowledgeDeposition(ctx, {
-      // researchAssetProvider 是构建产物拼接作用域里的顶层符号（prompt-studio-glue.js 定义）；
-      // 源码形态下不存在，用 typeof 守卫，避免 ReferenceError。
-      assetProvider: typeof researchAssetProvider === 'undefined' ? null : researchAssetProvider,
-    }))
-  } catch { /* 沉淀接线失败不影响四个视图槽位 */ }
+  let active = true
+  let disposeDeposition = () => {}
+  loadPromptKit().then(PromptKit => {
+    if (!active) return
+    const providers = ensureResearchProviders(PromptKit)
+    disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
+  }).catch(() => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */ })
+  disposers.push(() => { active = false; disposeDeposition() })
   return () => disposers.forEach(dispose => dispose?.())
 }
