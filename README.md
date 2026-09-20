@@ -220,6 +220,10 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 其余 118 个数据源标记为 `requires-mcp` 或 `reference-only`，会清楚提示所需的 MCP、订阅、API Key 或数据使用协议，并提供同一受控 Agent 回退。目录标注与查询实现由 `npm run check` 双向校验（有适配器就必须标出来，标了就必须有适配器），因此界面上的能力状态不会与实现漂移。**插件不会伪造任何检索结果。**
 
+四档标注各自的界面行为与保证机制：
+
+![数据源可用性的四档标注：从插件直查到尚未实现的宿主声明](docs/assets/availability-ladder.svg)
+
 ## 兼容性与状态
 
 当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。

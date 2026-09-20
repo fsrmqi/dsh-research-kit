@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 564" width="820" height="564" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>贡献落点地图：三类改动分别落到哪里、要同步什么、由哪条门禁看守</title>
+<desc>左侧是三类改动意图，中间是对应落点与必须同步的文件，右侧是提交前必须通过的门禁；下方是两条不得手改的红线与新代码的三处登记纪律。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<text x="30" y="62" font-size="12" fill="#5F5E5A">你想改什么</text>
+<text x="218" y="62" font-size="12" fill="#5F5E5A">落到哪里 · 还要同步什么</text>
+<text x="620" y="62" font-size="12" fill="#5F5E5A">谁在守门</text>
+
+<rect x="30" y="80" width="176" height="84" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="118" y="114" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle">内容</text>
+<text x="118" y="138" font-size="12" fill="#5F5E5A" text-anchor="middle">工作流 · 技能 · 数据源</text>
+
+<rect x="218" y="80" width="370" height="84" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="234" y="106" font-size="13" font-weight="500" fill="#3C3489">catalog/ 三个目录的分片 JSON</text>
+<text x="234" y="128" font-size="12" fill="#5F5E5A">数据源要直查，必须同时加适配器</text>
+<text x="234" y="148" font-size="12" fill="#5F5E5A">（dsh/database-query.js，check 会双向比对）</text>
+
+<rect x="30" y="192" width="176" height="84" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="118" y="226" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle">代码</text>
+<text x="118" y="250" font-size="12" fill="#5F5E5A" text-anchor="middle">界面逻辑 · 宿主路由 · 工具</text>
+
+<rect x="218" y="192" width="370" height="84" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="234" y="218" font-size="13" font-weight="500" fill="#3C3489">mcp/tool-registry.js</text>
+<text x="234" y="240" font-size="12" fill="#5F5E5A">文档里的工具表由 sync-tool-docs 生成，不要手写</text>
+<text x="234" y="260" font-size="12" fill="#5F5E5A">新工具要声明领域、分级、访问权限与确认要求</text>
+
+<rect x="30" y="304" width="176" height="84" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="118" y="338" font-size="14" font-weight="500" fill="#2C2C2A" text-anchor="middle">文档与配图</text>
+<text x="118" y="362" font-size="12" fill="#5F5E5A" text-anchor="middle">说明文档 · 手写 SVG</text>
+
+<rect x="218" y="304" width="370" height="84" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
+<text x="234" y="330" font-size="13" font-weight="500" fill="#3C3489">src/** · dsh/** · docs/** · docs/assets/*.svg</text>
+<text x="234" y="352" font-size="12" fill="#5F5E5A">改源码后必须重新构建，把产物一起提交</text>
+<text x="234" y="372" font-size="12" fill="#5F5E5A">新增文档要登记 docs/README.md 的索引</text>
+
+<path d="M594 122 L616 122" fill="none" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M594 234 L616 234" fill="none" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#a)"/>
+<path d="M594 346 L616 346" fill="none" stroke="#5DCAA5" stroke-width="1.5" marker-end="url(#a)"/>
+
+<rect x="620" y="80" width="170" height="308" rx="12" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="635" y="118" font-size="13" font-weight="500" fill="#085041">npm run check</text>
+<text x="635" y="140" font-size="12" fill="#0F6E56">vendor · catalog</text>
+<text x="635" y="160" font-size="12" fill="#0F6E56">图表 · 工具表</text>
+<text x="635" y="180" font-size="12" fill="#0F6E56">文档统计 · 语法检查</text>
+<text x="635" y="212" font-size="13" font-weight="500" fill="#085041">npm test</text>
+<text x="635" y="234" font-size="12" fill="#0F6E56">构建 + 单元测试</text>
+<text x="635" y="268" font-size="13" font-weight="500" fill="#085041">npm run test:browser</text>
+<text x="635" y="290" font-size="12" fill="#0F6E56">真实浏览器回归</text>
+<text x="635" y="330" font-size="13" font-weight="500" fill="#085041">prepublishOnly</text>
+<text x="635" y="352" font-size="12" fill="#0F6E56">= check + test</text>
+
+<rect x="30" y="400" width="760" height="76" rx="12" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5"/>
+<text x="50" y="424" font-size="13" font-weight="500" fill="#854F0B">两条不能手改的红线</text>
+<text x="50" y="446" font-size="12" fill="#633806">ui/client.js 是构建产物——只改它不重新构建，check 与 CI 都会失败</text>
+<text x="50" y="466" font-size="12" fill="#633806">vendor/ 三个工件 SHA 锁定——要更新必须同步 vendor/vendor-manifest.json</text>
+
+<rect x="30" y="488" width="760" height="52" rx="12" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="50" y="510" font-size="12" font-weight="500" fill="#085041">新增模块与脚本要同时登记三处</text>
+<text x="50" y="530" font-size="12" fill="#0F6E56">ARCHITECTURE §2 模块树 · scripts/build-client.mjs 的 files 清单 · package.json 的 check</text>
+</svg>

@@ -4,6 +4,10 @@
 
 本文件说明**怎么参与**；设计原理见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，验收方式见 [docs/MANUAL-QA.md](docs/MANUAL-QA.md)。
 
+先看全景。下面这张图把「改什么 → 落到哪个目录 → 由哪条门禁看守」放在一起，另外标出两条**不能手改**的红线和新增代码的三处登记纪律；后文各节是这张图的展开。
+
+![贡献落点地图：三类改动分别落到哪里、要同步什么、由哪条门禁看守](docs/assets/contributor-map.svg)
+
 ## 环境准备
 
 | 需要 | 说明 |

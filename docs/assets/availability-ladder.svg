@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 568" width="820" height="568" role="img" font-family="ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+<title>数据源可用性的四档标注：从插件直查到尚未实现的宿主声明，每档各自的界面行为与保证机制</title>
+<desc>四档标注按可用程度排列：插件可直接查询与需接入 MCP 由校验器与保守标注保证，仅作参考要求如实写出检索前提，宿主已确认可用在能力探测落地前不得使用。未接通的来源一律走同一条受控 Agent 回退。</desc>
+<defs>
+  <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<rect x="30" y="30" width="760" height="46" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="50" y="58" font-size="12" fill="#2C2C2A">每个数据源条目都必须标出接入前提——界面显示的能力状态不会与实现漂移</text>
+
+<rect x="30" y="92" width="236" height="88" rx="12" fill="#E1F5EE" stroke="#5DCAA5" stroke-width="0.5"/>
+<text x="148" y="126" font-size="12" fill="#0F6E56" text-anchor="middle">available-in-plugin</text>
+<text x="148" y="152" font-size="13" font-weight="500" fill="#085041" text-anchor="middle">插件可直接查询</text>
+<rect x="278" y="92" width="512" height="88" rx="12" fill="#FFFFFF" stroke="#9FE1CB" stroke-width="0.5"/>
+<text x="294" y="118" font-size="13" font-weight="500" fill="#26215C">插件内置适配器完成查询，结果即取即得</text>
+<text x="294" y="140" font-size="12" fill="#5F5E5A">详情页显示「插件可直接查询」，候选结果带来源链接与稳定标识符</text>
+<text x="294" y="162" font-size="12" fill="#0F6E56">双向校验：有适配器就必须标出，标了就必须有适配器</text>
+
+<rect x="30" y="192" width="236" height="88" rx="12" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="148" y="226" font-size="12" fill="#185FA5" text-anchor="middle">requires-mcp</text>
+<text x="148" y="252" font-size="13" font-weight="500" fill="#0C447C" text-anchor="middle">需接入 MCP</text>
+<rect x="278" y="192" width="512" height="88" rx="12" fill="#FFFFFF" stroke="#B5D4F4" stroke-width="0.5"/>
+<text x="294" y="218" font-size="13" font-weight="500" fill="#26215C">需要额外接入对应的 MCP 连接器才能查询</text>
+<text x="294" y="240" font-size="12" fill="#5F5E5A">详情页列出所需 MCP 名称；未接通前不显示为可用</text>
+<text x="294" y="262" font-size="12" fill="#185FA5">保守标注：未验证可用的来源一律不标为可直查</text>
+
+<rect x="30" y="292" width="236" height="88" rx="12" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="148" y="326" font-size="12" fill="#5F5E5A" text-anchor="middle">reference-only</text>
+<text x="148" y="352" font-size="13" font-weight="500" fill="#2C2C2A" text-anchor="middle">仅作参考</text>
+<rect x="278" y="292" width="512" height="88" rx="12" fill="#FFFFFF" stroke="#D3D1C7" stroke-width="0.5"/>
+<text x="294" y="318" font-size="13" font-weight="500" fill="#26215C">需要订阅、API Key、机构授权或数据使用协议</text>
+<text x="294" y="340" font-size="12" fill="#5F5E5A">详情页如实写出检索前提，不暗示已经可用</text>
+<text x="294" y="362" font-size="12" fill="#444441">新增数据源时必须写清检索前提，不得暗示已可用</text>
+
+<rect x="30" y="392" width="236" height="88" rx="12" fill="#FAEEDA" stroke="#FAC775" stroke-width="0.5" stroke-dasharray="5 4"/>
+<text x="148" y="426" font-size="12" fill="#854F0B" text-anchor="middle">available-in-host</text>
+<text x="148" y="452" font-size="13" font-weight="500" fill="#633806" text-anchor="middle">宿主已确认可用</text>
+<rect x="278" y="392" width="512" height="88" rx="12" fill="#FFFFFF" stroke="#FAC775" stroke-width="0.5" stroke-dasharray="5 4"/>
+<text x="294" y="418" font-size="13" font-weight="500" fill="#26215C">宿主已声明可用——须先实现真实能力探测并覆盖自动化测试</text>
+<text x="294" y="440" font-size="12" fill="#5F5E5A">能力探测落地前，不允许任何条目使用这一标注</text>
+<text x="294" y="462" font-size="12" fill="#854F0B">门槛：探测与测试齐备后才允许标记（当前无条目使用）</text>
+
+<rect x="30" y="492" width="760" height="60" rx="12" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="50" y="516" font-size="12" font-weight="500" fill="#0C447C">未接通的来源一律走同一条受控回退</text>
+<text x="50" y="536" font-size="12" fill="#185FA5">由当前会话的 Agent 用它自己的 Web / MCP / 文件工具完成检索——插件不伪造任何检索结果。</text>
+</svg>

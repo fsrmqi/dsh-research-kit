@@ -59,6 +59,8 @@
 
 ### 新增
 
+- 📊 **文档配图补三张，并给「图 ↔ 引用」上了门禁**：`docs/assets/` 由 5 张增至 8 张，补齐三处此前只有纯文字的入口——`mcp-tools-map.svg`（MCP 工具地图：四类宿主连同一个 stdio 服务、工具按能力域分组、只有两个能力域会改变仓库状态且调用前需显式确认；挂 [配置指南](docs/MCP-SETUP.md) 开篇）、`contributor-map.svg`（贡献落点地图：改什么 → 落到哪个目录 → 由哪条门禁看守，附两条不得手改的红线与新增代码的三处登记；挂 [贡献指南](CONTRIBUTING.md) 开篇）、`availability-ladder.svg`（数据源可用性四档标注及各自的界面行为与保证机制，含 `available-in-host` 尚未实现这一如实状态；挂 README「数据库查询」与 [PRODUCT](docs/PRODUCT.md) §2）。三张图延续配图纪律：手写 SVG、不进构建、不写会随内容增长的统计数字；除真实 Chromium 渲染核对外，本轮加了 `getBBox()` 自动断言——全部 `text` 必须落在画布内且两两不重叠，机器先过一遍再看渲染图。另新增 `scripts/check-doc-assets.mjs` 进入 `npm run check`：双向校验「每张图至少被一处读者文档引用」与「每条 `assets/*.svg` 引用都指向真实文件」，把「只加图不引用」与「删图忘改引用」这两类此前无门禁可拦的漂移变成构建期失败；门禁本身用三个场景反向验证（死资产 / 断链 / 路径写错均被拦下）。
+
 - 🧰 **MCP Server 与 Agent 活动面板（9/18 一批提交，此前未记入本文件）**：插件同时作为 MCP Server 提供 **31 个 `research_*` 工具**，宿主 Agent 可直接调用而无需经过 UI；[配置指南](docs/MCP-SETUP.md)给出 Codex / Claude Code / Zed / DSH 四种宿主的接入方式。
   - **工具元数据单一事实源**：`mcp/tool-registry.js` 统一声明名称 / 分类 / 层级 / 访问级别 / 帮助路由，工具表与活动面板标签由此派生；配置指南的工具表改由 `scripts/sync-tool-docs.mjs` 生成并进入 `npm run check`，工具名与清单不再可能手写漂移。
   - **导航与综合入口**：新增 `research_help`（按自然语言目标推荐工具与最短调用链，本身不执行任何动作）、`research_literature_search`（多源检索、去重、可选核验）与 `research_evidence_review`（只读盘点、建议分级与可追溯性风险），把原先需要多次细粒度调用的路径收敛为默认入口。

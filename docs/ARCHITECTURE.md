@@ -168,6 +168,7 @@ dsh-research-kit/
 │   ├── build-client.mjs             # 内联目录数据并生成浏览器产物（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
+│   ├── check-doc-assets.mjs         # 校验 docs/assets/ 的图与文档引用双向一致（死资产 / 断链，--verbose 列引用处）
 │   ├── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
 │   ├── sync-tool-docs.mjs           # 从工具注册表生成 MCP-SETUP 的工具表与最短路径（--check 入 npm run check）
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
