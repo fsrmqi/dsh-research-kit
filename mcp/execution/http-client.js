@@ -9,8 +9,8 @@ const circuits = new Map()
 
 const contactEmail = String(process.env.DSH_RESEARCH_KIT_CONTACT_EMAIL || '').trim()
 export const USER_AGENT = contactEmail
-  ? `dsh-research-kit/0.1.0 (+https://github.com/fsrmqi/dsh-research-kit; mailto:${contactEmail})`
-  : 'dsh-research-kit/0.1.0 (+https://github.com/fsrmqi/dsh-research-kit)'
+  ? `dsh-research-kit/0.2.0 (+https://github.com/fsrmqi/dsh-research-kit; mailto:${contactEmail})`
+  : 'dsh-research-kit/0.2.0 (+https://github.com/fsrmqi/dsh-research-kit)'
 
 function circuitKey(url) {
   try {

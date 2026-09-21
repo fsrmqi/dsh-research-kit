@@ -132,7 +132,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball (offline / audit)**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 ```
 
 > The generated `ui/client.js`, `ui/catalog-data.json`, and `ui/promptkit.js` artifacts are committed, so a clone installs without building.
@@ -222,7 +222,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 ## Compatibility & status
 
-Current version `0.1.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
+Current version `0.2.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
 Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries), 362 regression tests in 46 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 

@@ -4,11 +4,23 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-> 当前版本 `0.1.0`，**尚未发布到 npm**；下述变更均在 `main` 分支上。安装方式见 [README](README.md)。
+> 当前版本 `0.2.0`，**尚未发布到 npm**；下述变更均在 `main` 分支上。安装方式见 [README](README.md)。
 
-## [未发布]
+## [0.2.0] - 2026-09-21
+
+### 行为变化
+
+- 🛡 **写入类 MCP 工具默认要求人工确认**：`research_evidence_save`、`research_evidence_save_batch`、`research_run_start`、`research_run_export`、`research_evidence_link`、`research_evidence_grade_apply` 与 `research_run_checkpoint_approve` 现在默认通过 MCP form elicitation 向宿主请求确认；取消时返回 `CONFIRMATION_DECLINED`。宿主不支持 elicitation 时，可配置 `DSH_RESEARCH_KIT_CONFIRMATION_TOKEN` 并传入 `confirmation_token` 作受控回落；仅在测试或明确信任的宿主里设置 `DSH_RESEARCH_KIT_CONFIRM_WRITES=disabled` 才会跳过确认。
+- 📦 **证据列表与证据盘点默认摘要输出**：`research_evidence_list` 和 `research_evidence_review` 默认返回更紧凑的摘要字段，并新增 `offset` / `limit` / `mode` / `fields` 分页与字段过滤参数。需要笔记、分级推理等完整字段时，显式传 `mode: "full"` 或选择字段；内部 API 与现有调用方的默认行为保持兼容。
+- 🧾 **MCP 输出默认紧凑化，OpenAlex 引用列表按需返回**：工具结果改为紧凑 JSON；`research_metadata_openalex_fetch` 默认只返回 `referenced_works_count`，需要完整引用图时才传 `include_references: true`，避免大结果挤占宿主上下文。
+- 🧭 **工具能力与本地数据目录可配置**：31 个 MCP 工具现在暴露 `readOnlyHint`、`openWorldHint` 等 annotations；证据库、日志、护照与检查点支持 `DSH_RESEARCH_KIT_HOME` 指向独立数据根目录，便于项目隔离、多实例和测试。
 
 ### 变更
+
+- 🌐 **外部学术数据源请求更稳**：新增共享 HTTP 客户端，支持 `Retry-After`、指数退避、短时熔断、标准 User-Agent 与 Crossref `mailto`；Crossref / OpenAlex / Semantic Scholar / Europe PMC / arXiv / ClinicalTrials 支持每源 timeout、rate limit 与 API key 配置。arXiv 统一走 HTTPS。
+- 🧬 **多源文献检索标识符归一化**：DOI / PMID / arXiv / OpenAlex 统一为稳定键后合并，DOI 优先；同一论文在 Crossref、OpenAlex、Semantic Scholar 等来源间不再因主键形状不同而漏合并。
+- 🧠 **Memory Center 检索边界加固**：显式 `tool` 必须属于请求的 `server`；即使宿主实现不消费 `AbortSignal`，路由也会在 15 秒内硬超时返回。
+- 🧮 **用量统计覆盖轮转日志**：`research_usage_stats` 与运行状态产物投影现在同时读取当前日志和轮转日志，不再因 5 MB 轮转低估近期调用。
 
 - 🔧 **MCP 工具命名统一为 `research_` 前缀（升级注意）**：14 个工具从无前缀名改为 `research_<领域>_<动作>`，与新增工具形成一致命名空间——`verify_citation`→`research_citation_verify`、`query_source`→`research_source_query`、`save_evidence`→`research_evidence_save`、`list_evidence`→`research_evidence_list`、`grade_evidence`→`research_evidence_grade`、`link_evidence`→`research_evidence_link`、`export_passport`→`research_run_export`、`import_passport`→`research_run_import`、`generate_figure`→`research_figure_generate`、`list_figure_styles`→`research_figure_list_styles`、`checkpoint_status`→`research_run_checkpoint_status`、`approve_checkpoint`→`research_run_checkpoint_approve`、`search_workflows`→`research_catalog_search`、`compose_workflow`→`research_workflow_compose`。**本包尚未发布到 npm，因此不存在已发布版本层面的破坏性变更**；但 README 提供「GitHub 钉 commit」安装路径——若你按 9/18 之前的 commit 安装并在宿主配置、脚本或提示词里写死了旧工具名，请按上表更新。迁移说明同时收录于 [MCP Server 配置指南](docs/MCP-SETUP.md)。
 - 🔗 **动线整合第一切片落地：资产-证据互链（ROADMAP §11 P5，上一轮走查定案）**：四个分区各自完整但互不相通——灵感资产与证据库的关系此前只有自动沉淀的机器链，用户**主动**把某条资产与某条证据挂在一起没有任何入口。本轮补齐最小闭环：① **数据模型**——证据库侧新增 IndexedDB link 表（`evidence-vault-store` v1 → v2，`onupgradeneeded` 按 `objectStoreNames.contains` 守卫创建，**v1 老库平滑升级不丢数据**有专项测试；不扩展 vendored asset provider 契约）；同一对端点按稳定 id 去重，重复建立返回既有记录；500 条总量保险丝；证据删除联动清链，降级内存路径行为一致。② **入口 A（主）**——灵感资产卡展开「关联证据」：候选按同项目、共同标签与**知识链种子**（knowledge-store 节点上同时带 assetId 与 evidenceIds 的配对，最强信号）推导并标注理由，**勾选确认后点「建立关联（N）」才建立，绝不自动建边**；已关联列表可逐条解除；本视图的资产删除联动解除相关 link。③ **入口 B（只读反查）**——证据条目显示「被引用于」哪些灵感资产（标题由分区③传入，资产已删时如实标注「不在当前列表」）。④ **出口**——图谱画「资产 → 支撑证据」`supports` 边，随「持久沉淀」范围收敛；端点不可见或已删除时由图谱既有的末尾边过滤自然剔除（悬空兜底）。⑤ **Non-goal 落实**——不做自动建边、不碰 `vendor/`、首版不进备份（导出完成文案如实注明）。测试 236 → **242 项**（新增 6：link 身份 / 候选推导 / v1→v2 升级 / 去重与联动清链 / 图谱出口 / 接线断言）。
@@ -192,4 +204,3 @@
 - 工作台左列（资源列表）未做 sticky：右列详情约 1044px，左列仅 415px 且随页面滚走，滚到详情底部出口按钮时列表已滑出视口（F2 期间观察，非本次改造引入）。
 - profile 侧的环境残留（与插件无关，R1 期间发现）：`remove` 不清理 `link:` 依赖的 `node_modules` 符号链接，卸载后 `require('dsh-research-kit')` 仍可解析（插件树由 `bundles` 驱动，残留链接不会被加载，影响为低）。
 - 深色主题与窄屏已实现但未经真机截图核验；收藏、历史与个人工作流属 Phase 2。
-

@@ -132,7 +132,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball（离线 / 审计）**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 ```
 
 > 构建产物 `ui/client.js`、`ui/catalog-data.json` 与 `ui/promptkit.js` 已提交到仓库——克隆后即可安装，无需本地构建。
@@ -226,7 +226,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.1.0.tgz
 
 ## 兼容性与状态
 
-当前版本 `0.1.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
+当前版本 `0.2.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
 已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、362 项回归测试（46 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
 
