@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
 // 端到端研究旅程：启动 run → 状态总览 → 检索 → 保存 → 盘点 → 审阅 → 交接。
 // 与 mcp-smoke.test.mjs 相同的沙箱模式：HOME 重定向，避免污染真实 ~/.dsh-research-kit。
@@ -21,7 +22,8 @@ test.before(async () => {
     cwd: path.resolve(import.meta.dirname, '..'),
     env: { ...process.env, HOME: home, USERPROFILE: home, NODE_OPTIONS: '' },
   })
-  client = new Client({ name: 'pipeline-e2e', version: '0.1.0' })
+  client = new Client({ name: 'pipeline-e2e', version: '0.1.0' }, { capabilities: { elicitation: { form: {} } } })
+  client.setRequestHandler(ElicitRequestSchema, async () => ({ action: 'accept', content: { confirm: true } }))
   await client.connect(transport)
 })
 

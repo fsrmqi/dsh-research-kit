@@ -44,6 +44,19 @@ async function searchOpenAlex(query, limit = 10, { includeReferences = false } =
   return (data.results || []).map(work => normalizeWork(work, { includeReferences }))
 }
 
+async function mapWithConcurrency(items, limit, run) {
+  const results = new Array(items.length)
+  let cursor = 0
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await run(items[index], index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
 async function fetchMetadata({ dois, query, limit, project, save_to_evidence, include_references }) {
   if (query) {
     const results = await searchOpenAlex(query, limit || 10, { includeReferences: include_references })
@@ -52,15 +65,16 @@ async function fetchMetadata({ dois, query, limit, project, save_to_evidence, in
   if (!Array.isArray(dois) || !dois.length) {
     throw new Error('必须提供 dois 数组或 query 搜索词。')
   }
-  const results = []
-  const errors = []
-  for (const doi of dois.slice(0, 20)) {
+  const selectedDois = dois.slice(0, 20)
+  const outcomes = await mapWithConcurrency(selectedDois, 4, async doi => {
     try {
-      results.push(await fetchOpenAlexWork(doi, { includeReferences: include_references }))
+      return { ok: true, value: await fetchOpenAlexWork(doi, { includeReferences: include_references }) }
     } catch (e) {
-      errors.push({ doi, error: e.message })
+      return { ok: false, doi, error: e.message }
     }
-  }
+  })
+  const results = outcomes.filter(item => item.ok).map(item => item.value)
+  const errors = outcomes.filter(item => !item.ok).map(({ doi, error }) => ({ doi, error }))
   if (save_to_evidence) {
     const saved = []
     for (const work of results) {

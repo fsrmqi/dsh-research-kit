@@ -71,6 +71,7 @@ async function fetchWithRetry(url, {
   timeoutMs = REQUEST_TIMEOUT_MS,
   retries = MAX_RETRIES,
   fetchImpl = fetch,
+  headers = {},
 } = {}) {
   const key = circuitKey(url)
   assertCircuitClosed(key)
@@ -80,7 +81,7 @@ async function fetchWithRetry(url, {
     let response
     try {
       response = await fetchImpl(url, {
-        headers: { Accept: accept, 'User-Agent': USER_AGENT },
+        headers: { Accept: accept, 'User-Agent': USER_AGENT, ...headers },
         signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (error) {

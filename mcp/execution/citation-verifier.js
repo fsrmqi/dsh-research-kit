@@ -26,6 +26,10 @@ function detectIdentifierType(raw) {
   return null
 }
 
+function pubmedApiKey(env = process.env) {
+  return String(env.DSH_RESEARCH_KIT_SOURCE_PUBMED_API_KEY || env.PUBMED_API_KEY || '').trim()
+}
+
 async function fetchCrossref(doi) {
   const data = await fetchJsonWithRetry(crossrefUrl(`https://api.crossref.org/works/${encodeURIComponent(doi)}`))
   const item = data.message
@@ -43,7 +47,8 @@ async function fetchCrossref(doi) {
 }
 
 async function fetchPubmed(pmid) {
-  const data = await fetchJsonWithRetry(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`)
+  const apiKey = pubmedApiKey()
+  const data = await fetchJsonWithRetry(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json${apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : ''}`)
   const item = data.result?.[pmid]
   if (!item) throw new Error('PubMed 未返回该 PMID 的记录。')
   return {

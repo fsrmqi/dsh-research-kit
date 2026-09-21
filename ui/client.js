@@ -8285,8 +8285,8 @@ window.__ModuleLoader__.load({
         name: 'research_evidence_list',
         category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '检索证据',
-        summaryZh: '检索已保存证据',
-        example: "{ project: 'demo' }",
+        summaryZh: '检索已保存证据；默认摘要输出，支持分页与字段过滤',
+        example: "{ project: 'demo', offset: 0, limit: 50, mode: 'summary' }",
         artifactKind: '',
       },
       {
@@ -8301,8 +8301,8 @@ window.__ModuleLoader__.load({
         name: 'research_evidence_review',
         category: 'evidence', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '证据盘点',
-        summaryZh: '默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别',
-        example: "{ project: 'demo', run_id: 'run-1a2b3c' }",
+        summaryZh: '默认证据盘点入口：只读汇总、建议分级、可追溯性风险识别；默认摘要输出并支持分页',
+        example: "{ project: 'demo', run_id: 'run-1a2b3c', offset: 0, limit: 100, mode: 'summary' }",
         artifactKind: 'evidence-report',
       },
       {

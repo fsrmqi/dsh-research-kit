@@ -93,20 +93,26 @@ function summarizeResult(result) {
   }
 }
 
-async function readCallLogs({ limit = 50, tool, since, runId } = {}) {
-  if (!existsSync(LOG_FILE)) return []
+async function parseLogRecords(file) {
+  if (!existsSync(file)) return []
   try {
-    const raw = await readFile(LOG_FILE, 'utf8')
-    let records = raw.trim().split('\n').filter(Boolean).map(line => {
+    const raw = await readFile(file, 'utf8')
+    return raw.trim().split('\n').filter(Boolean).map(line => {
       try { return JSON.parse(line) } catch { return null }
     }).filter(Boolean)
-    if (tool) records = records.filter(record => record.tool === tool)
-    if (since) records = records.filter(record => record.at > since)
-    if (runId) records = records.filter(record => record.run_id === runId)
-    return records.slice(-Math.min(limit, 200)).reverse()
   } catch {
     return []
   }
+}
+
+async function readCallLogs({ limit = 50, tool, since, runId } = {}) {
+  const rotated = await parseLogRecords(ROTATED_FILE)
+  const current = await parseLogRecords(LOG_FILE)
+  let records = [...rotated, ...current]
+  if (tool) records = records.filter(record => record.tool === tool)
+  if (since) records = records.filter(record => record.at > since)
+  if (runId) records = records.filter(record => record.run_id === runId)
+  return records.slice(-Math.min(limit, 200)).reverse()
 }
 
 export { logCall, readCallLogs }

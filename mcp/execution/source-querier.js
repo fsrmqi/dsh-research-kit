@@ -4,9 +4,43 @@ const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
 const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX_REQUESTS = 12
 const inFlightQueries = new Map()
 const rateBuckets = new Map()
+
+const SOURCE_ENV_KEYS = {
+  crossref: 'CROSSREF',
+  openalex: 'OPENALEX',
+  'semantic-scholar': 'SEMANTIC_SCHOLAR',
+  'europe-pmc': 'EUROPE_PMC',
+  arxiv: 'ARXIV',
+  clinicaltrials: 'CLINICALTRIALS',
+}
+
+function positiveInt(value, fallback, max = 120) {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? Math.min(Math.floor(number), max) : fallback
+}
+
+function sourceSettings(sourceId, env = process.env) {
+  const envKey = SOURCE_ENV_KEYS[sourceId] || sourceId.replaceAll('-', '_').toUpperCase()
+  const timeoutMs = positiveInt(
+    env[`DSH_RESEARCH_KIT_SOURCE_${envKey}_TIMEOUT_MS`] || env.DSH_RESEARCH_KIT_SOURCE_TIMEOUT_MS,
+    15_000,
+    60_000,
+  )
+  const rateLimit = positiveInt(
+    env[`DSH_RESEARCH_KIT_SOURCE_${envKey}_RATE_LIMIT`] || env.DSH_RESEARCH_KIT_SOURCE_RATE_LIMIT,
+    12,
+    120,
+  )
+  const apiKey = String(
+    env[`DSH_RESEARCH_KIT_SOURCE_${envKey}_API_KEY`]
+    || env[`${envKey}_API_KEY`]
+    || (envKey === 'EUROPE_PMC' ? env.PUBMED_API_KEY : '')
+    || ''
+  ).trim()
+  return { env_key: envKey, timeout_ms: timeoutMs, rate_limit: rateLimit, api_key: apiKey }
+}
 
 function cacheKey(dbId, query, limit) { return `${dbId}::${query.trim()}::${limit}` }
 function cacheGet(key) {
@@ -28,10 +62,10 @@ function makeSource(id, title, url, meta = '', summary = '') {
   return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) }
 }
 
-function rateLimitExceeded(sourceId) {
+function rateLimitExceeded(sourceId, rateLimit) {
   const now = Date.now()
   const bucket = (rateBuckets.get(sourceId) || []).filter(at => now - at < RATE_LIMIT_WINDOW_MS)
-  if (bucket.length >= RATE_LIMIT_MAX_REQUESTS) {
+  if (bucket.length >= rateLimit) {
     rateBuckets.set(sourceId, bucket)
     return true
   }
@@ -39,6 +73,17 @@ function rateLimitExceeded(sourceId) {
   rateBuckets.set(sourceId, bucket)
   while (rateBuckets.size > 100) rateBuckets.delete(rateBuckets.keys().next().value)
   return false
+}
+
+function authenticatedUrl(url, adapter, settings) {
+  if (!settings.api_key || !adapter.auth_query) return url
+  const parsed = new URL(url)
+  parsed.searchParams.set(adapter.auth_query, settings.api_key)
+  return parsed.toString()
+}
+
+function sourceHeaders(adapter, settings) {
+  return settings.api_key && adapter.auth_header ? { [adapter.auth_header]: settings.api_key } : {}
 }
 
 const ADAPTERS = {
@@ -51,6 +96,7 @@ const ADAPTERS = {
     )),
   },
   openalex: {
+    auth_query: 'api_key',
     url: (q, n) => `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=${n}`,
     parse: data => (data.results || []).map(item => makeSource(
       item.id, item.title, item.doi || item.id,
@@ -58,6 +104,7 @@ const ADAPTERS = {
     )),
   },
   'semantic-scholar': {
+    auth_header: 'x-api-key',
     url: (q, n) => `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=${n}&fields=title,year,authors,venue,abstract,url,citationCount,externalIds`,
     parse: data => (data.data || []).map(item => makeSource(
       item.paperId || item.externalIds?.DOI, item.title,
@@ -67,6 +114,7 @@ const ADAPTERS = {
     )),
   },
   'europe-pmc': {
+    auth_query: 'apiKey',
     url: (q, n) => `https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&pageSize=${n}&query=${encodeURIComponent(q)}`,
     parse: data => (data.resultList?.result || []).map(item => makeSource(
       item.pmid || item.id, item.title,
@@ -132,17 +180,18 @@ async function querySource(sourceId, query, limit = 5) {
     return { ...result, shared_request: true }
   }
 
-  if (rateLimitExceeded(sourceId)) {
-    const error = new Error(`数据源 "${sourceId}" 查询频率超出本地预算（每分钟 ${RATE_LIMIT_MAX_REQUESTS} 次）。请稍后重试或改用缓存结果。`)
+  const settings = sourceSettings(sourceId)
+  if (rateLimitExceeded(sourceId, settings.rate_limit)) {
+    const error = new Error(`数据源 "${sourceId}" 查询频率超出本地预算（每分钟 ${settings.rate_limit} 次）。请稍后重试或改用缓存结果。`)
     error.code = 'RATE_LIMITED'
     throw error
   }
 
   const request = (async () => {
-    const url = adapter.url(normalizedQuery, normalizedLimit)
+    const url = authenticatedUrl(adapter.url(normalizedQuery, normalizedLimit), adapter, settings)
     const body = adapter.isXml
-      ? await fetchTextWithRetry(url, { accept: 'application/xml' })
-      : await fetchJsonWithRetry(url)
+      ? await fetchTextWithRetry(url, { accept: 'application/xml', timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings) })
+      : await fetchJsonWithRetry(url, { timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings) })
     const sources = adapter.parse(body)
     const result = {
       sources,
@@ -163,7 +212,16 @@ async function querySource(sourceId, query, limit = 5) {
 }
 
 function listAvailableSources() {
-  return Object.keys(ADAPTERS).map(id => ({ id, availability: AVAILABILITY_MAP[id] || 'unknown' }))
+  return Object.keys(ADAPTERS).map(id => {
+    const settings = sourceSettings(id)
+    return {
+      id,
+      availability: AVAILABILITY_MAP[id] || 'unknown',
+      timeout_ms: settings.timeout_ms,
+      rate_limit_per_minute: settings.rate_limit,
+      api_key_configured: Boolean(settings.api_key),
+    }
+  })
 }
 
-export { querySource, listAvailableSources }
+export { querySource, listAvailableSources, sourceSettings }

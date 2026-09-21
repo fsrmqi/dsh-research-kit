@@ -30,6 +30,42 @@ function sourceIdentity(source) {
   return `title:${String(source?.title || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)}`
 }
 
+const EVIDENCE_FIELDS = [
+  'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'grade',
+  'saved_at', 'run_id', 'note', 'project', 'source', 'linked_assets',
+  'graded_by', 'graded_at',
+]
+const INVENTORY_FIELDS = [
+  'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'stored_grade',
+  'suggested_grade', 'suggested_grade_label', 'confidence', 'reasoning', 'saved_at',
+]
+
+function projectFields(item, fields) {
+  return Object.fromEntries(fields.map(field => [field, item[field]]))
+}
+
+function evidenceProjection(entry, { mode, fields } = {}) {
+  if (Array.isArray(fields) && fields.length) return projectFields(entry, fields)
+  if (mode === 'full') return entry
+  const {
+    id, title, identifier_type, identifier, url, status, grade, saved_at, run_id,
+  } = entry
+  return { id, title, identifier_type, identifier, url, status, grade, saved_at, run_id }
+}
+
+function inventoryProjection(entry, { mode, fields } = {}) {
+  if (Array.isArray(fields) && fields.length) return projectFields(entry, fields)
+  if (mode === 'full') return entry
+  const {
+    id, title, identifier_type, identifier, url, status, stored_grade,
+    suggested_grade, suggested_grade_label,
+  } = entry
+  return {
+    id, title, identifier_type, identifier, url, status, stored_grade,
+    suggested_grade, suggested_grade_label,
+  }
+}
+
 function mergeLiteratureResults(results) {
   const merged = new Map()
   for (const { sourceId, result } of results) {
@@ -384,11 +420,19 @@ const tools = [
       grade: z.enum(['empirical', 'inference', 'missing', 'ungraded']).optional().describe('Filter by evidence grade'),
       run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Filter evidence linked to one research run.'),
       limit: z.number().int().min(1).max(200).default(50).describe('Max results'),
+      offset: z.number().int().min(0).max(100_000).optional().default(0).describe('Zero-based page offset, sorted by newest evidence first'),
+      mode: z.enum(['summary', 'full']).optional().default('summary').describe('summary keeps responses compact; full returns every stored field'),
+      fields: z.array(z.enum(EVIDENCE_FIELDS)).max(EVIDENCE_FIELDS.length).optional().describe('Return only selected fields; overrides mode'),
     },
-    async execute({ project, identifier_type, grade, run_id, limit }) {
+    async execute({ project, identifier_type, grade, run_id, limit, offset, mode, fields }) {
       try {
-        const result = await listEvidence({ project, identifier_type, grade, run_id, limit })
-        return wrap(result, { source: 'evidence-store', confidence: 'verified' })
+        const result = await listEvidence({ project, identifier_type, grade, run_id, limit, offset })
+        return wrap({
+          ...result,
+          entries: result.entries.map(entry => evidenceProjection(entry, { mode, fields })),
+          output_mode: Array.isArray(fields) && fields.length ? 'fields' : mode,
+          ...(Array.isArray(fields) && fields.length ? { fields } : {}),
+        }, { source: 'evidence-store', confidence: 'verified' })
       } catch (e) {
         return err(`检索失败：${e.message}`)
       }
@@ -432,18 +476,31 @@ const tools = [
       project: z.string().optional().default('default').describe('Project name to review'),
       run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to review only evidence linked to that run.'),
       limit: z.number().int().min(1).max(200).optional().default(100).describe('Maximum evidence entries to include in the review'),
+      offset: z.number().int().min(0).max(100_000).optional().default(0).describe('Zero-based page offset, sorted by newest evidence first'),
+      mode: z.enum(['summary', 'full']).optional().default('summary').describe('summary keeps responses compact; full includes grading reasoning and timestamps'),
+      fields: z.array(z.enum(INVENTORY_FIELDS)).max(INVENTORY_FIELDS.length).optional().describe('Return only selected fields; overrides mode'),
     },
-    async execute({ project, run_id, limit }) {
+    async execute({ project, run_id, limit, offset, mode, fields }) {
       try {
-        const inventory = await inventoryEvidence({ project, run_id, limit })
+        const inventory = await inventoryEvidence({ project, run_id, limit, offset })
         const { entries, summary, missing, unverified } = inventory
         return contract({
           project: inventory.project,
-          entries,
+          entries: entries.map(entry => inventoryProjection(entry, { mode, fields })),
+          pagination: {
+            offset: inventory.offset,
+            limit: inventory.limit,
+            returned: inventory.returned,
+            total: inventory.total,
+            has_more: inventory.has_more,
+          },
+          output_mode: Array.isArray(fields) && fields.length ? 'fields' : mode,
+          ...(Array.isArray(fields) && fields.length ? { fields } : {}),
           next_actions: [
             ...(missing.length ? [`补齐 ${missing.length} 条缺少稳定标识符或链接的证据来源。`] : []),
             ...(unverified.length ? [`人工核验 ${unverified.length} 条尚未核验的证据；自动建议不等同于确认。`] : []),
             ...(!entries.length ? ['当前范围没有证据条目；先使用 research_literature_search 或 research_evidence_save 添加可追溯来源。'] : []),
+            ...(inventory.has_more ? [`还有 ${inventory.total - (inventory.offset + inventory.returned)} 条未显示；用 offset=${inventory.offset + inventory.returned} 继续盘点。`] : []),
             ...(unverified.length ? ['如需按建议分级写回证据库，使用 research_evidence_grade_apply（preview=true 预览，显式确认后应用）。'] : []),
           ],
         }, {

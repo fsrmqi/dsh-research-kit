@@ -249,7 +249,7 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
   })
 }
 
-async function listEvidence({ project, identifier_type, grade, run_id, limit } = {}) {
+async function listEvidence({ project, identifier_type, grade, run_id, limit, offset } = {}) {
   const projectName = safeProjectName(project)
   let entries = await readProjectEntries(projectName)
   if (identifier_type) entries = entries.filter(entry => entry.identifier_type === identifier_type)
@@ -258,7 +258,17 @@ async function listEvidence({ project, identifier_type, grade, run_id, limit } =
   // 按 saved_at 倒序（最新在前），再取前 N 条，与兄弟读取方一致
   const sorted = [...entries].sort((a, b) => new Date(b.saved_at || '') - new Date(a.saved_at || ''))
   const max = Math.max(1, Math.min(Number(limit) || 50, 200))
-  return { entries: sorted.slice(0, max), total: entries.length, project: projectName }
+  const pageOffset = Math.max(0, Number(offset) || 0)
+  const selected = sorted.slice(pageOffset, pageOffset + max)
+  return {
+    entries: selected,
+    total: entries.length,
+    returned: selected.length,
+    offset: pageOffset,
+    limit: max,
+    has_more: pageOffset + selected.length < entries.length,
+    project: projectName,
+  }
 }
 
 async function linkEvidence(evidenceId, assetId, project) {

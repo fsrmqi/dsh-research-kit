@@ -7,12 +7,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 
 // MCP 工具会往 DSH_RESEARCH_KIT_HOME 写证据库与调用日志，测试必须落到沙箱目录，
 // 否则会污染用户真实数据（还会触发日志轮转，把真实历史转走）。
 let home
 let client
 let transport
+let autoConfirmWrites = true
 
 test.before(async () => {
   home = await mkdtemp(path.join(os.tmpdir(), 'dsh-mcp-smoke-'))
@@ -22,7 +24,13 @@ test.before(async () => {
     cwd: path.resolve(import.meta.dirname, '..'),
     env: { ...process.env, HOME: home, USERPROFILE: home, DSH_RESEARCH_KIT_HOME: path.join(home, 'data'), NODE_OPTIONS: '' },
   })
-  client = new Client({ name: 'smoke-test', version: '0.1.0' })
+  client = new Client({ name: 'smoke-test', version: '0.1.0' }, { capabilities: { elicitation: { form: {} } } })
+  client.setRequestHandler(ElicitRequestSchema, async request => {
+    assert.match(request.params.message, /写入类 MCP 工具/)
+    return autoConfirmWrites
+      ? { action: 'accept', content: { confirm: true } }
+      : { action: 'decline' }
+  })
   await client.connect(transport)
 })
 
@@ -64,6 +72,20 @@ test('MCP 边界：结构化业务错误必须带 isError，且输出保持紧�
   assert.equal(parsed.error, true)
   assert.equal(parsed.code, 'TOOL_ERROR')
   assert.equal(result.content[0].text, JSON.stringify(parsed))
+})
+
+test('MCP 边界：写入工具默认需要 MCP elicitation 人工确认', async () => {
+  autoConfirmWrites = false
+  const result = await client.callTool({
+    name: 'research_evidence_save',
+    arguments: { identifier_type: 'doi', identifier: '10.9999/not-confirmed', title: 'Should not save' },
+  })
+  assert.equal(result.isError, true)
+  const parsed = JSON.parse(result.content[0].text)
+  assert.equal(parsed.code, 'CONFIRMATION_DECLINED', parsed.message)
+  const listed = await callTool('research_evidence_list', { project: 'default', identifier_type: 'doi' })
+  assert.ok(!listed.data.entries.some(entry => entry.identifier === '10.9999/not-confirmed'))
+  autoConfirmWrites = true
 })
 
 test('MCP 边界：research_catalog_search 命中中文查询，且 schema 默认值真的生效', async () => {
@@ -164,6 +186,29 @@ test('MCP 边界：research_evidence_save 后能被 research_evidence_list 读�
   assert.equal(listed.data.entries.length, 1)
   assert.equal(listed.data.entries[0].identifier, '10.9999/smoke-test')
   assert.ok(existsSync(path.join(home, 'data', 'evidence', 'mcp-test', 'entries.jsonl')), 'DSH_RESEARCH_KIT_HOME 应重定向证据库')
+})
+
+test('MCP 边界：证据列表与盘点默认摘要并支持分页和字段过滤', async () => {
+  await callTool('research_evidence_save', { identifier_type: 'doi', identifier: '10.9999/page-a', title: 'Page A', project: 'mcp-pagination' })
+  await callTool('research_evidence_save', { identifier_type: 'doi', identifier: '10.9999/page-b', title: 'Page B', project: 'mcp-pagination' })
+
+  const page = await callTool('research_evidence_list', { project: 'mcp-pagination', limit: 1, offset: 0 })
+  assert.equal(page.data.output_mode, 'summary')
+  assert.equal(page.data.entries.length, 1)
+  assert.equal(page.data.total, 2)
+  assert.equal(page.data.has_more, true)
+  assert.ok(!('note' in page.data.entries[0]))
+
+  const projected = await callTool('research_evidence_list', {
+    project: 'mcp-pagination', fields: ['id', 'title'],
+  })
+  assert.deepEqual(Object.keys(projected.data.entries[0]), ['id', 'title'])
+
+  const reviewed = await callTool('research_evidence_review', { project: 'mcp-pagination', limit: 1 })
+  assert.equal(reviewed.data.output_mode, 'summary')
+  assert.equal(reviewed.data.pagination.has_more, true)
+  assert.ok(!('reasoning' in reviewed.data.entries[0]))
+  assert.ok(reviewed.data.next_actions.some(action => action.includes('offset=')))
 })
 
 test('MCP 边界：passport、checkpoint 与证据可复用同一研究运行 ID', async () => {

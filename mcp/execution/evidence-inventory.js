@@ -13,8 +13,8 @@ function countBy(values) {
 }
 
 // 只读盘点：不改写证据记录；建议分级来自规则引擎，返回 entries 与 summary 供调用方组装。
-async function inventoryEvidence({ project, run_id, limit } = {}) {
-  const inventory = await listEvidence({ project, run_id, limit })
+async function inventoryEvidence({ project, run_id, limit, offset } = {}) {
+  const inventory = await listEvidence({ project, run_id, limit, offset })
   const entries = inventory.entries.map(entry => {
     const assessment = gradeEvidence(entry)
     return {
@@ -37,6 +37,10 @@ async function inventoryEvidence({ project, run_id, limit } = {}) {
   return {
     project: inventory.project,
     total: inventory.total,
+    returned: inventory.returned,
+    offset: inventory.offset,
+    limit: inventory.limit,
+    has_more: inventory.has_more,
     entries,
     summary: {
       total: inventory.total,

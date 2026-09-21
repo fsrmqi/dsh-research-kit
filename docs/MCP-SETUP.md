@@ -33,6 +33,27 @@ node mcp/server.js
 |------|------|------|
 | `DSH_RESEARCH_KIT_HOME` | `~/.dsh-research-kit` | 证据库、护照、检查点与调用日志的数据根目录，可用于项目隔离或多实例并行 |
 | `DSH_RESEARCH_KIT_CONTACT_EMAIL` | 空 | 作为 User-Agent 联系方式，并附加到 Crossref 请求的 `mailto` 参数 |
+| `DSH_RESEARCH_KIT_CONFIRM_WRITES` | `required` | 设为 `disabled` 时跳过写入 elicitation；仅建议在宿主不支持 elicitation 的测试环境使用 |
+| `DSH_RESEARCH_KIT_CONFIRMATION_TOKEN` | 空 | 宿主不支持 elicitation 时的回落确认令牌；写入工具传相同 `confirmation_token` 才放行 |
+
+公开数据源还支持每源覆盖，`<SOURCE>` 可用 `CROSSREF`、`OPENALEX`、`SEMANTIC_SCHOLAR`、`EUROPE_PMC`、`ARXIV`、`CLINICALTRIALS`：
+
+| 变量 | 默认 |
+|------|------|
+| `DSH_RESEARCH_KIT_SOURCE_<SOURCE>_TIMEOUT_MS` | `15000`，最大 `60000` |
+| `DSH_RESEARCH_KIT_SOURCE_<SOURCE>_RATE_LIMIT` | `12`，最大 `120` |
+| `DSH_RESEARCH_KIT_SOURCE_<SOURCE>_API_KEY` | 空；也兼容 `SEMANTIC_SCHOLAR_API_KEY`、`PUBMED_API_KEY` 等常见变量名 |
+
+```bash
+DSH_RESEARCH_KIT_SOURCE_SEMANTIC_SCHOLAR_TIMEOUT_MS=8000 \
+DSH_RESEARCH_KIT_SOURCE_SEMANTIC_SCHOLAR_RATE_LIMIT=30 \
+DSH_RESEARCH_KIT_SOURCE_SEMANTIC_SCHOLAR_API_KEY=your-key \
+node mcp/server.js
+```
+
+## 写入确认
+
+`research_evidence_save`、`research_evidence_save_batch`、`research_run_start`、`research_run_export`、`research_evidence_link`、`research_evidence_grade_apply` 和 `research_run_checkpoint_approve` 默认都会触发 MCP form elicitation。宿主接受并勾选确认后工具才执行；取消时返回 `CONFIRMATION_DECLINED`。宿主不支持 elicitation 时，可配置确认令牌作为受控回落。
 
 ```bash
 DSH_RESEARCH_KIT_HOME=/path/to/data \
@@ -207,7 +228,7 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 **检索并保存文献**
 1. `research_literature_search` — 参数示例：`{ query: 'sleep deprivation memory', run_id: 'run-1a2b3c' }`
 2. `research_evidence_save_batch` — 参数示例：`{ entries: [{ identifier_type: 'doi', identifier: '10.1038/xyz', title: '候选一' }], project: 'demo', run_id: 'run-1a2b3c' }`
-3. `research_evidence_review` — 参数示例：`{ project: 'demo', run_id: 'run-1a2b3c' }`
+3. `research_evidence_review` — 参数示例：`{ project: 'demo', run_id: 'run-1a2b3c', offset: 0, limit: 100, mode: 'summary' }`
 
 **审阅研究草稿**
 1. `research_review_output` — 参数示例：`{ text: '<草稿全文，至少100字>', run_id: 'run-1a2b3c' }`
@@ -237,9 +258,9 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存（默认入口） |
 | `research_citation_verify` | 验证 DOI / PMID / arXiv 是否存在 + claim 支持 |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
-| `research_evidence_list` | 检索已保存证据 |
+| `research_evidence_list` | 检索已保存证据；默认摘要输出，支持分页与字段过滤 |
 | `research_evidence_grade` | 实证 / 推论 / 缺失三级分级 |
-| `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级与可追溯性风险识别（默认入口） |
+| `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级、可追溯性风险识别；默认摘要输出并支持分页（默认入口） |
 | `research_evidence_link` | 证据与资产互链 |
 | `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点（默认入口） |
 | `research_evidence_save_batch` | 默认批量保存入口：将检索结果中人工挑选的候选一次性显式保存（默认入口） |
