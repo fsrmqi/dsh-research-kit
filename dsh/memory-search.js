@@ -1,5 +1,6 @@
 export const MEMORY_SEARCH_PATH = '/dsh-research-kit/memory-search'
 export const DEFAULT_MEMORY_SERVER = 'memory-center'
+import { readConfigValue } from './config.js'
 // 返回文本上限：只取有界摘要供增强上下文与来源预览，不搬运全库。
 const MAX_TEXT_CHARS = 4000
 const EXEC_TIMEOUT_MS = 15_000
@@ -124,8 +125,7 @@ function parseServerOf(name) {
 // 返回 { ok, available, ... }：available=false 是「部署里没有可用的 Memory Center MCP」
 // 或参数无法可靠合成，属于如实降级而非错误；available=true 时 text/sources 供增强器
 // 预览与注入。安全边界：本路由只代为执行 `mcp__` 前缀的工具，绝不触碰原生工具。
-export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS } = {}) {
-  const requestTimeoutMs = Math.max(1, Number(timeoutMs) || EXEC_TIMEOUT_MS)
+export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS, config } = {}) {
   return {
     kind: 'exact', path: MEMORY_SEARCH_PATH,
     async handler(req, res) {
@@ -137,7 +137,9 @@ export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS }
       }
       const query = String(body.query || '').trim()
       const explicitTool = String(body.tool || '').trim()
-      const server = String(body.server || (explicitTool ? parseServerOf(explicitTool) || '' : '') || DEFAULT_MEMORY_SERVER)
+      const requestTimeoutMs = Math.max(1, Number(readConfigValue(config?.memoryTimeoutMs, readConfigValue(timeoutMs, EXEC_TIMEOUT_MS))) || EXEC_TIMEOUT_MS)
+      const configuredServer = readConfigValue(config?.memoryServer, DEFAULT_MEMORY_SERVER)
+      const server = String(body.server || (explicitTool ? parseServerOf(explicitTool) || '' : '') || configuredServer)
       const limit = Math.max(1, Math.min(Number(body.limit) || 8, 20))
       if (!query) return reply(res, 400, { ok: false, error: 'empty_query' })
       if (query.length > MAX_QUERY_CHARS) return reply(res, 400, { ok: false, error: 'query_too_long' })

@@ -3,6 +3,7 @@ import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
+import { ResearchPluginStatusSection } from '../src/plugin-status.js'
 
 export function researchKitApply(ctx) {
   // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
@@ -17,6 +18,12 @@ export function researchKitApply(ctx) {
     ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
   ]
   const disposers = [registerResearchSlots(ctx, components)]
+  // Plugins-page status section follows the Plugins page lifecycle; other
+  // subjects render null instead of making this row require plugin-manager.
+  disposers.push(ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
+    name: 'plugins.detail.section',
+    id: 'dsh-research-kit-status',
+  }, ResearchPluginStatusSection)))
   // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
   // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
   let active = true

@@ -5,6 +5,7 @@ import {
   Segmented, EmptyState, Spinner, Notice,
 } from './ui.js'
 import { createEvidenceVaultStore } from './evidence-vault-store.js'
+import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
@@ -445,7 +446,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
   // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
   const selectedEntries = React.useMemo(() => entries.filter(item => selectedIdSet.has(item.id)), [entries, selectedIdSet])
-  const canWrite = typeof inputActions?.setDraft === 'function'
+  const canWrite = canWriteDraft(inputActions)
   // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
   // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
   const writePlan = React.useMemo(() => planCitationWrite({ entries: selectedEntries, canWrite }), [selectedEntries, canWrite])
@@ -460,8 +461,9 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
     setSelectedIds([])
   }
   const writeSelected = () => {
-    if (writePlan.action === 'write') inputActions.setDraft(writePlan.text)
-    setNotice(writePlan.notice)
+    if (writePlan.action !== 'write') return setNotice(writePlan.notice)
+    const written = writeDraftText(inputActions, writePlan.text)
+    setNotice(written.ok ? writePlan.notice : '草稿已变化，未自动写入引用；请选择后重新写入。')
   }
 
   const createProject = () => {

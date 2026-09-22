@@ -377,15 +377,16 @@ test('4c 有选择时可写入，且文本含来源与核验边界', () => {
   for (const row of rows) assert.ok(plan.text.includes(row.url), `「${row.title}」的来源链接必须出现在引用块里`)
 })
 
-test('4c 写入契约：视图经由纯逻辑决策，且 setDraft 只在 action === write 时被调用', () => {
+test('4c 写入契约：视图经由纯逻辑决策，且草稿写入只在 action === write 时被调用', () => {
   // 纯逻辑测试只证明决策本身对，还要钉住视图真的走了这条决策——
   // 否则把守卫从视图里删掉，上面的测试仍会全绿（同「目录与实现双向契约」那一课的教训）。
   const view = readFileSync(new URL('../src/research-evidence-vault.js', import.meta.url), 'utf8')
   assert.match(view, /planCitationWrite\(\{\s*entries:\s*selectedEntries,\s*canWrite\s*\}\)/, '视图未把写入决策交给 planCitationWrite')
-  assert.match(view, /if \(writePlan\.action === 'write'\)\s*inputActions\.setDraft\(writePlan\.text\)/, "setDraft 未被 action === 'write' 守住")
+  assert.match(view, /if \(writePlan\.action !== 'write'\) return setNotice\(writePlan\.notice\)/, "写入未被 action === 'write' 守住")
+  assert.match(view, /const written = writeDraftText\(inputActions, writePlan\.text\)/, '写入未通过安全草稿助手')
   assert.match(view, /disabled:\s*!selectedEntries\.length \|\| !canWrite/, '写入按钮在未选择或宿主不支持时未禁用')
-  // 视图不得绕过决策内联调用宿主写入：全文件只允许一处 setDraft(。
-  assert.equal((view.match(/setDraft\(/g) || []).length, 1, '视图只应有一处 setDraft 调用，且受 action 守卫')
+  // 视图不得绕过决策内联调用宿主写入：全文件只允许一处安全草稿写入。
+  assert.equal((view.match(/writeDraftText\(/g) || []).length, 1, '视图只应有一处 writeDraftText 调用，且受 action 守卫')
 })
 
 test('4c 选择基准：勾选是跨筛选状态，改筛选不撤销已选择', () => {

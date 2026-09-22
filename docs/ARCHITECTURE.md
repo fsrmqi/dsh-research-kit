@@ -195,7 +195,7 @@ dsh-research-kit/
 │   ├── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
 │   └── lib/
 │       └── catalog-entries.mjs      # 分片与聚合入口的两路读取（目录校验与文档统计校验共用）
-├── test/                            # 367 项测试（46 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 377 项测试（47 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json

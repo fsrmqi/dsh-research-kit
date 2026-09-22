@@ -2755,6 +2755,37 @@ window.__ModuleLoader__.load({
     }
 
 
+    /** Helpers for DSH composer writes without losing concurrent user edits. */
+
+    /** Whether the host can insert text while preserving the rest of the draft. */
+    function supportsSafeInsert(inputActions) {
+      return typeof inputActions?.captureInsertion === 'function'
+        && typeof inputActions?.insertText === 'function'
+    }
+
+    /** Whether any composer write is possible. */
+    function canWriteDraft(inputActions) {
+      return supportsSafeInsert(inputActions) || typeof inputActions?.setDraft === 'function'
+    }
+
+    /**
+     * Insert at the captured caret when the host supports it; otherwise replace the
+     * whole draft. `stale` means the async result should not silently overwrite the
+     * user's newer draft.
+     */
+    function writeDraftText(inputActions, text, { mode = 'insert' } = {}) {
+      const value = String(text ?? '')
+      if (mode !== 'replace' && supportsSafeInsert(inputActions)) {
+        const inserted = inputActions.insertText(value, inputActions.captureInsertion())
+        if (inserted === true) return { ok: true, inserted: true }
+        if (inserted === false) return { ok: false, inserted: false, stale: true }
+      }
+      if (typeof inputActions?.setDraft !== 'function') return { ok: false }
+      inputActions.setDraft(value)
+      return { ok: true, inserted: false, fallback: mode !== 'replace' }
+    }
+
+
     // 宿主能力探测的浏览器端消费：拉取 Node half 的 /dsh-research-kit/host-capabilities，
     // 把探测结果汇总成一行事实摘要（装配了哪些服务、连了哪些 MCP 服务器）。
     //
@@ -4847,7 +4878,7 @@ window.__ModuleLoader__.load({
       // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
       // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
       const selectedEntries = React.useMemo(() => entries.filter(item => selectedIdSet.has(item.id)), [entries, selectedIdSet])
-      const canWrite = typeof inputActions?.setDraft === 'function'
+      const canWrite = canWriteDraft(inputActions)
       // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
       // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
       const writePlan = React.useMemo(() => planCitationWrite({ entries: selectedEntries, canWrite }), [selectedEntries, canWrite])
@@ -4862,8 +4893,9 @@ window.__ModuleLoader__.load({
         setSelectedIds([])
       }
       const writeSelected = () => {
-        if (writePlan.action === 'write') inputActions.setDraft(writePlan.text)
-        setNotice(writePlan.notice)
+        if (writePlan.action !== 'write') return setNotice(writePlan.notice)
+        const written = writeDraftText(inputActions, writePlan.text)
+        setNotice(written.ok ? writePlan.notice : '草稿已变化，未自动写入引用；请选择后重新写入。')
       }
 
       const createProject = () => {
@@ -5117,7 +5149,7 @@ window.__ModuleLoader__.load({
       const [savedKeys, setSavedKeys] = React.useState([])
       const requestRef = React.useRef(null)
       React.useEffect(() => () => requestRef.current?.abort(), [])
-      const canWrite = typeof inputActions?.setDraft === 'function'
+      const canWrite = canWriteDraft(inputActions)
       const canSubmit = canWrite && typeof inputActions?.submit === 'function'
       const agentTask = sources => {
         const sourceBlock = sources?.length
@@ -5151,8 +5183,10 @@ window.__ModuleLoader__.load({
       const writeAgentFallback = () => {
         const prompt = state.result?.prompt || agentTask()
         if (!prompt || !canWrite) return
-        inputActions.setDraft(prompt)
-        setState(current => ({ ...current, message: '已写入当前会话输入框；发送后由 Agent 使用可用工具继续查询。' }))
+        const written = writeDraftText(inputActions, prompt)
+        setState(current => ({ ...current, message: written.ok
+          ? (written.inserted ? '已插入当前会话输入框；发送后由 Agent 使用可用工具继续查询。' : '已写入当前会话输入框；发送后由 Agent 使用可用工具继续查询。')
+          : '草稿已变化，未自动写入；请复制提示词后手动粘贴。' }))
       }
       const runWithAgent = async sources => {
         if (!canSubmit) return setState(current => ({ ...current, message: '当前 DSH 会话未提供发送操作，无法直接调用 Agent。' }))
@@ -5166,8 +5200,10 @@ window.__ModuleLoader__.load({
         const sources = state.result?.sources || []
         if (!sources.length || !canWrite) return
         const text = [`以下是通过 ${database.name} 实际查询到的候选来源，请继续核验并据此回答：`, ...sources.map((item, index) => `${index + 1}. ${item.title}\n   ${item.url}${item.meta ? `\n   ${item.meta}` : ''}${item.summary ? `\n   ${item.summary}` : ''}`)].join('\n')
-        inputActions.setDraft(text)
-        setState(current => ({ ...current, message: '已将候选来源写入输入框；请检查后再发送。' }))
+        const written = writeDraftText(inputActions, text)
+        setState(current => ({ ...current, message: written.ok
+          ? (written.inserted ? '已将候选来源插入输入框；请检查后再发送。' : '已将候选来源写入输入框；请检查后再发送。')
+          : '草稿已变化，未自动写入；请复制来源后手动粘贴。' }))
       }
       const loading = state.status === 'loading'
       return h(Card, { style: { padding: 14, background: C.surfaceAlt, display: 'grid', gap: 12 } }, [
@@ -5871,8 +5907,9 @@ window.__ModuleLoader__.load({
       const useInConversation = async (item, inputActions) => {
         const draft = String(item.nextAction || item.body || '')
         if (!draft) return
-        if (typeof inputActions?.setDraft !== 'function') return setError('当前会话未提供输入框操作；可复制内容手动粘贴。')
-        inputActions.setDraft(draft)
+        if (!canWriteDraft(inputActions)) return setError('当前会话未提供输入框操作；可复制内容手动粘贴。')
+        const written = writeDraftText(inputActions, draft)
+        if (!written.ok) return setError('草稿在结果生成后已变化；请复制内容手动粘贴。')
         await assetProvider?.markUsed?.(item.id)
         setNotice(`已把「${item.title}」写入输入框，可编辑后发送。`)
       }
@@ -7889,7 +7926,7 @@ window.__ModuleLoader__.load({
       )
       const assembled = React.useMemo(() => composed ? scienceAssemble(composed.prompt) : '', [composed, sciencePreset])
       const finalPrompt = editedPrompt ?? assembled
-      const hasDraftAction = typeof inputActions?.setDraft === 'function'
+      const hasDraftAction = canWriteDraft(inputActions)
       const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
       const selectedKey = selected?.id || ''
       const requiredFields = workflow ? (workflow.placeholders || []).filter(field => field.required) : []
@@ -7941,8 +7978,8 @@ window.__ModuleLoader__.load({
       const writeTaskPlan = () => {
         if (!hasDraftAction || !workflow || !taskPlan) return
         evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
-        inputActions.setDraft(`请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
-        setNotice('研究与交付计划已写入输入框；确认后可继续执行。')
+        const written = writeDraftText(inputActions, `请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
+        setNotice(written.ok ? '研究与交付计划已写入输入框；确认后可继续执行。' : '草稿已变化，未自动写入计划；请稍后重试。')
       }
       const togglePlanStage = index => {
         if (!workflow || !activePlan) return
@@ -7984,8 +8021,10 @@ window.__ModuleLoader__.load({
         try {
           composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
           const run = recordUse('draft')
-          inputActions.setDraft(runPrompt(run, finalPrompt))
-          setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
+          const written = writeDraftText(inputActions, runPrompt(run, finalPrompt))
+          setNotice(written.ok
+            ? `${written.inserted ? '已插入' : '已写入'}当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`
+            : `草稿已变化，未自动写入提示词；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建。`)
         }
         catch (error) { setNotice(error.message) }
       }
@@ -8915,6 +8954,75 @@ window.__ModuleLoader__.load({
 
 
 
+    const SERVICES = [
+      ['web', 'Web'],
+      ['shell', 'Shell'],
+      ['fs', 'FS'],
+      ['llm', 'LLM'],
+    ]
+
+    function isResearchBundle(subject) {
+      return subject?.kind === 'bundle' && subject.pkg?.name === 'dsh-research-kit'
+    }
+
+    function directQueryCount() {
+      return catalog.filter(item => item.type === 'database' && item.availability === 'available-in-plugin').length
+    }
+
+    /** Plugins-page section for deployment facts; it never upgrades catalog claims. */
+    function ResearchPluginStatusSection({ subject }) {
+      const [state, setState] = React.useState({ status: 'loading', data: null, error: '' })
+      const [catalogVersion, setCatalogVersion] = React.useState(0)
+      React.useEffect(() => {
+        if (!isResearchBundle(subject)) return
+        let alive = true
+        setState({ status: 'loading', data: null, error: '' })
+        loadBrowserCatalog().then(() => { if (alive) setCatalogVersion(version => version + 1) }).catch(() => {})
+        fetch('/dsh-research-kit/host-capabilities', { headers: { accept: 'application/json' } })
+          .then(async response => {
+            const body = await response.json()
+            if (!response.ok || !body.ok) throw new Error(body.message || `HTTP ${response.status}`)
+            if (alive) setState({ status: 'ready', data: body.capabilities, error: '' })
+          })
+          .catch(error => { if (alive) setState({ status: 'error', data: null, error: error?.message || String(error) }) })
+        return () => { alive = false }
+      }, [subject?.pkg?.name, catalogVersion])
+      if (!isResearchBundle(subject)) return null
+      const capabilities = state.data
+      const mcpServers = capabilities?.mcpServers || []
+      return h('section', {
+        'aria-label': 'Research Kit 运行状态',
+        style: {
+          marginTop: 18, padding: '14px 16px', border: `1px solid ${C.line}`, borderRadius: 12,
+          background: C.surface, display: 'grid', gap: 10,
+        },
+      }, [
+        h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
+          h('strong', { key: 'title', style: { fontSize: 14 } }, '运行状态'),
+          h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '部署事实 · 不改变目录标注'),
+        ]),
+        state.status === 'loading' ? h('p', { key: 'loading', style: { margin: 0, color: C.muted, fontSize: 13 } }, '正在探测宿主能力……') : null,
+        state.status === 'error' ? h('p', { key: 'error', style: { margin: 0, color: C.amber, fontSize: 13 } }, `探测失败：${state.error}`) : null,
+        capabilities ? h('div', { key: 'services', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, SERVICES.map(([key, label]) => {
+          const available = capabilities.services?.[key] === true
+          return h('span', {
+            key,
+            style: {
+              padding: '3px 8px', borderRadius: 999, fontSize: 12, fontWeight: 650,
+              background: available ? C.tealTint : C.surfaceAlt, color: available ? C.teal : C.muted,
+            },
+          }, `${label} ${available ? '可用' : '未知'}`)
+        })) : null,
+        capabilities ? h('div', { key: 'rows', style: { display: 'grid', gap: 5, fontSize: 13, lineHeight: 1.5, color: C.muted } }, [
+          h('div', { key: 'direct' }, `插件直查适配器：${directQueryCount()} 个`),
+          h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.server).join('、') : '无'}`),
+          h('div', { key: 'tools' }, `工具注册表：${capabilities.toolProbeAvailable ? `${capabilities.toolCount} 个工具` : '不可读'}`),
+        ]) : null,
+      ])
+    }
+
+
+
 
     const POLL_INTERVAL_MS = 5_000
     const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
@@ -9302,6 +9410,12 @@ window.__ModuleLoader__.load({
         ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
       ]
       const disposers = [registerResearchSlots(ctx, components)]
+      // Plugins-page status section follows the Plugins page lifecycle; other
+      // subjects render null instead of making this row require plugin-manager.
+      disposers.push(ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
+        name: 'plugins.detail.section',
+        id: 'dsh-research-kit-status',
+      }, ResearchPluginStatusSection)))
       // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
       // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
       let active = true

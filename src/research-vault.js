@@ -7,6 +7,7 @@ import {
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'
 import { deriveAssetEvidenceCandidates } from './lib/asset-evidence-links.js'
+import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import {
   EvidenceVaultPane, evidenceVaultStore, subscribeEvidenceVault,
   linkAssetToEvidence, removeAssetEvidenceLinkEntry,
@@ -226,8 +227,9 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   const useInConversation = async (item, inputActions) => {
     const draft = String(item.nextAction || item.body || '')
     if (!draft) return
-    if (typeof inputActions?.setDraft !== 'function') return setError('当前会话未提供输入框操作；可复制内容手动粘贴。')
-    inputActions.setDraft(draft)
+    if (!canWriteDraft(inputActions)) return setError('当前会话未提供输入框操作；可复制内容手动粘贴。')
+    const written = writeDraftText(inputActions, draft)
+    if (!written.ok) return setError('草稿在结果生成后已变化；请复制内容手动粘贴。')
     await assetProvider?.markUsed?.(item.id)
     setNotice(`已把「${item.title}」写入输入框，可编辑后发送。`)
   }

@@ -3,6 +3,7 @@ import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
 import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
+import { Config } from './dsh/config.js'
 import { evidenceSyncRoute } from './dsh/evidence-sync.js'
 import { agentActivityRoute } from './dsh/agent-activity.js'
 import { catalogDataRoute } from './dsh/catalog-data.js'
@@ -12,6 +13,7 @@ import { promptKitClientRoute } from './dsh/promptkit-client.js'
 // 科研插件的唯一 Node half。公开数据源查询只经 DSH 的受控 web 服务出网；
 // 语义增强复用当前会话已建立的路由（sessionId → provider/model），浏览器端永不持有 API Key。
 export const inject = ['webServer', 'web', 'llm', 'sessions']
+export { Config }
 
 // 会话模型路由的惰性兜底：agent/created 只在插件已加载后触发，
 // 若插件在会话创建之后才启用（或热重载），该会话永远不会补发事件，增强会误报
@@ -49,12 +51,12 @@ function createSessionRoutes(sessions) {
   }
 }
 
-export function apply(ctx) {
+export function apply(ctx, config = Config({})) {
   const logger = ctx.logger?.('dsh-research-kit')
   ctx.effect(() => ctx.webServer.register(catalogDataRoute()), 'dsh-research-kit catalog data')
   ctx.effect(() => ctx.webServer.register(archifyTemplateRoute()), 'dsh-research-kit archify template')
   ctx.effect(() => ctx.webServer.register(promptKitClientRoute()), 'dsh-research-kit promptkit client')
-  ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases: resources, logger })), 'dsh-research-kit database query')
+  ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases: resources, logger, config })), 'dsh-research-kit database query')
   // 会话模型路由：agent/created 记录、agent/disposed 删除，只存 provider/model 标识，不存任何 Key。
   const routes = createSessionRoutes(ctx.sessions)
   ctx.effect(() => {
@@ -75,7 +77,7 @@ export function apply(ctx) {
   })), 'dsh-research-kit host capabilities')
   // Memory Center 项目记忆检索（ROADMAP §5）：只代为执行 mcp__ 前缀的检索工具，
   // 结果交浏览器端预览；是否进入 Prompt 由用户在增强面板显式勾选（禁止静默注入）。
-  ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger })), 'dsh-research-kit memory search')
+  ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger, config })), 'dsh-research-kit memory search')
   // 证据同步（Agent 化改造 §6.3）：文件系统为单一真源，IndexedDB 仅作 UI 缓存层。
   ctx.effect(() => ctx.webServer.register(evidenceSyncRoute({ logger })), 'dsh-research-kit evidence sync')
   // Agent 活动面板数据源：MCP 调用日志 + checkpoint 状态（Agent 化改造 §8.1）。

@@ -1,4 +1,5 @@
 export const DATABASE_QUERY_PATH = '/dsh-research-kit/query'
+import { readConfigValue } from './config.js'
 
 const MAX_QUERY_LENGTH = 300
 const MAX_LIMIT = 10
@@ -59,11 +60,11 @@ function evictOldestRateBucket() {
 
 // 每 IP 滑动计数：窗口内达到上限时拒绝本次查询。桶数也有硬上限，
 // 防止短时间的大量新客户端标识把进程内 Map 撑大。
-function rateLimitExceeded(clientKey) {
+function rateLimitExceeded(clientKey, maxRequests = RATE_LIMIT_MAX_REQUESTS) {
   const now = Date.now()
   pruneRateBuckets(now)
   const bucket = rateBuckets.get(clientKey) || []
-  if (bucket.length >= RATE_LIMIT_MAX_REQUESTS) { rateBuckets.set(clientKey, bucket); return true }
+  if (bucket.length >= maxRequests) { rateBuckets.set(clientKey, bucket); return true }
   while (!rateBuckets.has(clientKey) && rateBuckets.size >= MAX_RATE_BUCKETS) evictOldestRateBucket()
   bucket.push(now)
   rateBuckets.set(clientKey, bucket)
@@ -163,7 +164,7 @@ function shouldFallbackToAgent(error) {
   return /HTTP (401|403|408|429|500|502|503|504)|WEB_PROVIDER_|查询超时/.test(message)
 }
 
-export async function runDatabaseQuery({ web, database, query, limit = 5, signal }) {
+export async function runDatabaseQuery({ web, database, query, limit = 5, signal, allowAgentFallback = true }) {
   const normalizedQuery = normalizeQueryKey(query)
   if (!normalizedQuery) throw new Error('请输入检索词。')
   if (normalizedQuery.length > MAX_QUERY_LENGTH) throw new Error(`检索词不能超过 ${MAX_QUERY_LENGTH} 个字符。`)
@@ -178,9 +179,10 @@ export async function runDatabaseQuery({ web, database, query, limit = 5, signal
       return { mode: 'direct', sources: adapter.parse(data, size).slice(0, size), query: normalizedQuery }
     }
   } catch (error) {
-    if (shouldFallbackToAgent(error)) return agentFallback(database, normalizedQuery, `插件直查暂不可用（${String(error?.message || error)}）；可交给当前 Agent 使用 Web 或 MCP 继续查询。`)
+    if (shouldFallbackToAgent(error) && allowAgentFallback) return agentFallback(database, normalizedQuery, `插件直查暂不可用（${String(error?.message || error)}）；可交给当前 Agent 使用 Web 或 MCP 继续查询。`)
     throw error
   }
+  if (!allowAgentFallback) throw new Error('Agent 回退已关闭。')
   return agentFallback(database, normalizedQuery, database.accessNote || '该来源需要当前会话的 MCP、授权或专用适配器。')
 }
 
@@ -189,7 +191,7 @@ function reply(res, status, body) {
   res.end(JSON.stringify(body))
 }
 
-export function databaseQueryRoute({ web, databases, logger }) {
+export function databaseQueryRoute({ web, databases, logger, config }) {
   const byId = new Map(databases.map(item => [item.id, item]))
   return {
     kind: 'exact', path: DATABASE_QUERY_PATH,
@@ -205,18 +207,21 @@ export function databaseQueryRoute({ web, databases, logger }) {
       const key = cacheKey(database.id, query, limit)
       const cached = cacheGet(key)
       if (cached) return reply(res, 200, { ...cached, cached: true })
-      if (rateLimitExceeded(clientKey)) {
+      const maxRequests = Math.max(1, Number(readConfigValue(config?.databaseRequestsPerMinute, RATE_LIMIT_MAX_REQUESTS)) || RATE_LIMIT_MAX_REQUESTS)
+      const timeoutMs = Math.max(1, Number(readConfigValue(config?.databaseTimeoutMs, 15_000)) || 15_000)
+      const allowAgentFallback = readConfigValue(config?.allowAgentFallback, true) !== false
+      if (rateLimitExceeded(clientKey, maxRequests)) {
         try { logger?.warn?.(`database query rate limited client=${clientKey} id=${database.id}`) } catch {}
-        return reply(res, 429, { error: 'rate_limited', message: '查询过于频繁（每分钟 12 次上限）。请稍后再试，或改用「让 Agent 查询」由会话内 Agent 检索。' })
+        return reply(res, 429, { error: 'rate_limited', message: `查询过于频繁（每分钟 ${maxRequests} 次上限）。请稍后再试，或改用「让 Agent 查询」由会话内 Agent 检索。` })
       }
       try {
         let pending = inFlightQueries.get(key)
         if (!pending) {
           pending = (async () => {
             const controller = new AbortController()
-            const timeout = setTimeout(() => controller.abort(), 15_000)
+            const timeout = setTimeout(() => controller.abort(), timeoutMs)
             try {
-              const result = await runDatabaseQuery({ web, database, query, limit, signal: controller.signal })
+              const result = await runDatabaseQuery({ web, database, query, limit, signal: controller.signal, allowAgentFallback })
               const payload = { database: { id: database.id, name: database.name }, ...result }
               cacheSet(key, payload)
               return payload

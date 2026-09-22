@@ -3,6 +3,7 @@ import { h, C } from './theme.js'
 import { Card, Button, Input, Notice, Spinner, Badge } from './ui.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { EvidenceSaveForm } from './research-evidence-vault.js'
+import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 
 const QUERY_PATH = '/dsh-research-kit/query'
 
@@ -21,7 +22,7 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   const [savedKeys, setSavedKeys] = React.useState([])
   const requestRef = React.useRef(null)
   React.useEffect(() => () => requestRef.current?.abort(), [])
-  const canWrite = typeof inputActions?.setDraft === 'function'
+  const canWrite = canWriteDraft(inputActions)
   const canSubmit = canWrite && typeof inputActions?.submit === 'function'
   const agentTask = sources => {
     const sourceBlock = sources?.length
@@ -55,8 +56,10 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   const writeAgentFallback = () => {
     const prompt = state.result?.prompt || agentTask()
     if (!prompt || !canWrite) return
-    inputActions.setDraft(prompt)
-    setState(current => ({ ...current, message: '已写入当前会话输入框；发送后由 Agent 使用可用工具继续查询。' }))
+    const written = writeDraftText(inputActions, prompt)
+    setState(current => ({ ...current, message: written.ok
+      ? (written.inserted ? '已插入当前会话输入框；发送后由 Agent 使用可用工具继续查询。' : '已写入当前会话输入框；发送后由 Agent 使用可用工具继续查询。')
+      : '草稿已变化，未自动写入；请复制提示词后手动粘贴。' }))
   }
   const runWithAgent = async sources => {
     if (!canSubmit) return setState(current => ({ ...current, message: '当前 DSH 会话未提供发送操作，无法直接调用 Agent。' }))
@@ -70,8 +73,10 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
     const sources = state.result?.sources || []
     if (!sources.length || !canWrite) return
     const text = [`以下是通过 ${database.name} 实际查询到的候选来源，请继续核验并据此回答：`, ...sources.map((item, index) => `${index + 1}. ${item.title}\n   ${item.url}${item.meta ? `\n   ${item.meta}` : ''}${item.summary ? `\n   ${item.summary}` : ''}`)].join('\n')
-    inputActions.setDraft(text)
-    setState(current => ({ ...current, message: '已将候选来源写入输入框；请检查后再发送。' }))
+    const written = writeDraftText(inputActions, text)
+    setState(current => ({ ...current, message: written.ok
+      ? (written.inserted ? '已将候选来源插入输入框；请检查后再发送。' : '已将候选来源写入输入框；请检查后再发送。')
+      : '草稿已变化，未自动写入；请复制来源后手动粘贴。' }))
   }
   const loading = state.status === 'loading'
   return h(Card, { style: { padding: 14, background: C.surfaceAlt, display: 'grid', gap: 12 } }, [

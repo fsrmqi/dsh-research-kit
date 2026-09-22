@@ -6,6 +6,7 @@ import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { fetchHostCapabilitiesSummary } from './host-capabilities-client.js'
 import { DatabaseQueryPanel } from './database-query-panel.js'
+import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { getActiveProject } from './research-evidence-vault.js'
 import { startResearchRun } from './research-context-store.js'
 import { h, C, GlobalStyle } from './theme.js'
@@ -193,7 +194,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   )
   const assembled = React.useMemo(() => composed ? scienceAssemble(composed.prompt) : '', [composed, sciencePreset])
   const finalPrompt = editedPrompt ?? assembled
-  const hasDraftAction = typeof inputActions?.setDraft === 'function'
+  const hasDraftAction = canWriteDraft(inputActions)
   const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
   const selectedKey = selected?.id || ''
   const requiredFields = workflow ? (workflow.placeholders || []).filter(field => field.required) : []
@@ -245,8 +246,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const writeTaskPlan = () => {
     if (!hasDraftAction || !workflow || !taskPlan) return
     evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
-    inputActions.setDraft(`请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
-    setNotice('研究与交付计划已写入输入框；确认后可继续执行。')
+    const written = writeDraftText(inputActions, `请为科研任务「${workflow.name}」生成一份可执行的研究与交付计划。阶段：${taskPlan.stages.map((stage, index) => `${index + 1}.${stage}`).join('；')}。每阶段列出输入、产出、待人工确认项与完成判据。不要声称已检索、已核验或已完成。`)
+    setNotice(written.ok ? '研究与交付计划已写入输入框；确认后可继续执行。' : '草稿已变化，未自动写入计划；请稍后重试。')
   }
   const togglePlanStage = index => {
     if (!workflow || !activePlan) return
@@ -288,8 +289,10 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     try {
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
       const run = recordUse('draft')
-      inputActions.setDraft(runPrompt(run, finalPrompt))
-      setNotice(`已写入当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`)
+      const written = writeDraftText(inputActions, runPrompt(run, finalPrompt))
+      setNotice(written.ok
+        ? `${written.inserted ? '已插入' : '已写入'}当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`
+        : `草稿已变化，未自动写入提示词；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建。`)
     }
     catch (error) { setNotice(error.message) }
   }
