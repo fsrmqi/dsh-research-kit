@@ -68,6 +68,28 @@ test('路由层：相同查询 5 分钟内命中缓存，不再调用公开 API'
   assert.equal(calls, 1, '第二次查询应命中缓存，不重复出网')
 })
 
+test('路由层：关闭 Agent 回退后不返回旧策略缓存的回退结果', async () => {
+  let allowAgentFallback = true
+  const route = databaseQueryRoute({
+    web: { async fetch() { throw new Error('无直查来源不应调用 Web') } },
+    databases,
+    logger: null,
+    config: { allowAgentFallback: { get: () => allowAgentFallback } },
+  })
+  const query = `fallback-policy-${Math.random()}`
+  const url = `${DATABASE_QUERY_PATH}?database_id=scopus&q=${query}&limit=1`
+  const first = makeResponse()
+  await route.handler(makeRequest(url, `fallback-on-${Math.random()}`), first)
+  assert.equal(first.status, 200)
+  assert.equal(JSON.parse(first.body).mode, 'agent-fallback')
+
+  allowAgentFallback = false
+  const second = makeResponse()
+  await route.handler(makeRequest(url, `fallback-off-${Math.random()}`), second)
+  assert.equal(second.status, 502)
+  assert.match(JSON.parse(second.body).message, /Agent 回退已关闭/)
+})
+
 test('路由层：规范化等价查询，并合并并发的上游请求', async () => {
   let calls = 0
   let release

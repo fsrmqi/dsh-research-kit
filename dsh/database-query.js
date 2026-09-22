@@ -202,20 +202,25 @@ export function databaseQueryRoute({ web, databases, logger, config }) {
       if (!database) return reply(res, 404, { error: 'unknown_database' })
       const query = String(url.searchParams.get('q') || '')
       const limit = String(url.searchParams.get('limit') || '5')
-      const clientKey = clientKeyFor(req)
-      // 先查缓存：命中则不计入速率窗口（缓存读取不冲击公开 API）。
-      const key = cacheKey(database.id, query, limit)
-      const cached = cacheGet(key)
-      if (cached) return reply(res, 200, { ...cached, cached: true })
       const maxRequests = Math.max(1, Number(readConfigValue(config?.databaseRequestsPerMinute, RATE_LIMIT_MAX_REQUESTS)) || RATE_LIMIT_MAX_REQUESTS)
       const timeoutMs = Math.max(1, Number(readConfigValue(config?.databaseTimeoutMs, 15_000)) || 15_000)
       const allowAgentFallback = readConfigValue(config?.allowAgentFallback, true) !== false
+      const clientKey = clientKeyFor(req)
+      // 先查缓存：命中则不计入速率窗口（缓存读取不冲击公开 API）。关闭回退后，
+      // 不能继续返回旧配置下缓存的 Agent 回退结果；直查结果则与该策略无关，可复用。
+      const key = cacheKey(database.id, query, limit)
+      const cached = cacheGet(key)
+      if (cached && (allowAgentFallback || cached.mode !== 'agent-fallback')) {
+        return reply(res, 200, { ...cached, cached: true })
+      }
       if (rateLimitExceeded(clientKey, maxRequests)) {
         try { logger?.warn?.(`database query rate limited client=${clientKey} id=${database.id}`) } catch {}
         return reply(res, 429, { error: 'rate_limited', message: `查询过于频繁（每分钟 ${maxRequests} 次上限）。请稍后再试，或改用「让 Agent 查询」由会话内 Agent 检索。` })
       }
       try {
-        let pending = inFlightQueries.get(key)
+        // 即时配置也约束正在合并的请求，避免新请求复用旧 fallback/超时策略。
+        const inFlightKey = `${key}::fallback=${allowAgentFallback}::timeout=${timeoutMs}`
+        let pending = inFlightQueries.get(inFlightKey)
         if (!pending) {
           pending = (async () => {
             const controller = new AbortController()
@@ -232,8 +237,8 @@ export function databaseQueryRoute({ web, databases, logger, config }) {
               clearTimeout(timeout)
             }
           })()
-          inFlightQueries.set(key, pending)
-          pending.finally(() => inFlightQueries.delete(key)).catch(() => {})
+          inFlightQueries.set(inFlightKey, pending)
+          pending.finally(() => inFlightQueries.delete(inFlightKey)).catch(() => {})
         }
         const payload = await pending
         reply(res, 200, payload)

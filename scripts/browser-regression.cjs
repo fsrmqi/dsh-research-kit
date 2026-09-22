@@ -6,8 +6,8 @@ const path = require('node:path');
 const repo = path.resolve(__dirname, '..');
 const artifacts = path.join(repo, 'browser-results');
 fs.mkdirSync(artifacts, { recursive: true });
-let catalogRequests=0, promptKitRequests=0, archifyRequests=0;
-const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>科研工作台回归验证</title><div id="root"></div><div id="composer" data-composer-card style="position:fixed;bottom:12px;left:12px;width:min(560px,calc(100vw - 24px));z-index:30000"></div>
+let catalogRequests=0, promptKitRequests=0, archifyRequests=0, hostCapabilitiesRequests=0;
+const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>科研工作台回归验证</title><div id="root"></div><div id="plugin-status"></div><div id="composer" data-composer-card style="position:fixed;bottom:12px;left:12px;width:min(560px,calc(100vw - 24px));z-index:30000"></div>
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(()=>React)}};</script>
 <script src="/bundle"></script><script>
@@ -33,6 +33,11 @@ const server = http.createServer((req,res)=>{
   res.setHeader('Content-Type','text/javascript; charset=utf-8');
   return res.end(fs.readFileSync(path.join(repo,'ui/promptkit.js')));
  }
+ if(req.url==='/dsh-research-kit/host-capabilities'){
+  hostCapabilitiesRequests++;
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  return res.end(JSON.stringify({ok:true,capabilities:{services:{web:true,shell:false,fs:false,llm:false},mcpServers:[],toolProbeAvailable:true,toolCount:0}}));
+ }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
@@ -48,6 +53,14 @@ const server = http.createServer((req,res)=>{
   page.setDefaultTimeout(10000);
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
+  await page.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
+  await page.waitForTimeout(100);
+  const capabilitiesBeforeStatusMount=hostCapabilitiesRequests;
+  await page.evaluate(()=>ReactDOM.createRoot(document.getElementById('plugin-status')).render(React.createElement(registered['dsh-research-kit-status'],{subject:{kind:'bundle',pkg:{name:'dsh-research-kit'}}})));
+  await page.getByLabel('Research Kit 运行状态').getByText('运行状态',{exact:true}).waitFor();
+  await page.waitForTimeout(100);
+  assert.equal(hostCapabilitiesRequests,capabilitiesBeforeStatusMount+1,'插件状态区每次挂载只能新增一次宿主能力探测');
+  console.log('插件状态区单次探测宿主能力：通过');
   await page.getByRole('tab',{name:'方法工坊',exact:true}).click();
   await page.getByRole('heading',{name:'方法工坊',exact:true}).waitFor();
   await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();

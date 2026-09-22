@@ -8972,7 +8972,7 @@ window.__ModuleLoader__.load({
     /** Plugins-page section for deployment facts; it never upgrades catalog claims. */
     function ResearchPluginStatusSection({ subject }) {
       const [state, setState] = React.useState({ status: 'loading', data: null, error: '' })
-      const [catalogVersion, setCatalogVersion] = React.useState(0)
+      const [, setCatalogVersion] = React.useState(0)
       React.useEffect(() => {
         if (!isResearchBundle(subject)) return
         let alive = true
@@ -8986,7 +8986,7 @@ window.__ModuleLoader__.load({
           })
           .catch(error => { if (alive) setState({ status: 'error', data: null, error: error?.message || String(error) }) })
         return () => { alive = false }
-      }, [subject?.pkg?.name, catalogVersion])
+      }, [subject?.kind, subject?.pkg?.name])
       if (!isResearchBundle(subject)) return null
       const capabilities = state.data
       const mcpServers = capabilities?.mcpServers || []
