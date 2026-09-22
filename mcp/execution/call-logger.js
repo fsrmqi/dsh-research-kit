@@ -1,5 +1,6 @@
 
 import { appendFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises'
+import { setImmediate as waitForBatch } from 'node:timers/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
@@ -11,22 +12,31 @@ const ROTATED_FILE = `${LOG_FILE}.1`
 const MAX_LOG_SIZE = 5 * 1024 * 1024
 
 let writeQueue = Promise.resolve()
+let ensuredDir
+let knownLogSize = null
+let flushScheduled = false
+let pendingLines = []
+const parsedLogCache = new Map()
 
-// 脱敏范围（ROADMAP P3-8）：除自由文本字段外，query/goal 这类研究内容键也不落盘——
-// 统计只看「调了哪个工具、失败没有、耗时多少」，不看用户查了什么。
-const SENSITIVE_PARAM_KEYS = new Set(['text', 'claim', 'note', 'passport_yaml', 'params', 'query', 'goal'])
+// 只允许结构化、非敏感字段落盘。新增参数默认不记录，避免口令或研究内容因漏加黑名单而泄露。
+const LOGGABLE_PARAM_KEYS = new Set([
+  'workflow_id', 'route', 'include_all_routes', 'category', 'type', 'limit', 'source_id', 'source_ids',
+  'per_source_limit', 'verify_identifiers', 'save_to_evidence', 'project', 'run_id', 'identifier_type',
+  'grade', 'offset', 'mode', 'fields', 'evidence_id', 'asset_id', 'style', 'dpi', 'apa_style', 'layout',
+  'stage', 'max_claims', 'max_lookups', 'target_journal', 'tool_name', 'include_references',
+])
 
 async function ensureDir() {
-  if (!existsSync(LOG_DIR)) await mkdir(LOG_DIR, { recursive: true })
+  ensuredDir ||= existsSync(LOG_DIR) ? Promise.resolve() : mkdir(LOG_DIR, { recursive: true })
+  await ensuredDir
 }
 
 function summarizeParams(params) {
   if (!params || typeof params !== 'object') return null
   const safe = {}
   for (const [key, value] of Object.entries(params).slice(0, 20)) {
-    if (SENSITIVE_PARAM_KEYS.has(key)) {
-      safe[key] = '[redacted]'
-    } else if (Array.isArray(value)) {
+    if (!LOGGABLE_PARAM_KEYS.has(key)) continue
+    if (Array.isArray(value)) {
       safe[key] = `[${value.length} items]`
     } else if (value && typeof value === 'object') {
       safe[key] = '[object]'
@@ -39,22 +49,37 @@ function summarizeParams(params) {
 
 async function appendLogLine(line) {
   await ensureDir()
+  const lineSize = Buffer.byteLength(line)
+  if (knownLogSize === null) {
+    try { knownLogSize = (await stat(LOG_FILE)).size } catch { knownLogSize = 0 }
+  }
   try {
-    const info = await stat(LOG_FILE)
-    if (info.size + Buffer.byteLength(line) > MAX_LOG_SIZE) {
+    if (knownLogSize + lineSize > MAX_LOG_SIZE) {
       try { await unlink(ROTATED_FILE) } catch {}
       await rename(LOG_FILE, ROTATED_FILE)
+      knownLogSize = 0
+      parsedLogCache.delete(ROTATED_FILE)
     }
   } catch {}
   await appendFile(LOG_FILE, line, 'utf8')
+  knownLogSize += lineSize
+  parsedLogCache.delete(LOG_FILE)
 }
 
 function enqueueLogLine(line) {
-  writeQueue = writeQueue.then(() => appendLogLine(line)).catch(() => {})
-  return writeQueue
+  pendingLines.push(line)
+  if (flushScheduled) return
+  flushScheduled = true
+  writeQueue = writeQueue.then(async () => {
+    await waitForBatch()
+    const batch = pendingLines.join('')
+    pendingLines = []
+    flushScheduled = false
+    if (batch) await appendLogLine(batch)
+  }).catch(() => { flushScheduled = false })
 }
 
-async function logCall({ tool, params, result, duration_ms, error }) {
+function logCall({ tool, params, result, duration_ms, error }) {
   const entry = {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     tool: String(tool || 'unknown'),
@@ -68,7 +93,7 @@ async function logCall({ tool, params, result, duration_ms, error }) {
     duration_ms: duration_ms || 0,
     at: new Date().toISOString(),
   }
-  await enqueueLogLine(JSON.stringify(entry) + '\n')
+  enqueueLogLine(JSON.stringify(entry) + '\n')
 }
 
 function summarizeResult(result) {
@@ -96,16 +121,22 @@ function summarizeResult(result) {
 async function parseLogRecords(file) {
   if (!existsSync(file)) return []
   try {
+    const info = await stat(file)
+    const cached = parsedLogCache.get(file)
+    if (cached?.size === info.size && cached?.mtimeMs === info.mtimeMs) return cached.records
     const raw = await readFile(file, 'utf8')
-    return raw.trim().split('\n').filter(Boolean).map(line => {
+    const records = raw.trim().split('\n').filter(Boolean).map(line => {
       try { return JSON.parse(line) } catch { return null }
     }).filter(Boolean)
+    parsedLogCache.set(file, { size: info.size, mtimeMs: info.mtimeMs, records })
+    return records
   } catch {
     return []
   }
 }
 
 async function readCallLogs({ limit = 50, tool, since, runId } = {}) {
+  await writeQueue
   const rotated = await parseLogRecords(ROTATED_FILE)
   const current = await parseLogRecords(LOG_FILE)
   let records = [...rotated, ...current]

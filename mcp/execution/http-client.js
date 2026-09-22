@@ -1,3 +1,6 @@
+import { setTimeout as delay } from 'node:timers/promises'
+import { currentExecutionSignal } from './execution-context.js'
+
 const REQUEST_TIMEOUT_MS = 15_000
 const MAX_RETRIES = 2
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504])
@@ -72,22 +75,27 @@ async function fetchWithRetry(url, {
   retries = MAX_RETRIES,
   fetchImpl = fetch,
   headers = {},
+  signal: explicitSignal,
 } = {}) {
+  const signal = explicitSignal || currentExecutionSignal()
   const key = circuitKey(url)
   assertCircuitClosed(key)
 
   let lastError
   for (let attempt = 0; attempt <= retries; attempt++) {
+    signal?.throwIfAborted()
     let response
     try {
+      const timeoutSignal = AbortSignal.timeout(timeoutMs)
       response = await fetchImpl(url, {
         headers: { Accept: accept, 'User-Agent': USER_AGENT, ...headers },
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
       })
     } catch (error) {
+      if (signal?.aborted) throw signal.reason || error
       lastError = error
       if (attempt === retries) break
-      await new Promise(resolve => setTimeout(resolve, retryDelayMs(null, attempt)))
+      await delay(retryDelayMs(null, attempt), undefined, signal ? { signal } : undefined)
       continue
     }
 
@@ -103,7 +111,7 @@ async function fetchWithRetry(url, {
       throw error
     }
 
-    await new Promise(resolve => setTimeout(resolve, retryDelayMs(response, attempt)))
+    await delay(retryDelayMs(response, attempt), undefined, signal ? { signal } : undefined)
   }
 
   recordCircuitResult(key, false)

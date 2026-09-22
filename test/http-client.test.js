@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { crossrefUrl, fetchWithRetry, USER_AGENT } from '../mcp/execution/http-client.js'
+import { runWithExecutionContext } from '../mcp/execution/execution-context.js'
 import { stableIdentifier } from '../mcp/execution/identifiers.js'
 
 function response(status, headers = {}) {
@@ -42,6 +43,23 @@ test('HTTP 客户端：Crossref URL 在配置联系邮箱时可附加 mailto 参
   const url = crossrefUrl('https://api.crossref.org/works?query=x', 'research@example.com')
   assert.equal(url, 'https://api.crossref.org/works?query=x&mailto=research%40example.com')
   assert.equal(crossrefUrl('https://api.openalex.org/works?search=x'), 'https://api.openalex.org/works?search=x')
+})
+
+test('HTTP 客户端：MCP 取消信号会中断外部请求且不再重试', async () => {
+  const controller = new AbortController()
+  let calls = 0
+  const pending = runWithExecutionContext({ signal: controller.signal }, () => fetchWithRetry('https://cancel.test/api', {
+    retries: 2,
+    fetchImpl: async (url, init) => {
+      calls += 1
+      return new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true })
+      })
+    },
+  }))
+  controller.abort(new DOMException('client cancelled', 'AbortError'))
+  await assert.rejects(pending, /client cancelled/)
+  assert.equal(calls, 1)
 })
 
 test('标识符归一化：DOI、PMID、arXiv、OpenAlex 统一为稳定键', () => {

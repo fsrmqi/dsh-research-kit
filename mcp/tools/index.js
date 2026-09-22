@@ -329,20 +329,24 @@ const tools = [
 
       const saved = []
       if (save_to_evidence) {
+        const batch = await saveEvidenceBatch(sources.map(source => ({
+          identifier_type: source.identifier_type,
+          identifier: source.identifier_type === 'none' ? '' : source.id,
+          title: source.title,
+          url: source.url,
+        })), { project, run_id })
+        const itemKey = item => item.identifier_type === 'none'
+          ? `title:${String(item.title || '').slice(0, 80).toLowerCase()}`
+          : `${item.identifier_type}:${item.identifier}`
+        const savedByKey = new Map(batch.saved.map(item => [itemKey(item), item]))
+        const duplicateByKey = new Map(batch.duplicates.map(item => [itemKey(item), item]))
         for (const source of sources) {
-          try {
-            const result = await saveEvidence({
-              identifier_type: source.identifier_type,
-              identifier: source.identifier_type === 'none' ? '' : source.id,
-              title: source.title,
-              url: source.url,
-              project,
-              run_id,
-            })
-            saved.push({ source_id: source.id, ...result })
-          } catch (e) {
-            saved.push({ source_id: source.id, saved: false, error: e.message })
-          }
+          const input = { identifier_type: source.identifier_type, identifier: source.identifier_type === 'none' ? '' : source.id, title: source.title }
+          const item = savedByKey.get(itemKey(input))
+          const duplicate = duplicateByKey.get(itemKey(input))
+          saved.push(item
+            ? { source_id: source.id, saved: true, id: item.id, dedup_status: 'new' }
+            : { source_id: source.id, saved: false, id: duplicate?.existing_id, dedup_status: duplicate ? 'duplicate' : 'invalid' })
         }
       }
 

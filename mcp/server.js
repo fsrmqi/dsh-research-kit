@@ -7,6 +7,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { tools } from './tools/index.js'
 import { logCall } from './execution/call-logger.js'
 import { toolAnnotations, toolMeta } from './tool-registry.js'
+import { runWithExecutionContext } from './execution/execution-context.js'
 
 const server = new McpServer({
   name: 'dsh-research-kit',
@@ -69,7 +70,7 @@ async function confirmWrite(tool, params) {
 }
 
 for (const tool of tools) {
-  server.tool(tool.name, tool.description, inputSchemaWithConfirmation(tool), toolAnnotations(tool.name), async params => {
+  server.tool(tool.name, tool.description, inputSchemaWithConfirmation(tool), toolAnnotations(tool.name), async (params, extra) => runWithExecutionContext(extra, async () => {
     const start = Date.now()
     try {
       const confirmationError = await confirmWrite(tool, params)
@@ -106,7 +107,7 @@ for (const tool of tools) {
         isError: true,
       }
     }
-  })
+  }))
 }
 
 const transport = new StdioServerTransport()

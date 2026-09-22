@@ -1,5 +1,5 @@
 
-import { saveEvidence } from './evidence-store.js'
+import { saveEvidenceBatch } from './evidence-store.js'
 import { wrap, err } from './wrapper.js'
 import { fetchJsonWithRetry } from './http-client.js'
 
@@ -58,43 +58,35 @@ async function mapWithConcurrency(items, limit, run) {
 }
 
 async function fetchMetadata({ dois, query, limit, project, save_to_evidence, include_references }) {
+  let mode
+  let results
+  let errors = []
   if (query) {
-    const results = await searchOpenAlex(query, limit || 10, { includeReferences: include_references })
-    return { mode: 'search', query, results, total: results.length }
-  }
-  if (!Array.isArray(dois) || !dois.length) {
+    mode = 'search'
+    results = await searchOpenAlex(query, limit || 10, { includeReferences: include_references })
+  } else if (!Array.isArray(dois) || !dois.length) {
     throw new Error('必须提供 dois 数组或 query 搜索词。')
-  }
-  const selectedDois = dois.slice(0, 20)
-  const outcomes = await mapWithConcurrency(selectedDois, 4, async doi => {
-    try {
-      return { ok: true, value: await fetchOpenAlexWork(doi, { includeReferences: include_references }) }
-    } catch (e) {
-      return { ok: false, doi, error: e.message }
-    }
-  })
-  const results = outcomes.filter(item => item.ok).map(item => item.value)
-  const errors = outcomes.filter(item => !item.ok).map(({ doi, error }) => ({ doi, error }))
-  if (save_to_evidence) {
-    const saved = []
-    for (const work of results) {
-      if (!work.title) continue
+  } else {
+    mode = 'fetch'
+    const selectedDois = dois.slice(0, 20)
+    const outcomes = await mapWithConcurrency(selectedDois, 4, async doi => {
       try {
-        const result = await saveEvidence({
-          identifier_type: work.doi ? 'doi' : 'none',
-          identifier: work.doi,
-          title: work.title,
-          url: work.url,
-          note: work.abstract ? work.abstract.slice(0, 2000) : '',
-          project: project || 'default',
-          grade_hint: 'empirical',
-        })
-        saved.push({ doi: work.doi, ...result })
-      } catch {}
-    }
-    return { mode: 'fetch', results, errors, saved_to_evidence: saved }
+        return { ok: true, value: await fetchOpenAlexWork(doi, { includeReferences: include_references }) }
+      } catch (e) {
+        return { ok: false, doi, error: e.message }
+      }
+    })
+    results = outcomes.filter(item => item.ok).map(item => item.value)
+    errors = outcomes.filter(item => !item.ok).map(({ doi, error }) => ({ doi, error }))
   }
-  return { mode: 'fetch', results, errors, total: results.length }
+  if (save_to_evidence) {
+    const saved = await saveEvidenceBatch(results.filter(work => work.title).map(work => ({
+      identifier_type: work.doi ? 'doi' : 'none', identifier: work.doi, title: work.title,
+      url: work.url, note: work.abstract ? work.abstract.slice(0, 2000) : '', grade_hint: 'empirical',
+    })), { project: project || 'default' })
+    return { mode, ...(query ? { query } : {}), results, errors, total: results.length, saved_to_evidence: saved }
+  }
+  return { mode, ...(query ? { query } : {}), results, errors, total: results.length }
 }
 
 async function fetchOpenAlexMetadata(input) {

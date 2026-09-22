@@ -7,6 +7,8 @@ import { dataPath } from '../paths.js'
 const BASE_DIR = dataPath('evidence')
 const LOCK_TIMEOUT_MS = 2_000
 const LOCK_STALE_MS = 5_000
+const entryCache = new Map()
+const sortedEntryCache = new Map()
 
 function invalidProject(message) {
   const error = new Error(message)
@@ -82,10 +84,20 @@ function dedupKey(entry) {
 async function readEntriesUnlocked(project) {
   const file = entriesFile(project)
   if (!existsSync(file)) return []
+  const info = await stat(file)
+  const cached = entryCache.get(file)
+  if (cached?.size === info.size && cached?.mtimeMs === info.mtimeMs) return cached.entries
   const raw = await readFile(file, 'utf-8')
-  return raw.split('\n').filter(line => line.trim()).map(line => {
+  const entries = raw.split('\n').filter(line => line.trim()).map(line => {
     try { return JSON.parse(line) } catch { return null }
   }).filter(Boolean)
+  entryCache.set(file, { size: info.size, mtimeMs: info.mtimeMs, entries })
+  return entries
+}
+
+function invalidateEntryCache(project) {
+  entryCache.delete(entriesFile(project))
+  sortedEntryCache.delete(safeProjectName(project))
 }
 
 async function writeEntriesUnlocked(project, entries) {
@@ -95,6 +107,7 @@ async function writeEntriesUnlocked(project, entries) {
   const temp = path.join(dir, `.entries-${process.pid}-${Date.now().toString(36)}.tmp`)
   await writeFile(temp, entries.map(entry => JSON.stringify(entry)).join('\n') + (entries.length ? '\n' : ''), 'utf8')
   await rename(temp, target)
+  invalidateEntryCache(project)
 }
 
 export async function readProjectEntries(project) {
@@ -134,7 +147,10 @@ export async function mergeProjectEntries(project, incoming = []) {
       seen.set(key, entry)
       added.push(entry)
     }
-    if (added.length) await appendFile(entriesFile(project), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+    if (added.length) {
+      await appendFile(entriesFile(project), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+      invalidateEntryCache(project)
+    }
     return { entries: [...existing, ...added], added: added.length, skipped }
   })
 }
@@ -207,7 +223,7 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
   const normalizedRunId = typeof run_id === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(run_id) ? run_id : ''
   const entries = []
   const invalid = []
-  for (const item of items.slice(0, 50)) {
+  for (const item of items.slice(0, 100)) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) { invalid.push({ index: entries.length + invalid.length, reason: '条目不是对象' }); continue }
     if (!item.title && !item.identifier) { invalid.push({ index: entries.length + invalid.length, reason: '缺少 title 与 identifier' }); continue }
     entries.push({
@@ -232,11 +248,14 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
     const duplicates = []
     for (const entry of entries) {
       const key = dedupKey(entry)
-      if (seen.has(key)) { duplicates.push({ title: entry.title, identifier: entry.identifier, existing_id: seen.get(key)?.id }); continue }
+      if (seen.has(key)) { duplicates.push({ title: entry.title, identifier_type: entry.identifier_type, identifier: entry.identifier, existing_id: seen.get(key)?.id }); continue }
       seen.set(key, entry)
       added.push(entry)
     }
-    if (added.length) await appendFile(entriesFile(projectName), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+    if (added.length) {
+      await appendFile(entriesFile(projectName), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+      invalidateEntryCache(projectName)
+    }
     return {
       project: projectName,
       run_id: normalizedRunId,
@@ -251,15 +270,19 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
 
 async function listEvidence({ project, identifier_type, grade, run_id, limit, offset } = {}) {
   const projectName = safeProjectName(project)
-  let entries = await readProjectEntries(projectName)
+  const sourceEntries = await readProjectEntries(projectName)
+  let sorted = sortedEntryCache.get(projectName)
+  if (sorted?.source !== sourceEntries) {
+    sorted = { source: sourceEntries, entries: [...sourceEntries].sort((a, b) => new Date(b.saved_at || '') - new Date(a.saved_at || '')) }
+    sortedEntryCache.set(projectName, sorted)
+  }
+  let entries = sorted.entries
   if (identifier_type) entries = entries.filter(entry => entry.identifier_type === identifier_type)
   if (grade) entries = entries.filter(entry => entry.grade === grade)
   if (run_id) entries = entries.filter(entry => entry.run_id === run_id)
-  // 按 saved_at 倒序（最新在前），再取前 N 条，与兄弟读取方一致
-  const sorted = [...entries].sort((a, b) => new Date(b.saved_at || '') - new Date(a.saved_at || ''))
   const max = Math.max(1, Math.min(Number(limit) || 50, 200))
   const pageOffset = Math.max(0, Number(offset) || 0)
-  const selected = sorted.slice(pageOffset, pageOffset + max)
+  const selected = entries.slice(pageOffset, pageOffset + max)
   return {
     entries: selected,
     total: entries.length,
@@ -275,7 +298,8 @@ async function linkEvidence(evidenceId, assetId, project) {
   const projectName = safeProjectName(project)
   return withProjectLock(projectName, async () => {
     const entries = await readEntriesUnlocked(projectName)
-    const entry = entries.find(item => item.id === evidenceId)
+    const found = entries.find(item => item.id === evidenceId)
+    const entry = found ? { ...found } : null
     if (!entry) throw new Error(`证据条目 "${evidenceId}" 不存在于项目 "${projectName}"。`)
     entry.linked_assets = [...new Set([...(entry.linked_assets || []), String(assetId)])]
     await writeEntriesUnlocked(projectName, entries.map(item => item.id === evidenceId ? entry : item))

@@ -120,3 +120,12 @@ test('日志层：readCallLogs 支持 runId 过滤', async () => {
   assert.ok(filtered.length >= 1, 'runId 过滤应能取到该 run 的调用')
   assert.ok(filtered.every(record => record.run_id === 'status-filter-test'), '过滤结果不应混入其他 run')
 })
+
+test('日志层：未列入白名单的确认口令绝不落盘', async () => {
+  const token = `secret-${Date.now()}`
+  await logCall({ tool: 'research_evidence_save', params: { run_id: 'redaction-test', confirmation_token: token }, result: { saved: true }, duration_ms: 1 })
+  const [record] = await readCallLogs({ limit: 1, tool: 'research_evidence_save', runId: 'redaction-test' })
+  assert.ok(record)
+  assert.ok(!record.params.includes(token))
+  assert.equal(JSON.parse(record.params).confirmation_token, undefined)
+})

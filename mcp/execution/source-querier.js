@@ -1,4 +1,5 @@
 import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
+import { currentExecutionSignal } from './execution-context.js'
 
 const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
@@ -52,6 +53,26 @@ function cacheGet(key) {
 function cacheSet(key, result) {
   CACHE.set(key, { at: Date.now(), result })
   while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value)
+}
+
+async function waitForSharedQuery(entry, signal) {
+  entry.waiters += 1
+  let onAbort
+  try {
+    if (!signal) return await entry.promise
+    signal.throwIfAborted()
+    return await Promise.race([
+      entry.promise,
+      new Promise((resolve, reject) => {
+        onAbort = () => reject(signal.reason || new DOMException('请求已取消。', 'AbortError'))
+        signal.addEventListener('abort', onAbort, { once: true })
+      }),
+    ])
+  } finally {
+    if (onAbort) signal.removeEventListener('abort', onAbort)
+    entry.waiters -= 1
+    if (entry.waiters === 0 && !entry.settled) entry.controller.abort(new DOMException('所有等待方均已取消。', 'AbortError'))
+  }
 }
 
 function clean(value, limit = 280) {
@@ -175,8 +196,9 @@ async function querySource(sourceId, query, limit = 5) {
   const cached = cacheGet(key)
   if (cached) return { ...cached, cached: true }
 
+  const callerSignal = currentExecutionSignal()
   if (inFlightQueries.has(key)) {
-    const result = await inFlightQueries.get(key)
+    const result = await waitForSharedQuery(inFlightQueries.get(key), callerSignal)
     return { ...result, shared_request: true }
   }
 
@@ -187,11 +209,12 @@ async function querySource(sourceId, query, limit = 5) {
     throw error
   }
 
-  const request = (async () => {
+  const entry = { controller: new AbortController(), promise: null, settled: false, waiters: 0 }
+  entry.promise = (async () => {
     const url = authenticatedUrl(adapter.url(normalizedQuery, normalizedLimit), adapter, settings)
     const body = adapter.isXml
-      ? await fetchTextWithRetry(url, { accept: 'application/xml', timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings) })
-      : await fetchJsonWithRetry(url, { timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings) })
+      ? await fetchTextWithRetry(url, { accept: 'application/xml', timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings), signal: entry.controller.signal })
+      : await fetchJsonWithRetry(url, { timeoutMs: settings.timeout_ms, headers: sourceHeaders(adapter, settings), signal: entry.controller.signal })
     const sources = adapter.parse(body)
     const result = {
       sources,
@@ -203,12 +226,12 @@ async function querySource(sourceId, query, limit = 5) {
     return result
   })()
 
-  inFlightQueries.set(key, request)
-  try {
-    return await request
-  } finally {
-    inFlightQueries.delete(key)
-  }
+  inFlightQueries.set(key, entry)
+  entry.promise.then(
+    () => { entry.settled = true; if (inFlightQueries.get(key) === entry) inFlightQueries.delete(key) },
+    () => { entry.settled = true; if (inFlightQueries.get(key) === entry) inFlightQueries.delete(key) },
+  )
+  return waitForSharedQuery(entry, callerSignal)
 }
 
 function listAvailableSources() {

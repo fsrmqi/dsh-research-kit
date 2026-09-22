@@ -34,6 +34,7 @@ node mcp/server.js
 | `DSH_RESEARCH_KIT_HOME` | `~/.dsh-research-kit` | 证据库、护照、检查点与调用日志的数据根目录，可用于项目隔离或多实例并行 |
 | `DSH_RESEARCH_KIT_CONTACT_EMAIL` | 空 | 作为 User-Agent 联系方式，并附加到 Crossref 请求的 `mailto` 参数 |
 | `DSH_RESEARCH_KIT_CONFIRM_WRITES` | `required` | 设为 `disabled` 时跳过写入 elicitation；仅建议在宿主不支持 elicitation 的测试环境使用 |
+| `DSH_RESEARCH_KIT_TOOL_TIMEOUT_MS` | `60000` | 单次 MCP 工具调用的总时间预算，最大 10 分钟；宿主取消请求时也会立即中断外部 HTTP 调用 |
 | `DSH_RESEARCH_KIT_CONFIRMATION_TOKEN` | 空 | 宿主不支持 elicitation 时的回落确认令牌；写入工具传相同 `confirmation_token` 才放行 |
 
 公开数据源还支持每源覆盖，`<SOURCE>` 可用 `CROSSREF`、`OPENALEX`、`SEMANTIC_SCHOLAR`、`EUROPE_PMC`、`ARXIV`、`CLINICALTRIALS`：
