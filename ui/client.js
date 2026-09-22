@@ -2342,6 +2342,16 @@ window.__ModuleLoader__.load({
       stale: '已失效',
     }
     const EVIDENCE_GRADES = ['ungraded', 'empirical', 'inference', 'missing']
+    const EVIDENCE_TRACEABILITY = ['missing', 'identified']
+    const EVIDENCE_STUDY_TYPES = ['unknown', 'primary-study', 'systematic-review', 'protocol', 'preprint', 'dataset', 'other']
+    const EVIDENCE_CLAIM_SUPPORT = ['unassessed', 'supported', 'not-supported', 'mixed', 'not-applicable']
+    const EVIDENCE_STRENGTHS = ['ungraded', 'empirical', 'inference']
+    const EVIDENCE_DIMENSION_LABELS = {
+      traceability: { missing: '缺少来源线索', identified: '可追溯来源' },
+      studyType: { unknown: '未判断', 'primary-study': '原始研究', 'systematic-review': '系统综述', protocol: '研究方案', preprint: '预印本', dataset: '数据集', other: '其他' },
+      claimSupport: { unassessed: '未评估', supported: '支持', 'not-supported': '不支持', mixed: '证据不一致', 'not-applicable': '不适用' },
+      strength: { ungraded: '未分级', empirical: '实证', inference: '推论' },
+    }
     const EVIDENCE_IDENTIFIER_LABELS = {
       doi: 'DOI',
       pmid: 'PMID',
@@ -2420,6 +2430,11 @@ window.__ModuleLoader__.load({
       if (!url && !identifier) throw new Error('证据条目既没有原始链接也没有稳定标识符；无法追溯的来源不入库。')
       const status = EVIDENCE_STATUSES.includes(input.status) ? input.status : 'unverified'
       const grade = EVIDENCE_GRADES.includes(input.grade) ? input.grade : 'ungraded'
+      const traceability = EVIDENCE_TRACEABILITY.includes(input.traceability)
+        ? input.traceability : (url || identifier ? 'identified' : 'missing')
+      const studyType = EVIDENCE_STUDY_TYPES.includes(input.studyType) ? input.studyType : 'unknown'
+      const claimSupport = EVIDENCE_CLAIM_SUPPORT.includes(input.claimSupport) ? input.claimSupport : 'unassessed'
+      const strength = EVIDENCE_STRENGTHS.includes(input.strength) ? input.strength : (EVIDENCE_STRENGTHS.includes(grade) ? grade : 'ungraded')
       return {
         id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         title,
@@ -2434,6 +2449,14 @@ window.__ModuleLoader__.load({
         note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
         status,
         grade,
+        traceability,
+        sourceVerification: status,
+        studyType,
+        claimSupport,
+        strength,
+        assessedAt: Number.isFinite(input.assessedAt) ? input.assessedAt : null,
+        assessedBy: clampText(input.assessedBy, 120),
+        assessmentReason: clampText(input.assessmentReason, MAX_EVIDENCE_REASON_CHARS),
         agentProduced: input.agentProduced === true,
         runId: normalizeRunId(input.runId || input.run_id),
       }
@@ -4464,6 +4487,14 @@ window.__ModuleLoader__.load({
         note: entry.note || '',
         status: entry.status || 'unverified',
         grade: entry.grade || 'ungraded',
+        traceability: entry.traceability,
+        sourceVerification: entry.source_verification || entry.sourceVerification || entry.status || 'unverified',
+        studyType: entry.study_type || entry.studyType,
+        claimSupport: entry.claim_support || entry.claimSupport,
+        strength: entry.strength || entry.grade,
+        assessedAt: entry.assessed_at ? Date.parse(entry.assessed_at) : undefined,
+        assessedBy: entry.assessed_by || entry.assessedBy || '',
+        assessmentReason: entry.assessment_reason || entry.assessmentReason || '',
         agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
         runId: entry.run_id || entry.runId || '',
       }
@@ -4480,6 +4511,14 @@ window.__ModuleLoader__.load({
         project: entry.project || 'default',
         grade: entry.grade || 'ungraded',
         status: entry.status || 'unverified',
+        source_verification: entry.sourceVerification || entry.status || 'unverified',
+        traceability: entry.traceability || 'identified',
+        study_type: entry.studyType || 'unknown',
+        claim_support: entry.claimSupport || 'unassessed',
+        strength: entry.strength || entry.grade || 'ungraded',
+        assessed_at: entry.assessedAt ? new Date(entry.assessedAt).toISOString() : '',
+        assessed_by: entry.assessedBy || '',
+        assessment_reason: entry.assessmentReason || '',
         source: 'dsh-ui',
         run_id: entry.runId || '',
         saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
@@ -4761,6 +4800,7 @@ window.__ModuleLoader__.load({
       const [newProjectOpen, setNewProjectOpen] = React.useState(false)
       const [backup, setBackup] = React.useState('')
       const [backupOpen, setBackupOpen] = React.useState(false)
+      const [assessmentNotes, setAssessmentNotes] = React.useState({})
       // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
       const [links, setLinks] = React.useState([])
       // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
@@ -4884,10 +4924,19 @@ window.__ModuleLoader__.load({
       const changeStatus = async (item, status) => {
         if (status === item.status) return
         try {
-          await saveEvidenceEntry({ ...item, status }, { onDuplicate: 'update' })
+          await saveEvidenceEntry({ ...item, status, sourceVerification: status }, { onDuplicate: 'update' })
           setNotice(`「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
+      const changeAssessment = async (item, key, value, reason = item.assessmentReason || '') => {
+        try {
+          const next = { ...item, [key]: value, assessmentReason: reason, assessedAt: Date.now(), assessedBy: 'researcher' }
+          if (key === 'strength') next.grade = value
+          await saveEvidenceEntry(next, { onDuplicate: 'update' })
+          setNotice(`「${item.title}」的人工评估已更新。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
       // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
       const clearScope = async () => {
@@ -5019,6 +5068,31 @@ window.__ModuleLoader__.load({
             confirmDeleteId === item.id
               ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
               : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
+          ]),
+          h('div', { key: 'assessment', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
+            h(Field, { key: 'traceability', label: '来源可追溯性' }, h(Select, {
+              value: item.traceability || 'identified', options: EVIDENCE_TRACEABILITY.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.traceability[value] })),
+              onChange: value => changeAssessment(item, 'traceability', value), ariaLabel: `设置「${item.title}」的来源可追溯性`,
+            })),
+            h(Field, { key: 'studyType', label: '研究类型' }, h(Select, {
+              value: item.studyType || 'unknown', options: EVIDENCE_STUDY_TYPES.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.studyType[value] })),
+              onChange: value => changeAssessment(item, 'studyType', value), ariaLabel: `设置「${item.title}」的研究类型`,
+            })),
+            h(Field, { key: 'claimSupport', label: '声明支持程度' }, h(Select, {
+              value: item.claimSupport || 'unassessed', options: EVIDENCE_CLAIM_SUPPORT.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.claimSupport[value] })),
+              onChange: value => changeAssessment(item, 'claimSupport', value), ariaLabel: `设置「${item.title}」的声明支持程度`,
+            })),
+            h(Field, { key: 'strength', label: '证据强度' }, h(Select, {
+              value: item.strength || 'ungraded', options: EVIDENCE_STRENGTHS.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.strength[value] })),
+              onChange: value => changeAssessment(item, 'strength', value), ariaLabel: `设置「${item.title}」的证据强度`,
+            })),
+          h(Field, { key: 'reason', label: '人工评估依据' }, h('div', { style: { display: 'flex', gap: 6 } }, [
+            h(Input, {
+              key: 'input', value: assessmentNotes[item.id] ?? item.assessmentReason ?? '', onChange: value => setAssessmentNotes(notes => ({ ...notes, [item.id]: value })),
+              ariaLabel: `设置「${item.title}」的人工评估依据`, placeholder: '例如：已核对全文方法与结果',
+            }),
+            h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveAssessmentReason(item) }, '保存依据'),
+          ])),
           ]),
         ]))),
       ])
@@ -8298,6 +8372,14 @@ window.__ModuleLoader__.load({
         artifactKind: '',
       },
       {
+        name: 'research_evidence_assess',
+        category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+        helpRoute: 'evidence', labelZh: '人工评估证据',
+        summaryZh: '人工记录来源、研究类型、声明支持程度与证据强度，并保留审核依据',
+        example: "{ evidence_id: '<id>', project: 'demo', strength: 'empirical', assessed_by: '研究者', assessment_reason: '已核对全文方法与结果' }",
+        artifactKind: '',
+      },
+      {
         name: 'research_evidence_review',
         category: 'evidence', tier: 'entry', access: 'read-only', requiresConfirmation: false,
         helpRoute: 'evidence', labelZh: '证据盘点',
@@ -8333,7 +8415,7 @@ window.__ModuleLoader__.load({
         name: 'research_evidence_grade_apply',
         category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: 'evidence', labelZh: '应用证据分级',
-        summaryZh: '预览→确认两段式写回建议分级；默认只预览，绝不自动写回',
+        summaryZh: '预览→确认两段式写回来源线索缺失；不自动判定证据强度',
         example: "{ project: 'demo', evidence_ids: ['<id>'], apply: false }",
         artifactKind: '',
       },

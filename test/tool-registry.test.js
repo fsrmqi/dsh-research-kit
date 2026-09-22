@@ -10,9 +10,9 @@ import { logCall, readCallLogs } from '../mcp/execution/call-logger.js'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-test('工具注册表：名称与 tools 数组 1:1 对齐（31 个，不多不少）', () => {
-  assert.equal(tools.length, 31, 'mcp/tools/index.js 应有 31 个工具')
-  assert.equal(toolCount, 31, '注册表应有 31 条元数据')
+test('工具注册表：名称与 tools 数组 1:1 对齐', () => {
+  assert.equal(tools.length, TOOL_REGISTRY.length, 'mcp/tools/index.js 应与注册表完全一致')
+  assert.equal(toolCount, TOOL_REGISTRY.length, '注册表计数应与元数据集合一致')
   const defined = tools.map(tool => tool.name).sort()
   const registered = TOOL_REGISTRY.map(tool => tool.name).sort()
   assert.deepEqual(registered, defined, '注册表与工具定义的名称集合应完全一致')

@@ -307,4 +307,27 @@ async function linkEvidence(evidenceId, assetId, project) {
   })
 }
 
-export { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence, dedupKey }
+async function assessEvidence(evidenceId, project, assessment = {}) {
+  const projectName = safeProjectName(project)
+  return withProjectLock(projectName, async () => {
+    const entries = await readEntriesUnlocked(projectName)
+    const current = entries.find(item => item.id === evidenceId)
+    if (!current) throw new Error(`证据条目 "${evidenceId}" 不存在于项目 "${projectName}"。`)
+    const allowed = {
+      traceability: ['missing', 'identified'], study_type: ['unknown', 'primary-study', 'systematic-review', 'protocol', 'preprint', 'dataset', 'other'],
+      claim_support: ['unassessed', 'supported', 'not-supported', 'mixed', 'not-applicable'], strength: ['ungraded', 'empirical', 'inference'],
+      source_verification: ['unverified', 'verified', 'disputed', 'stale'],
+    }
+    const next = { ...current }
+    for (const [key, values] of Object.entries(allowed)) if (assessment[key] && values.includes(assessment[key])) next[key] = assessment[key]
+    next.status = next.source_verification || next.status || 'unverified'
+    next.grade = next.strength || next.grade || 'ungraded'
+    next.assessed_by = String(assessment.assessed_by || 'researcher').trim().slice(0, 120)
+    next.assessment_reason = String(assessment.assessment_reason || '').trim().slice(0, 500)
+    next.assessed_at = new Date().toISOString()
+    await writeEntriesUnlocked(projectName, entries.map(item => item.id === evidenceId ? next : item))
+    return next
+  })
+}
+
+export { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence, assessEvidence, dedupKey }

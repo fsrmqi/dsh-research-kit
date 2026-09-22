@@ -10,7 +10,7 @@ process.env.HOME = await mkdtemp(path.join(os.tmpdir(), 'dsh-ev-'))
 const BASE_DIR = path.join(process.env.HOME, '.dsh-research-kit', 'evidence')
 
 // 动态 import 以读取刚改的 BASE_DIR（测试目录隔离）
-const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry } = await import('../mcp/execution/evidence-store.js')
+const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry, assessEvidence } = await import('../mcp/execution/evidence-store.js')
 
 test.after(async () => {
   await rm(process.env.HOME, { recursive: true, force: true })
@@ -62,6 +62,20 @@ test('run_id：可关联和筛选证据，但不改变同项目来源去重', as
   assert.equal(listed.entries.length, 1)
   assert.equal(listed.entries[0].run_id, 'run-alpha')
   assert.equal((await listEvidence({ project, run_id: 'run-beta' })).entries.length, 0)
+})
+
+test('assessEvidence：人工评估更新五个维度并保留兼容 grade/status', async () => {
+  const project = 'manual-assessment'
+  const saved = await saveEvidence({ project, identifier_type: 'doi', identifier: '10.9999/assessment', title: 'Assessment' })
+  const entry = await assessEvidence(saved.id, project, {
+    traceability: 'identified', source_verification: 'verified', study_type: 'primary-study', claim_support: 'mixed', strength: 'empirical',
+    assessed_by: 'reviewer', assessment_reason: '全文已核对',
+  })
+  assert.equal(entry.status, 'verified')
+  assert.equal(entry.grade, 'empirical')
+  assert.equal(entry.claim_support, 'mixed')
+  assert.equal(entry.assessed_by, 'reviewer')
+  assert.ok(entry.assessed_at)
 })
 
 test('mergeProjectEntries：无法解析的 JSONL 行不应永久丢失', async () => {

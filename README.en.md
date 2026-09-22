@@ -106,7 +106,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 31 `research_*` tools (literature search and verification, evidence inventory and grading, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+- **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 32 `research_*` tools (literature search and verification, evidence inventory and manual assessment, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
 
@@ -224,7 +224,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.2.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries), 365 regression tests in 46 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries), 367 regression tests in 46 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -233,7 +233,7 @@ Verified so far: catalog contract validation (587 entries, 587 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (365 / 46 files)
+npm test        # pure-logic, contract and render-level regression tests (367 / 46 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 
@@ -245,7 +245,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | --- | --- |
 | [docs/README.md](docs/README.md) | **Documentation index and recommended reading order** |
 | [Paper workflow handbook](docs/PAPER-WORKFLOW.md) | End-to-end paper work: the nine stages, literature search paths, submission packages, and the MCP operation chain (Chinese only) |
-| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 31 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
+| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 32 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
 | [Architecture & data contracts](docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
 | [Development guide](docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
 | [Manual QA checklist](docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |

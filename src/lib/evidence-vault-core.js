@@ -12,6 +12,16 @@ export const EVIDENCE_STATUS_LABELS = {
   stale: '已失效',
 }
 export const EVIDENCE_GRADES = ['ungraded', 'empirical', 'inference', 'missing']
+export const EVIDENCE_TRACEABILITY = ['missing', 'identified']
+export const EVIDENCE_STUDY_TYPES = ['unknown', 'primary-study', 'systematic-review', 'protocol', 'preprint', 'dataset', 'other']
+export const EVIDENCE_CLAIM_SUPPORT = ['unassessed', 'supported', 'not-supported', 'mixed', 'not-applicable']
+export const EVIDENCE_STRENGTHS = ['ungraded', 'empirical', 'inference']
+export const EVIDENCE_DIMENSION_LABELS = {
+  traceability: { missing: '缺少来源线索', identified: '可追溯来源' },
+  studyType: { unknown: '未判断', 'primary-study': '原始研究', 'systematic-review': '系统综述', protocol: '研究方案', preprint: '预印本', dataset: '数据集', other: '其他' },
+  claimSupport: { unassessed: '未评估', supported: '支持', 'not-supported': '不支持', mixed: '证据不一致', 'not-applicable': '不适用' },
+  strength: { ungraded: '未分级', empirical: '实证', inference: '推论' },
+}
 export const EVIDENCE_IDENTIFIER_LABELS = {
   doi: 'DOI',
   pmid: 'PMID',
@@ -90,6 +100,11 @@ export function normalizeEvidenceEntry(input = {}) {
   if (!url && !identifier) throw new Error('证据条目既没有原始链接也没有稳定标识符；无法追溯的来源不入库。')
   const status = EVIDENCE_STATUSES.includes(input.status) ? input.status : 'unverified'
   const grade = EVIDENCE_GRADES.includes(input.grade) ? input.grade : 'ungraded'
+  const traceability = EVIDENCE_TRACEABILITY.includes(input.traceability)
+    ? input.traceability : (url || identifier ? 'identified' : 'missing')
+  const studyType = EVIDENCE_STUDY_TYPES.includes(input.studyType) ? input.studyType : 'unknown'
+  const claimSupport = EVIDENCE_CLAIM_SUPPORT.includes(input.claimSupport) ? input.claimSupport : 'unassessed'
+  const strength = EVIDENCE_STRENGTHS.includes(input.strength) ? input.strength : (EVIDENCE_STRENGTHS.includes(grade) ? grade : 'ungraded')
   return {
     id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title,
@@ -104,6 +119,14 @@ export function normalizeEvidenceEntry(input = {}) {
     note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
     status,
     grade,
+    traceability,
+    sourceVerification: status,
+    studyType,
+    claimSupport,
+    strength,
+    assessedAt: Number.isFinite(input.assessedAt) ? input.assessedAt : null,
+    assessedBy: clampText(input.assessedBy, 120),
+    assessmentReason: clampText(input.assessmentReason, MAX_EVIDENCE_REASON_CHARS),
     agentProduced: input.agentProduced === true,
     runId: normalizeRunId(input.runId || input.run_id),
   }

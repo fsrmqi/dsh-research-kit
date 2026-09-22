@@ -8,6 +8,7 @@ import path from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
+import { toolCount } from '../mcp/tool-registry.js'
 
 // MCP 工具会往 DSH_RESEARCH_KIT_HOME 写证据库与调用日志，测试必须落到沙箱目录，
 // 否则会污染用户真实数据（还会触发日志轮转，把真实历史转走）。
@@ -47,8 +48,8 @@ async function callTool(name, args) {
 
 test('MCP 边界：server 能启动并注册全部工具', async () => {
   const { tools } = await client.listTools()
-  assert.equal(tools.length, 31)
-  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_evidence_save_batch', 'research_evidence_grade_apply', 'research_usage_stats', 'research_run_checkpoint_approve', 'research_review_output']) {
+  assert.equal(tools.length, toolCount)
+  for (const expected of ['research_help', 'research_catalog_search', 'research_literature_search', 'research_evidence_save', 'research_evidence_assess', 'research_evidence_review', 'research_figure_generate', 'research_run_start', 'research_run_status', 'research_evidence_save_batch', 'research_evidence_grade_apply', 'research_usage_stats', 'research_run_checkpoint_approve', 'research_review_output']) {
     assert.ok(tools.some(tool => tool.name === expected), `缺少工具 ${expected}`)
   }
 })

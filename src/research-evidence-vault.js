@@ -8,6 +8,7 @@ import { createEvidenceVaultStore } from './evidence-vault-store.js'
 import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
+  EVIDENCE_TRACEABILITY, EVIDENCE_STUDY_TYPES, EVIDENCE_CLAIM_SUPPORT, EVIDENCE_STRENGTHS, EVIDENCE_DIMENSION_LABELS,
   statusCounts, filterEvidence, detectIdentifier,
   serializeEvidenceBackup, parseEvidenceBackup, mergeEntries, planCitationWrite,
   buildEvidenceExplainPack,
@@ -84,6 +85,14 @@ function fileEvidenceInput(entry) {
     note: entry.note || '',
     status: entry.status || 'unverified',
     grade: entry.grade || 'ungraded',
+    traceability: entry.traceability,
+    sourceVerification: entry.source_verification || entry.sourceVerification || entry.status || 'unverified',
+    studyType: entry.study_type || entry.studyType,
+    claimSupport: entry.claim_support || entry.claimSupport,
+    strength: entry.strength || entry.grade,
+    assessedAt: entry.assessed_at ? Date.parse(entry.assessed_at) : undefined,
+    assessedBy: entry.assessed_by || entry.assessedBy || '',
+    assessmentReason: entry.assessment_reason || entry.assessmentReason || '',
     agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
     runId: entry.run_id || entry.runId || '',
   }
@@ -100,6 +109,14 @@ function vaultEvidenceFileEntry(entry) {
     project: entry.project || 'default',
     grade: entry.grade || 'ungraded',
     status: entry.status || 'unverified',
+    source_verification: entry.sourceVerification || entry.status || 'unverified',
+    traceability: entry.traceability || 'identified',
+    study_type: entry.studyType || 'unknown',
+    claim_support: entry.claimSupport || 'unassessed',
+    strength: entry.strength || entry.grade || 'ungraded',
+    assessed_at: entry.assessedAt ? new Date(entry.assessedAt).toISOString() : '',
+    assessed_by: entry.assessedBy || '',
+    assessment_reason: entry.assessmentReason || '',
     source: 'dsh-ui',
     run_id: entry.runId || '',
     saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
@@ -381,6 +398,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const [newProjectOpen, setNewProjectOpen] = React.useState(false)
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
+  const [assessmentNotes, setAssessmentNotes] = React.useState({})
   // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
   const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
@@ -504,10 +522,19 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const changeStatus = async (item, status) => {
     if (status === item.status) return
     try {
-      await saveEvidenceEntry({ ...item, status }, { onDuplicate: 'update' })
+      await saveEvidenceEntry({ ...item, status, sourceVerification: status }, { onDuplicate: 'update' })
       setNotice(`「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
+  const changeAssessment = async (item, key, value, reason = item.assessmentReason || '') => {
+    try {
+      const next = { ...item, [key]: value, assessmentReason: reason, assessedAt: Date.now(), assessedBy: 'researcher' }
+      if (key === 'strength') next.grade = value
+      await saveEvidenceEntry(next, { onDuplicate: 'update' })
+      setNotice(`「${item.title}」的人工评估已更新。`)
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+  }
+  const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
   // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
   const clearScope = async () => {
@@ -639,6 +666,31 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
         confirmDeleteId === item.id
           ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
           : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
+      ]),
+      h('div', { key: 'assessment', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
+        h(Field, { key: 'traceability', label: '来源可追溯性' }, h(Select, {
+          value: item.traceability || 'identified', options: EVIDENCE_TRACEABILITY.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.traceability[value] })),
+          onChange: value => changeAssessment(item, 'traceability', value), ariaLabel: `设置「${item.title}」的来源可追溯性`,
+        })),
+        h(Field, { key: 'studyType', label: '研究类型' }, h(Select, {
+          value: item.studyType || 'unknown', options: EVIDENCE_STUDY_TYPES.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.studyType[value] })),
+          onChange: value => changeAssessment(item, 'studyType', value), ariaLabel: `设置「${item.title}」的研究类型`,
+        })),
+        h(Field, { key: 'claimSupport', label: '声明支持程度' }, h(Select, {
+          value: item.claimSupport || 'unassessed', options: EVIDENCE_CLAIM_SUPPORT.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.claimSupport[value] })),
+          onChange: value => changeAssessment(item, 'claimSupport', value), ariaLabel: `设置「${item.title}」的声明支持程度`,
+        })),
+        h(Field, { key: 'strength', label: '证据强度' }, h(Select, {
+          value: item.strength || 'ungraded', options: EVIDENCE_STRENGTHS.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.strength[value] })),
+          onChange: value => changeAssessment(item, 'strength', value), ariaLabel: `设置「${item.title}」的证据强度`,
+        })),
+      h(Field, { key: 'reason', label: '人工评估依据' }, h('div', { style: { display: 'flex', gap: 6 } }, [
+        h(Input, {
+          key: 'input', value: assessmentNotes[item.id] ?? item.assessmentReason ?? '', onChange: value => setAssessmentNotes(notes => ({ ...notes, [item.id]: value })),
+          ariaLabel: `设置「${item.title}」的人工评估依据`, placeholder: '例如：已核对全文方法与结果',
+        }),
+        h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveAssessmentReason(item) }, '保存依据'),
+      ])),
       ]),
     ]))),
   ])

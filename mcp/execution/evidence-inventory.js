@@ -55,9 +55,8 @@ async function inventoryEvidence({ project, run_id, limit, offset } = {}) {
   }
 }
 
-// 受控分级写回（ROADMAP P2-5）：绝不自动应用。apply=false（默认）只返回预览，
-// 不修改任何条目；apply=true 才把建议分级写回，且只处理证据 id 显式列出的条目。
-// 允许覆盖 stored_grade 与 suggested_grade 不一致的条目：人工已确认，规则让位。
+// 受控来源线索写回：绝不自动应用。旧 grade 字段不再由规则引擎写入；
+// 唯一可自动发现的是「没有来源线索」，写回目标是 traceability，而非证据强度。
 async function applyEvidenceGrades({ project, run_id, evidence_ids, apply = false, limit = 200 } = {}) {
   const projectName = safeProjectName(project)
   const inventory = await listEvidence({ project: projectName, run_id, limit })
@@ -66,16 +65,15 @@ async function applyEvidenceGrades({ project, run_id, evidence_ids, apply = fals
   for (const entry of inventory.entries) {
     if (requested.size && !requested.has(String(entry.id))) continue
     const assessment = gradeEvidence(entry)
-    // 无法自动判断强度时不生成降级写回计划，保留已有人工分级。
+    // 无法自动判断强度时不生成写回计划，保留已有人工分级。
     if (assessment.grade === 'ungraded') continue
-    const currentGrade = entry.grade || 'ungraded'
-    if (currentGrade === assessment.grade) continue
+    const currentTraceability = entry.traceability || (entry.identifier || entry.url ? 'identified' : 'missing')
+    if (currentTraceability === 'missing') continue
     plan.push({
       id: entry.id,
       title: entry.title,
-      current_grade: currentGrade,
-      suggested_grade: assessment.grade,
-      suggested_grade_label: gradeLabel(assessment.grade),
+      current_traceability: currentTraceability,
+      suggested_traceability: 'missing',
       confidence: assessment.confidence,
       reasoning: assessment.reasoning,
     })
@@ -91,8 +89,8 @@ async function applyEvidenceGrades({ project, run_id, evidence_ids, apply = fals
     if (!plannedIds.has(entry.id)) return entry
     const item = plan.find(candidate => candidate.id === entry.id)
     changed += 1
-    applied.push({ id: entry.id, grade: item.suggested_grade })
-    return { ...entry, grade: item.suggested_grade, graded_by: 'rule-engine-confirmed', graded_at: new Date().toISOString() }
+    applied.push({ id: entry.id, traceability: item.suggested_traceability })
+    return { ...entry, traceability: item.suggested_traceability, traceability_checked_by: 'rule-engine-confirmed', traceability_checked_at: new Date().toISOString() }
   })
   if (changed) await writeProjectEntries(projectName, nextEntries)
   return { project: projectName, apply: true, changed, applied, skipped_confirmed: 0 }

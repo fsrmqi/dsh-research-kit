@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 31 个科研 Tool（文献检索、引用验证、证据管理、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 32 个科研 Tool（文献检索、引用验证、证据管理、人工评估、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。工具会同时暴露 MCP annotations（只读、外呼、幂等提示），业务错误统一带 `isError`，大结果默认使用紧凑 JSON。
 
@@ -89,7 +89,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 31 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 32 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -261,11 +261,12 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
 | `research_evidence_list` | 检索已保存证据；默认摘要输出，支持分页与字段过滤 |
 | `research_evidence_grade` | 检查来源线索：缺失或未分级；实证 / 推论需人工核验 |
+| `research_evidence_assess` | 人工记录来源、研究类型、声明支持程度与证据强度，并保留审核依据 |
 | `research_evidence_review` | 默认证据盘点入口：只读汇总、建议分级、可追溯性风险识别；默认摘要输出并支持分页（默认入口） |
 | `research_evidence_link` | 证据与资产互链 |
 | `research_run_start` | 默认启动入口：创建研究运行、状态护照与人工检查点（默认入口） |
 | `research_evidence_save_batch` | 默认批量保存入口：将检索结果中人工挑选的候选一次性显式保存（默认入口） |
-| `research_evidence_grade_apply` | 预览→确认两段式写回建议分级；默认只预览，绝不自动写回 |
+| `research_evidence_grade_apply` | 预览→确认两段式写回来源线索缺失；不自动判定证据强度 |
 | `research_run_status` | 运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步（默认入口） |
 | `research_run_export` | 导出跨会话状态快照 |
 | `research_run_import` | 导入状态快照恢复执行 |

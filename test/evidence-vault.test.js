@@ -38,10 +38,29 @@ test('条目规范化：字段完整，且默认落到未核验', () => {
   assert.equal(entry.identifier, '33790466')
   assert.deepEqual(entry.tags, ['单细胞', '图谱'], '标签需去重')
   assert.equal(entry.project, '肿瘤队列')
+  assert.equal(entry.traceability, 'identified')
+  assert.equal(entry.sourceVerification, 'unverified')
+  assert.equal(entry.studyType, 'unknown')
+  assert.equal(entry.claimSupport, 'unassessed')
+  assert.equal(entry.strength, 'ungraded')
   assert.ok(entry.id && entry.savedAt)
   for (const key of ['title', 'sourceDatabase', 'identifier', 'url', 'savedAt', 'project', 'tags', 'reason', 'note', 'status']) {
     assert.ok(key in entry, `字段缺失：${key}`)
   }
+})
+
+test('人工评估维度彼此独立，旧 grade/status 仍可兼容读取', () => {
+  const entry = normalizeEvidenceEntry({
+    title: '随机对照研究', url: 'https://example.org/study', status: 'verified', grade: 'empirical',
+    studyType: 'primary-study', claimSupport: 'mixed', strength: 'inference', assessedBy: '研究者', assessmentReason: '已核对全文',
+  })
+  assert.equal(entry.traceability, 'identified')
+  assert.equal(entry.sourceVerification, 'verified')
+  assert.equal(entry.studyType, 'primary-study')
+  assert.equal(entry.claimSupport, 'mixed')
+  assert.equal(entry.strength, 'inference')
+  assert.equal(entry.grade, 'empirical', '兼容字段不因新维度被静默改写')
+  assert.equal(entry.status, 'verified')
 })
 
 test('无法追溯的来源不入库（缺标题 / 缺链接与标识符）', () => {

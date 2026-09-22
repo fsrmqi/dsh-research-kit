@@ -3,7 +3,7 @@ import { z } from 'zod/v3'
 import { searchCatalog, itemById, composeWorkflow } from '../../src/catalog.js'
 import { querySource, listAvailableSources } from '../execution/source-querier.js'
 import { verifyCitation, detectIdentifierType } from '../execution/citation-verifier.js'
-import { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence } from '../execution/evidence-store.js'
+import { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence, assessEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
 import { exportPassport, importPassport, loadPassport } from '../state/material-passport.js'
 import { listRecentRuns, buildRunOverview } from '../state/run-overview.js'
@@ -34,6 +34,8 @@ const EVIDENCE_FIELDS = [
   'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'grade',
   'saved_at', 'run_id', 'note', 'project', 'source', 'linked_assets',
   'graded_by', 'graded_at',
+  'traceability', 'source_verification', 'study_type', 'claim_support', 'strength',
+  'assessed_by', 'assessed_at', 'assessment_reason',
 ]
 const INVENTORY_FIELDS = [
   'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'stored_grade',
@@ -112,6 +114,7 @@ const DISCOVERY_ROUTES = [
       ['research_evidence_list', '检索已保存的证据条目。'],
       ['research_evidence_save', '仅在确认需要时保存单条来源元数据。'],
       ['research_evidence_grade', '针对单条证据作细粒度建议分级。'],
+      ['research_evidence_assess', '人工记录来源核验、研究类型、声明支持程度与证据强度。'],
       ['research_evidence_grade_apply', '预览→确认两段式把建议分级写回；绝不自动应用。'],
     ],
   },
@@ -474,6 +477,31 @@ const tools = [
   },
 
   {
+    name: 'research_evidence_assess',
+    description: '人工记录证据的来源可追溯性、来源核验状态、研究类型、声明支持程度与证据强度；不会从标识符或关键词自动推断。',
+    inputSchema: {
+      evidence_id: z.string().describe('Evidence entry ID from research_evidence_save'),
+      project: z.string().optional().default('default').describe('Project name'),
+      traceability: z.enum(['missing', 'identified']).optional().describe('Whether a traceable identifier or URL is available'),
+      source_verification: z.enum(['unverified', 'verified', 'disputed', 'stale']).optional().describe('Manual source verification status'),
+      study_type: z.enum(['unknown', 'primary-study', 'systematic-review', 'protocol', 'preprint', 'dataset', 'other']).optional().describe('Manual study type'),
+      claim_support: z.enum(['unassessed', 'supported', 'not-supported', 'mixed', 'not-applicable']).optional().describe('Manual assessment of one stated claim'),
+      strength: z.enum(['ungraded', 'empirical', 'inference']).optional().describe('Manual evidence-strength classification'),
+      assessed_by: z.string().max(120).optional().describe('Reviewer name or role'),
+      assessment_reason: z.string().max(500).optional().describe('Brief basis for the manual assessment'),
+    },
+    async execute({ evidence_id, project, ...assessment }) {
+      try {
+        const entry = await assessEvidence(evidence_id, project, assessment)
+        return wrap({ evidence_id, entry }, {
+          source: 'evidence-assessment', confidence: 'verified',
+          disclaimer: '这是人工记录，不代表工具已核验全文或替研究者作出科学结论。',
+        })
+      } catch (e) { return err(`人工评估失败：${e.message}`) }
+    },
+  },
+
+  {
     name: 'research_evidence_review',
     description: 'Review the evidence inventory for a project or run in one read-only pass. Summarizes stored grades, proposes rule-based grades, and identifies entries with missing traceability or unverified status. Does not modify evidence records.',
     inputSchema: {
@@ -570,7 +598,7 @@ const tools = [
 
   {
     name: 'research_evidence_grade_apply',
-    description: 'Apply rule-suggested grades to evidence entries behind a preview-then-confirm gate. Default returns a preview plan without writing anything; set apply=true (after human confirmation) to write the suggested grades. Entries are only processed when their ids are explicitly listed.',
+    description: '在预览与确认后写入规则发现的来源线索缺失；不会自动写入证据强度或声明支持程度。',
     inputSchema: {
       project: z.string().optional().default('default').describe('Project name'),
       run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID to scope the plan'),
@@ -585,7 +613,7 @@ const tools = [
           source: 'evidence-inventory',
           confidence: apply ? 'verified' : 'cached',
           disclaimer: apply
-            ? '写回的分级仍来自规则引擎，人工确认的是「应用」这个动作本身；如需修正请用人工复核覆盖。'
+            ? '写回仅更新来源可追溯性；证据强度与声明支持程度必须由人工评估。'
             : '当前为预览模式，未写入任何数据；确认后需以 apply=true 再次调用才会写回。',
           run_id,
           summary: {
@@ -594,10 +622,10 @@ const tools = [
             planned: result.plan?.length ?? 0,
           },
           next_actions: apply
-            ? ['分级已写回；使用 research_evidence_review 复核最新盘点结果。']
+            ? ['来源线索状态已写回；使用 research_evidence_review 复核最新盘点结果。']
             : (result.plan?.length
-                ? ['人工核对上方计划后，以 apply=true 与相同的 evidence_ids 再次调用才会写回。', '预览不会修改任何条目；可以直接放弃。']
-                : ['当前范围内没有可自动应用的分级建议；未分级条目需人工核验，已有分级保持不变。']),
+                ? ['人工核对上方计划后，以 apply=true 与相同的 evidence_ids 再次调用才会写回来源线索状态。', '预览不会修改任何条目；可以直接放弃。']
+                : ['当前范围内没有可自动应用的来源线索建议；证据强度与声明支持程度需人工核验。']),
           warnings: apply ? [] : ['本次调用是预览：未写回任何分级。'],
         })
       } catch (e) {

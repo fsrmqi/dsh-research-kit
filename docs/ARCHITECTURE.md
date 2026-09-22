@@ -36,7 +36,7 @@
 └───────┴──── DSH 受控 web 服务 / 当前会话模型路由
 ```
 
-![全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主](assets/architecture.svg)
+![全局架构：DSH 工作台将 Prompt 交回宿主执行；同包 MCP Server 提供跨宿主的受控研究工具](assets/architecture.svg)
 
 ### 1.2 不引入独立后端的原因
 
@@ -49,7 +49,7 @@
 3. `/dsh-research-kit/host-capabilities` —— 宿主能力探测（ROADMAP §6）。从工具注册表解析 `mcp__<server>__<tool>` 得到「已连接 MCP 服务器」事实，并报告 Web/Shell/文件系统/模型路由装配事实；只读、无副作用、不改写目录标注。
 4. `/dsh-research-kit/memory-search` —— Memory Center 项目记忆检索（ROADMAP §5）。按已连接 MCP 的工具 Schema 合成参数后代为执行 `mcp__` 前缀检索工具；无法可靠合成参数时明确拒绝。结果只作增强候选上下文，是否注入由用户在面板显式勾选。
 
-四条都不构成"插件自己的后端"：无独立进程状态可持久化、无凭据、无模型选择权，宿主卸载插件后不残留。除此之外的一切仍在浏览器侧完成。
+这四条不构成 DSH 插件自己的后端：无凭据、无模型选择权，宿主卸载插件后不残留。另有 `mcp/server.js` stdio 入口，可被兼容宿主独立启动；它将证据、运行护照、检查点与调用日志保存到本地可配置目录，不启动后台队列或独立模型服务。
 
 | 能力 | 所有者 | 本插件职责 |
 | --- | --- | --- |
@@ -116,12 +116,12 @@ dsh-research-kit/
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
-├── mcp/                           # MCP Server：31 个 research_* 工具的注册、实现与执行层
+├── mcp/                           # MCP Server：32 个 research_* 工具的注册、实现与执行层
 │   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
 │   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
 │   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）
 │   ├── tools/
-│   │   └── index.js               # 31 个工具实现（参数校验、编排、外呼学术 API）
+│   │   └── index.js               # 32 个工具实现（参数校验、编排、外呼学术 API）
 │   ├── state/                     # 运行状态与产物
 │   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
 │   │   ├── material-passport.js    # 跨会话状态快照（护照 YAML）
@@ -185,7 +185,7 @@ dsh-research-kit/
 │   ├── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
 │   └── lib/
 │       └── catalog-entries.mjs      # 分片与聚合入口的两路读取（目录校验与文档统计校验共用）
-├── test/                            # 365 项测试（46 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
+├── test/                            # 367 项测试（46 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── package.json

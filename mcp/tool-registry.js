@@ -96,6 +96,14 @@ export const TOOL_REGISTRY = [
     artifactKind: '',
   },
   {
+    name: 'research_evidence_assess',
+    category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+    helpRoute: 'evidence', labelZh: '人工评估证据',
+    summaryZh: '人工记录来源、研究类型、声明支持程度与证据强度，并保留审核依据',
+    example: "{ evidence_id: '<id>', project: 'demo', strength: 'empirical', assessed_by: '研究者', assessment_reason: '已核对全文方法与结果' }",
+    artifactKind: '',
+  },
+  {
     name: 'research_evidence_review',
     category: 'evidence', tier: 'entry', access: 'read-only', requiresConfirmation: false,
     helpRoute: 'evidence', labelZh: '证据盘点',
@@ -131,7 +139,7 @@ export const TOOL_REGISTRY = [
     name: 'research_evidence_grade_apply',
     category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
     helpRoute: 'evidence', labelZh: '应用证据分级',
-    summaryZh: '预览→确认两段式写回建议分级；默认只预览，绝不自动写回',
+    summaryZh: '预览→确认两段式写回来源线索缺失；不自动判定证据强度',
     example: "{ project: 'demo', evidence_ids: ['<id>'], apply: false }",
     artifactKind: '',
   },

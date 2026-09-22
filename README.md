@@ -8,9 +8,9 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
-> 面向 DeepSeek Harness 的科研工作流目录与启动器：349 条人工审核的工作流、109 个技能条目、129 个科学数据源。
+> 面向 DeepSeek Harness 的科研工作台与跨宿主 MCP 工具集：349 条人工审核的工作流、109 个技能条目、129 个科学数据源，以及 32 个研究工具。
 
-把反复执行的科研任务（审稿、写引言、做综述、设计分析计划）变成**参数化、可编辑、发送前可见**的提示词。插件只负责把任务组装好并交还当前会话，执行仍由你自己的 DSH Agent 完成。
+在 DSH 中，它把反复执行的科研任务变成**参数化、可编辑、发送前可见**的提示词；通过独立 stdio MCP Server，它也可向 Codex、Claude Code、Zed 等宿主提供文献检索、证据管理、研究运行与审阅工具。所有研究判断仍需研究者核验。
 
 ---
 
@@ -18,7 +18,7 @@
 
 本项目是 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（命令行缩写 `dsh`）的插件。DSH 是 DeepSeek 开源的本地 Agent 工作系统，核心设计理念是「一切皆插件」（Everything is a Plugin）——模型、工具、界面、存储都由可替换的插件组成。
 
-**没有 DSH，本插件无法运行。** 它不自带模型、不启动独立服务，只是在 DSH 的会话界面里增加科研入口。
+**DSH 工作台需要 DSH；MCP Server 可独立接入兼容宿主。** 项目不自带模型或 API Key；DSH 侧复用当前会话能力，MCP 侧以本地 stdio 服务运行。
 
 | 需要什么 | 去哪拿 |
 | --- | --- |
@@ -54,7 +54,7 @@ Research Kit 把这四点做成可复用的资产。
 
 关键设计取舍：
 
-- **不调模型、不存密钥**。执行完全交给当前会话；
+- **不持有模型密钥**。DSH 侧复用当前会话模型路由，MCP 侧不选择或托管模型；
 - **不重造文件上传**。材料引用走 DSH 原生 `@文件`；
 - **不假装已检索**。数据源条目如实标注接入前提，未接通时明确回退到 Agent/MCP。
 
@@ -106,7 +106,7 @@ Research Kit 把这四点做成可复用的资产。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
 - **手动编辑保护** — 手动编辑后变更参数/技能会提示不会自动合并；筛选后详情始终属于当前结果集。
 - **宿主动作降级** — `setDraft`/`submit` 缺失时按钮禁用、灰化并说明原因，视图不崩溃。
-- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：31 个 `research_*` 工具（文献检索与核验、证据盘点与分级、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
+- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：32 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
 
 **深色主题与窄屏** — 跟随系统与 DSH 主题切换；880px 以下单列布局；原生 `aria-*` 与焦点环。
 
@@ -228,7 +228,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 
 当前版本 `0.2.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、365 项回归测试（46 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、367 项回归测试（46 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -237,7 +237,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（365 项 / 46 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（367 项 / 46 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 
@@ -249,7 +249,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | --- | --- |
 | [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序** |
 | [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿的完整走法：九阶段、三条查询路径、投稿包清单、MCP 操作链 |
-| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 31 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
+| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 32 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
 | [手工验收清单](docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |
