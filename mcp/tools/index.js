@@ -1,15 +1,15 @@
 
 import { z } from 'zod/v3'
-import { searchCatalog, itemById, composeWorkflow } from '../../src/catalog.js'
-import { querySource, listAvailableSources } from '../execution/source-querier.js'
-import { verifyCitation, detectIdentifierType } from '../execution/citation-verifier.js'
+import { itemById } from '../../src/catalog.js'
+import { querySource } from '../execution/source-querier.js'
+import { verifyCitation } from '../execution/citation-verifier.js'
 import { saveEvidence, saveEvidenceBatch, listEvidence, linkEvidence, assessEvidence } from '../execution/evidence-store.js'
 import { gradeEvidence, gradeLabel } from '../execution/evidence-grader.js'
-import { exportPassport, importPassport, loadPassport } from '../state/material-passport.js'
+import { exportPassport, importPassport } from '../state/material-passport.js'
 import { listRecentRuns, buildRunOverview } from '../state/run-overview.js'
 import { inventoryEvidence, applyEvidenceGrades } from '../execution/evidence-inventory.js'
 import { readCallLogs } from '../execution/call-logger.js'
-import { evaluateCheckpoints, initializeCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
+import { initializeCheckpoints, recordApproval, getCheckpointState } from '../state/checkpoint-manager.js'
 import { generateFigure, listFigureStyles } from '../execution/figure-generator.js'
 import { auditClaims } from '../execution/claim-auditor.js'
 import { linkLiterature } from '../execution/literature-linker.js'
@@ -20,240 +20,13 @@ import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
 import { fetchOpenAlexMetadata } from '../execution/openalex-fetcher.js'
 import { wrap, err } from '../execution/wrapper.js'
 import { contract } from '../execution/contract.js'
-import { stableIdentifier } from '../execution/identifiers.js'
-
-function sourceIdentity(source) {
-  const stable = stableIdentifier(source?.id, source?.url)
-  if (stable) return stable.key
-  const url = String(source?.url || '').trim().replace(/\/$/, '').toLowerCase()
-  if (url) return `url:${url}`
-  return `title:${String(source?.title || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 180)}`
-}
-
-const EVIDENCE_FIELDS = [
-  'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'grade',
-  'saved_at', 'run_id', 'note', 'project', 'source', 'linked_assets',
-  'graded_by', 'graded_at',
-  'traceability', 'source_verification', 'study_type', 'claim_support', 'strength',
-  'assessed_by', 'assessed_at', 'assessment_reason',
-]
-const INVENTORY_FIELDS = [
-  'id', 'title', 'identifier_type', 'identifier', 'url', 'status', 'stored_grade',
-  'suggested_grade', 'suggested_grade_label', 'confidence', 'reasoning', 'saved_at',
-]
-
-function projectFields(item, fields) {
-  return Object.fromEntries(fields.map(field => [field, item[field]]))
-}
-
-function evidenceProjection(entry, { mode, fields } = {}) {
-  if (Array.isArray(fields) && fields.length) return projectFields(entry, fields)
-  if (mode === 'full') return entry
-  const {
-    id, title, identifier_type, identifier, url, status, grade, saved_at, run_id,
-  } = entry
-  return { id, title, identifier_type, identifier, url, status, grade, saved_at, run_id }
-}
-
-function inventoryProjection(entry, { mode, fields } = {}) {
-  if (Array.isArray(fields) && fields.length) return projectFields(entry, fields)
-  if (mode === 'full') return entry
-  const {
-    id, title, identifier_type, identifier, url, status, stored_grade,
-    suggested_grade, suggested_grade_label,
-  } = entry
-  return {
-    id, title, identifier_type, identifier, url, status, stored_grade,
-    suggested_grade, suggested_grade_label,
-  }
-}
-
-function mergeLiteratureResults(results) {
-  const merged = new Map()
-  for (const { sourceId, result } of results) {
-    for (const item of result.sources || []) {
-      const key = sourceIdentity(item)
-      const stable = stableIdentifier(item.id, item.url)
-      const existing = merged.get(key)
-      if (existing) {
-        existing.found_in = [...new Set([...existing.found_in, sourceId])]
-        continue
-      }
-      merged.set(key, {
-        ...item,
-        id: stable?.value || item.id,
-        found_in: [sourceId],
-        identifier_type: stable?.type || detectIdentifierType(item.id) || 'none',
-      })
-    }
-  }
-  return [...merged.values()]
-}
-
-const DISCOVERY_ROUTES = [
-  {
-    id: 'start', label: '启动研究运行', keywords: ['启动', '开始', '项目', '运行', 'run'],
-    chain: [
-      ['research_catalog_search', '按研究目标查找工作流。'],
-      ['research_workflow_compose', '补齐工作流参数并生成可执行 Prompt。'],
-      ['research_run_start', '创建可追溯 run、状态护照和人工检查点。'],
-    ],
-  },
-  {
-    id: 'literature', label: '发现与检索文献', keywords: ['文献', '检索', '论文', 'doi', '引用', '来源', '保存'],
-    chain: [
-      ['research_literature_search', '默认多源检索、去重；核验和保存均须显式开启。'],
-      ['research_evidence_save_batch', '人工挑选候选后批量显式保存。'],
-      ['research_evidence_review', '盘点已保存证据的可追溯性与建议分级。'],
-    ],
-  },
-  {
-    id: 'evidence', label: '管理和盘点证据', keywords: ['证据', '分级', '证据库', '追溯'],
-    chain: [
-      ['research_evidence_review', '只读盘点证据缺口和未核验项。'],
-      ['research_evidence_list', '检索已保存的证据条目。'],
-      ['research_evidence_save', '仅在确认需要时保存单条来源元数据。'],
-      ['research_evidence_grade', '针对单条证据作细粒度建议分级。'],
-      ['research_evidence_assess', '人工记录来源核验、研究类型、声明支持程度与证据强度。'],
-      ['research_evidence_grade_apply', '预览→确认两段式把建议分级写回；绝不自动应用。'],
-    ],
-  },
-  {
-    id: 'review', label: '审阅研究草稿', keywords: ['审阅', '润色', '写作', '草稿', 'claim', '声明'],
-    chain: [
-      ['research_review_output', '默认聚合引用声明、异常、写作和限制语检查。'],
-      ['research_review_claims', '只深挖引用声明对齐时使用。'],
-      ['research_review_anomalies', '只深挖冗余、矛盾与缺失要素时使用。'],
-      ['research_review_writing', '只深挖写作质量问题时使用。'],
-    ],
-  },
-  {
-    id: 'figure', label: '生成论文图表', keywords: ['图表', '作图', '绘图', '可视化', 'figure'],
-    chain: [
-      ['research_figure_list_styles', '先查看可用的论文图表风格。'],
-      ['research_figure_generate', '生成可执行的 matplotlib 脚本。'],
-    ],
-  },
-  {
-    id: 'disclosure', label: '处理 AI 使用披露', keywords: ['披露', '合规', '期刊', '会议', 'ai 使用'],
-    chain: [
-      ['research_disclosure_list_policies', '确认目标期刊或会议的披露规则。'],
-      ['research_disclosure_generate', '按具体政策生成披露声明草案。'],
-    ],
-  },
-  {
-    id: 'resume', label: '恢复或推进研究运行', keywords: ['恢复', '继续', '检查点', 'checkpoint', '护照', '状态'],
-    chain: [
-      ['research_run_status', '先看运行总览：阶段、检查点、证据盘点与推荐下一步。'],
-      ['research_run_import', '从已有 Material Passport 恢复上下文。'],
-      ['research_run_checkpoint_status', '读取当前待审批的人工闸门。'],
-      ['research_run_checkpoint_approve', '仅在人工确认后放行指定阶段。'],
-      ['research_run_export', '交接前导出可追溯的状态快照。'],
-    ],
-  },
-]
-
-function discoverRoute(goal, routeId) {
-  if (routeId && routeId !== 'auto') return DISCOVERY_ROUTES.find(route => route.id === routeId) || null
-  const text = String(goal || '').toLowerCase()
-  return DISCOVERY_ROUTES.find(route => route.keywords.some(keyword => text.includes(keyword))) || null
-}
+import { DISCOVERY_ROUTES, discoveryTools } from './discovery.js'
+import { catalogTools } from './catalog.js'
+import { EVIDENCE_FIELDS, INVENTORY_FIELDS, evidenceProjection, inventoryProjection, mergeLiteratureResults } from './shared.js'
 
 const tools = [
-  {
-    name: 'research_help',
-    description: 'Discover the right Research Kit MCP tools for a goal. Returns a short recommended call chain and explains when to use lower-level tools. This tool is read-only and performs no research action.',
-    inputSchema: {
-      goal: z.string().max(500).optional().describe('Plain-language research goal, for example “帮我找文献” or “审阅这篇草稿”'),
-      route: z.enum(['auto', 'start', 'literature', 'evidence', 'review', 'figure', 'disclosure', 'resume']).optional().default('auto').describe('Optional explicit task route; auto infers it from goal.'),
-      include_all_routes: z.boolean().optional().default(false).describe('Include the complete route directory instead of only the best match.'),
-    },
-    async execute({ goal, route, include_all_routes }) {
-      const selected = discoverRoute(goal, route)
-      const serialize = item => ({
-        id: item.id,
-        label: item.label,
-        recommended_chain: item.chain.map(([tool, reason], index) => ({ step: index + 1, tool, reason })),
-      })
-      return contract({
-        ...(selected ? { recommended: serialize(selected) } : {}),
-        ...(selected ? {} : { guidance: '请描述目标，或在 route 中指定任务类别；也可先从“启动研究运行”开始。' }),
-        ...(include_all_routes ? { routes: DISCOVERY_ROUTES.map(serialize) } : {}),
-        available_routes: DISCOVERY_ROUTES.map(item => ({ id: item.id, label: item.label })),
-      }, {
-        source: 'research-tool-discovery',
-        confidence: 'verified',
-        disclaimer: '此工具只推荐调用路径；不会代表你执行检索、写入、审批或外部请求。',
-        summary: {
-          route: selected?.id || null,
-          routes_available: DISCOVERY_ROUTES.length,
-        },
-        next_actions: selected
-          ? selected.chain.map(([tool, reason]) => `${tool}：${reason}`)
-          : ['补充目标描述后重试，或从 include_all_routes=true 查看完整路由目录。'],
-      })
-    },
-  },
-
-  {
-    name: 'research_catalog_search',
-    description: 'Search the catalog of 317+ research workflows by keyword, category, or tags. Returns workflow summaries with input schemas.',
-    inputSchema: {
-      query: z.string().optional().describe('Search keyword (matches name, description, tags, category, prompt text)'),
-      category: z.string().optional().describe('Filter by category (e.g. 论文与手稿, 文献研究)'),
-      type: z.enum(['all', 'workflow', 'skill', 'database']).default('workflow').describe('Filter by item type'),
-      limit: z.number().int().min(1).max(50).default(10).describe('Max results'),
-    },
-    async execute({ query, category, type, limit }) {
-      const results = searchCatalog({ query: query || '', type: type || 'workflow' })
-      let filtered = results
-      if (category) filtered = results.filter(item => item.category === category)
-      const items = filtered.slice(0, limit).map(item => ({
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        category: item.category,
-        tags: item.tags || [],
-        tool_mode: item.tool_mode || 'guided',
-        input_schema: item.input_schema || null,
-        requires_files: item.requiresFiles || false,
-      }))
-      return wrap({ workflows: items, total: filtered.length }, { source: 'catalog/workflows', confidence: 'verified' })
-    },
-  },
-
-  {
-    name: 'research_workflow_compose',
-    description: 'Fill in a workflow\'s parameters and generate the final prompt. Returns the composed prompt with missing params, limitations, and suggested skills/sources.',
-    inputSchema: {
-      workflow_id: z.string().describe('Workflow ID from research_catalog_search'),
-      params: z.record(z.string()).optional().describe('Parameter key-value pairs to fill into the workflow template'),
-      skill_ids: z.array(z.string()).optional().describe('Additional skill/guidance module IDs to attach'),
-      source_ids: z.array(z.string()).optional().describe('Additional data source IDs to attach'),
-    },
-    async execute({ workflow_id, params, skill_ids, source_ids }) {
-      const workflow = itemById(workflow_id)
-      if (!workflow || workflow.type !== 'workflow') return err(`工作流 "${workflow_id}" 不存在。`)
-      try {
-        const result = composeWorkflow(workflow, params || {}, {
-          enforceRequired: false,
-          extraSkillIds: skill_ids || [],
-          extraDatabaseIds: source_ids || [],
-        })
-        return wrap({
-          prompt: result.prompt,
-          missing_params: result.missing,
-          limitations: workflow.limitations || [],
-          suggested_skills: (workflow.suggestedSkillIds || []).map(id => ({ id, name: itemById(id)?.name || id })),
-          suggested_sources: (workflow.suggestedDatabaseIds || []).map(id => ({ id, name: itemById(id)?.name || id })),
-          agent_guidance: workflow.agent_guidance || null,
-          checkpoints: workflow.checkpoints || [],
-        }, { source: `catalog/workflows#${workflow_id}`, confidence: 'verified' })
-      } catch (e) {
-        return err(e.message)
-      }
-    },
-  },
+  ...discoveryTools,
+  ...catalogTools,
 
   {
     name: 'research_source_query',

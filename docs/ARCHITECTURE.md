@@ -121,7 +121,10 @@ dsh-research-kit/
 │   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
 │   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）
 │   ├── tools/
-│   │   └── index.js               # 32 个工具实现（参数校验、编排、外呼学术 API）
+│   │   ├── index.js               # 对外注册入口：聚合工具数组并保持稳定导出
+│   │   ├── catalog.js             # 目录检索与工作流 Prompt 组装
+│   │   ├── discovery.js           # 工具发现路由与 research_help（只读）
+│   │   └── shared.js              # 证据字段投影与多源文献去重（跨工具共享）
 │   ├── state/                     # 运行状态与产物
 │   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
 │   │   ├── material-passport.js    # 跨会话状态快照（护照 YAML）
