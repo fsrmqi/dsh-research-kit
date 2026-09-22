@@ -124,6 +124,13 @@ dsh-research-kit/
 │   │   ├── index.js               # 对外注册入口：聚合工具数组并保持稳定导出
 │   │   ├── catalog.js             # 目录检索与工作流 Prompt 组装
 │   │   ├── discovery.js           # 工具发现路由与 research_help（只读）
+│   │   ├── evidence.js            # 证据保存、盘点、人工评估、写回与资产关联
+│   │   ├── figures.js             # 论文图表脚本生成与风格查询
+│   │   ├── literature.js          # 单源检索与稳定标识符存在性核验
+│   │   ├── literature-search.js   # 多源检索编排、互引分析与 OpenAlex 元数据
+│   │   ├── observability.js       # 脱敏工具调用统计与链路中断观测
+│   │   ├── review.js              # 草稿审阅、限制语检查与 AI 使用披露
+│   │   ├── runs.js                # 研究运行、护照与人工检查点
 │   │   └── shared.js              # 证据字段投影与多源文献去重（跨工具共享）
 │   ├── state/                     # 运行状态与产物
 │   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
