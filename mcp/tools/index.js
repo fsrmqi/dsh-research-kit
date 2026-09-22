@@ -276,10 +276,10 @@ const tools = [
 
   {
     name: 'research_citation_verify',
-    description: 'Verify a citation exists and optionally check if a claim is supported by the source. Supports DOI, PMID, arXiv ID.',
+    description: '核验 DOI、PMID、arXiv 来源是否存在；提供声明时仅返回关键词线索，支持性保持待人工核验。',
     inputSchema: {
       identifier: z.string().describe('DOI (10.xxxx/xxx), PMID (number), or arXiv ID (e.g. 2301.00001)'),
-      claim: z.string().optional().describe('The claim to verify against the source. If provided, checks if the abstract supports this claim.'),
+      claim: z.string().optional().describe('待核验声明；仅提供标题与摘要关键词线索，不自动判断支持或反驳。'),
     },
     async execute({ identifier, claim }) {
       try {
@@ -287,7 +287,7 @@ const tools = [
         return wrap(result, {
           source: 'citation-verifier',
           confidence: result.claim_supported === undefined ? 'api' : 'api',
-          disclaimer: claim ? 'claim 支持性判断基于摘要关键词匹配，不能替代全文核验。' : '存在性判断基于 Crossref/PubMed/arXiv API 实时查询。',
+          disclaimer: claim ? '关键词重合仅作相关性线索，claim 支持性保持待核验，需人工核验全文。' : '存在性判断基于 Crossref/PubMed/arXiv API 实时查询。',
         })
       } catch (e) {
         return err(`验证失败：${e.message}`)
@@ -445,7 +445,7 @@ const tools = [
 
   {
     name: 'research_evidence_grade',
-    description: 'Grade an evidence entry as empirical, inference, or missing based on source reliability and content analysis.',
+    description: '检查证据是否提供来源线索：缺少标识符及链接时返回 missing，否则返回 ungraded；实证或推论等级需人工核验原文。',
     inputSchema: {
       evidence_id: z.string().describe('Evidence entry ID from research_evidence_save'),
       project: z.string().optional().describe('Project name'),
@@ -597,7 +597,7 @@ const tools = [
             ? ['分级已写回；使用 research_evidence_review 复核最新盘点结果。']
             : (result.plan?.length
                 ? ['人工核对上方计划后，以 apply=true 与相同的 evidence_ids 再次调用才会写回。', '预览不会修改任何条目；可以直接放弃。']
-                : ['当前范围内没有建议分级与已存分级不同的条目；无需应用。']),
+                : ['当前范围内没有可自动应用的分级建议；未分级条目需人工核验，已有分级保持不变。']),
           warnings: apply ? [] : ['本次调用是预览：未写回任何分级。'],
         })
       } catch (e) {

@@ -66,6 +66,8 @@ async function applyEvidenceGrades({ project, run_id, evidence_ids, apply = fals
   for (const entry of inventory.entries) {
     if (requested.size && !requested.has(String(entry.id))) continue
     const assessment = gradeEvidence(entry)
+    // 无法自动判断强度时不生成降级写回计划，保留已有人工分级。
+    if (assessment.grade === 'ungraded') continue
     const currentGrade = entry.grade || 'ungraded'
     if (currentGrade === assessment.grade) continue
     plan.push({

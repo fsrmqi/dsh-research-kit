@@ -1,91 +1,72 @@
 import { test } from 'node:test'
-import assert from 'node:assert'
+import assert from 'node:assert/strict'
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { gradeEvidence, gradeLabel } from '../mcp/execution/evidence-grader.js'
 
-test('arXiv 来源应评为 inference，而非 missing', () => {
-  const entry = {
-    identifier_type: 'arxiv',
-    identifier: '2301.00001',
-    title: 'Machine Learning Advances',
-    note: 'A novel approach to transformer models',
+test('DOI、PMID、PMCID、NCT 和预印本标识均不足以自动判定证据强度', () => {
+  for (const [identifier_type, identifier] of [['doi', '10.9999/placeholder'], ['pmid', '12345678'], ['pmcid', 'PMC1234567'], ['nct', 'NCT01234567'], ['arxiv', '2301.00001']]) {
+    const result = gradeEvidence({ identifier_type, identifier, title: '研究方案', status: 'unverified' })
+    assert.equal(result.grade, 'ungraded', identifier_type)
+    assert.ok(result.confidence <= 0.3)
   }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'inference', 'arXiv 有标识符应评为推论级')
-  assert.ok(result.confidence >= 0.5 && result.confidence <= 0.7, '置信度应在合理范围')
 })
 
-test('URL 来源应评为 inference，而非 missing', () => {
-  const entry = {
-    identifier_type: 'none',
-    url: 'https://example.com/paper',
-    title: 'Example Paper',
-    note: 'Some research findings',
-  }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'inference', 'URL 有链接应评为推论级')
+test('URL 来源有追溯线索，但不能自动评为推论', () => {
+  assert.equal(gradeEvidence({ url: 'https://example.com/paper' }).grade, 'ungraded')
 })
 
-test('DOI 且无推断用语应评为 empirical', () => {
-  const entry = {
-    identifier_type: 'doi',
-    identifier: '10.1038/s41586-023-06001-1',
-    title: 'Nature Article',
-    note: 'Experimental results on protein folding',
+test('谨慎措辞不会把已有 DOI 判为来源缺失', () => {
+  for (const note of ['结果可能有效', 'Results may suggest an effect', 'We hypothesize an effect']) {
+    const result = gradeEvidence({ identifier_type: 'doi', identifier: '10.9999/example', note })
+    assert.equal(result.grade, 'ungraded')
+    assert.doesNotMatch(result.reasoning, /标识符或链接不完整/)
   }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'empirical', 'DOI 实证级')
-  assert.strictEqual(result.confidence, 0.7, '无强主张用语时 confidence=0.7')
 })
 
-test('DOI 含强主张用语 confidence 应为 0.85', () => {
-  const entry = {
-    identifier_type: 'doi',
-    identifier: '10.1038/s41586-023-06001-1',
-    title: 'Proven Mechanism',
-    note: 'We prove that X causes Y through rigorous experiments',
-  }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'empirical', 'DOI 仍是实证级')
-  assert.strictEqual(result.confidence, 0.85, '含强主张用语时 confidence=0.85')
+test('强断言不提高分级或置信度', () => {
+  const entry = { identifier_type: 'doi', identifier: '10.9999/example' }
+  assert.deepEqual(gradeEvidence({ ...entry, note: 'We prove that X causes Y' }), gradeEvidence(entry))
 })
 
-test('gradeLabel 返回中文标签', () => {
-  assert.strictEqual(gradeLabel('empirical'), '实证')
-  assert.strictEqual(gradeLabel('inference'), '推论')
-  assert.strictEqual(gradeLabel('missing'), '缺失')
-  assert.strictEqual(gradeLabel('ungraded'), '未分级')
-  assert.strictEqual(gradeLabel('unknown'), 'unknown') // 未知值原样返回
+test('gradeLabel 保留现有等级兼容性', () => {
+  for (const [grade, label] of [['empirical', '实证'], ['inference', '推论'], ['missing', '缺失'], ['ungraded', '未分级'], ['unknown', 'unknown']]) {
+    assert.equal(gradeLabel(grade), label)
+  }
 })
 
-test('pmcid 来源应评为 empirical', () => {
-  const entry = {
-    identifier_type: 'pmcid',
-    identifier: 'PMC1234567',
-    title: 'PubMed Central Article',
-    note: 'Clinical trial results',
-  }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'empirical', 'PMCID 是 peer-reviewed 类型')
+test('来源已核验不等于研究结论已被支持', () => {
+  assert.equal(gradeEvidence({ identifier_type: 'doi', identifier: '10.9999/example', status: 'verified' }).grade, 'ungraded')
 })
 
-test('nct 试验编号应评为 empirical', () => {
-  const entry = {
-    identifier_type: 'nct',
-    identifier: 'NCT01234567',
-    title: 'Clinical Trial Registration',
-    note: 'Phase III randomized controlled trial',
+test('缺少来源或仅空白字段才评为缺失', () => {
+  for (const entry of [{}, { identifier_type: 'doi', identifier: '  ', url: '  ' }, { identifier_type: 'none', identifier: 'unknown' }]) {
+    assert.equal(gradeEvidence(entry).grade, 'missing')
   }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'empirical', 'NCT 是 peer-reviewed 类型')
 })
 
-test('纯 URL 无标识符仍为 inference 不是 missing', () => {
-  const entry = {
-    identifier_type: 'none',
-    url: 'https://blog.example.com/research',
-    title: 'Research Blog Post',
+test('盘点保留来源线索，预览及应用未知分级不会覆盖人工分级', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'dsh-grade-regression-'))
+  const previous = process.env.DSH_RESEARCH_KIT_HOME
+  process.env.DSH_RESEARCH_KIT_HOME = home
+  try {
+    const { writeProjectEntries, readProjectEntries } = await import('../mcp/execution/evidence-store.js')
+    const { inventoryEvidence, applyEvidenceGrades } = await import('../mcp/execution/evidence-inventory.js')
+    const entry = { id: 'human-graded', identifier_type: 'doi', identifier: '10.9999/example', grade: 'empirical', graded_by: 'human', status: 'verified', project: 'review' }
+    await writeProjectEntries('review', [entry])
+    const inventory = await inventoryEvidence({ project: 'review' })
+    assert.equal(inventory.entries[0].suggested_grade, 'ungraded')
+    assert.equal(inventory.entries[0].stored_grade, 'empirical')
+    assert.equal(inventory.summary.missing_traceability, 0)
+    const preview = await applyEvidenceGrades({ project: 'review', evidence_ids: [entry.id] })
+    assert.deepEqual(preview.plan, [])
+    const applied = await applyEvidenceGrades({ project: 'review', evidence_ids: [entry.id], apply: true })
+    assert.equal(applied.changed, 0)
+    assert.deepEqual(await readProjectEntries('review'), [entry])
+  } finally {
+    if (previous === undefined) delete process.env.DSH_RESEARCH_KIT_HOME
+    else process.env.DSH_RESEARCH_KIT_HOME = previous
+    await rm(home, { recursive: true, force: true })
   }
-  const result = gradeEvidence(entry)
-  assert.strictEqual(result.grade, 'inference', 'URL 可追溯但弱于 DOI')
-  assert.strictEqual(result.confidence, 0.5, 'URL 的 confidence=0.5')
 })

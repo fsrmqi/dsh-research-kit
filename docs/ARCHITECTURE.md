@@ -129,11 +129,11 @@ dsh-research-kit/
 │   └── execution/                 # 审阅与生成执行层（纯逻辑 + 外呼适配器）
 │       ├── anomaly-detector.js     # 冗余/矛盾/缺失异常检测
 │       ├── call-logger.js          # 工具调用日志（活动面板与用法统计数据源）
-│       ├── citation-verifier.js    # DOI/PMID/arXiv 存在性与 claim 支持核验
+│       ├── citation-verifier.js    # DOI/PMID/arXiv 存在性与关键词线索，声明支持性待人工核验
 │       ├── claim-auditor.js        # 文本级 claim-source 对齐审计
 │       ├── contract.js             # 执行层契约（输入输出形状）
 │       ├── disclosure-generator.js  # 期刊 AI 披露声明生成（15 个期刊政策）
-│       ├── evidence-grader.js      # 实证/推论/缺失三级分级
+│       ├── evidence-grader.js      # 来源缺失检查；有来源则未分级，证据强度需人工核验
 │       ├── evidence-inventory.js   # 证据盘点汇总
 │       ├── evidence-store.js       # 证据条目持久化（文件系统为真源）
 │       ├── figure-generator.js    # 多面板 matplotlib 图表脚本生成（8 个风格）

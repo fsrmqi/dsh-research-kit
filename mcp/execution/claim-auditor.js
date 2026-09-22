@@ -114,7 +114,7 @@ async function auditClaims(text, { max_claims = 20 } = {}) {
   return wrap({ claims: results, summary }, {
     source: 'claim-auditor',
     confidence: 'api',
-    disclaimer: 'claim 支持性判断基于摘要关键词匹配，不能替代全文核验。',
+    disclaimer: '关键词重合仅作相关性线索，claim 支持性保持待核验，需人工核验全文。',
   })
 }
 

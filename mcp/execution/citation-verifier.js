@@ -99,16 +99,19 @@ function keywordOverlap(text, claim) {
 }
 
 function assessClaim(metadata, claim) {
-  const searchText = `${metadata.title} ${metadata.abstract}`.trim()
-  if (!searchText) return { supported: null, confidence: 0.3, reason: '无摘要可匹配，无法判断 claim 支持性。' }
-  const overlap = keywordOverlap(searchText, claim)
-  if (overlap.ratio >= 0.5) {
-    return { supported: true, confidence: Math.min(0.6 + overlap.ratio * 0.3, 0.9), reason: `摘要匹配度 ${(overlap.ratio * 100).toFixed(0)}%（${overlap.matched}/${overlap.total} 关键词命中）。`, matched_terms: overlap.matched_terms }
+  const title = String(metadata.title || '').trim()
+  const abstract = String(metadata.abstract || '').trim()
+  const overlap = keywordOverlap(`${title} ${abstract}`, claim)
+  // 词汇重合不能判断否定、因果、研究对象或结论强度；只作为人工核验线索。
+  // 即使完全重合或完全不重合，也不据此断言支持或反驳。
+  return {
+    supported: null,
+    confidence: 0.3,
+    reason: abstract
+      ? `标题与摘要关键词重合 ${overlap.matched}/${overlap.total}，仅表示词汇相关性，不能判断 claim 支持性；需人工核验全文。`
+      : '缺少摘要，标题关键词仅作检索线索，无法判断 claim 支持性；需人工核验全文。',
+    matched_terms: overlap.matched_terms,
   }
-  if (overlap.ratio >= 0.25) {
-    return { supported: null, confidence: 0.4 + overlap.ratio, reason: `摘要部分匹配（${overlap.matched}/${overlap.total}），需人工核验全文。`, matched_terms: overlap.matched_terms }
-  }
-  return { supported: false, confidence: Math.max(0.5, 0.8 - overlap.ratio), reason: `摘要匹配度低（${overlap.matched}/${overlap.total}），claim 可能不被原文支持。`, matched_terms: overlap.matched_terms }
 }
 
 async function verifyCitation(identifier, claim) {
