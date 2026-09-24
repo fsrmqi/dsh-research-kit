@@ -61,6 +61,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 槽位注册测试（调用注册表 + 产物包含性检查） | 已实现 | `test/dsh-slots.test.js` |
 | 证据库持久化 / 项目隔离 / 去重 / 备份（跨刷新以最小 IndexedDB 桩断言） | 已实现 | `test/evidence-vault.test.js` + `test/helpers/fake-indexeddb.js` |
 | 证据库写入决策（未选择不注入 / 宿主不支持时降级 / 选择基准） | 已实现（纯逻辑 + 视图接线契约） | `test/evidence-vault.test.js` 的 4c 段 |
+| 证据库 Agent 批量初判（一键执行 / 默认跳过人工条目 / 可选重跑 / 取消 / 并发快照保护） | 已实现；仅判断元数据与笔记，不读取全文，不改变人工核验状态 | `dsh/evidence-agent-assess.js` + `src/lib/agent-evidence-batch.js` + `test/evidence-agent-batch.test.js` |
 | 证据图谱节点与边（含已保存证据接入、布局稳定性、端口路由、邻域/路径、URL 视图状态、不暴露笔记） | 已实现 | `test/evidence-graph.test.js` |
 | 组装回放（分区① 内嵌紧凑回放 + 独立 viewer 弹窗） | 已实现 | `src/route-replay.js` + `src/lib/archify-adapter.js` + `test/route-replay.test.js` |
 | 研究结果解释图（diagram IR → 单文件交互 HTML） | 已实现（工具链；仓库内不预置 IR 文件） | `scripts/render-diagrams.mjs` + `scripts/validate-diagrams.mjs` |

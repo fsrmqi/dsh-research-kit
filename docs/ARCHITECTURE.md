@@ -98,7 +98,7 @@ dsh-research-kit/
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装 + 内嵌组装回放
 │   ├── route-replay.js              # 组装回放：trace 分段、引用块预览、独立 viewer 弹窗（§3.2）
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
-│   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出）与保存表单
+│   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出 / Agent 批量初判）与保存表单
 │   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点 + 自动沉淀开关与结论追溯面板
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
@@ -169,7 +169,8 @@ dsh-research-kit/
 │   ├── promptkit-client.js          # PromptKit 同源延迟脚本路由
 │   ├── archify-template.js          # Archify viewer 同源延迟模板路由
 │   ├── agent-activity.js           # Agent 活动面板：调用轨迹聚合、运行 ID 自动捕获与检查点确认桥接（HTTP handler）
-│   └── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
+│   ├── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
+│   └── evidence-agent-assess.js   # 当前会话模型的证据元数据批量初判（不读取全文、不改人工状态）
 ├── ui/
 │   ├── package.json                 # 浏览器子包元数据
 │   ├── client.js                    # 构建生成的 DSH ModuleLoader 主包（勿手改）
@@ -481,6 +482,8 @@ composeWorkflow(workflow, values, …)
 注入与否由纯函数 `planCitationWrite()` 决策，它返回 `empty / unsupported / write` 三态，**只有 `write` 才允许调用宿主 `inputActions.setDraft()`**。因此「未选择不注入」不是渲染层的巧合，而是有专门回归测试守护的契约：未勾选时写入按钮为禁用态、决策返回空文本；宿主未提供输入框操作时按钮同样禁用，但引用块仍照常显示，用户可自行复制粘贴。写入始终是用户显式动作——草稿增强、工作流启动与 Agent 调用都不会静默注入历史证据。
 
 选择集（`selectedEntries`）以**全部证据条目**（`entries`）为基准，而不是当前筛选结果（`filtered`）：勾选是用户明确做出的跨筛选状态，调整检索词或核验状态筛选只改变「看见什么」，不得悄悄撤销「已选择什么」——否则按钮计数会与用户认知不符。项目切换时选择清空，因此不会跨项目带入。这与工作台资源选择器**有意不同**：那里的选中项是「当前视图下要用于组装 Prompt 的资源」，必须属于当前结果集（见 §3.1），筛选即切换选中项；证据库的勾选是跨筛选累积的引用清单，两者语义不同，不要统一成一种写法。
+
+**Agent 批量初判（已实现）**：证据库操作区提供「一键用 Agent 判断」。`planAgentEvidenceBatch()` 默认按人工评估标记排除已处理条目；用户勾选「包含人工处理过的」后，允许重新请求当前会话模型的最新初判。请求按每批最多 6 条分批，带进度与取消；服务端路由为 `POST /dsh-research-kit/evidence-agent-assess?session_id=...`，只发送标题、链接、标识符、来源数据库、保存原因和笔记。模型输出必须通过枚举与 ID 完整性校验，结果写入 `agentAssessment`，前五次旧结果保留在 `agentAssessmentHistory`。写回前重新读取当前条目并做指纹比对，期间被人工修改或删除的条目会跳过，避免覆盖并发更新。Agent 结果不改变 `status`、`assessedBy`、`assessedAt` 或 `assessmentReason`，也不等同于 DOI/全文核验；模型没有来源访问能力时必须保守返回待判断值。
 
 ### 3.5 证据图谱（分区④）
 
