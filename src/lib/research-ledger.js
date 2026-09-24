@@ -44,13 +44,7 @@ export function normalizeResearchLedgerEvent(input = {}) {
 }
 
 export function researchLedgerSummary(events = []) {
-  const latest = new Map()
-  for (const event of events) {
-    if (event.kind !== 'screening') continue
-    const previous = latest.get(event.evidenceId)
-    if (!previous || event.at >= previous.at) latest.set(event.evidenceId, event)
-  }
-  const decisions = [...latest.values()]
+  const decisions = [...latestResearchScreening(events).values()]
   return {
     searches: events.filter(item => item.kind === 'search').length,
     included: decisions.filter(item => item.decision === 'include').length,
@@ -58,4 +52,14 @@ export function researchLedgerSummary(events = []) {
     pending: decisions.filter(item => item.decision === 'pending').length,
     artifacts: events.filter(item => item.kind === 'artifact').length,
   }
+}
+
+export function latestResearchScreening(events = []) {
+  const latest = new Map()
+  for (const event of events) {
+    if (event.kind !== 'screening') continue
+    const previous = latest.get(event.evidenceId)
+    if (!previous || event.at > previous.at) latest.set(event.evidenceId, event)
+  }
+  return latest
 }

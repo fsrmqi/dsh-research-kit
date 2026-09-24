@@ -1931,7 +1931,7 @@ window.__ModuleLoader__.load({
       { primary: '作物遗传育种', secondary: '抗逆性状', pattern: /耐盐|抗旱|盐胁迫|抗病|stress.toleran|salt.toleran|drought/i },
       { primary: '作物遗传育种', secondary: '产量性状', pattern: /产量|粒重|穗长|yield|grain.weight/i },
       { primary: '分子机制', secondary: '基因功能', pattern: /基因功能|候选基因|突变体|gene.function|candidate.gene|mutant/i },
-      { primary: '分子机制', secondary: '表达调控', pattern: /表达量|转录因子|调控网络|gene.expression|transcription.factor/i },
+      { primary: '分子机制', secondary: '表达调控', pattern: /表达量|基因表达|转录因子|调控网络|gene.expression|transcription.factor/i },
       { primary: '生物信息学', secondary: '单细胞分析', pattern: /单细胞|single.cell|scRNA/i },
       { primary: '生物信息学', secondary: '转录组分析', pattern: /转录组|RNA.seq|transcriptom/i },
       { primary: '临床研究', secondary: '临床试验', pattern: /临床试验|随机对照|clinical.trial|randomized.controlled/i },
@@ -2186,13 +2186,7 @@ window.__ModuleLoader__.load({
     }
 
     function researchLedgerSummary(events = []) {
-      const latest = new Map()
-      for (const event of events) {
-        if (event.kind !== 'screening') continue
-        const previous = latest.get(event.evidenceId)
-        if (!previous || event.at >= previous.at) latest.set(event.evidenceId, event)
-      }
-      const decisions = [...latest.values()]
+      const decisions = [...latestResearchScreening(events).values()]
       return {
         searches: events.filter(item => item.kind === 'search').length,
         included: decisions.filter(item => item.decision === 'include').length,
@@ -2200,6 +2194,16 @@ window.__ModuleLoader__.load({
         pending: decisions.filter(item => item.decision === 'pending').length,
         artifacts: events.filter(item => item.kind === 'artifact').length,
       }
+    }
+
+    function latestResearchScreening(events = []) {
+      const latest = new Map()
+      for (const event of events) {
+        if (event.kind !== 'screening') continue
+        const previous = latest.get(event.evidenceId)
+        if (!previous || event.at > previous.at) latest.set(event.evidenceId, event)
+      }
+      return latest
     }
 
 
@@ -5655,6 +5659,7 @@ window.__ModuleLoader__.load({
       const [organizerPlan, setOrganizerPlan] = React.useState(null)
       const [organizerBusy, setOrganizerBusy] = React.useState(false)
       const [organizerProgress, setOrganizerProgress] = React.useState('')
+      const [organizerLog, setOrganizerLog] = React.useState([])
       const [organizerJournal, setOrganizerJournal] = React.useState(null)
       const [claims, setClaims] = React.useState([])
       const [ledger, setLedger] = React.useState([])
@@ -5791,6 +5796,7 @@ window.__ModuleLoader__.load({
         try {
           const run = activeResearchRun()
           if (!run) throw new Error('当前没有研究运行；请先从工作流启动一次研究运行，再记录产出。')
+          if (project && run.project && project !== run.project) throw new Error(`当前证据项目「${project}」与活跃运行「${run.project}」不一致；请切换项目后再记录产出。`)
           await store.saveResearchLedgerEvent({
             kind: 'artifact', project: run.project || project, runId: run.id,
             title: artifactTitle, datasetId: artifactDataset, codeVersion: artifactCode,
@@ -5864,12 +5870,14 @@ window.__ModuleLoader__.load({
         if (organizerBusy) return
         setOrganizerBusy(true)
         setOrganizerProgress('正在扫描全部项目与关联')
+        setOrganizerLog(['开始扫描项目与关联'])
         try {
           await syncEvidenceVaultWithFiles(undefined, { force: true })
           const plan = await previewProjectOrganization({ store, assetProvider })
           setOrganizerPlan(plan)
+          setOrganizerLog(current => [...current, `扫描完成：${plan.length} 个可整理项目`])
           setNotice(plan.length ? `找到 ${plan.length} 个可整理的任务型项目；请检查建议后一次确认。` : '没有发现需要整理的已知任务型项目。')
-        } catch (error) { setNotice(`⚠️ 无法完整扫描项目：${error?.message || error}`) }
+        } catch (error) { setOrganizerLog(current => [...current, `扫描失败：${error?.message || error}`]); setNotice(`⚠️ 无法完整扫描项目：${error?.message || error}`) }
         finally { setOrganizerBusy(false); setOrganizerProgress('') }
       }
 
@@ -5877,15 +5885,18 @@ window.__ModuleLoader__.load({
         const mappings = (organizerPlan || []).filter(item => item.selected).map(({ from, to }) => ({ from, to }))
         if (!mappings.length || organizerBusy) return
         setOrganizerBusy(true)
+        setOrganizerLog(current => [...current, `确认整理 ${mappings.length} 个项目`])
         try {
-          const journal = await applyProjectOrganization({ store, assetProvider, mappings, onProgress: setOrganizerProgress })
+          const journal = await applyProjectOrganization({ store, assetProvider, mappings, onProgress: message => {
+            setOrganizerProgress(message); setOrganizerLog(current => [...current, message])
+          } })
           setOrganizerJournal(journal)
           setOrganizerPlan(null)
           setProject(getActiveProject())
           invalidateEvidenceSync()
           publishEvidenceVault()
           setNotice(`已整理 ${mappings.length} 个项目；原项目名已保留，可用“撤销上次整理”恢复。`)
-        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+        } catch (error) { setOrganizerLog(current => [...current, `整理失败：${error?.message || error}`]); setNotice(`⚠️ ${error?.message || error}`) }
         finally { setOrganizerBusy(false); setOrganizerProgress('') }
       }
 
@@ -5893,13 +5904,15 @@ window.__ModuleLoader__.load({
         if (organizerBusy) return
         setOrganizerBusy(true)
         try {
-          const journal = await undoProjectOrganization({ store, assetProvider, onProgress: setOrganizerProgress })
+          const journal = await undoProjectOrganization({ store, assetProvider, onProgress: message => {
+            setOrganizerProgress(message); setOrganizerLog(current => [...current, message])
+          } })
           setOrganizerJournal({ ...journal, status: 'undone' })
           setProject(getActiveProject())
           invalidateEvidenceSync()
           publishEvidenceVault()
           setNotice('已撤销上次项目整理，证据与关联已恢复原归属。')
-        } catch (error) { setNotice(`⚠️ 撤销未完成：${error?.message || error}`) }
+        } catch (error) { setOrganizerLog(current => [...current, `撤销失败：${error?.message || error}`]); setNotice(`⚠️ 撤销未完成：${error?.message || error}`) }
         finally { setOrganizerBusy(false); setOrganizerProgress('') }
       }
 
@@ -5938,7 +5951,8 @@ window.__ModuleLoader__.load({
       }
       const exportResearchRecord = () => {
         try {
-          const includedIds = new Set(ledger.filter(item => item.kind === 'screening' && item.decision === 'include').map(item => item.evidenceId))
+          const includedIds = new Set([...latestResearchScreening(ledger).values()]
+            .filter(item => item.decision === 'include').map(item => item.evidenceId))
           const cited = entries.filter(item => includedIds.has(item.id)).map(item => ({
             id: item.id, title: item.title, identifier: item.identifier, identifierKind: item.identifierKind,
             url: item.url, project: item.project, status: item.status,
@@ -6138,6 +6152,8 @@ window.__ModuleLoader__.load({
               ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
             organizerBusy ? h('span', { key: 'progress', role: 'status', style: { fontSize: 12, color: C.muted } }, organizerProgress || '正在整理…') : null,
           ]),
+          organizerLog.length ? h('div', { key: 'organizer-log', role: 'status', style: { maxHeight: 100, overflowY: 'auto', fontSize: 11, color: C.muted, display: 'grid', gap: 3 } },
+            organizerLog.slice(-10).map((line, index) => h('span', { key: `${index}:${line}` }, line))) : null,
           organizerPlan ? h('div', { key: 'organizer-preview', style: { display: 'grid', gap: 8, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 8 } }, [
             h('strong', { key: 'title', style: { fontSize: 13 } }, '项目归类预览 · 确认前不会修改数据'),
             ...organizerPlan.map((item, index) => h('label', { key: item.from, style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 } }, [

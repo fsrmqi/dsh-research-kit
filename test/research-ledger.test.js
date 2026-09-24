@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import { createEvidenceVaultStore } from '../src/evidence-vault-store.js'
-import { normalizeResearchLedgerEvent, researchLedgerSummary } from '../src/lib/research-ledger.js'
+import { normalizeResearchLedgerEvent, researchLedgerSummary, latestResearchScreening } from '../src/lib/research-ledger.js'
 
 test('科研账本区分检索、筛选与执行产出，排除须有理由', () => {
   assert.throws(() => normalizeResearchLedgerEvent({ kind: 'screening', evidenceId: 'e1', decision: 'exclude' }), /理由/)
@@ -15,6 +15,7 @@ test('科研账本区分检索、筛选与执行产出，排除须有理由', ()
     { kind: 'artifact' },
   ]
   assert.deepEqual(researchLedgerSummary(events), { searches: 1, included: 1, excluded: 0, pending: 0, artifacts: 1 })
+  assert.equal(latestResearchScreening([...events, { kind: 'screening', evidenceId: 'e1', decision: 'exclude', at: 3 }]).get('e1').decision, 'exclude')
 })
 
 test('科研账本跨 store 持久化，项目整理与撤销保持原归属', async () => {
