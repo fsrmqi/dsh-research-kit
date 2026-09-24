@@ -9,7 +9,7 @@ fs.mkdirSync(artifacts, { recursive: true });
 let catalogRequests=0, promptKitRequests=0, archifyRequests=0, hostCapabilitiesRequests=0;
 const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>科研工作台回归验证</title><div id="root"></div><div id="plugin-status"></div><div id="composer" data-composer-card style="position:fixed;bottom:12px;left:12px;width:min(560px,calc(100vw - 24px));z-index:30000"></div>
 <script src="/react"></script><script src="/react-dom"></script>
-<script>window.__ModuleLoader__={load({factory}){window.plugin=factory(()=>React)}};</script>
+<script>window.__ModuleLoader__={load({factory}){window.plugin=factory(id=>id==='react-dom'?ReactDOM:React)}};</script>
 <script src="/bundle"></script><script>
 const registered={}; window.toolViews={};
 window.testEvents=[{type:'assistant/message',seq:14,time:123,data:{turn:2,message:{id:'review-one',content:[{type:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}];
@@ -75,17 +75,43 @@ const server = http.createServer((req,res)=>{
   await page.evaluate(()=>{window.toolCardRoot.unmount();document.getElementById('tool-card-smoke').remove()});
   console.log('研究工具详情卡：完整 MCP 工具名与真实结果块渲染通过');
   await page.evaluate(()=>{
-    const target=document.createElement('div');target.id='message-action-smoke';target.style.cssText='position:fixed;top:12px;left:12px;z-index:40000';document.body.append(target);
+    window.testEvents=[];
+    const target=document.createElement('div');target.id='message-action-smoke';target.style.cssText='position:fixed;top:720px;left:180px;z-index:10;height:30px;overflow:hidden';document.body.append(target);
     window.messageActionRoot=ReactDOM.createRoot(target);
-    window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'review-one',sessionId:'qa'}));
+    const nodes={values:()=>[{kind:'turn-tail',data:{closing:{turn:2,status:'settled',finalNode:{messageId:'review-one',seq:14,time:123},blocks:[{kind:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}]};
+    window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'review-one',sessionId:'qa',useChat:select=>select({nodes})}));
   });
   await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
   await page.getByRole('group',{name:'研究回答沉淀预览'}).getByText(/10\.1038\/review/).waitFor();
+  const popover=await page.evaluate(()=>{
+    const el=document.querySelector('[aria-label="研究回答沉淀预览"]'),r=el.getBoundingClientRect();
+    return {portaled:el.parentElement===document.body,visible:r.top>=0&&r.bottom<=innerHeight,above:r.bottom<720,hit:el.contains(document.elementFromPoint(r.left+12,r.top+12))};
+  });
+  assert.deepEqual(popover,{portaled:true,visible:true,above:true,hit:true});
+  if(process.env.RK_QA_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_SCREENSHOT});
+  await page.setViewportSize({width:390,height:900});
+  await page.waitForFunction(()=>{
+    const el=document.querySelector('[aria-label="研究回答沉淀预览"]');
+    if(!el) return false;
+    const r=el.getBoundingClientRect();
+    return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;
+  });
+  if(process.env.RK_QA_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_MOBILE_SCREENSHOT});
+  await page.setViewportSize({width:1280,height:900});
   await page.getByRole('button',{name:'取消',exact:true}).click();
   await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
   await page.getByRole('group',{name:'研究回答沉淀预览'}).getByLabel(/引用：10\.1038\/review/).uncheck();
   await page.getByRole('button',{name:'确认沉淀所选'}).click();
   await page.getByRole('status').getByText(/已沉淀：知识 .*证据 0/).waitFor();
+  await page.evaluate(()=>window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'missing',sessionId:'qa',useChat:select=>select({nodes:{values:()=>[]}})})));
+  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('status').getByText('当前会话窗口中找不到这条回答。').waitFor();
+  const noticePlacement=await page.evaluate(()=>{
+    const el=[...document.querySelectorAll('[role="status"]')].find(item=>item.textContent.includes('当前会话窗口中找不到这条回答。')),r=el.getBoundingClientRect();
+    return {portaled:el.parentElement===document.body,visible:r.top>=0&&r.bottom<=innerHeight,above:r.bottom<720,hit:el.contains(document.elementFromPoint(r.left+12,r.top+12))};
+  });
+  assert.deepEqual(noticePlacement,{portaled:true,visible:true,above:true,hit:true});
+  if(process.env.RK_QA_NOTICE_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_NOTICE_SCREENSHOT});
   await page.evaluate(()=>{window.messageActionRoot.unmount();document.getElementById('message-action-smoke').remove()});
   console.log('逐条回答：按消息 ID 预览、取消与勾选沉淀通过');
   await page.waitForTimeout(100);

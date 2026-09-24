@@ -16,6 +16,11 @@ test('逐条审阅按消息 ID 定位，不误用最近回答', () => {
   assert.match(found.text, /Ghd7/)
   assert.ok(found.extraction.nodes.length > 0)
   assert.equal(reviewableAssistantMessage(sessions, 's1', 'missing'), null)
+  const projected = reviewableAssistantMessage(null, 's1', 'first', { values: () => [{
+    kind: 'turn-tail', data: { closing: { turn: 1, status: 'settled', finalNode: { messageId: 'first', seq: 4, time: 99 }, blocks: [{ kind: 'text', text: '研究表明，Ghd7 促进水稻耐盐性。' }] } },
+  }] })
+  assert.equal(projected.seq, 4)
+  assert.match(projected.text, /Ghd7/)
 })
 
 test('确认沉淀只写入勾选的知识与引用，未勾选来源不入库', async () => {
