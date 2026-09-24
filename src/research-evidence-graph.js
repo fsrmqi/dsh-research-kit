@@ -137,6 +137,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [assets, setAssets] = React.useState([])
   const vault = React.useMemo(() => evidenceVaultStore(), [])
   const [savedEvidence, setSavedEvidence] = React.useState([])
+  const [researchClaims, setResearchClaims] = React.useState([])
   const [evidenceProjects, setEvidenceProjects] = React.useState([])
   const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
   const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
@@ -149,6 +150,8 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [confirmClear, setConfirmClear] = React.useState(false)
   // 项目筛选：默认跟随证据库的当前项目（该字段是工作上下文，跨会话保留），'' 表示全部项目。
   const [projectFilter, setProjectFilter] = React.useState(() => { try { return getActiveProject() || '' } catch { return '' } })
+  const [questionFilter, setQuestionFilter] = React.useState('')
+  const [directionFilter, setDirectionFilter] = React.useState('all')
   // 节点范围：区分「本会话记录」（刷新即消失）与「持久沉淀」（证据/资产/知识）。
   const [scope, setScope] = React.useState('all')
   const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
@@ -192,18 +195,21 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         vault.list({ project: selectedProject }),
         vault.listProjects(),
         listAssetEvidenceLinks({ project: selectedProject }),
+        vault.listResearchClaims({ project: selectedProject }),
       ]))
-      .then(([rows, projects, links]) => {
+      .then(([rows, projects, links, claims]) => {
         if (version !== evidenceRefreshVersion.current) return
         setSavedEvidence(rows || [])
         setEvidenceProjects(projects || [])
         setAssetEvidenceLinks(Array.isArray(links) ? links : [])
+        setResearchClaims(Array.isArray(claims) ? claims : [])
       })
       .catch(() => {
         if (version !== evidenceRefreshVersion.current) return
         setSavedEvidence([])
         setEvidenceProjects([])
         setAssetEvidenceLinks([])
+        setResearchClaims([])
       })
   }, [vault, projectFilter])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
@@ -237,6 +243,20 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     () => (projectFilter ? savedEvidence.filter(item => (item.project || '') === projectFilter) : savedEvidence),
     [savedEvidence, projectFilter],
   )
+  const projectResearchClaims = React.useMemo(() => projectFilter
+    ? researchClaims.filter(item => (item.project || '') === projectFilter) : researchClaims, [researchClaims, projectFilter])
+  const questionOptions = React.useMemo(() => [...new Map(projectResearchClaims
+    .filter(item => item.question).map(item => [item.question, item.question])).values()], [projectResearchClaims])
+  const visibleResearchClaims = React.useMemo(() => projectResearchClaims
+    .filter(item => !questionFilter || item.question === questionFilter)
+    .map(item => directionFilter === 'all' ? item : { ...item, links: (item.links || []).filter(link => link.stance === directionFilter) })
+    .filter(item => directionFilter === 'all' || item.links.length),
+  [projectResearchClaims, questionFilter, directionFilter])
+  const graphEvidence = React.useMemo(() => {
+    if (!questionFilter && directionFilter === 'all') return visibleSavedEvidence
+    const ids = new Set(visibleResearchClaims.flatMap(item => (item.links || []).map(link => link.evidenceId)))
+    return visibleSavedEvidence.filter(item => ids.has(item.id))
+  }, [visibleSavedEvidence, visibleResearchClaims, questionFilter, directionFilter])
   const visibleAssets = React.useMemo(
     () => (projectFilter ? assets.filter(item => (item.project || '') === projectFilter) : assets),
     [assets, projectFilter],
@@ -275,11 +295,12 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     queries: includeSession ? records.queries : [],
     plans: includeSession ? records.plans : [],
     assets: includePersistent ? visibleAssets : [],
-    savedEvidence: includePersistent ? visibleSavedEvidence : [],
+    savedEvidence: includePersistent ? graphEvidence : [],
+    researchClaims: includePersistent ? visibleResearchClaims : [],
     knowledge: includePersistent ? knowledgeInput : { nodes: [], claims: [] },
     // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
     assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
-  }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
+  }), [graphResources, records, includeSession, includePersistent, visibleAssets, graphEvidence, knowledgeInput, assetEvidenceLinks, visibleResearchClaims])
   // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
   const highlighted = React.useMemo(() => {
     if (view.mode === 'all') return null
@@ -673,10 +694,16 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         key: 'project',
         value: projectFilter,
         options: [{ value: '', label: '全部项目' }, ...projectOptions.map(name => ({ value: name, label: name }))],
-        onChange: setProjectFilter,
+        onChange: value => { setProjectFilter(value); setQuestionFilter('') },
         ariaLabel: '按项目筛选持久数据',
         style: { width: 'auto', minWidth: 108 },
       }) : null,
+      questionOptions.length ? h(Select, { key: 'question', value: questionFilter, onChange: value => { setQuestionFilter(value); if (value) setScope('persistent') },
+        options: [{ value: '', label: '全部研究问题' }, ...questionOptions.map(question => ({ value: question, label: question.slice(0, 60) }))],
+        ariaLabel: '按研究问题筛选图谱', style: { width: 'auto', minWidth: 120 } }) : null,
+      h(Select, { key: 'direction', value: directionFilter, onChange: value => { setDirectionFilter(value); if (value !== 'all') setScope('persistent') },
+        options: [{ value: 'all', label: '全部证据方向' }, { value: 'supports', label: '支持' }, { value: 'refutes', label: '反驳' }, { value: 'insufficient', label: '证据不足' }, { value: 'unassessed', label: '待评估' }],
+        ariaLabel: '按证据方向筛选图谱', style: { width: 'auto', minWidth: 110 } }),
       h('span', { key: 'nodes', style: { color: C.muted, fontSize: 13 } }, `${graph.nodes.length} 个节点`),
       h('span', { key: 'edges', style: { color: C.muted, fontSize: 13 } }, `${graph.edges.length} 条关系`),
       h('span', { key: 'scale', style: { color: C.muted, fontSize: 13 } }, `${Math.round(scale * 100)}%`),

@@ -175,7 +175,7 @@ test('导出只消费图上已显示的布局与路由，不读取证据原文',
 })
 
 // ── 自动沉淀知识接入 ──────────────────────────────────────────────────────────
-test('知识图谱：节点、关系、来源消息与证据支持边接入图谱', () => {
+test('知识图谱：节点、关系、来源消息与中性的证据关联边接入图谱', () => {
   const graph = buildEvidenceGraph({
     savedEvidence: [{ id: 'ev1', title: '已保存论文', sourceDatabase: '会话回答', identifier: '10.1038/x', status: 'unverified' }],
     knowledge: {
@@ -194,7 +194,7 @@ test('知识图谱：节点、关系、来源消息与证据支持边接入图�
   assert.ok(graph.nodes.some(node => node.id === 'message:s1:3' && node.kind === 'message'), '来源消息应成为图谱节点')
   assert.ok(graph.edges.some(edge => edge.from === 'message:s1:3' && edge.to === 'kn-gene' && edge.kind === 'records'))
   assert.ok(graph.edges.some(edge => edge.from === 'kn-gene' && edge.to === 'kn-trait' && edge.kind === 'may-affect'))
-  assert.ok(graph.edges.some(edge => edge.from === 'evidence:ev1' && edge.to === 'kn-finding' && edge.kind === 'supports'))
+  assert.ok(graph.edges.some(edge => edge.from === 'evidence:ev1' && edge.to === 'kn-finding' && edge.kind === 'linked'))
   const layout = layoutEvidenceGraph(graph)
   const byId = new Map(layout.nodes.map(node => [node.id, node]))
   assert.ok(byId.get('message:s1:3').x < byId.get('kn-finding').x, '来源消息应在发现节点左侧')

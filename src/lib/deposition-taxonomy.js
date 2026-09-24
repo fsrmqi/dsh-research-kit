@@ -36,6 +36,10 @@ export function topicForDepositedItem(item) {
 // 主列表分组使用全部命中的主题，而不是只取首个主题：例如「水稻基因表达的单细胞测序」
 // 同时属于植物科学、基因与分子和生物信息。返回空数组时才归入「待归类」。
 export function topicsForDepositedItem(item) {
+  const structured = (Array.isArray(item?.classification?.topics) ? item.classification.topics : [])
+    .map(topic => `${topic.primary || ''} / ${topic.secondary || ''}`).filter(topic => !topic.startsWith(' / ') && !topic.endsWith(' / '))
+  if (structured.length) return [...new Set(structured)]
+  if (item?.classification?.reviewed === true) return [UNCLASSIFIED_TOPIC]
   const tags = Array.isArray(item?.tags) ? item.tags : []
   const saved = tags.filter(tag => String(tag).startsWith(TOPIC_PREFIX)).map(tag => String(tag).slice(TOPIC_PREFIX.length))
   const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
@@ -46,6 +50,10 @@ export function topicsForDepositedItem(item) {
 
 export function visibleDepositionTags(item) {
   const saved = Array.isArray(item?.tags) ? item.tags : []
+  const structured = (Array.isArray(item?.classification?.topics) ? item.classification.topics : [])
+    .map(topic => `主题:${topic.primary || ''}/${topic.secondary || ''}`).filter(tag => !tag.includes(':/') && !tag.endsWith('/'))
+  if (structured.length) return [...new Set([...saved, ...structured])]
+  if (item?.classification?.reviewed === true) return saved
   if (saved.some(tag => String(tag).startsWith(TOPIC_PREFIX))) return saved
   const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
   return [...saved, ...inferred.map(topic => `${TOPIC_PREFIX}${topic}`)]

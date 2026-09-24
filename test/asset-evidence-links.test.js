@@ -157,7 +157,7 @@ test('接线：入口 A 候选勾选显式建立（绝不自动）；入口 B �
   assert.match(pane, /assetTitlesById = null/, '反查标题必须由分区传入且可缺省')
   assert.match(pane, /被引用于：/, '证据条目缺少「被引用于」只读反查')
   assert.match(pane, /不在当前列表/, '反查的悬空资产要如实标注')
-  assert.match(pane, /资产-证据关联关系不在备份内/, '备份导出未如实声明 link 边界')
+  assert.match(pane, /scopedLinks = links\.filter/, '备份须包含当前证据对应的互链')
   // 出口：图谱传入互链且只在持久范围显示。
   const graph = readFileSync(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')
   assert.match(graph, /listAssetEvidenceLinks/)

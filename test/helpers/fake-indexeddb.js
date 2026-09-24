@@ -42,19 +42,23 @@ export function createFakeIndexedDB() {
         return { createIndex: () => {} }
       },
       transaction(storeName) {
-        if (!data.stores.has(storeName)) data.stores.set(storeName, new Map())
-        const rows = data.stores.get(storeName)
+        const names = Array.isArray(storeName) ? storeName : [storeName]
+        for (const name of names) if (!data.stores.has(name)) data.stores.set(name, new Map())
         const tx = { pending: 0, oncomplete: null, onerror: null, onabort: null, error: null }
         return {
-          objectStore: () => ({
+          objectStore: (name = names[0]) => {
+            const rows = data.stores.get(name)
+            return {
             getAll: () => makeRequest(tx, request => { request.result = [...rows.values()] }),
+            get: key => makeRequest(tx, request => { request.result = rows.get(String(key)) }),
             index: name => ({
               getAll: key => makeRequest(tx, request => { request.result = [...rows.values()].filter(row => row?.[name] === key) }),
             }),
             put: value => makeRequest(tx, request => { rows.set(value.id, value); request.result = value.id }),
             delete: key => makeRequest(tx, request => { rows.delete(String(key)) }),
             clear: () => makeRequest(tx, () => { rows.clear() }),
-          }),
+          }
+          },
           set oncomplete(fn) { tx.oncomplete = fn },
           get oncomplete() { return tx.oncomplete },
           set onerror(fn) { tx.onerror = fn },

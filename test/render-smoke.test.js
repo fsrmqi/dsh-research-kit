@@ -59,6 +59,7 @@ test('工作台对照组：宿主提供 inputActions 后两个按钮恢复可用
 test('证据库：宿主不支持写入时「写入 Prompt」按钮为禁用态', () => {
   const html = render(EvidenceVaultPane, {})
   assert.match(buttonMarkup(html, '写入 Prompt') || '', /disabled/, '宿主无 setDraft 时写入按钮应禁用')
+  assert.match(buttonMarkup(html, 'Agent 判断选中') || '', /disabled/, '未选证据时 Agent 判断选中应禁用')
 })
 
 test('灵感库与数据库面板：宿主未提供 inputActions 时仍能完整渲染，不抛错', () => {

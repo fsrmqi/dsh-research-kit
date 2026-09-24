@@ -105,3 +105,31 @@ export function listResearchRuns({ project, sessionId } = {}) {
     (sessionId === undefined || run.sessionId === String(sessionId || ''))
   )
 }
+
+export function remapResearchRuns(mappings, { dryRun = false } = {}) {
+  const map = new Map(mappings.map(item => [item.from, item.to]))
+  const before = readRuns()
+  const after = before.map(run => map.has(run.project)
+    ? { ...run, project: map.get(run.project), legacyProject: run.legacyProject || run.project }
+    : run)
+  const contextBefore = currentResearchContext()
+  const contextAfter = map.has(contextBefore.project)
+    ? { ...contextBefore, project: map.get(contextBefore.project) } : contextBefore
+  if (dryRun) return { before, after, contextBefore, contextAfter }
+  writeRuns(after)
+  if (map.has(contextBefore.project)) setResearchProject(map.get(contextBefore.project))
+  return { before, after, contextBefore, contextAfter: currentResearchContext() }
+}
+
+export function restoreResearchRuns(snapshot, { validateOnly = false } = {}) {
+  const currentRuns = JSON.stringify(readRuns())
+  const currentContext = JSON.stringify(currentResearchContext())
+  if (![JSON.stringify(snapshot.after), JSON.stringify(snapshot.before)].includes(currentRuns)
+    || ![JSON.stringify(snapshot.contextAfter), JSON.stringify(snapshot.contextBefore)].includes(currentContext)) {
+    throw new Error('研究运行在整理后已变化，不能自动撤销。')
+  }
+  if (validateOnly) return true
+  writeRuns(snapshot.before)
+  setResearchContext(snapshot.contextBefore)
+  return true
+}

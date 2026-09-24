@@ -1,5 +1,6 @@
 // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
 import { visibleDepositionTags } from './deposition-taxonomy.js'
+import { normalizeResearchClassification } from './research-taxonomy.js'
 //
 // 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
 // 证据条目必须可追溯——有稳定标识符或原始链接，否则后续无法核验，也就失去了保存意义。
@@ -105,6 +106,21 @@ function normalizeAgentAssessment(value) {
   }
 }
 
+function normalizeSourceCheck(value) {
+  if (!value || typeof value !== 'object') return null
+  if (!['matched', 'mismatch', 'unknown', 'not_found'].includes(value.status) || !Number.isFinite(value.checkedAt)) return null
+  const official = value.official && typeof value.official === 'object' ? {
+    title: clampText(value.official.title, MAX_EVIDENCE_TITLE_CHARS),
+    journal: clampText(value.official.journal, 180),
+    year: Number(value.official.year) || null,
+    url: safeUrl(value.official.url),
+  } : null
+  return {
+    status: value.status, provider: clampText(value.provider, 80), identifier: clampText(value.identifier, 120),
+    checkedAt: value.checkedAt, contentVerified: false, official,
+  }
+}
+
 // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
 // 这类条目存下来也无法核验，只会污染证据库。
 export function normalizeEvidenceEntry(input = {}) {
@@ -130,10 +146,13 @@ export function normalizeEvidenceEntry(input = {}) {
     identifierKind: EVIDENCE_IDENTIFIER_LABELS[identifierKind] ? identifierKind : 'none',
     url,
     savedAt: Number.isFinite(input.savedAt) ? input.savedAt : Date.now(),
+    updatedAt: Number.isFinite(input.updatedAt) ? input.updatedAt : (Number.isFinite(input.savedAt) ? input.savedAt : Date.now()),
     project: clampText(input.project, 120),
+    legacyProject: clampText(input.legacyProject || input.legacy_project, 120),
     tags: normalizeTags(input.tags),
     reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
     note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
+    classification: normalizeResearchClassification(input.classification, `${title} ${input.reason || ''} ${input.note || ''}`),
     status,
     grade,
     traceability,
@@ -147,6 +166,9 @@ export function normalizeEvidenceEntry(input = {}) {
     agentAssessment: normalizeAgentAssessment(input.agentAssessment),
     agentAssessmentHistory: (Array.isArray(input.agentAssessmentHistory) ? input.agentAssessmentHistory : [])
       .slice(-5).map(normalizeAgentAssessment).filter(Boolean),
+    sourceCheck: normalizeSourceCheck(input.sourceCheck),
+    sourceCheckHistory: (Array.isArray(input.sourceCheckHistory) ? input.sourceCheckHistory : [])
+      .slice(-5).map(normalizeSourceCheck).filter(Boolean),
     agentProduced: input.agentProduced === true,
     runId: normalizeRunId(input.runId || input.run_id),
   }
@@ -177,7 +199,7 @@ export function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
 // 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
 
 export const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
-export const EVIDENCE_BACKUP_VERSION = 1
+export const EVIDENCE_BACKUP_VERSION = 2
 
 // URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
 // 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
@@ -213,13 +235,16 @@ export function findDuplicate(entries, candidate) {
 // 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
 // 而不是把旧格式静默解析成残缺条目。
 
-export function serializeEvidenceBackup({ entries = [], project = '' } = {}) {
+export function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [] } = {}) {
   return JSON.stringify({
     kind: EVIDENCE_BACKUP_KIND,
     version: EVIDENCE_BACKUP_VERSION,
     exportedAt: Date.now(),
     project: String(project || ''),
     entries: Array.isArray(entries) ? entries : [],
+    claims: Array.isArray(claims) ? claims : [],
+    links: Array.isArray(links) ? links : [],
+    ledger: Array.isArray(ledger) ? ledger : [],
   }, null, 2)
 }
 
@@ -233,7 +258,12 @@ export function parseEvidenceBackup(text) {
   if (Number(parsed?.version) > EVIDENCE_BACKUP_VERSION) throw new Error(`备份版本 ${parsed.version} 高于当前支持的 ${EVIDENCE_BACKUP_VERSION}，请升级 Research Kit 后再恢复。`)
   const rows = Array.isArray(parsed.entries) ? parsed.entries : null
   if (!rows) throw new Error('备份文件缺少 entries 字段。')
-  return { project: String(parsed.project || ''), entries: rows }
+  const optional = {}
+  for (const key of ['claims', 'links', 'ledger']) {
+    if (Number(parsed.version) >= 2 && !Array.isArray(parsed[key])) throw new Error(`备份文件缺少 ${key} 字段。`)
+    optional[key] = Array.isArray(parsed[key]) ? parsed[key] : []
+  }
+  return { project: String(parsed.project || ''), entries: rows, ...optional }
 }
 
 // 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。

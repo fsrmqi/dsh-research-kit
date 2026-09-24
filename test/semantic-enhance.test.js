@@ -7,6 +7,7 @@ import { DATABASE_QUERY_PATH as QUERY_PATH } from '../dsh/database-query.js'
 import { HOST_CAPABILITIES_PATH } from '../dsh/host-capabilities.js'
 import { MEMORY_SEARCH_PATH } from '../dsh/memory-search.js'
 import { EVIDENCE_SYNC_PATH } from '../dsh/evidence-sync.js'
+import { EVIDENCE_SOURCE_CHECK_PATH } from '../dsh/evidence-source-check.js'
 import { AGENT_ACTIVITY_PATH } from '../dsh/agent-activity.js'
 import { CATALOG_DATA_PATH } from '../dsh/catalog-data.js'
 import { ARCHIFY_TEMPLATE_PATH } from '../dsh/archify-template.js'
@@ -32,7 +33,7 @@ function makeContext() {
   }
 }
 
-test('index.js 统一注册十一条路由且不使用 dsh-promptkit 路径', () => {
+test('index.js 统一注册科研路由且不使用 dsh-promptkit 路径', () => {
   const { ctx, registered } = makeContext()
   apply(ctx)
   assert.deepEqual(registered.map(route => route.path).sort(), [
@@ -43,6 +44,7 @@ test('index.js 统一注册十一条路由且不使用 dsh-promptkit 路径', ()
     HOST_CAPABILITIES_PATH,
     MEMORY_SEARCH_PATH,
     EVIDENCE_SYNC_PATH,
+    EVIDENCE_SOURCE_CHECK_PATH,
     AGENT_ACTIVITY_PATH,
     CATALOG_DATA_PATH,
     ARCHIFY_TEMPLATE_PATH,

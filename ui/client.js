@@ -458,6 +458,34 @@ window.__ModuleLoader__.load({
       )
     }
 
+    function remapResearchRuns(mappings, { dryRun = false } = {}) {
+      const map = new Map(mappings.map(item => [item.from, item.to]))
+      const before = readRuns()
+      const after = before.map(run => map.has(run.project)
+        ? { ...run, project: map.get(run.project), legacyProject: run.legacyProject || run.project }
+        : run)
+      const contextBefore = currentResearchContext()
+      const contextAfter = map.has(contextBefore.project)
+        ? { ...contextBefore, project: map.get(contextBefore.project) } : contextBefore
+      if (dryRun) return { before, after, contextBefore, contextAfter }
+      writeRuns(after)
+      if (map.has(contextBefore.project)) setResearchProject(map.get(contextBefore.project))
+      return { before, after, contextBefore, contextAfter: currentResearchContext() }
+    }
+
+    function restoreResearchRuns(snapshot, { validateOnly = false } = {}) {
+      const currentRuns = JSON.stringify(readRuns())
+      const currentContext = JSON.stringify(currentResearchContext())
+      if (![JSON.stringify(snapshot.after), JSON.stringify(snapshot.before)].includes(currentRuns)
+        || ![JSON.stringify(snapshot.contextAfter), JSON.stringify(snapshot.contextBefore)].includes(currentContext)) {
+        throw new Error('研究运行在整理后已变化，不能自动撤销。')
+      }
+      if (validateOnly) return true
+      writeRuns(snapshot.before)
+      setResearchContext(snapshot.contextBefore)
+      return true
+    }
+
 
     const MAX_QUERIES = 30
     const MAX_WORKFLOWS = 30
@@ -1897,6 +1925,63 @@ window.__ModuleLoader__.load({
     }
 
 
+    // 受控二级主题与检索维度。规则命中是内容索引建议，不是来源或结论核验。
+    const RESEARCH_TOPIC_RULES = [
+      { primary: '作物遗传育种', secondary: '雄性不育', pattern: /雄性不育|不育系|male.steril|pollen.steril|NP1|IPE1/i },
+      { primary: '作物遗传育种', secondary: '抗逆性状', pattern: /耐盐|抗旱|盐胁迫|抗病|stress.toleran|salt.toleran|drought/i },
+      { primary: '作物遗传育种', secondary: '产量性状', pattern: /产量|粒重|穗长|yield|grain.weight/i },
+      { primary: '分子机制', secondary: '基因功能', pattern: /基因功能|候选基因|突变体|gene.function|candidate.gene|mutant/i },
+      { primary: '分子机制', secondary: '表达调控', pattern: /表达量|转录因子|调控网络|gene.expression|transcription.factor/i },
+      { primary: '生物信息学', secondary: '单细胞分析', pattern: /单细胞|single.cell|scRNA/i },
+      { primary: '生物信息学', secondary: '转录组分析', pattern: /转录组|RNA.seq|transcriptom/i },
+      { primary: '临床研究', secondary: '临床试验', pattern: /临床试验|随机对照|clinical.trial|randomized.controlled/i },
+      { primary: '研究方法', secondary: '系统综述', pattern: /系统综述|荟萃分析|systematic.review|meta.analysis/i },
+      { primary: '研究方法', secondary: '统计分析', pattern: /统计模型|回归分析|置信区间|regression|confidence.interval/i },
+    ]
+
+    const RESEARCH_TOPIC_OPTIONS = [...new Map(RESEARCH_TOPIC_RULES.map(rule =>
+      [`${rule.primary}/${rule.secondary}`, { primary: rule.primary, secondary: rule.secondary }])).values()]
+
+    function isControlledResearchTopic(primary, secondary) {
+      return RESEARCH_TOPIC_OPTIONS.some(item => item.primary === primary && item.secondary === secondary)
+    }
+
+    const FACET_RULES = {
+      organism: [
+        ['大麦', /大麦|barley|hordeum/i], ['水稻', /水稻|rice|oryza/i],
+        ['小麦', /小麦|wheat|triticum/i], ['玉米', /玉米|maize|zea.mays/i],
+      ],
+      method: [
+        ['RNA-seq', /RNA.seq|转录组测序/i], ['CRISPR', /CRISPR|基因编辑/i],
+        ['GWAS', /GWAS|全基因组关联/i], ['系统综述', /systematic.review|系统综述/i],
+      ],
+    }
+
+    function inferResearchClassification(text) {
+      const source = String(text || '').slice(0, 8000)
+      return {
+        topics: RESEARCH_TOPIC_RULES.filter(rule => rule.pattern.test(source)).map(rule => ({
+          primary: rule.primary, secondary: rule.secondary, confidence: 'rule-match', source: 'local-rule',
+        })),
+        facets: Object.fromEntries(Object.entries(FACET_RULES).map(([name, rules]) =>
+          [name, rules.filter(([, pattern]) => pattern.test(source)).map(([label]) => label)])),
+        reviewed: false,
+      }
+    }
+
+    function normalizeResearchClassification(value, text = '') {
+      if (!value || value.reviewed !== true) return inferResearchClassification(text)
+      return {
+        topics: (Array.isArray(value.topics) ? value.topics : []).slice(0, 12).map(item => ({
+          primary: String(item.primary || '').slice(0, 80), secondary: String(item.secondary || '').slice(0, 80),
+          confidence: 'human', source: 'researcher',
+        })).filter(item => item.primary && item.secondary),
+        facets: value.facets && typeof value.facets === 'object' ? value.facets : {},
+        reviewed: true,
+      }
+    }
+
+
     // 只用本地、可解释的词表归类；不调用模型，不把原始回答交给外部服务。
     // 分类不是事实核验，多个主题可并存，未命中时明确留在「待归类」。
     const DEPOSITION_TOPIC_RULES = [
@@ -1935,6 +2020,10 @@ window.__ModuleLoader__.load({
     // 主列表分组使用全部命中的主题，而不是只取首个主题：例如「水稻基因表达的单细胞测序」
     // 同时属于植物科学、基因与分子和生物信息。返回空数组时才归入「待归类」。
     function topicsForDepositedItem(item) {
+      const structured = (Array.isArray(item?.classification?.topics) ? item.classification.topics : [])
+        .map(topic => `${topic.primary || ''} / ${topic.secondary || ''}`).filter(topic => !topic.startsWith(' / ') && !topic.endsWith(' / '))
+      if (structured.length) return [...new Set(structured)]
+      if (item?.classification?.reviewed === true) return [UNCLASSIFIED_TOPIC]
       const tags = Array.isArray(item?.tags) ? item.tags : []
       const saved = tags.filter(tag => String(tag).startsWith(TOPIC_PREFIX)).map(tag => String(tag).slice(TOPIC_PREFIX.length))
       const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
@@ -1945,6 +2034,10 @@ window.__ModuleLoader__.load({
 
     function visibleDepositionTags(item) {
       const saved = Array.isArray(item?.tags) ? item.tags : []
+      const structured = (Array.isArray(item?.classification?.topics) ? item.classification.topics : [])
+        .map(topic => `主题:${topic.primary || ''}/${topic.secondary || ''}`).filter(tag => !tag.includes(':/') && !tag.endsWith('/'))
+      if (structured.length) return [...new Set([...saved, ...structured])]
+      if (item?.classification?.reviewed === true) return saved
       if (saved.some(tag => String(tag).startsWith(TOPIC_PREFIX))) return saved
       const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
       return [...saved, ...inferred.map(topic => `${TOPIC_PREFIX}${topic}`)]
@@ -1963,6 +2056,150 @@ window.__ModuleLoader__.load({
         const ai = order.indexOf(a), bi = order.indexOf(b)
         return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi)
       }).map(([topic, rows]) => ({ topic, rows }))
+    }
+
+
+    // 旧任务型项目归类只产生建议；应用前必须把映射和影响数量交给用户预览。
+    // 不根据项目名删除数据，也不把测试数据冒充为已核验科研证据。
+    const TEST_PROJECT = /^(?:concurrency-test(?:[-_].*)?|dedup-probe(?:[-_].*)?|list-order(?:[-_].*)?)$/i
+    const DEMO_PROJECT = /^demo-crispr(?:[-_].*)?$/i
+    const BARLEY_PROJECT = /^barley-NP1-IPE1-family$/i
+
+    const ARCHIVED_TEST_WORKSPACE = '测试与演示（归档）'
+
+    function classifyLegacyProject(name, evidenceEntries = []) {
+      const project = String(name || '').trim()
+      if (TEST_PROJECT.test(project)) return {
+        from: project, to: ARCHIVED_TEST_WORKSPACE, category: 'test', confidence: 'high',
+        reason: '命中测试／并发／去重探针命名规则；只归档，不删除来源。',
+      }
+      if (DEMO_PROJECT.test(project)) return {
+        from: project, to: ARCHIVED_TEST_WORKSPACE, category: 'demo', confidence: 'high',
+        reason: '命中演示项目命名规则；只归档，不删除来源。',
+      }
+      if (BARLEY_PROJECT.test(project)) {
+        const related = evidenceEntries.filter(item => item.project === project)
+        const consistent = !related.length || related.every(item =>
+          /大麦|barley|NP1|IPE1|雄性不育|male.steril/i.test(`${item.title || ''} ${item.reason || ''} ${item.note || ''}`))
+        return {
+          from: project, to: '大麦雄性不育', category: 'research', confidence: consistent && related.length ? 'high' : 'review',
+          reason: consistent && related.length ? '条目内容与大麦／NP1／IPE1 主题一致。' : '项目名指向科研任务，但来源内容不足或不一致，需在预览中确认目标课题。',
+        }
+      }
+      return null
+    }
+
+    function buildProjectOrganizationPlan({ evidence = [], assets = [], nodes = [], claims = [], researchClaims = [], links = [], runs = [] } = {}) {
+      const collections = { evidence, assets, nodes, claims, researchClaims, links, runs }
+      const names = new Set(Object.values(collections).flatMap(rows => rows.map(item => item.project).filter(Boolean)))
+      return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN')).map(name => {
+        const suggestion = classifyLegacyProject(name, evidence)
+        if (!suggestion) return null
+        const counts = Object.fromEntries(Object.entries(collections).map(([kind, rows]) =>
+          [kind, rows.filter(item => item.project === name).length]))
+        return { ...suggestion, counts, selected: suggestion.confidence === 'high' }
+      }).filter(Boolean)
+    }
+
+
+    // 论断与来源之间是逐边评估：同一论文可支持一个论断、反驳另一个论断。
+    const RESEARCH_EVIDENCE_STANCES = ['unassessed', 'supports', 'refutes', 'insufficient']
+
+    const short = (value, max) => String(value || '').trim().slice(0, max)
+
+    function normalizeResearchClaim(input = {}, now = Date.now()) {
+      const statement = short(input.statement, 500)
+      if (!statement) throw new Error('研究论断不能为空。')
+      const links = [...new Map((Array.isArray(input.links) ? input.links : []).map(item => {
+        const evidenceId = short(item?.evidenceId, 120)
+        if (!evidenceId) return ['', null]
+        return [evidenceId, {
+          evidenceId,
+          stance: RESEARCH_EVIDENCE_STANCES.includes(item.stance) ? item.stance : 'unassessed',
+          locator: short(item.locator, 240),
+          studyDesign: short(item.studyDesign, 240),
+          sample: short(item.sample, 240),
+          result: short(item.result, 500),
+          limitations: short(item.limitations, 500),
+          assessedBy: short(item.assessedBy, 120),
+          assessedAt: Number(item.assessedAt) || 0,
+        }]
+      }).filter(([id]) => id))].map(([, item]) => item).slice(0, 50)
+      if (links.some(item => ['supports', 'refutes'].includes(item.stance) && (!item.locator || !item.assessedBy))) {
+        throw new Error('判断支持或反驳时，必须填写来源位置并注明评估者。')
+      }
+      return {
+        id: short(input.id, 120) || `research-claim-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        project: short(input.project, 120),
+        question: short(input.question, 500),
+        statement,
+        links,
+        createdAt: Number(input.createdAt) || now,
+        updatedAt: now,
+      }
+    }
+
+
+    const KINDS = new Set(['search', 'screening', 'artifact'])
+    const DECISIONS = new Set(['include', 'exclude', 'pending'])
+
+    const clean = (value, limit = 500) => String(value || '').trim().slice(0, limit)
+
+    function normalizeResearchLedgerEvent(input = {}) {
+      const kind = clean(input.kind, 30)
+      if (!KINDS.has(kind)) throw new Error('未知的科研账本事件类型。')
+      const at = Number(input.at) || Date.now()
+      const base = {
+        id: clean(input.id, 100) || `ledger-${at.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        kind,
+        project: clean(input.project, 100),
+        runId: clean(input.runId, 100),
+        question: clean(input.question, 500),
+        at,
+        actor: clean(input.actor, 30) || 'researcher',
+      }
+      if (kind === 'search') {
+        const database = clean(input.database, 120)
+        const query = clean(input.query, 2000)
+        if (!database || !query) throw new Error('检索记录必须包含数据库和检索式。')
+        return { ...base, database, query, mode: clean(input.mode, 30),
+          resultCount: Math.max(0, Number(input.resultCount) || 0),
+          sourceIds: [...new Set((Array.isArray(input.sourceIds) ? input.sourceIds : []).map(value => clean(value, 300)).filter(Boolean))].slice(0, 500),
+          snapshotId: clean(input.snapshotId, 200),
+          deduplicatedCount: Math.max(0, Number(input.deduplicatedCount) || 0) }
+      }
+      if (kind === 'screening') {
+        const evidenceId = clean(input.evidenceId, 100)
+        const decision = clean(input.decision, 30)
+        if (!evidenceId || !DECISIONS.has(decision)) throw new Error('筛选记录必须包含证据和有效的决定。')
+        const reason = clean(input.reason, 2000)
+        if (decision === 'exclude' && !reason) throw new Error('排除证据须记录理由。')
+        return { ...base, evidenceId, decision, reason, source: clean(input.source, 30) || 'manual' }
+      }
+      const title = clean(input.title, 300)
+      if (!title) throw new Error('研究产出须填写名称。')
+      // 用户手填执行引用只能说明「声称有执行记录」；不能冒充已由系统核验的工具结果。
+      return { ...base, title, state: input.state === 'verified-execution' && input.executionVerified === true ? 'verified-execution' : 'draft',
+        datasetId: clean(input.datasetId, 300), codeVersion: clean(input.codeVersion, 300),
+        parameters: clean(input.parameters, 2000), environment: clean(input.environment, 1000),
+        output: clean(input.output, 1000), executionRef: clean(input.executionRef, 500) }
+    }
+
+    function researchLedgerSummary(events = []) {
+      const latest = new Map()
+      for (const event of events) {
+        if (event.kind !== 'screening') continue
+        const previous = latest.get(event.evidenceId)
+        if (!previous || event.at >= previous.at) latest.set(event.evidenceId, event)
+      }
+      const decisions = [...latest.values()]
+      return {
+        searches: events.filter(item => item.kind === 'search').length,
+        included: decisions.filter(item => item.decision === 'include').length,
+        excluded: decisions.filter(item => item.decision === 'exclude').length,
+        pending: decisions.filter(item => item.decision === 'pending').length,
+        artifacts: events.filter(item => item.kind === 'artifact').length,
+      }
     }
 
 
@@ -2061,7 +2298,7 @@ window.__ModuleLoader__.load({
 
     // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
     // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [] } = {}) {
+    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [], researchClaims = [] } = {}) {
       const nodes = new Map()
       const edges = []
       const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -2114,6 +2351,21 @@ window.__ModuleLoader__.load({
           if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
         }
       }
+      // 研究问题／论断与每条证据的方向由研究者显式给出；普通关联绝不冒充支持。
+      for (const claim of researchClaims) {
+        if (!claim?.id || !claim.statement) continue
+        const claimId = `research-claim:${claim.id}`
+        add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: '研究论断 · 逐来源评估' })
+        if (claim.question) {
+          const questionId = `research-question:${claim.id}`
+          add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })
+          link(questionId, claimId, 'frames')
+        }
+        for (const evidence of claim.links || []) {
+          const kind = ({ supports: 'supports', refutes: 'refutes', insufficient: 'insufficient' })[evidence.stance] || 'linked'
+          link(claimId, `evidence:${evidence.evidenceId}`, kind)
+        }
+      }
       // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
       // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
       // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
@@ -2130,7 +2382,7 @@ window.__ModuleLoader__.load({
           add({ id: messageId, kind: 'message', label: `会话消息 #${source.seq ?? '?'}`, detail: source.at ? new Date(source.at).toLocaleString('zh-CN') : '' })
           link(messageId, record.id, 'records')
         }
-        for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'supports')
+        for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'linked')
         if (record.assetId) link(record.id, `asset:${record.assetId}`, 'deposited')
       }
       // 关系端点指向不存在（或被删除）的节点时，由末尾的边过滤自然剔除，不悬挂。
@@ -2147,6 +2399,7 @@ window.__ModuleLoader__.load({
     const EVIDENCE_NODE_COLORS = {
       database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
       message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',
+      'research-question': '#8b5cf6', 'research-claim': '#d97706',
     }
 
     // ── 布局 ──────────────────────────────────────────────────────────────────────
@@ -2155,7 +2408,7 @@ window.__ModuleLoader__.load({
     // 自动沉淀知识的流向：消息(0) → 问题/实体(1) → 发现/假设/方法(2) → 证据(4)。
     const GRAPH_NODE_WIDTH = 136
     const GRAPH_NODE_HEIGHT = 54
-    const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2 }
+    const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2, 'research-question': 1, 'research-claim': 2 }
     const GRAPH_COLUMN_GAP = 220
     const GRAPH_ROW_GAP = 82
     const GRAPH_ORIGIN_X = 70
@@ -2504,6 +2757,21 @@ window.__ModuleLoader__.load({
       }
     }
 
+    function normalizeSourceCheck(value) {
+      if (!value || typeof value !== 'object') return null
+      if (!['matched', 'mismatch', 'unknown', 'not_found'].includes(value.status) || !Number.isFinite(value.checkedAt)) return null
+      const official = value.official && typeof value.official === 'object' ? {
+        title: clampText(value.official.title, MAX_EVIDENCE_TITLE_CHARS),
+        journal: clampText(value.official.journal, 180),
+        year: Number(value.official.year) || null,
+        url: safeUrl(value.official.url),
+      } : null
+      return {
+        status: value.status, provider: clampText(value.provider, 80), identifier: clampText(value.identifier, 120),
+        checkedAt: value.checkedAt, contentVerified: false, official,
+      }
+    }
+
     // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
     // 这类条目存下来也无法核验，只会污染证据库。
     function normalizeEvidenceEntry(input = {}) {
@@ -2529,10 +2797,13 @@ window.__ModuleLoader__.load({
         identifierKind: EVIDENCE_IDENTIFIER_LABELS[identifierKind] ? identifierKind : 'none',
         url,
         savedAt: Number.isFinite(input.savedAt) ? input.savedAt : Date.now(),
+        updatedAt: Number.isFinite(input.updatedAt) ? input.updatedAt : (Number.isFinite(input.savedAt) ? input.savedAt : Date.now()),
         project: clampText(input.project, 120),
+        legacyProject: clampText(input.legacyProject || input.legacy_project, 120),
         tags: normalizeTags(input.tags),
         reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
         note: clampText(input.note, MAX_EVIDENCE_NOTE_CHARS),
+        classification: normalizeResearchClassification(input.classification, `${title} ${input.reason || ''} ${input.note || ''}`),
         status,
         grade,
         traceability,
@@ -2546,6 +2817,9 @@ window.__ModuleLoader__.load({
         agentAssessment: normalizeAgentAssessment(input.agentAssessment),
         agentAssessmentHistory: (Array.isArray(input.agentAssessmentHistory) ? input.agentAssessmentHistory : [])
           .slice(-5).map(normalizeAgentAssessment).filter(Boolean),
+        sourceCheck: normalizeSourceCheck(input.sourceCheck),
+        sourceCheckHistory: (Array.isArray(input.sourceCheckHistory) ? input.sourceCheckHistory : [])
+          .slice(-5).map(normalizeSourceCheck).filter(Boolean),
         agentProduced: input.agentProduced === true,
         runId: normalizeRunId(input.runId || input.run_id),
       }
@@ -2576,7 +2850,7 @@ window.__ModuleLoader__.load({
     // 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
 
     const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
-    const EVIDENCE_BACKUP_VERSION = 1
+    const EVIDENCE_BACKUP_VERSION = 2
 
     // URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
     // 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
@@ -2612,13 +2886,16 @@ window.__ModuleLoader__.load({
     // 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
     // 而不是把旧格式静默解析成残缺条目。
 
-    function serializeEvidenceBackup({ entries = [], project = '' } = {}) {
+    function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [] } = {}) {
       return JSON.stringify({
         kind: EVIDENCE_BACKUP_KIND,
         version: EVIDENCE_BACKUP_VERSION,
         exportedAt: Date.now(),
         project: String(project || ''),
         entries: Array.isArray(entries) ? entries : [],
+        claims: Array.isArray(claims) ? claims : [],
+        links: Array.isArray(links) ? links : [],
+        ledger: Array.isArray(ledger) ? ledger : [],
       }, null, 2)
     }
 
@@ -2632,7 +2909,12 @@ window.__ModuleLoader__.load({
       if (Number(parsed?.version) > EVIDENCE_BACKUP_VERSION) throw new Error(`备份版本 ${parsed.version} 高于当前支持的 ${EVIDENCE_BACKUP_VERSION}，请升级 Research Kit 后再恢复。`)
       const rows = Array.isArray(parsed.entries) ? parsed.entries : null
       if (!rows) throw new Error('备份文件缺少 entries 字段。')
-      return { project: String(parsed.project || ''), entries: rows }
+      const optional = {}
+      for (const key of ['claims', 'links', 'ledger']) {
+        if (Number(parsed.version) >= 2 && !Array.isArray(parsed[key])) throw new Error(`备份文件缺少 ${key} 字段。`)
+        optional[key] = Array.isArray(parsed[key]) ? parsed[key] : []
+      }
+      return { project: String(parsed.project || ''), entries: rows, ...optional }
     }
 
     // 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。
@@ -3859,9 +4141,13 @@ window.__ModuleLoader__.load({
     const DB_NAME = 'dsh-research-kit-evidence'
     // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
     // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
-    const DB_VERSION = 2
+    // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
+    const DB_VERSION = 5
     const STORE = 'evidence'
     const LINKS_STORE = 'assetEvidenceLinks'
+    const ORGANIZER_STORE = 'projectOrganizer'
+    const CLAIMS_STORE = 'researchClaims'
+    const LEDGER_STORE = 'researchLedger'
     // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
     const MAX_LINKS = 500
     const PROJECT_KEY = 'dsh-research-kit.evidence.project'
@@ -3902,6 +4188,9 @@ window.__ModuleLoader__.load({
       let degraded = false
       let memory = []
       let activeProject = null
+      let memoryOrganizerJournal = null
+      let memoryResearchClaims = []
+      let memoryResearchLedger = []
 
       const connect = () => {
         if (degraded) return Promise.resolve(null)
@@ -3925,6 +4214,15 @@ window.__ModuleLoader__.load({
               links.createIndex('assetId', 'assetId')
               links.createIndex('evidenceId', 'evidenceId')
               links.createIndex('project', 'project')
+            }
+            if (!db.objectStoreNames.contains(ORGANIZER_STORE)) db.createObjectStore(ORGANIZER_STORE, { keyPath: 'id' })
+            if (!db.objectStoreNames.contains(CLAIMS_STORE)) {
+              const claims = db.createObjectStore(CLAIMS_STORE, { keyPath: 'id' })
+              claims.createIndex('project', 'project')
+            }
+            if (!db.objectStoreNames.contains(LEDGER_STORE)) {
+              const ledger = db.createObjectStore(LEDGER_STORE, { keyPath: 'id' })
+              ledger.createIndex('project', 'project')
             }
           }
           request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
@@ -3970,6 +4268,50 @@ window.__ModuleLoader__.load({
 
       return {
         isDegraded: () => degraded,
+
+        async readOrganizerJournal() {
+          const row = await withStore('readonly', store => requestToPromise(store.get('last')), ORGANIZER_STORE)
+          return row === undefined ? memoryOrganizerJournal : row || null
+        },
+        async writeOrganizerJournal(value) {
+          const row = { ...value, id: 'last' }
+          const written = await withStore('readwrite', store => requestToPromise(store.put(row)), ORGANIZER_STORE)
+          if (written === undefined) memoryOrganizerJournal = row
+          return row
+        },
+
+        async listResearchClaims({ project } = {}) {
+          const rows = await withStore('readonly', store => requestToPromise(
+            typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
+          return (Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        },
+        async saveResearchClaim(input) {
+          const claim = normalizeResearchClaim(input)
+          const evidenceIds = new Set((await readAll()).map(item => item.id))
+          if (claim.links.some(item => !evidenceIds.has(item.evidenceId))) throw new Error('论断关联了不存在的证据，请刷新后重试。')
+          const result = await withStore('readwrite', store => requestToPromise(store.put(claim)), CLAIMS_STORE)
+          if (result === undefined) memoryResearchClaims = [claim, ...memoryResearchClaims.filter(item => item.id !== claim.id)]
+          return claim
+        },
+
+        async listResearchLedger({ project, kind, runId } = {}) {
+          const rows = await withStore('readonly', store => requestToPromise(
+            typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), LEDGER_STORE)
+          return (Array.isArray(rows) ? rows : memoryResearchLedger)
+            .filter(item => (project === undefined || item.project === project)
+              && (kind === undefined || item.kind === kind) && (runId === undefined || item.runId === runId))
+            .sort((a, b) => (b.at || 0) - (a.at || 0))
+        },
+        async saveResearchLedgerEvent(input) {
+          const event = normalizeResearchLedgerEvent(input)
+          if (event.kind === 'screening' && !(await readAll()).some(item => item.id === event.evidenceId)) {
+            throw new Error('筛选记录关联了不存在的证据。')
+          }
+          const result = await withStore('readwrite', store => requestToPromise(store.put(event)), LEDGER_STORE)
+          if (result === undefined) memoryResearchLedger = [event, ...memoryResearchLedger.filter(item => item.id !== event.id)]
+          return event
+        },
 
         // ── 项目上下文 ──────────────────────────────────────────
         getActiveProject() {
@@ -4114,6 +4456,106 @@ window.__ModuleLoader__.load({
           })
           if (!touched) memory = [...rows, ...memory.filter(item => !rows.some(row => row.id === item.id))]
           return rows.length
+        },
+
+        // 项目整理只改归属，不改证据 ID、人工结论、Agent 历史或关联端点。
+        // 证据与关联共用一个 IndexedDB 事务，防止刷新时只搬了一半。
+        async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null } = {}) {
+          const map = new Map(mappings.map(item => [item.from, item.to]))
+          const evidenceBefore = (await readAll()).filter(item => map.has(item.project))
+          const linksBefore = (await this.listAssetEvidenceLinks()).filter(item => map.has(item.project))
+          const claimsBefore = (await this.listResearchClaims()).filter(item => map.has(item.project))
+          const ledgerBefore = (await this.listResearchLedger()).filter(item => map.has(item.project))
+          const evidenceAfter = evidenceBefore.map(item => ({
+            ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project, updatedAt: now,
+          }))
+          const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const all = await readAll()
+          const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]
+          for (const item of evidenceAfter) {
+            const other = findDuplicate(proposed.filter(row => row.id !== item.id), item)
+            if (other) throw new Error(`「${item.title}」迁移到「${item.project}」时与现有来源重复。`)
+          }
+          const snapshot = { evidenceBefore, evidenceAfter, linksBefore, linksAfter, claimsBefore, claimsAfter, ledgerBefore, ledgerAfter }
+          if (expectedSnapshot && (JSON.stringify(expectedSnapshot.evidenceBefore) !== JSON.stringify(evidenceBefore)
+            || JSON.stringify(expectedSnapshot.linksBefore) !== JSON.stringify(linksBefore)
+            || JSON.stringify(expectedSnapshot.claimsBefore) !== JSON.stringify(claimsBefore)
+            || JSON.stringify(expectedSnapshot.ledgerBefore || []) !== JSON.stringify(ledgerBefore))) {
+            throw new Error('项目整理预览后证据已变化，未写入；请重新预览。')
+          }
+          if (dryRun) return snapshot
+          const db = await connect()
+          if (db) {
+            const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
+            for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
+            for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
+            for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
+            for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
+            await new Promise((resolve, reject) => {
+              tx.oncomplete = resolve
+              tx.onerror = () => reject(tx.error || new Error('证据项目迁移失败'))
+              tx.onabort = () => reject(tx.error || new Error('证据项目迁移中止'))
+            })
+          } else {
+            memory = [...evidenceAfter, ...memory.filter(item => !map.has(item.project))]
+            memoryLinks = [...linksAfter, ...memoryLinks.filter(item => !map.has(item.project))]
+            memoryResearchClaims = [...claimsAfter, ...memoryResearchClaims.filter(item => !map.has(item.project))]
+            memoryResearchLedger = [...ledgerAfter, ...memoryResearchLedger.filter(item => !map.has(item.project))]
+          }
+          return snapshot
+        },
+
+        async restoreProjectOrganization(snapshot, { validateOnly = false } = {}) {
+          const current = await readAll()
+          const currentLinks = await this.listAssetEvidenceLinks()
+          const currentClaims = await this.listResearchClaims()
+          const currentLedger = await this.listResearchLedger()
+          for (const row of snapshot.evidenceAfter || []) {
+            const value = JSON.stringify(current.find(item => item.id === row.id))
+            const before = JSON.stringify(snapshot.evidenceBefore.find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('证据在整理后已变化，不能自动撤销。')
+          }
+          for (const row of snapshot.linksAfter || []) {
+            const value = JSON.stringify(currentLinks.find(item => item.id === row.id))
+            const before = JSON.stringify(snapshot.linksBefore.find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('关联在整理后已变化，不能自动撤销。')
+          }
+          for (const row of snapshot.claimsAfter || []) {
+            const value = JSON.stringify(currentClaims.find(item => item.id === row.id))
+            const before = JSON.stringify(snapshot.claimsBefore.find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('研究论断在整理后已变化，不能自动撤销。')
+          }
+          for (const row of snapshot.ledgerAfter || []) {
+            const value = JSON.stringify(currentLedger.find(item => item.id === row.id))
+            const before = JSON.stringify((snapshot.ledgerBefore || []).find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('科研账本在整理后已变化，不能自动撤销。')
+          }
+          if (validateOnly) return true
+          const db = await connect()
+          if (db) {
+            const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
+            for (const row of snapshot.evidenceBefore || []) tx.objectStore(STORE).put(row)
+            for (const row of snapshot.linksBefore || []) tx.objectStore(LINKS_STORE).put(row)
+            for (const row of snapshot.claimsBefore || []) tx.objectStore(CLAIMS_STORE).put(row)
+            for (const row of snapshot.ledgerBefore || []) tx.objectStore(LEDGER_STORE).put(row)
+            await new Promise((resolve, reject) => {
+              tx.oncomplete = resolve
+              tx.onerror = () => reject(tx.error || new Error('证据项目撤销失败'))
+              tx.onabort = () => reject(tx.error || new Error('证据项目撤销中止'))
+            })
+          } else {
+            const beforeIds = new Set((snapshot.evidenceBefore || []).map(item => item.id))
+            const linkIds = new Set((snapshot.linksBefore || []).map(item => item.id))
+            memory = [...snapshot.evidenceBefore, ...memory.filter(item => !beforeIds.has(item.id))]
+            memoryLinks = [...snapshot.linksBefore, ...memoryLinks.filter(item => !linkIds.has(item.id))]
+            const claimIds = new Set((snapshot.claimsBefore || []).map(item => item.id))
+            memoryResearchClaims = [...snapshot.claimsBefore, ...memoryResearchClaims.filter(item => !claimIds.has(item.id))]
+            const ledgerIds = new Set((snapshot.ledgerBefore || []).map(item => item.id))
+            memoryResearchLedger = [...(snapshot.ledgerBefore || []), ...memoryResearchLedger.filter(item => !ledgerIds.has(item.id))]
+          }
+          return true
         },
       }
     }
@@ -4398,6 +4840,53 @@ window.__ModuleLoader__.load({
           return readClaims()
         },
 
+        async remapProjects(mappings, { dryRun = false, expectedSnapshot = null } = {}) {
+          const map = new Map(mappings.map(item => [item.from, item.to]))
+          const nodesBefore = (await readNodes()).filter(item => map.has(item.project))
+          const claimsBefore = (await readClaims()).filter(item => map.has(item.project))
+          const nodesAfter = nodesBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const snapshot = { nodesBefore, nodesAfter, claimsBefore, claimsAfter }
+          if (expectedSnapshot && (JSON.stringify(expectedSnapshot.nodesBefore) !== JSON.stringify(nodesBefore)
+            || JSON.stringify(expectedSnapshot.claimsBefore) !== JSON.stringify(claimsBefore))) {
+            throw new Error('项目整理预览后知识库已变化，未写入；请重新预览。')
+          }
+          if (dryRun) return snapshot
+          const db = await connect()
+          if (db) {
+            const tx = db.transaction([KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite')
+            for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
+            for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
+            await new Promise((resolve, reject) => {
+              tx.oncomplete = resolve
+              tx.onerror = () => reject(tx.error || new Error('知识项目迁移失败'))
+              tx.onabort = () => reject(tx.error || new Error('知识项目迁移中止'))
+            })
+          } else {
+            memory.nodes = [...nodesAfter, ...memory.nodes.filter(item => !map.has(item.project))]
+            memory.claims = [...claimsAfter, ...memory.claims.filter(item => !map.has(item.project))]
+          }
+          return snapshot
+        },
+
+        async restoreProjectOrganization(snapshot, { validateOnly = false } = {}) {
+          const nodes = await readNodes(), claims = await readClaims()
+          for (const row of snapshot.nodesAfter || []) {
+            const value = JSON.stringify(nodes.find(item => item.id === row.id))
+            const before = JSON.stringify(snapshot.nodesBefore.find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('知识节点在整理后已变化，不能自动撤销。')
+          }
+          for (const row of snapshot.claimsAfter || []) {
+            const value = JSON.stringify(claims.find(item => item.id === row.id))
+            const before = JSON.stringify(snapshot.claimsBefore.find(item => item.id === row.id))
+            if (value !== JSON.stringify(row) && value !== before) throw new Error('知识关系在整理后已变化，不能自动撤销。')
+          }
+          if (validateOnly) return true
+          await putRows(KNOWLEDGE_NODE_STORE, snapshot.nodesBefore || [])
+          await putRows(KNOWLEDGE_CLAIM_STORE, snapshot.claimsBefore || [])
+          return true
+        },
+
         // 把一条提取结果合并入库。nodes/claims 是提取器输出的 draft（带 key），
         // source 是来源消息（{ sessionId, seq, turn, at, excerpt }），可为空（手动提取）。
         // project 记录沉淀时的当前项目（图谱按项目筛选的数据基础）；已有 project 的记录不被覆盖。
@@ -4595,12 +5084,148 @@ window.__ModuleLoader__.load({
 
 
 
+    const PROJECT_ORGANIZER_PATH = '/dsh-research-kit/evidence-sync'
+
+    async function projectOrganizerRequest(body) {
+      const response = await fetch(PROJECT_ORGANIZER_PATH, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok || !payload.ok) throw new Error(payload.error || `项目整理服务失败：HTTP ${response.status}`)
+      return payload
+    }
+
+    async function recoverProjectOrganizationJournal(store) {
+      const local = await store.readOrganizerJournal()
+      if (!local || local.fileId || local.status !== 'preparing') return local
+      const response = await fetch(`${PROJECT_ORGANIZER_PATH}?organizer=last`, { signal: AbortSignal.timeout(5_000) })
+      const payload = await response.json()
+      const remote = payload?.journal
+      if (!response.ok || !payload?.ok) throw new Error('无法检查上次项目整理状态。')
+      if (!remote) return store.writeOrganizerJournal({ ...local, status: 'failed' })
+      if (JSON.stringify(remote.mappings) !== JSON.stringify(local.mappings)) throw new Error('文件侧整理记录与浏览器记录不一致；已停止自动恢复。')
+      if (!['applying', 'applied'].includes(remote.status)) return store.writeOrganizerJournal({ ...local, status: 'failed' })
+      return store.writeOrganizerJournal({ ...local, status: 'file', fileId: remote.id })
+    }
+
+    async function finalizeProjectOrganization(store) {
+      const journal = await store.readOrganizerJournal()
+      if (!journal?.fileId || journal.status !== 'applied') throw new Error('没有待保留的项目整理。')
+      await projectOrganizerRequest({ action: 'finalize', id: journal.fileId })
+      return store.writeOrganizerJournal({ ...journal, status: 'finalized' })
+    }
+
+    async function previewProjectOrganization({ store, assetProvider }) {
+      const [evidence, assets, nodes, claims, links, researchClaims] = await Promise.all([
+        store.list(), assetProvider?.list?.() || [], knowledgeStore().listNodes(),
+        knowledgeStore().listClaims(), store.listAssetEvidenceLinks(), store.listResearchClaims(),
+      ])
+      return buildProjectOrganizationPlan({ evidence, assets, nodes, claims, researchClaims, links, runs: listResearchRuns() })
+    }
+
+    async function restoreAssets(assetProvider, before) {
+      if (!before?.length) return
+      if (!assetProvider?.save) throw new Error('灵感资产服务不可用，无法恢复项目归属。')
+      for (const item of before) await assetProvider.save(item)
+    }
+
+    async function undoProjectOrganization({ store, assetProvider, onProgress = () => {} }) {
+      const journal = await store.readOrganizerJournal()
+      if (!journal || !journal.fileId || !['applied', 'file', 'evidence', 'knowledge', 'assets', 'runs', 'recovering'].includes(journal.status)) {
+        throw new Error('当前没有可撤销的项目整理。')
+      }
+      // 文件侧撤销会写盘；先核对所有浏览器侧快照，避免文件已回滚而本地因新编辑拒绝恢复。
+      if (journal.runSnapshot) restoreResearchRuns(journal.runSnapshot, { validateOnly: true })
+      if (journal.knowledgeSnapshot) await knowledgeStore().restoreProjectOrganization(journal.knowledgeSnapshot, { validateOnly: true })
+      if (journal.evidenceSnapshot) await store.restoreProjectOrganization(journal.evidenceSnapshot, { validateOnly: true })
+      if (journal.assetAfter?.length) {
+        const current = new Map((await assetProvider.list()).map(item => [item.id, item]))
+        for (const row of journal.assetAfter) {
+          if (JSON.stringify(current.get(row.id)) !== JSON.stringify(row)) throw new Error(`灵感资产「${row.title}」在整理后已变化，不能自动撤销。`)
+        }
+      }
+      onProgress('正在核对并恢复文件侧证据')
+      await projectOrganizerRequest({ action: 'undo', id: journal.fileId })
+      await store.writeOrganizerJournal({ ...journal, status: 'recovering' })
+      if (journal.runSnapshot) {
+        onProgress('正在恢复研究运行')
+        restoreResearchRuns(journal.runSnapshot)
+      }
+      if (journal.assetBefore?.length) {
+        onProgress('正在恢复灵感资产')
+        await restoreAssets(assetProvider, journal.assetBefore)
+      }
+      if (journal.knowledgeSnapshot) {
+        onProgress('正在恢复知识节点')
+        await knowledgeStore().restoreProjectOrganization(journal.knowledgeSnapshot)
+      }
+      if (journal.evidenceSnapshot) {
+        onProgress('正在恢复证据与关联')
+        await store.restoreProjectOrganization(journal.evidenceSnapshot)
+      }
+      await store.writeOrganizerJournal({ ...journal, status: 'undone' })
+      onProgress('已撤销项目整理')
+      return journal
+    }
+
+    async function applyProjectOrganization({ store, assetProvider, mappings, onProgress = () => {} }) {
+      const moves = Array.isArray(mappings) ? mappings.filter(item => item?.from && item?.to && item.from !== item.to) : []
+      if (!moves.length) throw new Error('没有选中可整理的项目。')
+      if (store.isDegraded() || knowledgeStore().isDegraded()) throw new Error('当前存储处于内存降级模式，不能安全执行项目迁移。')
+      const existing = await store.readOrganizerJournal()
+      if (existing && !['undone', 'failed', 'finalized'].includes(existing.status)) throw new Error('已有未撤销的项目整理，请先撤销或保留当前结果。')
+      const assets = await assetProvider?.list?.() || []
+      const sources = new Set(moves.map(item => item.from))
+      const assetBefore = assets.filter(item => sources.has(item.project))
+      if (assetBefore.length && typeof assetProvider?.save !== 'function') throw new Error('灵感资产服务不可写，不能完整迁移这些项目。')
+      let journal = await store.writeOrganizerJournal({ status: 'preparing', mappings: moves, assetBefore, createdAt: Date.now() })
+      try {
+        onProgress('正在建立文件侧备份并迁移证据')
+        const file = await projectOrganizerRequest({ action: 'organize', moves })
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'file', fileId: file.id })
+        onProgress('正在迁移浏览器证据与关联')
+        const evidenceSnapshot = await store.remapProjects(moves, { dryRun: true, now: journal.createdAt })
+        journal = await store.writeOrganizerJournal({ ...journal, evidenceSnapshot })
+        await store.remapProjects(moves, { now: journal.createdAt, expectedSnapshot: evidenceSnapshot })
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'evidence' })
+        onProgress('正在迁移知识节点')
+        const knowledgeSnapshot = await knowledgeStore().remapProjects(moves, { dryRun: true })
+        journal = await store.writeOrganizerJournal({ ...journal, knowledgeSnapshot })
+        await knowledgeStore().remapProjects(moves, { expectedSnapshot: knowledgeSnapshot })
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'knowledge' })
+        const map = new Map(moves.map(item => [item.from, item.to]))
+        onProgress('正在迁移灵感资产')
+        for (const item of assetBefore) {
+          await assetProvider.save({ ...item, project: map.get(item.project), tags: [...new Set([...(item.tags || []), `原项目:${item.project}`])] })
+        }
+        const assetAfter = (await assetProvider?.list?.() || []).filter(item => assetBefore.some(before => before.id === item.id))
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'assets', assetAfter })
+        onProgress('正在迁移研究运行')
+        const runSnapshot = remapResearchRuns(moves, { dryRun: true })
+        journal = await store.writeOrganizerJournal({ ...journal, runSnapshot })
+        remapResearchRuns(moves)
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'runs' })
+        journal = await store.writeOrganizerJournal({ ...journal, status: 'applied' })
+        onProgress('项目整理完成，可撤销')
+        return journal
+      } catch (error) {
+        if (journal.fileId) {
+          try { await undoProjectOrganization({ store, assetProvider, onProgress }) }
+          catch (rollbackError) { throw new Error(`${error.message}；自动回滚未完成：${rollbackError.message}。请勿继续整理，先恢复备份。`) }
+        } else await store.writeOrganizerJournal({ ...journal, status: 'failed' })
+        throw error
+      }
+    }
+
+
+
     // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
     //
     // 与灵感资产的边界：灵感资产回答「想过什么」，证据库回答「依据什么」。
     // 隐私边界（不可协商，与 ROADMAP §4 一致）：
     //   - 只入库用户逐条确认的元数据与主动写下的笔记；禁止自动入库；
-    //   - 不保存 API 原始响应、检索词、全文或附件；
+    //   - 不保存 API 原始响应、全文或附件；检索词仅在用户点击“记录本次检索”后写入账本；
     //   - 保存不等于认可，新条目一律落到「未核验」。
 
     // 单例 + 订阅：保存入口在查询面板（分区①），列表在本面板（沉淀层），
@@ -4660,7 +5285,9 @@ window.__ModuleLoader__.load({
         identifierKind: entry.identifier_type || entry.identifierKind || 'accession',
         url: entry.url,
         savedAt: entry.saved_at ? Date.parse(entry.saved_at) : undefined,
+        updatedAt: entry.updated_at ? Date.parse(entry.updated_at) : undefined,
         project: entry.project || 'default',
+        legacyProject: entry.legacy_project || entry.legacyProject || '',
         tags: Array.isArray(entry.tags) ? entry.tags : [],
         reason: entry.reason || '',
         note: entry.note || '',
@@ -4674,6 +5301,11 @@ window.__ModuleLoader__.load({
         assessedAt: entry.assessed_at ? Date.parse(entry.assessed_at) : undefined,
         assessedBy: entry.assessed_by || entry.assessedBy || '',
         assessmentReason: entry.assessment_reason || entry.assessmentReason || '',
+        agentAssessment: entry.agent_assessment || entry.agentAssessment || null,
+        agentAssessmentHistory: entry.agent_assessment_history || entry.agentAssessmentHistory || [],
+        sourceCheck: entry.source_check || entry.sourceCheck || null,
+        sourceCheckHistory: entry.source_check_history || entry.sourceCheckHistory || [],
+        classification: entry.classification || null,
         agentProduced: entry.source === 'mcp-agent' || entry.agentProduced === true,
         runId: entry.run_id || entry.runId || '',
       }
@@ -4685,9 +5317,13 @@ window.__ModuleLoader__.load({
         identifier_type: entry.identifierKind || 'accession',
         identifier: entry.identifier || '',
         title: entry.title,
+        source_database: entry.sourceDatabase || '',
         url: entry.url || '',
+        tags: entry.tags || [],
+        reason: entry.reason || '',
         note: entry.note || '',
         project: entry.project || 'default',
+        legacy_project: entry.legacyProject || '',
         grade: entry.grade || 'ungraded',
         status: entry.status || 'unverified',
         source_verification: entry.sourceVerification || entry.status || 'unverified',
@@ -4698,9 +5334,15 @@ window.__ModuleLoader__.load({
         assessed_at: entry.assessedAt ? new Date(entry.assessedAt).toISOString() : '',
         assessed_by: entry.assessedBy || '',
         assessment_reason: entry.assessmentReason || '',
-        source: 'dsh-ui',
+        agent_assessment: entry.agentAssessment || null,
+        agent_assessment_history: entry.agentAssessmentHistory || [],
+        source_check: entry.sourceCheck || null,
+        source_check_history: entry.sourceCheckHistory || [],
+        classification: entry.classification || null,
+        source: entry.agentProduced ? 'mcp-agent' : 'dsh-ui',
         run_id: entry.runId || '',
         saved_at: new Date(entry.savedAt || Date.now()).toISOString(),
+        updated_at: new Date(entry.updatedAt || entry.savedAt || Date.now()).toISOString(),
       }
     }
 
@@ -4737,7 +5379,22 @@ window.__ModuleLoader__.load({
           signal: AbortSignal.timeout(5_000),
         })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const result = await response.json()
+        if (!result?.ok || result.added !== rows.length) throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
       }
+    }
+
+    async function updateFileEvidenceEntry(entry) {
+      const response = await fetch(EVIDENCE_SYNC_PATH, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project: entry.project || 'default', entry: vaultEvidenceFileEntry(entry) }),
+        signal: AbortSignal.timeout(5_000),
+      })
+      if (response.status === 404) {
+        await postFileEvidenceEntries([vaultEvidenceFileEntry(entry)])
+        return
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
     }
 
     async function performEvidenceVaultSync(project) {
@@ -4746,8 +5403,15 @@ window.__ModuleLoader__.load({
       const fileEntries = await fetchFileEvidenceEntries(project)
       const localEntries = await store.list(project ? { project } : {})
       const localKeys = new Set(localEntries.map(evidenceSyncKey))
+      const localById = new Map(localEntries.map(entry => [entry.id, entry]))
       let imported = 0
       for (const fileEntry of fileEntries) {
+        const local = localById.get(fileEntry.id)
+        if (local && Date.parse(fileEntry.updated_at || '') > (local.updatedAt || local.savedAt || 0)) {
+          await store.save(fileEvidenceInput(fileEntry), { onDuplicate: 'update' })
+          imported++
+          continue
+        }
         if (localKeys.has(evidenceSyncKey(fileEntry))) continue
         try {
           await store.save(fileEvidenceInput(fileEntry), { onDuplicate: 'new' })
@@ -4789,7 +5453,7 @@ window.__ModuleLoader__.load({
     async function persistEvidenceEntryToFile(entry) {
       if (!canUseFileSync()) return false
       try {
-        await postFileEvidenceEntries([vaultEvidenceFileEntry(entry)])
+        await updateFileEvidenceEntry(entry)
         invalidateEvidenceSync(entry.project)
         return true
       } catch {
@@ -4800,10 +5464,11 @@ window.__ModuleLoader__.load({
     async function saveEvidenceEntry(input, options) {
       const result = await evidenceVaultStore().save({
         ...input,
+        updatedAt: Date.now(),
         // UI 保存默认归入当前运行；没有运行时保持空值，兼容既有项目级证据。
         runId: input?.runId || activeResearchRun()?.id || '',
       }, options)
-      await persistEvidenceEntryToFile(result.entry)
+      result.fileSynced = await persistEvidenceEntryToFile(result.entry)
       publishEvidenceVault()
       return result
     }
@@ -4965,7 +5630,7 @@ window.__ModuleLoader__.load({
     // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
     // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
     // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-    function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null }) {
+    function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
       const store = evidenceVaultStore()
       const [entries, setEntries] = React.useState([])
       const [projects, setProjects] = React.useState([])
@@ -4985,6 +5650,36 @@ window.__ModuleLoader__.load({
       const [agentBusy, setAgentBusy] = React.useState(false)
       const [agentProgress, setAgentProgress] = React.useState('')
       const [agentStats, setAgentStats] = React.useState(null)
+      const [sourceCheckBusy, setSourceCheckBusy] = React.useState(false)
+      const [sourceCheckProgress, setSourceCheckProgress] = React.useState('')
+      const [organizerPlan, setOrganizerPlan] = React.useState(null)
+      const [organizerBusy, setOrganizerBusy] = React.useState(false)
+      const [organizerProgress, setOrganizerProgress] = React.useState('')
+      const [organizerJournal, setOrganizerJournal] = React.useState(null)
+      const [claims, setClaims] = React.useState([])
+      const [ledger, setLedger] = React.useState([])
+      const [screeningDecision, setScreeningDecision] = React.useState('include')
+      const [screeningReason, setScreeningReason] = React.useState('')
+      const [screeningOpen, setScreeningOpen] = React.useState(false)
+      const [artifactOpen, setArtifactOpen] = React.useState(false)
+      const [artifactTitle, setArtifactTitle] = React.useState('')
+      const [artifactDataset, setArtifactDataset] = React.useState('')
+      const [artifactCode, setArtifactCode] = React.useState('')
+      const [artifactParameters, setArtifactParameters] = React.useState('')
+      const [artifactEnvironment, setArtifactEnvironment] = React.useState('')
+      const [artifactOutput, setArtifactOutput] = React.useState('')
+      const [artifactExecution, setArtifactExecution] = React.useState('')
+      const [claimFormOpen, setClaimFormOpen] = React.useState(false)
+      const [claimQuestion, setClaimQuestion] = React.useState('')
+      const [claimStatement, setClaimStatement] = React.useState('')
+      const [claimStance, setClaimStance] = React.useState('unassessed')
+      const [claimLocator, setClaimLocator] = React.useState('')
+      const [claimStudyDesign, setClaimStudyDesign] = React.useState('')
+      const [claimSample, setClaimSample] = React.useState('')
+      const [claimResult, setClaimResult] = React.useState('')
+      const [claimLimitations, setClaimLimitations] = React.useState('')
+      const [classificationEditId, setClassificationEditId] = React.useState('')
+      const [classificationDraft, setClassificationDraft] = React.useState('')
       const agentAbort = React.useRef(null)
       // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
       const [links, setLinks] = React.useState([])
@@ -4999,12 +5694,14 @@ window.__ModuleLoader__.load({
         Promise.resolve()
           .then(() => syncEvidenceVaultWithFiles(project || undefined))
           .catch(() => {})
-          .then(() => Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks()]))
-          .then(([rows, names, links]) => {
+          .then(() => Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
+          .then(([rows, names, links, claims, ledger]) => {
             if (version !== refreshVersion.current) return
             setEntries(rows || [])
             setProjects(names || [])
             setLinks(Array.isArray(links) ? links : [])
+            setClaims(Array.isArray(claims) ? claims : [])
+            setLedger(Array.isArray(ledger) ? ledger : [])
             setLoading(false)
           })
           .catch(error => {
@@ -5015,6 +5712,7 @@ window.__ModuleLoader__.load({
       }, [store, project])
       React.useEffect(() => { refresh() }, [refresh])
       React.useEffect(() => subscribeEvidenceVault(refresh), [refresh])
+      React.useEffect(() => { recoverProjectOrganizationJournal(store).then(setOrganizerJournal).catch(error => setNotice(`⚠️ 项目整理恢复检查失败：${error.message}`)) }, [store])
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
@@ -5055,6 +5753,105 @@ window.__ModuleLoader__.load({
         setNotice(written.ok ? writePlan.notice : '草稿已变化，未自动写入引用；请选择后重新写入。')
       }
 
+      const saveClaim = async () => {
+        if (!selectedEntries.length) return setNotice('请先勾选至少一条证据。')
+        try {
+          await store.saveResearchClaim({
+            project: project || selectedEntries[0].project || '',
+            question: claimQuestion, statement: claimStatement,
+            links: selectedEntries.map(item => ({
+              evidenceId: item.id, stance: claimStance, locator: claimLocator,
+              studyDesign: claimStudyDesign, sample: claimSample, result: claimResult,
+              limitations: claimLimitations, assessedBy: claimStance === 'unassessed' ? '' : 'researcher',
+              assessedAt: claimStance === 'unassessed' ? 0 : Date.now(),
+            })),
+          })
+          setClaimFormOpen(false); setClaimStatement(''); setClaimQuestion(''); setClaimLocator('')
+          setClaimStudyDesign(''); setClaimSample(''); setClaimResult(''); setClaimLimitations(''); setClaimStance('unassessed')
+          publishEvidenceVault()
+          setNotice(`已建立研究论断，并关联 ${selectedEntries.length} 条证据；未评估关系不会标为支持。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const saveScreening = async () => {
+        if (!selectedEntries.length) return setNotice('请先选择要筛选的证据。')
+        if (screeningDecision === 'exclude' && !screeningReason.trim()) return setNotice('排除时必须填写理由。')
+        try {
+          const run = activeResearchRun()
+          for (const item of selectedEntries) await store.saveResearchLedgerEvent({
+            kind: 'screening', project: item.project || project, runId: run?.id || '',
+            evidenceId: item.id, decision: screeningDecision, reason: screeningReason,
+            source: 'manual', actor: 'researcher',
+          })
+          setScreeningOpen(false); setScreeningReason('')
+          publishEvidenceVault()
+          setNotice(`已记录 ${selectedEntries.length} 条证据的${screeningDecision === 'include' ? '纳入' : screeningDecision === 'exclude' ? '排除' : '待定'}决定；不会改变来源核验状态。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const saveArtifact = async () => {
+        try {
+          const run = activeResearchRun()
+          if (!run) throw new Error('当前没有研究运行；请先从工作流启动一次研究运行，再记录产出。')
+          await store.saveResearchLedgerEvent({
+            kind: 'artifact', project: run.project || project, runId: run.id,
+            title: artifactTitle, datasetId: artifactDataset, codeVersion: artifactCode,
+            parameters: artifactParameters, environment: artifactEnvironment,
+            output: artifactOutput, executionRef: artifactExecution,
+            state: 'draft',
+          })
+          setArtifactOpen(false); setArtifactTitle(''); setArtifactDataset(''); setArtifactCode('')
+          setArtifactParameters(''); setArtifactEnvironment(''); setArtifactOutput(''); setArtifactExecution('')
+          publishEvidenceVault()
+          setNotice(artifactExecution.trim() ? '已记录待核对的执行引用；尚未验证工具日志，不标记为实际执行。' : '研究产出已记录为草稿；未提供执行依据，不会标记为实际执行。')
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const saveClassification = async item => {
+        try {
+          const topics = classificationDraft.split(/[;；\n]/).map(part => part.trim()).filter(Boolean).map(part => {
+            const [primary, secondary] = part.split(/\s*[/／]\s*/)
+            if (!primary?.trim() || !secondary?.trim()) throw new Error('分类格式应为“一级主题/二级主题”，多组用分号分隔。')
+            if (!isControlledResearchTopic(primary.trim(), secondary.trim())) throw new Error(`“${primary.trim()}/${secondary.trim()}”不在当前受控主题词表中。`)
+            return { primary: primary.trim(), secondary: secondary.trim() }
+          })
+          await saveEvidenceEntry({ ...item, classification: { topics, facets: item.classification?.facets || {}, reviewed: true } }, { onDuplicate: 'update' })
+          setClassificationEditId(''); setClassificationDraft('')
+          setNotice(`「${item.title}」的人工分类已保存，不会被自动规则覆盖。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+
+      const checkSelectedSources = async () => {
+        if (sourceCheckBusy || !selectedEntries.length) return
+        const eligible = selectedEntries.filter(item => (item.identifierKind === 'doi' || item.identifierKind === 'pmid') && item.identifier)
+        if (!eligible.length) return setNotice('已选证据没有可核对的 DOI 或 PMID。')
+        setSourceCheckBusy(true)
+        let completed = 0, unmatched = 0
+        try {
+          for (let start = 0; start < eligible.length; start += 6) {
+            const batch = eligible.slice(start, start + 6)
+            setSourceCheckProgress(`正在核对 ${start + 1}–${start + batch.length} / ${eligible.length}`)
+            const response = await fetch('/dsh-research-kit/evidence-source-check', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ entries: batch.map(item => ({ id: item.id, title: item.title, identifier: item.identifier, identifierKind: item.identifierKind })) }),
+            })
+            const body = await response.json().catch(() => ({}))
+            if (!response.ok || !body?.ok || !Array.isArray(body.results)) throw new Error(body.error || `来源核对失败：HTTP ${response.status}`)
+            for (const result of body.results) {
+              const original = batch.find(item => item.id === result.id)
+              if (!original) continue
+              if (!result.check) { unmatched++; continue }
+              const current = (await store.list({ project: original.project })).find(item => item.id === original.id)
+              if (!current || current.title !== original.title || current.identifier !== original.identifier) { unmatched++; continue }
+              const sourceCheckHistory = current.sourceCheck
+                ? [...(current.sourceCheckHistory || []), current.sourceCheck].slice(-5) : current.sourceCheckHistory || []
+              const saved = await saveEvidenceEntry({ ...current, sourceCheck: result.check, sourceCheckHistory }, { onDuplicate: 'update' })
+              if (!saved.fileSynced) throw new Error(`「${original.title}」的核对记录未同步到文件侧。`)
+              completed++
+            }
+          }
+          setNotice(`已核对 ${completed} 条官方元数据${unmatched ? `，${unmatched} 条未完成` : ''}。这不代表已读取原文或核实结论，核验状态保持不变。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}；已完成 ${completed} 条。`) }
+        finally { setSourceCheckBusy(false); setSourceCheckProgress('') }
+      }
+
       const createProject = () => {
         const name = String(newProject || '').trim()
         if (!name) return
@@ -5063,12 +5860,69 @@ window.__ModuleLoader__.load({
         setNewProjectOpen(false)
       }
 
+      const previewOrganizer = async () => {
+        if (organizerBusy) return
+        setOrganizerBusy(true)
+        setOrganizerProgress('正在扫描全部项目与关联')
+        try {
+          await syncEvidenceVaultWithFiles(undefined, { force: true })
+          const plan = await previewProjectOrganization({ store, assetProvider })
+          setOrganizerPlan(plan)
+          setNotice(plan.length ? `找到 ${plan.length} 个可整理的任务型项目；请检查建议后一次确认。` : '没有发现需要整理的已知任务型项目。')
+        } catch (error) { setNotice(`⚠️ 无法完整扫描项目：${error?.message || error}`) }
+        finally { setOrganizerBusy(false); setOrganizerProgress('') }
+      }
+
+      const applyOrganizer = async () => {
+        const mappings = (organizerPlan || []).filter(item => item.selected).map(({ from, to }) => ({ from, to }))
+        if (!mappings.length || organizerBusy) return
+        setOrganizerBusy(true)
+        try {
+          const journal = await applyProjectOrganization({ store, assetProvider, mappings, onProgress: setOrganizerProgress })
+          setOrganizerJournal(journal)
+          setOrganizerPlan(null)
+          setProject(getActiveProject())
+          invalidateEvidenceSync()
+          publishEvidenceVault()
+          setNotice(`已整理 ${mappings.length} 个项目；原项目名已保留，可用“撤销上次整理”恢复。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+        finally { setOrganizerBusy(false); setOrganizerProgress('') }
+      }
+
+      const undoOrganizer = async () => {
+        if (organizerBusy) return
+        setOrganizerBusy(true)
+        try {
+          const journal = await undoProjectOrganization({ store, assetProvider, onProgress: setOrganizerProgress })
+          setOrganizerJournal({ ...journal, status: 'undone' })
+          setProject(getActiveProject())
+          invalidateEvidenceSync()
+          publishEvidenceVault()
+          setNotice('已撤销上次项目整理，证据与关联已恢复原归属。')
+        } catch (error) { setNotice(`⚠️ 撤销未完成：${error?.message || error}`) }
+        finally { setOrganizerBusy(false); setOrganizerProgress('') }
+      }
+
+      const finalizeOrganizer = async () => {
+        if (organizerBusy) return
+        setOrganizerBusy(true)
+        try {
+          const journal = await finalizeProjectOrganization(store)
+          setOrganizerJournal(journal)
+          setNotice('已保留本次整理结果；现在可再次整理新项目。本次撤销快照已关闭。')
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+        finally { setOrganizerBusy(false) }
+      }
+
       const exportJson = () => {
         try {
-          const text = serializeEvidenceBackup({ entries, project })
+          const entryIds = new Set(entries.map(item => item.id))
+          const scopedClaims = claims.filter(item => item.links.every(link => entryIds.has(link.evidenceId)))
+          const scopedLinks = links.filter(item => entryIds.has(item.evidenceId))
+          const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger })
           const suffix = project || '全部项目'
           downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
-          setNotice(`已导出 ${entries.length} 条证据${project ? `（项目：${project}）` : '（全部项目）'}。注意：资产-证据关联关系不在备份内（首版边界，见 ROADMAP §11）。`)
+          setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联与 ${ledger.length} 条账本事件。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
@@ -5082,6 +5936,18 @@ window.__ModuleLoader__.load({
           setNotice(`已导出 ${filtered.length} 条证据作为解释图素材（按当前筛选范围；渲染时用 --evidence <路径> 并入）。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
+      const exportResearchRecord = () => {
+        try {
+          const includedIds = new Set(ledger.filter(item => item.kind === 'screening' && item.decision === 'include').map(item => item.evidenceId))
+          const cited = entries.filter(item => includedIds.has(item.id)).map(item => ({
+            id: item.id, title: item.title, identifier: item.identifier, identifierKind: item.identifierKind,
+            url: item.url, project: item.project, status: item.status,
+          }))
+          downloadJson(JSON.stringify({ kind: 'dsh-research-record', version: 1, exportedAt: Date.now(), project,
+            ledger, claims, citations: cited }, null, 2) + '\n', `dsh-research-record-${project || 'all'}-${stamp()}.json`)
+          setNotice(`已导出 ${ledger.length} 条账本事件、${claims.length} 条论断及 ${cited.length} 条纳入来源。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
 
       const importJson = async () => {
         try {
@@ -5090,6 +5956,27 @@ window.__ModuleLoader__.load({
           const merged = mergeEntries(all, parsed.entries)
           const fresh = merged.rows.filter(row => !all.some(item => item.id === row.id))
           if (fresh.length) await store.importMany(fresh)
+          const availableIds = new Set((await store.list()).map(item => item.id))
+          const claimIds = new Set((await store.listResearchClaims()).map(item => item.id))
+          let restoredClaims = 0, restoredLinks = 0, restoredLedger = 0, skippedRelated = 0
+          for (const item of parsed.claims) {
+            if (claimIds.has(item?.id)) continue
+            if (!Array.isArray(item?.links) || item.links.some(link => !availableIds.has(link.evidenceId))) { skippedRelated++; continue }
+            await store.saveResearchClaim(item); claimIds.add(item.id); restoredClaims++
+          }
+          const linkIds = new Set((await store.listAssetEvidenceLinks()).map(item => item.id))
+          for (const item of parsed.links) {
+            if (linkIds.has(item?.id)) continue
+            if (!availableIds.has(item?.evidenceId)) { skippedRelated++; continue }
+            const result = await store.linkAssetEvidence(item)
+            if (result.created) restoredLinks++
+          }
+          const ledgerIds = new Set((await store.listResearchLedger()).map(item => item.id))
+          for (const item of parsed.ledger) {
+            if (ledgerIds.has(item?.id)) continue
+            if (item?.kind === 'screening' && !availableIds.has(item.evidenceId)) { skippedRelated++; continue }
+            await store.saveResearchLedgerEvent(item); ledgerIds.add(item.id); restoredLedger++
+          }
           setBackup('')
           setBackupOpen(false)
           invalidateEvidenceSync(project || undefined)
@@ -5097,7 +5984,7 @@ window.__ModuleLoader__.load({
           publishEvidenceVault()
           const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
           const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
-          setNotice(`已恢复 ${merged.added} 条证据${tail}${bad}。`)
+          setNotice(`已恢复 ${merged.added} 条证据、${restoredClaims} 条论断、${restoredLinks} 条关联、${restoredLedger} 条账本事件${tail}${bad}${skippedRelated ? `；${skippedRelated} 条关联对象不存在，已跳过` : ''}。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
@@ -5170,7 +6057,8 @@ window.__ModuleLoader__.load({
               const history = current.agentAssessment
                 ? [...(current.agentAssessmentHistory || []), current.agentAssessment].slice(-5)
                 : current.agentAssessmentHistory || []
-              await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history }, { onDuplicate: 'update' })
+              const saved = await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history, updatedAt: Date.now() }, { onDuplicate: 'update' })
+              if (!await persistEvidenceEntryToFile(saved.entry)) throw new Error(`「${original.title}」的 Agent 结果仅保存在当前浏览器，文件同步失败；请重试以避免丢失。`)
               completed++
               setAgentStats(current => ({ ...current, completed: current.completed + 1, last: `${original.title}：已完成` }))
               publishEvidenceVault()
@@ -5229,7 +6117,7 @@ window.__ModuleLoader__.load({
             h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换项目', style: { width: 'auto', minWidth: 140 } }),
             h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建项目'),
             h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-            h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length }, '导出备份'),
+            h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length }, '导出备份'),
             h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
             h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
             confirmClear
@@ -5241,6 +6129,25 @@ window.__ModuleLoader__.load({
           newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
             h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '项目名称，例：肿瘤队列分析', ariaLabel: '新项目名称', style: { flex: '1 1 200px' } }),
             h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
+          ]) : null,
+          h('div', { key: 'organizer-actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || (organizerJournal && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)), onClick: previewOrganizer }, '一键整理项目'),
+            organizerJournal?.fileId && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)
+              ? h(Button, { key: 'undo', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: undoOrganizer }, '撤销上次整理') : null,
+            organizerJournal?.status === 'applied'
+              ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
+            organizerBusy ? h('span', { key: 'progress', role: 'status', style: { fontSize: 12, color: C.muted } }, organizerProgress || '正在整理…') : null,
+          ]),
+          organizerPlan ? h('div', { key: 'organizer-preview', style: { display: 'grid', gap: 8, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 8 } }, [
+            h('strong', { key: 'title', style: { fontSize: 13 } }, '项目归类预览 · 确认前不会修改数据'),
+            ...organizerPlan.map((item, index) => h('label', { key: item.from, style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 } }, [
+              h('input', { key: 'check', type: 'checkbox', checked: item.selected, disabled: organizerBusy, onChange: event => setOrganizerPlan(rows => rows.map((row, i) => i === index ? { ...row, selected: event.target.checked } : row)) }),
+              h('span', { key: 'description' }, `${item.from} → ${item.to} · ${item.category === 'research' ? '科研课题' : '测试／演示归档'} · ${item.confidence === 'high' ? '高置信' : '需确认'} · 证据 ${item.counts.evidence}、论断 ${item.counts.researchClaims}、资产 ${item.counts.assets}、知识 ${item.counts.nodes + item.counts.claims}、运行 ${item.counts.runs}。${item.reason}`),
+            ])),
+            h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+              h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: organizerBusy || !organizerPlan.some(item => item.selected), onClick: applyOrganizer }, '确认并一键分类'),
+              h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: () => setOrganizerPlan(null) }, '取消'),
+            ]),
           ]) : null,
           backupOpen ? h('div', { key: 'backup', style: { display: 'grid', gap: 8 } }, [
             h('strong', { key: 't', style: { fontSize: 12, color: C.muted } }, '粘贴此前导出的 JSON 备份（增量合并：已存在的条目跳过，不会覆盖现有笔记）'),
@@ -5260,8 +6167,6 @@ window.__ModuleLoader__.load({
           h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
             h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
               agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
-            h(Button, { key: 'run-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
-              `判断已选择数据（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}）`),
             agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
             h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
               h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
@@ -5287,7 +6192,73 @@ window.__ModuleLoader__.load({
           ]),
           h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
           h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
+          h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
+            `Agent 判断选中（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
+          h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对选中来源（${selectedEntries.length}）`),
+          h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选选中（${selectedEntries.length}）`),
+          h(Button, { key: 'claim', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setClaimFormOpen(value => !value) }, `建立论断（${selectedEntries.length}）`),
           h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `写入 Prompt（${selectedEntries.length}）`),
+        ]),
+        screeningOpen ? h(Card, { key: 'screening-form', style: { display: 'grid', gap: 8 } }, [
+          h('strong', { key: 'title', style: { fontSize: 13 } }, `筛选已选 ${selectedEntries.length} 条证据`),
+          h(Select, { key: 'decision', value: screeningDecision, onChange: setScreeningDecision, ariaLabel: '筛选决定', options: [
+            { value: 'include', label: '纳入' }, { value: 'exclude', label: '排除' }, { value: 'pending', label: '待定' },
+          ] }),
+          h(Textarea, { key: 'reason', value: screeningReason, onChange: setScreeningReason, rows: 2, placeholder: '筛选理由；排除时必填', ariaLabel: '筛选理由' }),
+          h('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
+            h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !selectedEntries.length || (screeningDecision === 'exclude' && !screeningReason.trim()), onClick: saveScreening }, '记录筛选决定'),
+            h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => setScreeningOpen(false) }, '取消'),
+          ]),
+          h('span', { key: 'hint', style: { color: C.muted, fontSize: 12 } }, '每次决定都会留痕；账本按每条证据的最新决定统计。'),
+        ]) : null,
+        claimFormOpen ? h(Card, { key: 'claim-form', style: { display: 'grid', gap: 8 } }, [
+          h('strong', { key: 'title', style: { fontSize: 13 } }, `建立研究论断 · 关联已选 ${selectedEntries.length} 条证据`),
+          h(Input, { key: 'question', value: claimQuestion, onChange: setClaimQuestion, placeholder: '研究问题（可选）', ariaLabel: '研究问题' }),
+          h(Textarea, { key: 'statement', value: claimStatement, onChange: setClaimStatement, rows: 2, placeholder: '可检验的具体论断', ariaLabel: '具体论断' }),
+          h(Select, { key: 'stance', value: claimStance, onChange: setClaimStance, ariaLabel: '所选证据与论断的关系', options: RESEARCH_EVIDENCE_STANCES.map(value => ({ value, label: ({ unassessed: '尚未评估', supports: '支持', refutes: '反驳', insufficient: '证据不足' })[value] })) }),
+          h(Input, { key: 'locator', value: claimLocator, onChange: setClaimLocator, placeholder: '原文位置：页码／图表／段落；支持或反驳时必填', ariaLabel: '来源定位' }),
+          h(Input, { key: 'design', value: claimStudyDesign, onChange: setClaimStudyDesign, placeholder: '研究设计（可选）', ariaLabel: '研究设计' }),
+          h(Input, { key: 'sample', value: claimSample, onChange: setClaimSample, placeholder: '样本／研究对象（可选）', ariaLabel: '样本与研究对象' }),
+          h(Input, { key: 'result', value: claimResult, onChange: setClaimResult, placeholder: '关键结果（可选）', ariaLabel: '关键结果' }),
+          h(Input, { key: 'limitations', value: claimLimitations, onChange: setClaimLimitations, placeholder: '局限性（可选）', ariaLabel: '局限性' }),
+          h('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
+            h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !claimStatement.trim() || !selectedEntries.length, onClick: saveClaim }, '保存论断与证据关系'),
+            h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => setClaimFormOpen(false) }, '取消'),
+          ]),
+          h('span', { key: 'note', style: { fontSize: 12, color: C.muted } }, '这一判断仅记录所选证据与当前论断的关系，不会改变来源核验状态；支持／反驳须填写可定位的原文位置。'),
+        ]) : null,
+        claims.length ? h(Card, { key: 'research-claims', style: { display: 'grid', gap: 8 } }, [
+          h('strong', { key: 'title', style: { fontSize: 13 } }, `研究论断（${claims.length}）`),
+          ...claims.slice(0, 20).map(claim => h('div', { key: claim.id, style: { borderTop: `1px solid ${C.line}`, paddingTop: 8, fontSize: 12 } }, [
+            claim.question ? h('div', { key: 'question', style: { color: C.muted } }, `问题：${claim.question}`) : null,
+            h('strong', { key: 'statement' }, claim.statement),
+            h('div', { key: 'links', style: { color: C.muted, marginTop: 3 } }, `关联证据 ${claim.links.length} 条：${claim.links.map(link => ({ unassessed: '待评估', supports: '支持', refutes: '反驳', insufficient: '不足' })[link.stance] || '待评估').join('、')}`),
+          ])),
+          claims.length > 20 ? h('span', { key: 'more', style: { fontSize: 12, color: C.muted } }, '仅展示最近 20 条；其余仍保存在本地证据库。') : null,
+        ]) : null,
+        h(Card, { key: 'research-ledger', style: { display: 'grid', gap: 8 } }, [
+          h('div', { key: 'head', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h('strong', { key: 'title', style: { fontSize: 13 } }, '科研账本与复现链'),
+            h('span', { key: 'summary', style: { fontSize: 12, color: C.muted } }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
+            h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+            h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
+            h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
+          ]),
+          artifactOpen ? h('div', { key: 'artifact-form', style: { display: 'grid', gap: 6 } }, [
+            h(Input, { key: 'title', value: artifactTitle, onChange: setArtifactTitle, placeholder: '图表、报告或分析产出名称', ariaLabel: '研究产出名称' }),
+            h(Input, { key: 'dataset', value: artifactDataset, onChange: setArtifactDataset, placeholder: '数据集编号／版本（可选）', ariaLabel: '数据集编号' }),
+            h(Input, { key: 'code', value: artifactCode, onChange: setArtifactCode, placeholder: '代码 commit／版本（可选）', ariaLabel: '代码版本' }),
+            h(Input, { key: 'params', value: artifactParameters, onChange: setArtifactParameters, placeholder: '参数（可选）', ariaLabel: '运行参数' }),
+            h(Input, { key: 'env', value: artifactEnvironment, onChange: setArtifactEnvironment, placeholder: '环境（可选）', ariaLabel: '执行环境' }),
+            h(Input, { key: 'output', value: artifactOutput, onChange: setArtifactOutput, placeholder: '产出文件／链接（可选）', ariaLabel: '产出位置' }),
+            h(Input, { key: 'execution', value: artifactExecution, onChange: setArtifactExecution, placeholder: '实际执行日志／工具调用 ID；留空记为草稿', ariaLabel: '执行依据' }),
+            h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !artifactTitle.trim(), onClick: saveArtifact }, '保存研究产出'),
+          ]) : null,
+          ...ledger.slice(0, 12).map(item => h('div', { key: item.id, style: { borderTop: `1px solid ${C.line}`, paddingTop: 6, fontSize: 12, color: C.muted } },
+            item.kind === 'search' ? `检索 · ${item.database} · ${item.query} · 当前返回 ${item.resultCount} 条`
+              : item.kind === 'screening' ? `筛选 · ${item.decision === 'include' ? '纳入' : item.decision === 'exclude' ? '排除' : '待定'} · ${entries.find(row => row.id === item.evidenceId)?.title || item.evidenceId}${item.reason ? ` · ${item.reason}` : ''}`
+                : `产出 · ${item.title} · ${item.state === 'verified-execution' ? '执行已核验' : item.executionRef ? '执行引用待核对' : '草稿'}`)),
+          ledger.length > 12 ? h('span', { key: 'more', style: { color: C.muted, fontSize: 12 } }, `显示最近 12 条；完整 ${ledger.length} 条可导出。`) : null,
         ]),
         selectedEntries.length ? h(Card, { key: 'preview', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
           h('strong', { key: 't', style: { fontSize: 13 } }, `引用块预览（${selectedEntries.length} 条）`),
@@ -5307,7 +6278,7 @@ window.__ModuleLoader__.load({
         }, [
           h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
             h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
-              h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `勾选「${item.title}」写入 Prompt`, style: { accentColor: C.teal } }),
+              h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `选择「${item.title}」用于 Agent 判断或写入 Prompt`, style: { accentColor: C.teal } }),
               item.url
                 ? h('a', { key: 'title', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 15, fontWeight: 700, color: C.teal, lineHeight: 1.45 } }, item.title)
                 : h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -5324,8 +6295,20 @@ window.__ModuleLoader__.load({
               item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
               visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
                 visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+              item.classification?.facets ? h('p', { key: 'facets', style: { margin: 0 } }, `检索维度：${[...(item.classification.facets.organism || []), ...(item.classification.facets.method || [])].join('、') || '待归类'} · ${item.classification.reviewed ? '人工确认' : '本地规则建议'}`) : null,
             ])
             : null,
+          h('div', { key: 'classification-actions', style: { display: 'grid', gap: 6 } }, [
+            h(Button, { key: 'edit', size: 'sm', variant: 'ghost', onClick: () => {
+              setClassificationEditId(current => current === item.id ? '' : item.id)
+              setClassificationDraft((item.classification?.topics || []).map(topic => `${topic.primary}/${topic.secondary}`).join('；'))
+            } }, item.classification?.reviewed ? '修改人工分类' : '确认／修正自动分类'),
+            classificationEditId === item.id ? h('div', { key: 'form', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
+              h(Input, { key: 'input', value: classificationDraft, onChange: setClassificationDraft, placeholder: '一级主题/二级主题；一级主题/二级主题', ariaLabel: `修正「${item.title}」的主题分类`, style: { flex: '1 1 220px' } }),
+              h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveClassification(item) }, '保存人工分类'),
+            ]) : null,
+            classificationEditId === item.id ? h('span', { key: 'options', style: { fontSize: 11, color: C.muted } }, `可选：${RESEARCH_TOPIC_OPTIONS.map(topic => `${topic.primary}/${topic.secondary}`).join('；')}`) : null,
+          ]),
           // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
           citedByIndex.get(item.id)?.length
             ? h('div', { key: 'cited-by', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } }, [
@@ -5379,6 +6362,8 @@ window.__ModuleLoader__.load({
             h('span', { key: 'reason' }, item.agentAssessment.reason),
             h('span', { key: 'history', style: { color: C.muted } }, `置信度：${{ low: '低', medium: '中', high: '高' }[item.agentAssessment.confidence] || '低'}${item.agentAssessmentHistory?.length ? ` · 保留前 ${item.agentAssessmentHistory.length} 次判断` : ''} · 仅元数据初判，待人工核验`),
           ]) : null,
+          item.sourceCheck ? h('div', { key: 'source-check', style: { fontSize: 12, color: C.muted, paddingTop: 4 } },
+            `官方元数据：${({ matched: '标题匹配', mismatch: '标题不一致，待人工核对', unknown: '无法判断', not_found: '未找到记录' })[item.sourceCheck.status]} · ${item.sourceCheck.provider} · ${formatEvidenceTime(item.sourceCheck.checkedAt)} · 未核对原文`) : null,
         ]))),
       ])
     }
@@ -5400,6 +6385,7 @@ window.__ModuleLoader__.load({
       // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
       const [saveTarget, setSaveTarget] = React.useState('')
       const [savedKeys, setSavedKeys] = React.useState([])
+      const [recordedQuery, setRecordedQuery] = React.useState(false)
       const requestRef = React.useRef(null)
       React.useEffect(() => () => requestRef.current?.abort(), [])
       const canWrite = canWriteDraft(inputActions)
@@ -5419,6 +6405,7 @@ window.__ModuleLoader__.load({
         requestRef.current = request
         setSaveTarget('')
         setSavedKeys([])
+        setRecordedQuery(false)
         setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
         try {
           const url = new URL(QUERY_PATH, window.location.origin)
@@ -5459,6 +6446,23 @@ window.__ModuleLoader__.load({
           ? (written.inserted ? '已将候选来源插入输入框；请检查后再发送。' : '已将候选来源写入输入框；请检查后再发送。')
           : '草稿已变化，未自动写入；请复制来源后手动粘贴。' }))
       }
+      const recordSearch = async () => {
+        if (state.status !== 'ready' || recordedQuery) return
+        try {
+          const result = state.result || {}
+          const sources = Array.isArray(result.sources) ? result.sources : []
+          const store = evidenceVaultStore()
+          await store.saveResearchLedgerEvent({
+            kind: 'search', project: store.getActiveProject(), runId: activeResearchRun()?.id || '',
+            question: query, database: database.name, query: result.query || databaseSearchText(query, englishQuery),
+            mode: result.mode || 'direct', resultCount: sources.length,
+            sourceIds: sources.map(item => item.id || item.url).filter(Boolean),
+            snapshotId: result.snapshotId || '',
+          })
+          setRecordedQuery(true)
+          setState(current => ({ ...current, message: `已记录本次检索（当前返回 ${sources.length} 条候选）；检索记录不代表来源已纳入或核验。` }))
+        } catch (error) { setState(current => ({ ...current, message: `检索记录保存失败：${error?.message || error}` })) }
+      }
       const loading = state.status === 'loading'
       return h(Card, { style: { padding: 14, background: C.surfaceAlt, display: 'grid', gap: 12 } }, [
         h('div', { key: 'title' }, [
@@ -5478,6 +6482,7 @@ window.__ModuleLoader__.load({
         ]),
         loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
         state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [
+          h(Button, { key: 'record-search', size: 'sm', variant: 'soft', disabled: recordedQuery, onClick: recordSearch }, recordedQuery ? '本次检索已入账' : '记录本次检索到账本'),
           ...(state.result?.sources || []).map((item, index) => {
             const sourceKey = String(item.id || item.url || index)
             const saved = savedKeys.includes(sourceKey)
@@ -6275,7 +7280,7 @@ window.__ModuleLoader__.load({
           }) : null,
           h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
         ]) : null,
-        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById }) : null,
+        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider }) : null,
         tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
         tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
@@ -6531,6 +7536,7 @@ window.__ModuleLoader__.load({
       const [assets, setAssets] = React.useState([])
       const vault = React.useMemo(() => evidenceVaultStore(), [])
       const [savedEvidence, setSavedEvidence] = React.useState([])
+      const [researchClaims, setResearchClaims] = React.useState([])
       const [evidenceProjects, setEvidenceProjects] = React.useState([])
       const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
       const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
@@ -6543,6 +7549,8 @@ window.__ModuleLoader__.load({
       const [confirmClear, setConfirmClear] = React.useState(false)
       // 项目筛选：默认跟随证据库的当前项目（该字段是工作上下文，跨会话保留），'' 表示全部项目。
       const [projectFilter, setProjectFilter] = React.useState(() => { try { return getActiveProject() || '' } catch { return '' } })
+      const [questionFilter, setQuestionFilter] = React.useState('')
+      const [directionFilter, setDirectionFilter] = React.useState('all')
       // 节点范围：区分「本会话记录」（刷新即消失）与「持久沉淀」（证据/资产/知识）。
       const [scope, setScope] = React.useState('all')
       const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
@@ -6586,18 +7594,21 @@ window.__ModuleLoader__.load({
             vault.list({ project: selectedProject }),
             vault.listProjects(),
             listAssetEvidenceLinks({ project: selectedProject }),
+            vault.listResearchClaims({ project: selectedProject }),
           ]))
-          .then(([rows, projects, links]) => {
+          .then(([rows, projects, links, claims]) => {
             if (version !== evidenceRefreshVersion.current) return
             setSavedEvidence(rows || [])
             setEvidenceProjects(projects || [])
             setAssetEvidenceLinks(Array.isArray(links) ? links : [])
+            setResearchClaims(Array.isArray(claims) ? claims : [])
           })
           .catch(() => {
             if (version !== evidenceRefreshVersion.current) return
             setSavedEvidence([])
             setEvidenceProjects([])
             setAssetEvidenceLinks([])
+            setResearchClaims([])
           })
       }, [vault, projectFilter])
       React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
@@ -6631,6 +7642,20 @@ window.__ModuleLoader__.load({
         () => (projectFilter ? savedEvidence.filter(item => (item.project || '') === projectFilter) : savedEvidence),
         [savedEvidence, projectFilter],
       )
+      const projectResearchClaims = React.useMemo(() => projectFilter
+        ? researchClaims.filter(item => (item.project || '') === projectFilter) : researchClaims, [researchClaims, projectFilter])
+      const questionOptions = React.useMemo(() => [...new Map(projectResearchClaims
+        .filter(item => item.question).map(item => [item.question, item.question])).values()], [projectResearchClaims])
+      const visibleResearchClaims = React.useMemo(() => projectResearchClaims
+        .filter(item => !questionFilter || item.question === questionFilter)
+        .map(item => directionFilter === 'all' ? item : { ...item, links: (item.links || []).filter(link => link.stance === directionFilter) })
+        .filter(item => directionFilter === 'all' || item.links.length),
+      [projectResearchClaims, questionFilter, directionFilter])
+      const graphEvidence = React.useMemo(() => {
+        if (!questionFilter && directionFilter === 'all') return visibleSavedEvidence
+        const ids = new Set(visibleResearchClaims.flatMap(item => (item.links || []).map(link => link.evidenceId)))
+        return visibleSavedEvidence.filter(item => ids.has(item.id))
+      }, [visibleSavedEvidence, visibleResearchClaims, questionFilter, directionFilter])
       const visibleAssets = React.useMemo(
         () => (projectFilter ? assets.filter(item => (item.project || '') === projectFilter) : assets),
         [assets, projectFilter],
@@ -6669,11 +7694,12 @@ window.__ModuleLoader__.load({
         queries: includeSession ? records.queries : [],
         plans: includeSession ? records.plans : [],
         assets: includePersistent ? visibleAssets : [],
-        savedEvidence: includePersistent ? visibleSavedEvidence : [],
+        savedEvidence: includePersistent ? graphEvidence : [],
+        researchClaims: includePersistent ? visibleResearchClaims : [],
         knowledge: includePersistent ? knowledgeInput : { nodes: [], claims: [] },
         // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
         assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
-      }), [graphResources, records, includeSession, includePersistent, visibleAssets, visibleSavedEvidence, knowledgeInput, assetEvidenceLinks])
+      }), [graphResources, records, includeSession, includePersistent, visibleAssets, graphEvidence, knowledgeInput, assetEvidenceLinks, visibleResearchClaims])
       // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
       const highlighted = React.useMemo(() => {
         if (view.mode === 'all') return null
@@ -7067,10 +8093,16 @@ window.__ModuleLoader__.load({
             key: 'project',
             value: projectFilter,
             options: [{ value: '', label: '全部项目' }, ...projectOptions.map(name => ({ value: name, label: name }))],
-            onChange: setProjectFilter,
+            onChange: value => { setProjectFilter(value); setQuestionFilter('') },
             ariaLabel: '按项目筛选持久数据',
             style: { width: 'auto', minWidth: 108 },
           }) : null,
+          questionOptions.length ? h(Select, { key: 'question', value: questionFilter, onChange: value => { setQuestionFilter(value); if (value) setScope('persistent') },
+            options: [{ value: '', label: '全部研究问题' }, ...questionOptions.map(question => ({ value: question, label: question.slice(0, 60) }))],
+            ariaLabel: '按研究问题筛选图谱', style: { width: 'auto', minWidth: 120 } }) : null,
+          h(Select, { key: 'direction', value: directionFilter, onChange: value => { setDirectionFilter(value); if (value !== 'all') setScope('persistent') },
+            options: [{ value: 'all', label: '全部证据方向' }, { value: 'supports', label: '支持' }, { value: 'refutes', label: '反驳' }, { value: 'insufficient', label: '证据不足' }, { value: 'unassessed', label: '待评估' }],
+            ariaLabel: '按证据方向筛选图谱', style: { width: 'auto', minWidth: 110 } }),
           h('span', { key: 'nodes', style: { color: C.muted, fontSize: 13 } }, `${graph.nodes.length} 个节点`),
           h('span', { key: 'edges', style: { color: C.muted, fontSize: 13 } }, `${graph.edges.length} 条关系`),
           h('span', { key: 'scale', style: { color: C.muted, fontSize: 13 } }, `${Math.round(scale * 100)}%`),

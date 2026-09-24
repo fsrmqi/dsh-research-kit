@@ -2,7 +2,8 @@ import React from 'react'
 import { h, C } from './theme.js'
 import { Card, Button, Input, Notice, Spinner, Badge } from './ui.js'
 import { createEvidenceStore } from './evidence-store.js'
-import { EvidenceSaveForm } from './research-evidence-vault.js'
+import { EvidenceSaveForm, evidenceVaultStore } from './research-evidence-vault.js'
+import { activeResearchRun } from './research-context-store.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 
 const QUERY_PATH = '/dsh-research-kit/query'
@@ -20,6 +21,7 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
   const [saveTarget, setSaveTarget] = React.useState('')
   const [savedKeys, setSavedKeys] = React.useState([])
+  const [recordedQuery, setRecordedQuery] = React.useState(false)
   const requestRef = React.useRef(null)
   React.useEffect(() => () => requestRef.current?.abort(), [])
   const canWrite = canWriteDraft(inputActions)
@@ -39,6 +41,7 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
     requestRef.current = request
     setSaveTarget('')
     setSavedKeys([])
+    setRecordedQuery(false)
     setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
     try {
       const url = new URL(QUERY_PATH, window.location.origin)
@@ -79,6 +82,23 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
       ? (written.inserted ? '已将候选来源插入输入框；请检查后再发送。' : '已将候选来源写入输入框；请检查后再发送。')
       : '草稿已变化，未自动写入；请复制来源后手动粘贴。' }))
   }
+  const recordSearch = async () => {
+    if (state.status !== 'ready' || recordedQuery) return
+    try {
+      const result = state.result || {}
+      const sources = Array.isArray(result.sources) ? result.sources : []
+      const store = evidenceVaultStore()
+      await store.saveResearchLedgerEvent({
+        kind: 'search', project: store.getActiveProject(), runId: activeResearchRun()?.id || '',
+        question: query, database: database.name, query: result.query || databaseSearchText(query, englishQuery),
+        mode: result.mode || 'direct', resultCount: sources.length,
+        sourceIds: sources.map(item => item.id || item.url).filter(Boolean),
+        snapshotId: result.snapshotId || '',
+      })
+      setRecordedQuery(true)
+      setState(current => ({ ...current, message: `已记录本次检索（当前返回 ${sources.length} 条候选）；检索记录不代表来源已纳入或核验。` }))
+    } catch (error) { setState(current => ({ ...current, message: `检索记录保存失败：${error?.message || error}` })) }
+  }
   const loading = state.status === 'loading'
   return h(Card, { style: { padding: 14, background: C.surfaceAlt, display: 'grid', gap: 12 } }, [
     h('div', { key: 'title' }, [
@@ -98,6 +118,7 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
     ]),
     loading ? h(Spinner, { key: 'spin', text: '正在查询公开数据源…' }) : null,
     state.status === 'ready' ? h('div', { key: 'results', style: { display: 'grid', gap: 8 } }, [
+      h(Button, { key: 'record-search', size: 'sm', variant: 'soft', disabled: recordedQuery, onClick: recordSearch }, recordedQuery ? '本次检索已入账' : '记录本次检索到账本'),
       ...(state.result?.sources || []).map((item, index) => {
         const sourceKey = String(item.id || item.url || index)
         const saved = savedKeys.includes(sourceKey)

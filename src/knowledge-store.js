@@ -283,6 +283,53 @@ export function createKnowledgeStore() {
       return readClaims()
     },
 
+    async remapProjects(mappings, { dryRun = false, expectedSnapshot = null } = {}) {
+      const map = new Map(mappings.map(item => [item.from, item.to]))
+      const nodesBefore = (await readNodes()).filter(item => map.has(item.project))
+      const claimsBefore = (await readClaims()).filter(item => map.has(item.project))
+      const nodesAfter = nodesBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const snapshot = { nodesBefore, nodesAfter, claimsBefore, claimsAfter }
+      if (expectedSnapshot && (JSON.stringify(expectedSnapshot.nodesBefore) !== JSON.stringify(nodesBefore)
+        || JSON.stringify(expectedSnapshot.claimsBefore) !== JSON.stringify(claimsBefore))) {
+        throw new Error('项目整理预览后知识库已变化，未写入；请重新预览。')
+      }
+      if (dryRun) return snapshot
+      const db = await connect()
+      if (db) {
+        const tx = db.transaction([KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite')
+        for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
+        for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = resolve
+          tx.onerror = () => reject(tx.error || new Error('知识项目迁移失败'))
+          tx.onabort = () => reject(tx.error || new Error('知识项目迁移中止'))
+        })
+      } else {
+        memory.nodes = [...nodesAfter, ...memory.nodes.filter(item => !map.has(item.project))]
+        memory.claims = [...claimsAfter, ...memory.claims.filter(item => !map.has(item.project))]
+      }
+      return snapshot
+    },
+
+    async restoreProjectOrganization(snapshot, { validateOnly = false } = {}) {
+      const nodes = await readNodes(), claims = await readClaims()
+      for (const row of snapshot.nodesAfter || []) {
+        const value = JSON.stringify(nodes.find(item => item.id === row.id))
+        const before = JSON.stringify(snapshot.nodesBefore.find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('知识节点在整理后已变化，不能自动撤销。')
+      }
+      for (const row of snapshot.claimsAfter || []) {
+        const value = JSON.stringify(claims.find(item => item.id === row.id))
+        const before = JSON.stringify(snapshot.claimsBefore.find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('知识关系在整理后已变化，不能自动撤销。')
+      }
+      if (validateOnly) return true
+      await putRows(KNOWLEDGE_NODE_STORE, snapshot.nodesBefore || [])
+      await putRows(KNOWLEDGE_CLAIM_STORE, snapshot.claimsBefore || [])
+      return true
+    },
+
     // 把一条提取结果合并入库。nodes/claims 是提取器输出的 draft（带 key），
     // source 是来源消息（{ sessionId, seq, turn, at, excerpt }），可为空（手动提取）。
     // project 记录沉淀时的当前项目（图谱按项目筛选的数据基础）；已有 project 的记录不被覆盖。

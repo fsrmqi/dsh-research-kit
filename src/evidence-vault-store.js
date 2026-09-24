@@ -1,5 +1,7 @@
 import { normalizeEvidenceEntry, findDuplicate } from './lib/evidence-vault-core.js'
 import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
+import { normalizeResearchClaim } from './lib/research-claims.js'
+import { normalizeResearchLedgerEvent } from './lib/research-ledger.js'
 
 // 证据库持久化：IndexedDB 最小 schema。
 //
@@ -13,9 +15,13 @@ import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
 const DB_NAME = 'dsh-research-kit-evidence'
 // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
 // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
-const DB_VERSION = 2
+// v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
+const DB_VERSION = 5
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
+const ORGANIZER_STORE = 'projectOrganizer'
+const CLAIMS_STORE = 'researchClaims'
+const LEDGER_STORE = 'researchLedger'
 // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
 const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
@@ -56,6 +62,9 @@ export function createEvidenceVaultStore() {
   let degraded = false
   let memory = []
   let activeProject = null
+  let memoryOrganizerJournal = null
+  let memoryResearchClaims = []
+  let memoryResearchLedger = []
 
   const connect = () => {
     if (degraded) return Promise.resolve(null)
@@ -79,6 +88,15 @@ export function createEvidenceVaultStore() {
           links.createIndex('assetId', 'assetId')
           links.createIndex('evidenceId', 'evidenceId')
           links.createIndex('project', 'project')
+        }
+        if (!db.objectStoreNames.contains(ORGANIZER_STORE)) db.createObjectStore(ORGANIZER_STORE, { keyPath: 'id' })
+        if (!db.objectStoreNames.contains(CLAIMS_STORE)) {
+          const claims = db.createObjectStore(CLAIMS_STORE, { keyPath: 'id' })
+          claims.createIndex('project', 'project')
+        }
+        if (!db.objectStoreNames.contains(LEDGER_STORE)) {
+          const ledger = db.createObjectStore(LEDGER_STORE, { keyPath: 'id' })
+          ledger.createIndex('project', 'project')
         }
       }
       request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
@@ -124,6 +142,50 @@ export function createEvidenceVaultStore() {
 
   return {
     isDegraded: () => degraded,
+
+    async readOrganizerJournal() {
+      const row = await withStore('readonly', store => requestToPromise(store.get('last')), ORGANIZER_STORE)
+      return row === undefined ? memoryOrganizerJournal : row || null
+    },
+    async writeOrganizerJournal(value) {
+      const row = { ...value, id: 'last' }
+      const written = await withStore('readwrite', store => requestToPromise(store.put(row)), ORGANIZER_STORE)
+      if (written === undefined) memoryOrganizerJournal = row
+      return row
+    },
+
+    async listResearchClaims({ project } = {}) {
+      const rows = await withStore('readonly', store => requestToPromise(
+        typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
+      return (Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    },
+    async saveResearchClaim(input) {
+      const claim = normalizeResearchClaim(input)
+      const evidenceIds = new Set((await readAll()).map(item => item.id))
+      if (claim.links.some(item => !evidenceIds.has(item.evidenceId))) throw new Error('论断关联了不存在的证据，请刷新后重试。')
+      const result = await withStore('readwrite', store => requestToPromise(store.put(claim)), CLAIMS_STORE)
+      if (result === undefined) memoryResearchClaims = [claim, ...memoryResearchClaims.filter(item => item.id !== claim.id)]
+      return claim
+    },
+
+    async listResearchLedger({ project, kind, runId } = {}) {
+      const rows = await withStore('readonly', store => requestToPromise(
+        typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), LEDGER_STORE)
+      return (Array.isArray(rows) ? rows : memoryResearchLedger)
+        .filter(item => (project === undefined || item.project === project)
+          && (kind === undefined || item.kind === kind) && (runId === undefined || item.runId === runId))
+        .sort((a, b) => (b.at || 0) - (a.at || 0))
+    },
+    async saveResearchLedgerEvent(input) {
+      const event = normalizeResearchLedgerEvent(input)
+      if (event.kind === 'screening' && !(await readAll()).some(item => item.id === event.evidenceId)) {
+        throw new Error('筛选记录关联了不存在的证据。')
+      }
+      const result = await withStore('readwrite', store => requestToPromise(store.put(event)), LEDGER_STORE)
+      if (result === undefined) memoryResearchLedger = [event, ...memoryResearchLedger.filter(item => item.id !== event.id)]
+      return event
+    },
 
     // ── 项目上下文 ──────────────────────────────────────────
     getActiveProject() {
@@ -268,6 +330,106 @@ export function createEvidenceVaultStore() {
       })
       if (!touched) memory = [...rows, ...memory.filter(item => !rows.some(row => row.id === item.id))]
       return rows.length
+    },
+
+    // 项目整理只改归属，不改证据 ID、人工结论、Agent 历史或关联端点。
+    // 证据与关联共用一个 IndexedDB 事务，防止刷新时只搬了一半。
+    async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null } = {}) {
+      const map = new Map(mappings.map(item => [item.from, item.to]))
+      const evidenceBefore = (await readAll()).filter(item => map.has(item.project))
+      const linksBefore = (await this.listAssetEvidenceLinks()).filter(item => map.has(item.project))
+      const claimsBefore = (await this.listResearchClaims()).filter(item => map.has(item.project))
+      const ledgerBefore = (await this.listResearchLedger()).filter(item => map.has(item.project))
+      const evidenceAfter = evidenceBefore.map(item => ({
+        ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project, updatedAt: now,
+      }))
+      const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const all = await readAll()
+      const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]
+      for (const item of evidenceAfter) {
+        const other = findDuplicate(proposed.filter(row => row.id !== item.id), item)
+        if (other) throw new Error(`「${item.title}」迁移到「${item.project}」时与现有来源重复。`)
+      }
+      const snapshot = { evidenceBefore, evidenceAfter, linksBefore, linksAfter, claimsBefore, claimsAfter, ledgerBefore, ledgerAfter }
+      if (expectedSnapshot && (JSON.stringify(expectedSnapshot.evidenceBefore) !== JSON.stringify(evidenceBefore)
+        || JSON.stringify(expectedSnapshot.linksBefore) !== JSON.stringify(linksBefore)
+        || JSON.stringify(expectedSnapshot.claimsBefore) !== JSON.stringify(claimsBefore)
+        || JSON.stringify(expectedSnapshot.ledgerBefore || []) !== JSON.stringify(ledgerBefore))) {
+        throw new Error('项目整理预览后证据已变化，未写入；请重新预览。')
+      }
+      if (dryRun) return snapshot
+      const db = await connect()
+      if (db) {
+        const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
+        for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
+        for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
+        for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
+        for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = resolve
+          tx.onerror = () => reject(tx.error || new Error('证据项目迁移失败'))
+          tx.onabort = () => reject(tx.error || new Error('证据项目迁移中止'))
+        })
+      } else {
+        memory = [...evidenceAfter, ...memory.filter(item => !map.has(item.project))]
+        memoryLinks = [...linksAfter, ...memoryLinks.filter(item => !map.has(item.project))]
+        memoryResearchClaims = [...claimsAfter, ...memoryResearchClaims.filter(item => !map.has(item.project))]
+        memoryResearchLedger = [...ledgerAfter, ...memoryResearchLedger.filter(item => !map.has(item.project))]
+      }
+      return snapshot
+    },
+
+    async restoreProjectOrganization(snapshot, { validateOnly = false } = {}) {
+      const current = await readAll()
+      const currentLinks = await this.listAssetEvidenceLinks()
+      const currentClaims = await this.listResearchClaims()
+      const currentLedger = await this.listResearchLedger()
+      for (const row of snapshot.evidenceAfter || []) {
+        const value = JSON.stringify(current.find(item => item.id === row.id))
+        const before = JSON.stringify(snapshot.evidenceBefore.find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('证据在整理后已变化，不能自动撤销。')
+      }
+      for (const row of snapshot.linksAfter || []) {
+        const value = JSON.stringify(currentLinks.find(item => item.id === row.id))
+        const before = JSON.stringify(snapshot.linksBefore.find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('关联在整理后已变化，不能自动撤销。')
+      }
+      for (const row of snapshot.claimsAfter || []) {
+        const value = JSON.stringify(currentClaims.find(item => item.id === row.id))
+        const before = JSON.stringify(snapshot.claimsBefore.find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('研究论断在整理后已变化，不能自动撤销。')
+      }
+      for (const row of snapshot.ledgerAfter || []) {
+        const value = JSON.stringify(currentLedger.find(item => item.id === row.id))
+        const before = JSON.stringify((snapshot.ledgerBefore || []).find(item => item.id === row.id))
+        if (value !== JSON.stringify(row) && value !== before) throw new Error('科研账本在整理后已变化，不能自动撤销。')
+      }
+      if (validateOnly) return true
+      const db = await connect()
+      if (db) {
+        const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
+        for (const row of snapshot.evidenceBefore || []) tx.objectStore(STORE).put(row)
+        for (const row of snapshot.linksBefore || []) tx.objectStore(LINKS_STORE).put(row)
+        for (const row of snapshot.claimsBefore || []) tx.objectStore(CLAIMS_STORE).put(row)
+        for (const row of snapshot.ledgerBefore || []) tx.objectStore(LEDGER_STORE).put(row)
+        await new Promise((resolve, reject) => {
+          tx.oncomplete = resolve
+          tx.onerror = () => reject(tx.error || new Error('证据项目撤销失败'))
+          tx.onabort = () => reject(tx.error || new Error('证据项目撤销中止'))
+        })
+      } else {
+        const beforeIds = new Set((snapshot.evidenceBefore || []).map(item => item.id))
+        const linkIds = new Set((snapshot.linksBefore || []).map(item => item.id))
+        memory = [...snapshot.evidenceBefore, ...memory.filter(item => !beforeIds.has(item.id))]
+        memoryLinks = [...snapshot.linksBefore, ...memoryLinks.filter(item => !linkIds.has(item.id))]
+        const claimIds = new Set((snapshot.claimsBefore || []).map(item => item.id))
+        memoryResearchClaims = [...snapshot.claimsBefore, ...memoryResearchClaims.filter(item => !claimIds.has(item.id))]
+        const ledgerIds = new Set((snapshot.ledgerBefore || []).map(item => item.id))
+        memoryResearchLedger = [...(snapshot.ledgerBefore || []), ...memoryResearchLedger.filter(item => !ledgerIds.has(item.id))]
+      }
+      return true
     },
   }
 }

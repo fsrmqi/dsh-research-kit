@@ -3,8 +3,13 @@ import {
   clearAllProjectEntries,
   clearProjectEntries,
   deleteProjectEntry,
+  evidenceProjectOrganizationState,
+  finalizeEvidenceProjectOrganization,
   listAllProjectEntries,
   mergeProjectEntries,
+  organizeEvidenceProjects,
+  replaceProjectEntry,
+  undoEvidenceProjectOrganization,
   readProjectEntries,
   safeProjectName,
 } from '../mcp/execution/evidence-store.js'
@@ -44,6 +49,9 @@ export function evidenceSyncRoute({ logger } = {}) {
       try {
         if (req.method === 'GET') {
           const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`)
+          if (url.searchParams.get('organizer') === 'last') {
+            return reply(res, 200, { ok: true, journal: await evidenceProjectOrganizationState() })
+          }
           const projectParam = url.searchParams.get('project')
           if (!projectParam) {
             const entries = await listAllProjectEntries()
@@ -61,6 +69,22 @@ export function evidenceSyncRoute({ logger } = {}) {
           if (!incoming.length) return reply(res, 400, { ok: false, error: 'no_entries' })
           const result = await mergeProjectEntries(project, incoming)
           return reply(res, 200, { ok: true, project, added: result.added, skipped: result.skipped.length })
+        }
+
+        if (req.method === 'PUT') {
+          const body = await readBody(req)
+          const project = requestProject(body.project)
+          const result = await replaceProjectEntry(project, body.entry)
+          if (!result.updated) return reply(res, 404, { ok: false, error: 'not_found' })
+          return reply(res, 200, { ok: true, project, entry: result.entry })
+        }
+
+        if (req.method === 'PATCH') {
+          const body = await readBody(req)
+          if (body?.action === 'organize') return reply(res, 200, { ok: true, ...await organizeEvidenceProjects(body.moves) })
+          if (body?.action === 'undo') return reply(res, 200, { ok: true, ...await undoEvidenceProjectOrganization(body.id) })
+          if (body?.action === 'finalize') return reply(res, 200, { ok: true, ...await finalizeEvidenceProjectOrganization(body.id) })
+          return reply(res, 400, { ok: false, error: 'invalid_action' })
         }
 
         if (req.method === 'DELETE') {

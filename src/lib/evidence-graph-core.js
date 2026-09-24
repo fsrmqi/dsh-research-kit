@@ -2,7 +2,7 @@
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
 import { KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUS_LABELS } from './knowledge-extract.js'
 import { assetEvidenceGraphEdges } from './asset-evidence-links.js'
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [] } = {}) {
+export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [], researchClaims = [] } = {}) {
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -55,6 +55,21 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
       if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
     }
   }
+  // 研究问题／论断与每条证据的方向由研究者显式给出；普通关联绝不冒充支持。
+  for (const claim of researchClaims) {
+    if (!claim?.id || !claim.statement) continue
+    const claimId = `research-claim:${claim.id}`
+    add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: '研究论断 · 逐来源评估' })
+    if (claim.question) {
+      const questionId = `research-question:${claim.id}`
+      add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })
+      link(questionId, claimId, 'frames')
+    }
+    for (const evidence of claim.links || []) {
+      const kind = ({ supports: 'supports', refutes: 'refutes', insufficient: 'insufficient' })[evidence.stance] || 'linked'
+      link(claimId, `evidence:${evidence.evidenceId}`, kind)
+    }
+  }
   // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
   // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
   // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
@@ -71,7 +86,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
       add({ id: messageId, kind: 'message', label: `会话消息 #${source.seq ?? '?'}`, detail: source.at ? new Date(source.at).toLocaleString('zh-CN') : '' })
       link(messageId, record.id, 'records')
     }
-    for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'supports')
+    for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'linked')
     if (record.assetId) link(record.id, `asset:${record.assetId}`, 'deposited')
   }
   // 关系端点指向不存在（或被删除）的节点时，由末尾的边过滤自然剔除，不悬挂。
@@ -88,6 +103,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
 export const EVIDENCE_NODE_COLORS = {
   database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
   message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',
+  'research-question': '#8b5cf6', 'research-claim': '#d97706',
 }
 
 // ── 布局 ──────────────────────────────────────────────────────────────────────
@@ -96,7 +112,7 @@ export const EVIDENCE_NODE_COLORS = {
 // 自动沉淀知识的流向：消息(0) → 问题/实体(1) → 发现/假设/方法(2) → 证据(4)。
 export const GRAPH_NODE_WIDTH = 136
 export const GRAPH_NODE_HEIGHT = 54
-const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2 }
+const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2, 'research-question': 1, 'research-claim': 2 }
 const GRAPH_COLUMN_GAP = 220
 const GRAPH_ROW_GAP = 82
 const GRAPH_ORIGIN_X = 70

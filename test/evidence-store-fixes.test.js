@@ -10,7 +10,7 @@ process.env.HOME = await mkdtemp(path.join(os.tmpdir(), 'dsh-ev-'))
 const BASE_DIR = path.join(process.env.HOME, '.dsh-research-kit', 'evidence')
 
 // 动态 import 以读取刚改的 BASE_DIR（测试目录隔离）
-const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry, assessEvidence } = await import('../mcp/execution/evidence-store.js')
+const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry, assessEvidence, replaceProjectEntry, organizeEvidenceProjects, undoEvidenceProjectOrganization } = await import('../mcp/execution/evidence-store.js')
 
 test.after(async () => {
   await rm(process.env.HOME, { recursive: true, force: true })
@@ -76,6 +76,48 @@ test('assessEvidence：人工评估更新五个维度并保留兼容 grade/statu
   assert.equal(entry.claim_support, 'mixed')
   assert.equal(entry.assessed_by, 'reviewer')
   assert.ok(entry.assessed_at)
+})
+
+test('replaceProjectEntry：只按 ID 更新，保留原有字段与 Agent 历史，不覆盖同来源其他条目', async () => {
+  const project = 'replace-assessment'
+  const saved = await saveEvidence({ project, identifier_type: 'doi', identifier: '10.9999/replace', title: '研究来源' })
+  const result = await replaceProjectEntry(project, {
+    id: saved.id, project, agent_assessment: { reason: '元数据初判', at: 123 },
+    agent_assessment_history: [{ reason: '前次初判', at: 100 }],
+  })
+  assert.equal(result.updated, true)
+  const rows = await readProjectEntries(project)
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].identifier, '10.9999/replace')
+  assert.equal(rows[0].agent_assessment.reason, '元数据初判')
+  assert.equal(rows[0].agent_assessment_history.length, 1)
+  assert.equal((await replaceProjectEntry(project, { id: 'missing', project })).updated, false)
+})
+
+test('项目整理：先检查目标冲突；成功后保留原项目并可按快照撤销', async () => {
+  const from = 'concurrency-test-organize'
+  const to = '测试与演示（归档）'
+  await saveEvidence({ project: from, identifier_type: 'doi', identifier: '10.9999/organize-a', title: 'A' })
+  const moved = await organizeEvidenceProjects([{ from, to }])
+  assert.equal(moved.moved, 1)
+  assert.equal((await readProjectEntries(from)).length, 0)
+  const target = await readProjectEntries(to)
+  assert.equal(target.length, 1)
+  assert.equal(target[0].legacy_project, from)
+  await assert.rejects(() => organizeEvidenceProjects([{ from, to }]), /已有可撤销/)
+  await undoEvidenceProjectOrganization(moved.id)
+  assert.equal((await readProjectEntries(from)).length, 1)
+  assert.equal((await readProjectEntries(to)).length, 0)
+})
+
+test('项目整理：目标已有同 DOI 时拒绝，源项目保持原样', async () => {
+  const from = 'dedup-probe-organize'
+  const to = 'conflict-target'
+  await saveEvidence({ project: from, identifier_type: 'doi', identifier: '10.9999/conflict', title: '来源' })
+  await saveEvidence({ project: to, identifier_type: 'doi', identifier: '10.9999/conflict', title: '已有来源' })
+  await assert.rejects(() => organizeEvidenceProjects([{ from, to }]), /重复 ID 或来源/)
+  assert.equal((await readProjectEntries(from)).length, 1)
+  assert.equal((await readProjectEntries(to)).length, 1)
 })
 
 test('mergeProjectEntries：无法解析的 JSONL 行不应永久丢失', async () => {
