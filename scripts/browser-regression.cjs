@@ -11,7 +11,10 @@ const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(()=>React)}};</script>
 <script src="/bundle"></script><script>
-const registered={}; plugin.apply({slots:{inject(n,fn){fn();return ()=>{}},register(o,c){registered[o.id]=c;return ()=>{}}}});
+const registered={}; window.toolViews={};
+window.testEvents=[{type:'assistant/message',seq:14,time:123,data:{turn:2,message:{id:'review-one',content:[{type:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}];
+window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){return ()=>{}}},binding(){return {eventSource:{getSnapshot(){return {entries:window.testEvents}},subscribe(){return ()=>{}}}}}};
+plugin.apply({sessions:window.testSessions,slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
 ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions}),React.createElement(registered['dsh-research-kit-draft-enhancer'],{sessionId:'qa',inputActions:actions})));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
@@ -54,6 +57,37 @@ const server = http.createServer((req,res)=>{
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
   await page.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
+  await page.evaluate(()=>{
+    const target=document.createElement('div'); target.id='tool-card-smoke'; document.body.append(target);
+    const result={data:{entries:[{title:'证据样本',identifier:'10.1000/example',source_id:'crossref',stored_grade:'ungraded',suggested_grade:'empirical'}]}};
+    window.toolCardRoot=ReactDOM.createRoot(target);
+    window.toolCardRoot.render(React.createElement(window.toolViews['mcp__dsh-research-kit__research_evidence_list'],{toolName:'mcp__dsh-research-kit__research_evidence_list',phase:'result',block:{kind:'tool-result',content:[{type:'text',text:JSON.stringify(result)}]}}));
+  });
+  const toolCard=page.getByLabel('检索证据 工具详情');
+  await toolCard.getByText('证据样本').waitFor();
+  await toolCard.getByText(/DOI：10\.1000\/example · 已记录等级：未分级 · 建议等级：实证/).waitFor();
+  await page.evaluate(()=>window.toolCardRoot.render(React.createElement(window.toolViews['mcp__dsh-research-kit__research_evidence_list'],{toolName:'mcp__dsh-research-kit__research_evidence_list',phase:'preparing',block:{phase:'preparing'},useToolCallArgumentsPartial:()=>'{"project":"测试项目"}'})));
+  await toolCard.getByText('项目：测试项目').waitFor();
+  await page.evaluate(()=>window.toolCardRoot.render(React.createElement(window.toolViews['mcp__dsh-research-kit__research_evidence_list'],{toolName:'mcp__dsh-research-kit__research_evidence_list',phase:'start',block:{phase:'start',argsRaw:'{"project":"测试项目"}'}})));
+  await toolCard.getByText('执行中').waitFor();
+  await page.evaluate(()=>window.toolCardRoot.render(React.createElement(window.toolViews['mcp__dsh-research-kit__research_evidence_list'],{toolName:'mcp__dsh-research-kit__research_evidence_list',phase:'result',block:{kind:'tool-result',isError:true,content:[{type:'text',text:'{"error":true,"message":"检索失败"}'}]}})));
+  await toolCard.getByRole('alert').getByText('检索失败').waitFor();
+  await page.evaluate(()=>{window.toolCardRoot.unmount();document.getElementById('tool-card-smoke').remove()});
+  console.log('研究工具详情卡：完整 MCP 工具名与真实结果块渲染通过');
+  await page.evaluate(()=>{
+    const target=document.createElement('div');target.id='message-action-smoke';target.style.cssText='position:fixed;top:12px;left:12px;z-index:40000';document.body.append(target);
+    window.messageActionRoot=ReactDOM.createRoot(target);
+    window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'review-one',sessionId:'qa'}));
+  });
+  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('group',{name:'研究回答沉淀预览'}).getByText(/10\.1038\/review/).waitFor();
+  await page.getByRole('button',{name:'取消',exact:true}).click();
+  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('group',{name:'研究回答沉淀预览'}).getByLabel(/引用：10\.1038\/review/).uncheck();
+  await page.getByRole('button',{name:'确认沉淀所选'}).click();
+  await page.getByRole('status').getByText(/已沉淀：知识 .*证据 0/).waitFor();
+  await page.evaluate(()=>{window.messageActionRoot.unmount();document.getElementById('message-action-smoke').remove()});
+  console.log('逐条回答：按消息 ID 预览、取消与勾选沉淀通过');
   await page.waitForTimeout(100);
   const capabilitiesBeforeStatusMount=hostCapabilitiesRequests;
   await page.evaluate(()=>ReactDOM.createRoot(document.getElementById('plugin-status')).render(React.createElement(registered['dsh-research-kit-status'],{subject:{kind:'bundle',pkg:{name:'dsh-research-kit'}}})));

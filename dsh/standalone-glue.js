@@ -5,6 +5,7 @@ import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
 import { ResearchPluginStatusSection } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
+import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
 
 export function researchKitApply(ctx) {
   // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
@@ -29,6 +30,12 @@ export function researchKitApply(ctx) {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())
   }))
+  let depositAssetProvider = null
+  disposers.push(ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
+    name: 'conversation.chat.assistant-actions', id: 'dsh-research-kit-review-deposit', order: 90,
+  }, props => React.createElement(ResearchMessageDepositAction, {
+    ...props, sessions: ctx.sessions, assetProvider: () => depositAssetProvider,
+  }))))
   // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
   // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
   let active = true
@@ -36,6 +43,7 @@ export function researchKitApply(ctx) {
   loadPromptKit().then(PromptKit => {
     if (!active) return
     const providers = ensureResearchProviders(PromptKit)
+    depositAssetProvider = providers.researchAssetProvider
     disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
   }).catch(() => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */ })
   disposers.push(() => { active = false; disposeDeposition() })

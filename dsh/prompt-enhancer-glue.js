@@ -106,10 +106,24 @@ class ResearchSessionEnhancer {
 
 // 桥接 DSH 输入框：inputActions 由槽位体系注入（setDraft / submit）。
 // 草稿真源随 DSH 版本：InputZone 点时快照（0.1.2）或 useInput 订阅（0.1.3+/旧契约）。
-class ResearchDraftComposer {
+export class ResearchDraftComposer {
   constructor(input, inputActions) { this.input = input; this.inputActions = inputActions; this.listeners = new Set() }
   getDraft() { return this.input?.draft ?? '' }
   write(text) { this.inputActions?.setDraft(String(text ?? '')) }
+  getSelection() {
+    if (typeof this.inputActions?.captureInsertion !== 'function') return null
+    const span = this.inputActions.captureInsertion()
+    if (!span || span.start === span.end) return null
+    // DSH 的选区坐标是 detect projection；含 @ 引用 chip 时与 clipboard 草稿坐标不同。
+    if (this.input?.occurrences?.length) throw new Error('草稿包含引用，请先取消选区并使用整稿增强。')
+    const draft = String(this.getDraft())
+    if (!Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end > draft.length) throw new Error('选区已变化，请重新选择。')
+    return { start: span.start, end: span.end, text: draft.slice(span.start, span.end), draft, span }
+  }
+  replaceSelection(text, selection) {
+    if (!selection || selection.draft !== this.getDraft() || typeof this.inputActions?.insertText !== 'function') throw new Error('选区已变化，请重新选择。')
+    if (!this.inputActions.insertText(String(text ?? ''), selection.span)) throw new Error('草稿或选区已变化，未覆盖新内容；请重新操作。')
+  }
   onChange(cb) { this.listeners.add(cb); return () => this.listeners.delete(cb) }
   notify(draft) { for (const cb of this.listeners) cb(draft) }
 }
@@ -135,7 +149,7 @@ function LoadedResearchDraftEnhancerHost(props) {
   const chatSnapshot = useChat ? useChat(value => value?.legacy ?? value) : undefined
   const messages = React.useMemo(() => PromptKit.utils.conversationMessages(chatSnapshot), [chatSnapshot])
   const composer = React.useMemo(() => new ResearchDraftComposer({ draft }, inputActions), [sessionId, inputActions])
-  composer.input = { draft }
+  composer.input = { draft, occurrences: input?.occurrences ?? hookedInput?.occurrences }
   const enhancer = React.useMemo(() => new ResearchSessionEnhancer(() => sessionId), [sessionId])
   // 会话资源选择变化时刷新上下文摘要；摘要每次增强时即时计算，避免过期引用。
   const [, setSelectionVersion] = React.useState(0)

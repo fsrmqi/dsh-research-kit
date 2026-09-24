@@ -55,13 +55,41 @@ test('生成产物包含新模块并使用 research-kit 命名空间', () => {
 })
 
 test('新版 DSH 工具详情卡覆盖全部 research MCP 工具', async () => {
-  const { researchToolNames, researchToolDetailModel } = await import('../src/research-toolview.js')
+  const { researchToolNames, researchToolDetailModel, researchToolArgumentSummary } = await import('../src/research-toolview.js')
   const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')
   assert.ok(researchToolNames.length >= 30)
-  assert.ok(researchToolNames.every(name => name.startsWith('research_')))
+  assert.ok(researchToolNames.every(name => name.startsWith('mcp__dsh-research-kit__research_')))
   assert.match(glue, /slots\.inject\('tool\.call\.toolview',[\s\S]*?researchToolNames\.map\(key => ctx\.slots\.register\(\{ name: 'tool\.call\.toolview', key \}, ResearchToolView\)\)/)
-  const model = researchToolDetailModel('research_literature_search', { result: JSON.stringify({ data: { sources: [{ title: '可追溯来源', doi: '10.1000/example', source_id: 'crossref', url: 'https://doi.org/10.1000/example', verification: { status: 'verified' }, grade: 'empirical' }] } }) })
-  assert.deepEqual(model.evidence[0], { title: '可追溯来源', doi: '10.1000/example', source: 'crossref', url: 'https://doi.org/10.1000/example', grade: 'empirical', verification: 'verified' })
+  const model = researchToolDetailModel('mcp__dsh-research-kit__research_literature_search', { kind: 'tool-result', content: [{ type: 'text', text: JSON.stringify({ data: { sources: [{ title: '可追溯来源', doi: '10.1000/example', source_id: 'crossref', url: 'https://doi.org/10.1000/example', verification: { status: 'verified' }, suggested_grade: 'empirical' }] } }) }] })
+  assert.deepEqual(model.evidence[0], { title: '可追溯来源', doi: '10.1000/example', source: 'crossref', url: 'https://doi.org/10.1000/example', grades: [{ label: '建议等级', value: '实证' }], verification: 'verified' })
   assert.ok(model.pending.length === 0)
-  assert.ok(researchToolDetailModel('research_evidence_grade_apply', { result: { data: { apply: false } } }).pending.some(item => item.includes('人工确认')))
+  const recorded = researchToolDetailModel('mcp__dsh-research-kit__research_evidence_list', { content: [{ type: 'text', text: JSON.stringify({ data: { entries: [{ title: '已入库', stored_grade: 'ungraded', suggested_grade: 'inference' }] } }) }] })
+  assert.deepEqual(recorded.evidence[0].grades, [{ label: '已记录等级', value: '未分级' }, { label: '建议等级', value: '推论' }])
+  assert.ok(researchToolDetailModel('mcp__dsh-research-kit__research_evidence_grade_apply', { content: [{ type: 'text', text: JSON.stringify({ data: { apply: false } }) }] }).pending.some(item => item.includes('人工确认')))
+  assert.match(researchToolArgumentSummary('{"query":"BRCA1","project":"测试"}'), /检索词：BRCA1 · 项目：测试/)
+  assert.match(researchToolArgumentSummary('{"query":"BR'), /正在接收参数/)
+})
+
+test('科研增强只替换选区，版本过期和引用坐标不安全时拒绝写入', async () => {
+  const { ResearchDraftComposer } = await import('../dsh/prompt-enhancer-glue.js')
+  let draft = '前文 需要增强 后文'
+  let rev = 4
+  const actions = {
+    captureInsertion: () => ({ start: 3, end: 7, draftRev: rev }),
+    insertText: (text, span) => {
+      if (span.draftRev !== rev) return false
+      draft = `${draft.slice(0, span.start)}${text}${draft.slice(span.end)}`
+      rev++
+      return true
+    },
+    setDraft: text => { draft = text },
+  }
+  const composer = new ResearchDraftComposer({ draft, occurrences: [] }, actions)
+  const selection = composer.getSelection()
+  assert.equal(selection.text, '需要增强')
+  composer.replaceSelection('已增强', selection)
+  assert.equal(draft, '前文 已增强 后文')
+  assert.throws(() => composer.replaceSelection('误覆盖', selection), /已变化/)
+  const withReference = new ResearchDraftComposer({ draft: '引用 @x', occurrences: [{ id: 'x' }] }, actions)
+  assert.throws(() => withReference.getSelection(), /包含引用/)
 })

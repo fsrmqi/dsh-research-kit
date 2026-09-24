@@ -96,6 +96,7 @@ function assetDedupeKey(title, project) {
 // 返回摘要供测试与 UI 提示使用；任何单步失败都被计数吞掉——自动流程不允许打断宿主。
 export async function depositAssistantMessage({
   text,
+  selection,
   sessionId = '',
   seq = null,
   turn = null,
@@ -109,7 +110,14 @@ export async function depositAssistantMessage({
   const summary = { ...EMPTY_SUMMARY, sessionId: String(sessionId || ''), seq: Number.isFinite(Number(seq)) ? Number(seq) : null }
   const source = String(text || '')
   if (!source.trim()) return summary
-  const extraction = extractKnowledge(source)
+  const extracted = extractKnowledge(source)
+  const selectedKeys = Array.isArray(selection?.nodeKeys) ? new Set(selection.nodeKeys) : null
+  const selectedCitations = Array.isArray(selection?.citationIndexes) ? new Set(selection.citationIndexes) : null
+  const extraction = {
+    nodes: selectedKeys ? extracted.nodes.filter(node => selectedKeys.has(node.key)) : extracted.nodes,
+    claims: selectedKeys ? extracted.claims.filter(claim => selectedKeys.has(claim.fromKey) && selectedKeys.has(claim.toKey)) : extracted.claims,
+    citations: selectedCitations ? extracted.citations.filter((_, index) => selectedCitations.has(index)) : extracted.citations,
+  }
   summary.citations = extraction.citations.length
   if (!extraction.nodes.length && !extraction.claims.length && !extraction.citations.length) return summary
   summary.extracted = true
@@ -147,7 +155,7 @@ export async function depositAssistantMessage({
   }
   if (evidenceIds.length) {
     for (const node of applied.nodes) {
-      if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+      if (!DEPOSIT_ASSET_KINDS.includes(node.kind) || (selectedKeys && !selectedKeys.has(node.key))) continue
       if (!touchedByThisMessage(node)) continue
       for (const evidenceId of evidenceIds) await store.linkEvidence(node.id, evidenceId)
     }
@@ -163,7 +171,7 @@ export async function depositAssistantMessage({
     } catch { knownAssetKeys = new Set() }
   }
   for (const node of applied.nodes) {
-    if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+    if (!DEPOSIT_ASSET_KINDS.includes(node.kind) || (selectedKeys && !selectedKeys.has(node.key))) continue
     if (!touchedByThisMessage(node)) continue
     const body = node.sources?.[0]?.excerpt || node.label
     const dedupeKey = assetDedupeKey(node.label, project)

@@ -7086,6 +7086,7 @@ window.__ModuleLoader__.load({
     // 返回摘要供测试与 UI 提示使用；任何单步失败都被计数吞掉——自动流程不允许打断宿主。
     async function depositAssistantMessage({
       text,
+      selection,
       sessionId = '',
       seq = null,
       turn = null,
@@ -7099,7 +7100,14 @@ window.__ModuleLoader__.load({
       const summary = { ...EMPTY_SUMMARY, sessionId: String(sessionId || ''), seq: Number.isFinite(Number(seq)) ? Number(seq) : null }
       const source = String(text || '')
       if (!source.trim()) return summary
-      const extraction = extractKnowledge(source)
+      const extracted = extractKnowledge(source)
+      const selectedKeys = Array.isArray(selection?.nodeKeys) ? new Set(selection.nodeKeys) : null
+      const selectedCitations = Array.isArray(selection?.citationIndexes) ? new Set(selection.citationIndexes) : null
+      const extraction = {
+        nodes: selectedKeys ? extracted.nodes.filter(node => selectedKeys.has(node.key)) : extracted.nodes,
+        claims: selectedKeys ? extracted.claims.filter(claim => selectedKeys.has(claim.fromKey) && selectedKeys.has(claim.toKey)) : extracted.claims,
+        citations: selectedCitations ? extracted.citations.filter((_, index) => selectedCitations.has(index)) : extracted.citations,
+      }
       summary.citations = extraction.citations.length
       if (!extraction.nodes.length && !extraction.claims.length && !extraction.citations.length) return summary
       summary.extracted = true
@@ -7137,7 +7145,7 @@ window.__ModuleLoader__.load({
       }
       if (evidenceIds.length) {
         for (const node of applied.nodes) {
-          if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+          if (!DEPOSIT_ASSET_KINDS.includes(node.kind) || (selectedKeys && !selectedKeys.has(node.key))) continue
           if (!touchedByThisMessage(node)) continue
           for (const evidenceId of evidenceIds) await store.linkEvidence(node.id, evidenceId)
         }
@@ -7153,7 +7161,7 @@ window.__ModuleLoader__.load({
         } catch { knownAssetKeys = new Set() }
       }
       for (const node of applied.nodes) {
-        if (!DEPOSIT_ASSET_KINDS.includes(node.kind)) continue
+        if (!DEPOSIT_ASSET_KINDS.includes(node.kind) || (selectedKeys && !selectedKeys.has(node.key))) continue
         if (!touchedByThisMessage(node)) continue
         const body = node.sources?.[0]?.excerpt || node.label
         const dedupeKey = assetDedupeKey(node.label, project)
@@ -7359,6 +7367,73 @@ window.__ModuleLoader__.load({
         activeProject,
       })
       return { summary, seq: found.seq, interrupted: found.interrupted }
+    }
+
+
+
+    function reviewableAssistantMessage(sessions, sessionId, messageId) {
+      let entries
+      try { entries = sessions?.binding?.(String(sessionId))?.eventSource?.getSnapshot?.()?.entries } catch { return null }
+      if (!Array.isArray(entries)) return null
+      const event = entries.findLast(item => item?.type === 'assistant/message' && String(item?.data?.message?.id) === String(messageId))
+      const content = event?.data?.message?.content
+      if (!Array.isArray(content)) return null
+      const text = content.filter(item => item?.type === 'text' && typeof item.text === 'string').map(item => item.text).join('\n')
+      if (!text.trim()) return null
+      const extraction = extractKnowledge(text)
+      return { text, seq: Number(event.seq), turn: Number(event.data?.turn) || null, at: Number(event.time) || 0, interrupted: Boolean(event.data?.interrupted), extraction }
+    }
+
+    function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetProvider }) {
+      const [preview, setPreview] = React.useState(null)
+      const [selectedNodes, setSelectedNodes] = React.useState([])
+      const [selectedCitations, setSelectedCitations] = React.useState([])
+      const [busy, setBusy] = React.useState(false)
+      const [notice, setNotice] = React.useState('')
+      const open = () => {
+        const found = reviewableAssistantMessage(sessions, sessionId, messageId)
+        if (!found) { setNotice('当前会话窗口中找不到这条回答。'); return }
+        setPreview(found)
+        setSelectedNodes(found.extraction.nodes.map(node => node.key))
+        setSelectedCitations(found.extraction.citations.map((_, index) => index))
+        setNotice('')
+      }
+      const toggle = (values, setValues, key) => setValues(values.includes(key) ? values.filter(item => item !== key) : [...values, key])
+      const confirm = async () => {
+        if (!preview || busy) return
+        if (!selectedNodes.length && !selectedCitations.length) { setNotice('请至少选择一项。'); return }
+        const latest = reviewableAssistantMessage(sessions, sessionId, messageId)
+        if (!latest || latest.seq !== preview.seq || latest.text !== preview.text) { setNotice('回答已变化，请重新打开预览。'); setPreview(null); return }
+        setBusy(true)
+        try {
+          const summary = await depositAssistantMessage({
+            text: preview.text, sessionId: String(sessionId), seq: preview.seq, turn: preview.turn, at: preview.at,
+            selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, assetProvider: assetProvider?.(),
+          })
+          setNotice(summary.extracted ? `已沉淀：知识 ${summary.addedNodes}、证据 ${summary.savedEvidence}、资产 ${summary.savedAssets}；均待人工核验。` : '所选内容没有可提取的研究信息。')
+          setPreview(null)
+        } catch (error) { setNotice(`沉淀失败：${error?.message || error}`) }
+        finally { setBusy(false) }
+      }
+      return React.createElement('span', { style: { display: 'inline-flex', position: 'relative', alignItems: 'center', fontSize: 12 } }, [
+        React.createElement('button', { key: 'open', type: 'button', onClick: open, 'aria-label': '审阅并沉淀这条研究回答' }, '审阅沉淀'),
+        notice ? React.createElement('span', { key: 'notice', role: 'status', style: { position: 'absolute', top: '100%', left: 0, zIndex: 50, padding: 6, width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6 } }, notice) : null,
+        preview ? React.createElement('div', { key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', style: { position: 'absolute', top: '100%', left: 0, zIndex: 51, padding: 10, width: 'min(360px, calc(100vw - 24px))', maxHeight: 300, overflow: 'auto', border: '1px solid #d0d7de', borderRadius: 8, background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.15)' } }, [
+          React.createElement('strong', { key: 'title' }, `回答 #${preview.seq} · 选择待核验内容`),
+          preview.interrupted ? React.createElement('div', { key: 'interrupted', style: { color: '#9a6700' } }, '这条回答曾被中断，内容可能不完整。') : null,
+          ...preview.extraction.nodes.map(node => React.createElement('label', { key: node.key, style: { display: 'block' } }, [
+            React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedNodes.includes(node.key), onChange: () => toggle(selectedNodes, setSelectedNodes, node.key) }),
+            `${KNOWLEDGE_KIND_LABELS[node.kind] || '知识'}：${node.label}`,
+          ])),
+          ...preview.extraction.citations.map((citation, index) => React.createElement('label', { key: `citation-${index}`, style: { display: 'block' } }, [
+            React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedCitations.includes(index), onChange: () => toggle(selectedCitations, setSelectedCitations, index) }),
+            `引用：${citation.identifier || citation.url || citation.title || '来源待核验'}`,
+          ])),
+          !preview.extraction.nodes.length && !preview.extraction.citations.length ? React.createElement('div', { key: 'empty' }, '未提取出知识或引用。') : null,
+          React.createElement('button', { key: 'confirm', type: 'button', disabled: busy || (!selectedNodes.length && !selectedCitations.length), onClick: confirm }, busy ? '沉淀中…' : '确认沉淀所选'),
+          React.createElement('button', { key: 'cancel', type: 'button', disabled: busy, onClick: () => setPreview(null) }, '取消'),
+        ]) : null,
+      ])
     }
 
 
@@ -8639,13 +8714,32 @@ window.__ModuleLoader__.load({
 
 
 
-    const byName = new Map(TOOL_REGISTRY.map(item => [item.name, item]))
-    const researchToolNames = TOOL_REGISTRY.map(item => item.name)
+    // DSH 的 keyed toolview 使用模型实际看到的完整 MCP 工具名。
+    const MCP_TOOL_PREFIX = 'mcp__dsh-research-kit__'
+    const byName = new Map(TOOL_REGISTRY.map(item => [`${MCP_TOOL_PREFIX}${item.name}`, item]))
+    const researchToolNames = [...byName.keys()]
     const gradeLabel = value => ({ empirical: '实证', inference: '推论', missing: '缺失', ungraded: '未分级' }[value] || value || '未分级')
     const verificationLabel = value => ({ verified: '来源已核验', unverified: '来源待核验', disputed: '来源有争议', stale: '来源已过期' }[value] || '')
+    const ARGUMENT_FIELDS = [['query', '检索词'], ['project', '项目'], ['run_id', '运行'], ['source', '来源'], ['sources', '数据库'], ['database', '数据库'], ['identifier', '标识符'], ['evidence_id', '证据']]
+
+    function researchToolArgumentSummary(raw) {
+      let args
+      try { args = JSON.parse(raw || '{}') } catch { return raw ? `正在接收参数（${raw.length} 字符）` : '等待调用参数' }
+      if (!args || typeof args !== 'object' || Array.isArray(args)) return '等待调用参数'
+      const facts = ARGUMENT_FIELDS.flatMap(([key, label]) => {
+        const value = args[key]
+        const formatted = Array.isArray(value) ? value.join('、') : typeof value === 'string' || typeof value === 'number' ? String(value) : ''
+        return formatted ? [`${label}：${formatted.slice(0, 120)}`] : []
+      })
+      return facts.slice(0, 3).join(' · ') || '参数已就绪'
+    }
 
     function resultValue(block) {
-      const value = block?.result ?? block?.content ?? block?.output
+      // ToolResultNode.content 是 DSH 的持久化结果；MCP Server 每次返回一块 JSON 文本。
+      const content = block?.content
+      const value = Array.isArray(content)
+        ? content.find(item => item?.type === 'text' && typeof item.text === 'string')?.text
+        : block?.result ?? content ?? block?.output
       if (typeof value !== 'string') return value || {}
       try { return JSON.parse(value) } catch { return { text: value } }
     }
@@ -8662,12 +8756,18 @@ window.__ModuleLoader__.load({
       const data = value?.data && typeof value.data === 'object' ? value.data : value
       const evidence = recordsOf(value).slice(0, 8).map(item => {
         const identifier = String(item?.doi || item?.identifier || (item?.identifier_type === 'doi' ? item?.id : '') || '')
+        const storedGrade = item?.strength || item?.stored_grade || item?.grade
+        const suggestedGrade = item?.suggested_grade || item?.grade_hint || data?.grade
         return {
           title: String(item?.title || item?.label || item?.name || '未命名来源').slice(0, 180),
           doi: identifier.toLowerCase().startsWith('10.') ? identifier : '',
           source: String(item?.source_id || item?.source || item?.identifier_type || '来源未标注'),
           url: /^https?:\/\//.test(String(item?.url || '')) ? String(item.url) : '',
-          grade: item?.strength || item?.stored_grade || item?.suggested_grade || item?.grade || data?.grade || data?.grade_label || 'ungraded',
+          grades: [
+            ...(storedGrade ? [{ label: '已记录等级', value: gradeLabel(storedGrade) }] : []),
+            ...(suggestedGrade ? [{ label: '建议等级', value: gradeLabel(suggestedGrade) }] : []),
+            ...(!storedGrade && !suggestedGrade ? [{ label: '证据等级', value: '未分级' }] : []),
+          ],
           verification: item?.source_verification || item?.verification?.status || item?.status || data?.source_verification || 'unverified',
         }
       })
@@ -8680,19 +8780,37 @@ window.__ModuleLoader__.load({
     }
 
     /** DSH 0.1.7 keyed toolview：结构化呈现来源、DOI、等级与人工确认点。 */
-    function ResearchToolView({ toolName, phase, block, inspect }) {
+    function PreparingResearchToolView({ toolName, useToolCallArgumentsPartial }) {
+      const raw = typeof useToolCallArgumentsPartial === 'function' ? useToolCallArgumentsPartial() : ''
+      const tool = byName.get(toolName)
+      return React.createElement('section', { 'aria-label': `${tool?.labelZh || toolName} 工具详情`, role: 'status', style: { margin: '8px 0', padding: '10px 12px', border: '1px solid #0969da33', borderRadius: 9, background: '#f6f8fa', fontSize: 12 } }, [
+        React.createElement('strong', { key: 'name' }, `${tool?.labelZh || toolName} · 准备中`),
+        React.createElement('div', { key: 'arguments' }, researchToolArgumentSummary(raw)),
+      ])
+    }
+
+    function ResearchToolView(props) {
+      if (props.phase === 'preparing') return React.createElement(PreparingResearchToolView, props)
+      return React.createElement(StartedResearchToolView, props)
+    }
+
+    function StartedResearchToolView({ toolName, phase, block, inspect }) {
       const { tool, evidence, pending, text } = researchToolDetailModel(toolName, block)
-      const state = phase === 'preparing' ? '准备中' : phase === 'start' ? '执行中' : '已完成'
-      const tone = tool?.access === 'writes' ? '#9a6700' : tool?.access === 'external' ? '#0969da' : '#1a7f37'
+      const value = phase === 'result' ? resultValue(block) : null
+      const failed = phase === 'result' && (block?.isError === true || value?.error === true)
+      const state = phase === 'start' ? '执行中' : failed ? '失败' : '已完成'
+      const tone = failed ? '#cf222e' : tool?.access === 'writes' ? '#9a6700' : tool?.access === 'external' ? '#0969da' : '#1a7f37'
       return React.createElement('section', {
         'aria-label': `${tool?.labelZh || toolName} 工具详情`,
         style: { margin: '8px 0', padding: '10px 12px', border: `1px solid ${tone}33`, borderRadius: 9, background: '#f6f8fa', fontSize: 12, lineHeight: 1.5 },
       }, [
         React.createElement('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, [React.createElement('strong', { key: 'name' }, tool?.labelZh || toolName), React.createElement('span', { key: 'state', style: { color: tone } }, state)]),
         React.createElement('div', { key: 'summary', style: { color: '#57606a' } }, tool?.summaryZh || '科研 MCP 工具'),
+        phase === 'start' ? React.createElement('div', { key: 'arguments', style: { marginTop: 5 } }, researchToolArgumentSummary(block?.argsRaw)) : null,
+        failed ? React.createElement('div', { key: 'error', role: 'alert', style: { marginTop: 5, color: tone } }, String(value?.message || block?.error?.message || '工具执行失败').slice(0, 240)) : null,
         evidence.length ? React.createElement('div', { key: 'evidence', style: { display: 'grid', gap: 6, marginTop: 7 } }, evidence.map((item, index) => React.createElement('div', { key: `${item.title}:${index}`, style: { padding: '6px 8px', borderLeft: `3px solid ${tone}`, background: '#fff' } }, [
           React.createElement('div', { key: 'title' }, item.title),
-          React.createElement('div', { key: 'meta', style: { color: '#57606a' } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, `证据等级：${gradeLabel(item.grade)}`, verificationLabel(item.verification)].filter(Boolean).join(' · ')),
+          React.createElement('div', { key: 'meta', style: { color: '#57606a' } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, ...item.grades.map(fact => `${fact.label}：${fact.value}`), verificationLabel(item.verification)].filter(Boolean).join(' · ')),
           item.url ? React.createElement('a', { key: 'url', href: item.url, target: '_blank', rel: 'noreferrer' }, '打开来源') : null,
         ]))) : null,
         pending.length ? React.createElement('div', { key: 'pending', style: { marginTop: 7, color: '#9a6700' } }, pending.map((item, index) => React.createElement('div', { key: index }, `人工确认：${item}`))) : null,
@@ -8914,6 +9032,20 @@ window.__ModuleLoader__.load({
       constructor(input, inputActions) { this.input = input; this.inputActions = inputActions; this.listeners = new Set() }
       getDraft() { return this.input?.draft ?? '' }
       write(text) { this.inputActions?.setDraft(String(text ?? '')) }
+      getSelection() {
+        if (typeof this.inputActions?.captureInsertion !== 'function') return null
+        const span = this.inputActions.captureInsertion()
+        if (!span || span.start === span.end) return null
+        // DSH 的选区坐标是 detect projection；含 @ 引用 chip 时与 clipboard 草稿坐标不同。
+        if (this.input?.occurrences?.length) throw new Error('草稿包含引用，请先取消选区并使用整稿增强。')
+        const draft = String(this.getDraft())
+        if (!Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end > draft.length) throw new Error('选区已变化，请重新选择。')
+        return { start: span.start, end: span.end, text: draft.slice(span.start, span.end), draft, span }
+      }
+      replaceSelection(text, selection) {
+        if (!selection || selection.draft !== this.getDraft() || typeof this.inputActions?.insertText !== 'function') throw new Error('选区已变化，请重新选择。')
+        if (!this.inputActions.insertText(String(text ?? ''), selection.span)) throw new Error('草稿或选区已变化，未覆盖新内容；请重新操作。')
+      }
       onChange(cb) { this.listeners.add(cb); return () => this.listeners.delete(cb) }
       notify(draft) { for (const cb of this.listeners) cb(draft) }
     }
@@ -8939,7 +9071,7 @@ window.__ModuleLoader__.load({
       const chatSnapshot = useChat ? useChat(value => value?.legacy ?? value) : undefined
       const messages = React.useMemo(() => PromptKit.utils.conversationMessages(chatSnapshot), [chatSnapshot])
       const composer = React.useMemo(() => new ResearchDraftComposer({ draft }, inputActions), [sessionId, inputActions])
-      composer.input = { draft }
+      composer.input = { draft, occurrences: input?.occurrences ?? hookedInput?.occurrences }
       const enhancer = React.useMemo(() => new ResearchSessionEnhancer(() => sessionId), [sessionId])
       // 会话资源选择变化时刷新上下文摘要；摘要每次增强时即时计算，避免过期引用。
       const [, setSelectionVersion] = React.useState(0)
@@ -9487,6 +9619,12 @@ window.__ModuleLoader__.load({
         const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
         return () => toolDisposers.forEach(dispose => dispose?.())
       }))
+      let depositAssetProvider = null
+      disposers.push(ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
+        name: 'conversation.chat.assistant-actions', id: 'dsh-research-kit-review-deposit', order: 90,
+      }, props => React.createElement(ResearchMessageDepositAction, {
+        ...props, sessions: ctx.sessions, assetProvider: () => depositAssetProvider,
+      }))))
       // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
       // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
       let active = true
@@ -9494,6 +9632,7 @@ window.__ModuleLoader__.load({
       loadPromptKit().then(PromptKit => {
         if (!active) return
         const providers = ensureResearchProviders(PromptKit)
+        depositAssetProvider = providers.researchAssetProvider
         disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
       }).catch(() => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */ })
       disposers.push(() => { active = false; disposeDeposition() })
