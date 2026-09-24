@@ -83,7 +83,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     } catch (error) { setNotice(`沉淀失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
-  const panel = preview ? React.createElement('div', { key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', style: { ...position, zIndex: 2147483000, padding: 10, width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))', overflow: 'auto', border: '1px solid #d0d7de', borderRadius: 8, background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, [
+  const panel = preview ? React.createElement('div', { key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', style: { ...position, zIndex: 2147483000, boxSizing: 'border-box', padding: 10, width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))', overflow: 'auto', border: '1px solid #d0d7de', borderRadius: 8, background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, [
       React.createElement('strong', { key: 'title' }, `回答 #${preview.seq} · 选择待核验内容`),
       preview.interrupted ? React.createElement('div', { key: 'interrupted', style: { color: '#9a6700' } }, '这条回答曾被中断，内容可能不完整。') : null,
       ...preview.extraction.nodes.map(node => React.createElement('label', { key: node.key, style: { display: 'block' } }, [
@@ -97,7 +97,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
       !preview.extraction.nodes.length && !preview.extraction.citations.length ? React.createElement('div', { key: 'empty' }, '未提取出知识或引用。') : null,
       React.createElement('button', { key: 'confirm', type: 'button', disabled: busy || (!selectedNodes.length && !selectedCitations.length), onClick: confirm }, busy ? '沉淀中…' : '确认沉淀所选'),
       React.createElement('button', { key: 'cancel', type: 'button', disabled: busy, onClick: () => setPreview(null) }, '取消'),
-    ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
+    ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
   return React.createElement(React.Fragment, null, [
     React.createElement('button', { key: 'open', ref: anchorRef, type: 'button', onClick: open, 'aria-label': '审阅并沉淀这条研究回答' }, '审阅沉淀'),
     panel && typeof document !== 'undefined' ? createPortal(panel, document.body) : null,
