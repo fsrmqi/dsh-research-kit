@@ -76,7 +76,9 @@ export function evidenceAgentAssessRoute({ llm, routes, logger }) {
       if (!sessionId) { reply(res, 400, { error: 'session_id_required' }); return }
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 120_000)
-      const abort = () => controller.abort()
+      // Node 的 response `close` 在正常响应完成后也可能触发；只在响应尚未完成时取消模型，
+      // 避免正常写回后把连接误判为客户端取消。
+      const abort = () => { if (!res.writableEnded) controller.abort() }
       if (typeof res.on === 'function') res.on('close', abort)
       try {
         const body = await readBody(req)

@@ -567,8 +567,13 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ entries: batch }), signal: controller.signal,
         })
-        const body = await response.json()
-        if (!response.ok) throw new Error(body.next_action || `Agent 请求失败：HTTP ${response.status}`)
+        const raw = await response.text()
+        let body
+        try { body = JSON.parse(raw || '{}') } catch {
+          throw new Error(`Agent 服务返回了空或无效响应（HTTP ${response.status}）。请重试；若持续出现，请检查当前会话模型路由。`)
+        }
+        if (!response.ok) throw new Error(body.next_action || body.error || `Agent 请求失败：HTTP ${response.status}`)
+        if (!body?.ok || !Array.isArray(body.assessments)) throw new Error('Agent 服务未返回完整的结构化判断。请重试。')
         const results = normalizeAgentEvidenceResult(body, batch.map(row => row.id), { model: body.model })
         for (const result of results) {
           if (controller.signal.aborted) break

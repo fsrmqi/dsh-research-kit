@@ -65,3 +65,26 @@ test('批量判断路由要求 POST 与会话 ID', async () => {
   await route.handler({ method: 'POST', url: EVIDENCE_AGENT_ASSESS_PATH }, missing)
   assert.equal(missing.status, 400)
 })
+
+test('批量判断路由正常返回结构化 JSON，不会因 response close 误取消', async () => {
+  const route = evidenceAgentAssessRoute({
+    llm: { async *stream() {
+      yield { type: 'text-delta', text: JSON.stringify({ assessments: [result('e1')] }) }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } },
+    routes: { get: () => ({ provider: 'test', model: 'test-model' }) },
+  })
+  const response = {
+    writableEnded: false, destroyed: false, headers: {},
+    on() {}, off() {},
+    writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) },
+    end(data) { this.writableEnded = true; this.data = data },
+  }
+  const request = {
+    method: 'POST', url: `${EVIDENCE_AGENT_ASSESS_PATH}?session_id=s1`, on() {}, off() {},
+    async *[Symbol.asyncIterator]() { yield JSON.stringify({ entries: [row('e1')] }) },
+  }
+  await route.handler(request, response)
+  assert.equal(response.status, 200)
+  assert.equal(JSON.parse(response.data).assessments[0].id, 'e1')
+})
