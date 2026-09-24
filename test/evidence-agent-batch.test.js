@@ -66,6 +66,15 @@ test('批量判断路由要求 POST 与会话 ID', async () => {
   assert.equal(missing.status, 400)
 })
 
+test('批量判断路由允许跨源 OPTIONS 预检，避免真实 POST 被 405 拦截', async () => {
+  const route = evidenceAgentAssessRoute({ llm: {}, routes: { get: () => null } })
+  const response = { headers: {}, writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) }, end() { this.ended = true } }
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://dsh.example' } }, response)
+  assert.equal(response.status, 204)
+  assert.equal(response.headers['access-control-allow-origin'], 'https://dsh.example')
+  assert.match(response.headers['access-control-allow-methods'], /POST/)
+})
+
 test('批量判断路由正常返回结构化 JSON，不会因 response close 误取消', async () => {
   const route = evidenceAgentAssessRoute({
     llm: { async *stream() {

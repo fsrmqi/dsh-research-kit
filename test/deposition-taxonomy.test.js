@@ -23,15 +23,18 @@ test('已保存主题优先；旧条目即时归类但不改写人工标签', ()
   assert.equal(topicForDepositedItem({ title: '无匹配' }), UNCLASSIFIED_TOPIC)
 })
 
-test('分组每条只出现一次，未知主题留待归类；搜索能命中动态主题', () => {
+test('分组按内容的全部命中主题展开，未知主题留待归类；搜索能命中动态主题', () => {
   const rows = [
     { id: 'unknown', title: '其他', body: '', tags: [] },
     { id: 'plant', title: '水稻耐盐性', body: '', tags: [] },
     { id: 'gene', title: '基因表达', body: '', tags: [] },
+    { id: 'multi', title: '水稻基因的单细胞测序', body: '', tags: [] },
   ]
   const groups = groupDepositedItems(rows)
-  assert.deepEqual(groups.map(group => group.topic), ['植物科学', '基因与分子', '待归类'])
-  assert.deepEqual(groups.flatMap(group => group.rows.map(row => row.id)).sort(), rows.map(row => row.id).sort())
-  assert.deepEqual(filterAssets(rows, { query: '主题:植物科学' }).map(row => row.id), ['plant'])
-  assert.deepEqual(filterEvidence(rows, { query: '主题:基因与分子' }).map(row => row.id), ['gene'])
+  assert.deepEqual(groups.map(group => group.topic), ['植物科学', '基因与分子', '生物信息', '待归类'])
+  assert.deepEqual(groups.find(group => group.topic === '植物科学').rows.map(row => row.id).sort(), ['multi', 'plant'])
+  assert.deepEqual(groups.find(group => group.topic === '基因与分子').rows.map(row => row.id).sort(), ['gene', 'multi'])
+  assert.deepEqual(groups.find(group => group.topic === '生物信息').rows.map(row => row.id), ['multi'])
+  assert.deepEqual(filterAssets(rows, { query: '主题:植物科学' }).map(row => row.id), ['plant', 'multi'])
+  assert.deepEqual(filterEvidence(rows, { query: '主题:基因与分子' }).map(row => row.id), ['gene', 'multi'])
 })

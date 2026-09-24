@@ -33,6 +33,17 @@ export function topicForDepositedItem(item) {
   return inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)[0] || UNCLASSIFIED_TOPIC
 }
 
+// 主列表分组使用全部命中的主题，而不是只取首个主题：例如「水稻基因表达的单细胞测序」
+// 同时属于植物科学、基因与分子和生物信息。返回空数组时才归入「待归类」。
+export function topicsForDepositedItem(item) {
+  const tags = Array.isArray(item?.tags) ? item.tags : []
+  const saved = tags.filter(tag => String(tag).startsWith(TOPIC_PREFIX)).map(tag => String(tag).slice(TOPIC_PREFIX.length))
+  const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
+  return [...new Set([...saved, ...inferred])].filter(Boolean).length
+    ? [...new Set([...saved, ...inferred])]
+    : [UNCLASSIFIED_TOPIC]
+}
+
 export function visibleDepositionTags(item) {
   const saved = Array.isArray(item?.tags) ? item.tags : []
   if (saved.some(tag => String(tag).startsWith(TOPIC_PREFIX))) return saved
@@ -43,9 +54,10 @@ export function visibleDepositionTags(item) {
 export function groupDepositedItems(items) {
   const groups = new Map()
   for (const item of Array.isArray(items) ? items : []) {
-    const topic = topicForDepositedItem(item)
-    if (!groups.has(topic)) groups.set(topic, [])
-    groups.get(topic).push(item)
+    for (const topic of topicsForDepositedItem(item)) {
+      if (!groups.has(topic)) groups.set(topic, [])
+      groups.get(topic).push(item)
+    }
   }
   const order = DEPOSITION_TOPIC_RULES.map(rule => rule.topic)
   return [...groups].sort(([a], [b]) => {

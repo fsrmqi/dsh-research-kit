@@ -122,7 +122,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
   const byId = React.useMemo(() => new Map(assets.map(item => [item.id, item])), [assets])
   const filtered = React.useMemo(() => filterAssets(assets, { query: deferredQuery, filter }), [assets, deferredQuery, filter])
   const displayedAssets = React.useMemo(() => groupByTopic
-    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
     : filtered, [filtered, groupByTopic])
   const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
@@ -354,7 +354,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
       items: displayedAssets,
       dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
       renderItem: item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
-      key: item.id,
+      key: item.__displayKey || item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
     }, [

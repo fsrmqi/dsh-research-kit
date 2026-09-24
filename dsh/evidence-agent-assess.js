@@ -6,8 +6,28 @@ const MAX_OUTPUT_CHARS = 18_000
 
 function reply(res, status, body) {
   if (res.destroyed || res.writableEnded) return
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+  if (res.__agentCorsOrigin) {
+    headers['access-control-allow-origin'] = res.__agentCorsOrigin
+    headers.vary = 'Origin'
+  }
+  res.writeHead(status, headers)
   res.end(JSON.stringify(body))
+}
+
+function allowPreflight(req, res) {
+  const origin = String(req.headers?.origin || '').trim()
+  if (!origin) return false
+  res.__agentCorsOrigin = origin
+  res.writeHead(204, {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'access-control-allow-headers': 'content-type',
+    'access-control-max-age': '600',
+    vary: 'Origin',
+  })
+  res.end()
+  return true
 }
 
 async function readBody(req) {
@@ -71,7 +91,10 @@ export function evidenceAgentAssessRoute({ llm, routes, logger }) {
   return {
     kind: 'exact', path: EVIDENCE_AGENT_ASSESS_PATH,
     async handler(req, res) {
+      if (req.method === 'OPTIONS') { allowPreflight(req, res); return }
       if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST' }); res.end(); return }
+      const origin = String(req.headers?.origin || '').trim()
+      if (origin) res.__agentCorsOrigin = origin
       const sessionId = String(new URL(req.url || EVIDENCE_AGENT_ASSESS_PATH, 'http://localhost').searchParams.get('session_id') || '')
       if (!sessionId) { reply(res, 400, { error: 'session_id_required' }); return }
       const controller = new AbortController()

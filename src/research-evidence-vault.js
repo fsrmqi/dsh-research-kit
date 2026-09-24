@@ -406,6 +406,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [includeHuman, setIncludeHuman] = React.useState(false)
   const [agentBusy, setAgentBusy] = React.useState(false)
   const [agentProgress, setAgentProgress] = React.useState('')
+  const [agentStats, setAgentStats] = React.useState(null)
   const agentAbort = React.useRef(null)
   // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
   const [links, setLinks] = React.useState([])
@@ -440,7 +441,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const counts = React.useMemo(() => statusCounts(entries), [entries])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
   const displayedEntries = React.useMemo(() => groupByTopic
-    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
     : filtered, [filtered, groupByTopic])
   const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
@@ -548,21 +549,24 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   }
   const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
-  const runAgentAssessment = async () => {
+  const runAgentAssessment = async (requestedEntries = entries) => {
     if (agentBusy) return
-    const plan = planAgentEvidenceBatch(entries, { includeHuman })
+    const plan = planAgentEvidenceBatch(requestedEntries, { includeHuman })
     if (!plan.eligible.length) return setNotice('当前范围没有待 Agent 判断的证据；可勾选「包含人工处理过的」重新判断。')
     if (!sessionId) return setNotice('⚠️ 当前会话不可用，无法调用 Agent 模型。')
     const controller = new AbortController()
     agentAbort.current = controller
     setAgentBusy(true)
+    setAgentStats({ total: plan.eligible.length, completed: 0, skipped: 0, failed: 0, batch: 0, batches: plan.batches.length, phase: '准备请求', last: '' })
     let completed = 0
     let skippedChanged = 0
     let failed = 0
     try {
       for (const batch of plan.batches) {
         if (controller.signal.aborted) break
-        setAgentProgress(`正在判断 ${completed + 1}–${Math.min(completed + batch.length, plan.eligible.length)} / ${plan.eligible.length}`)
+        const batchNumber = plan.batches.indexOf(batch) + 1
+        setAgentProgress(`第 ${batchNumber}/${plan.batches.length} 批：请求 ${batch.length} 条`)
+        setAgentStats(current => ({ ...current, batch: batchNumber, phase: `正在请求第 ${batchNumber} 批（${batch.length} 条）`, last: '' }))
         const response = await fetch(`/dsh-research-kit/evidence-agent-assess?session_id=${encodeURIComponent(sessionId)}`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ entries: batch }), signal: controller.signal,
@@ -575,22 +579,29 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         if (!response.ok) throw new Error(body.next_action || body.error || `Agent 请求失败：HTTP ${response.status}`)
         if (!body?.ok || !Array.isArray(body.assessments)) throw new Error('Agent 服务未返回完整的结构化判断。请重试。')
         const results = normalizeAgentEvidenceResult(body, batch.map(row => row.id), { model: body.model })
+        setAgentStats(current => ({ ...current, phase: `第 ${batchNumber} 批返回，正在逐条写回` }))
         for (const result of results) {
           if (controller.signal.aborted) break
           const original = batch.find(row => row.id === result.id)
           const current = (await store.list({ project: original.project || undefined })).find(row => row.id === result.id)
-          if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) { skippedChanged++; continue }
+          if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) {
+            skippedChanged++
+            setAgentStats(current => ({ ...current, skipped: current.skipped + 1, last: `${original.title}：跳过（条目已变化或删除）` }))
+            continue
+          }
           const history = current.agentAssessment
             ? [...(current.agentAssessmentHistory || []), current.agentAssessment].slice(-5)
             : current.agentAssessmentHistory || []
           await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history }, { onDuplicate: 'update' })
           completed++
+          setAgentStats(current => ({ ...current, completed: current.completed + 1, last: `${original.title}：已完成` }))
           publishEvidenceVault()
         }
       }
       setNotice(`${controller.signal.aborted ? '已取消；' : 'Agent 判断完成：'}更新 ${completed} 条${skippedChanged ? `，跳过运行期间变化的 ${skippedChanged} 条` : ''}${plan.skippedHuman ? `，跳过人工处理过的 ${plan.skippedHuman} 条` : ''}。结果仅基于元数据与笔记，不等于来源核验。`)
     } catch (error) {
       failed = plan.eligible.length - completed - skippedChanged
+      setAgentStats(current => ({ ...current, failed, phase: controller.signal.aborted ? '已取消' : '请求失败', last: error?.message || String(error) }))
       setNotice(`⚠️ ${controller.signal.aborted ? '已取消' : error?.message || error}；已完成 ${completed} 条，未处理 ${failed} 条。`)
     } finally {
       agentAbort.current = null
@@ -671,13 +682,24 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
         h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
           agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
+        h(Button, { key: 'run-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
+          `判断已选择数据（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}）`),
         agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
         h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
           h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
           '包含人工处理过的',
         ]),
       ]),
-      h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '每次点击重新调用当前会话模型；仅发送标题、链接、标识符、保存原因和笔记。结果与人工评估分开保存，不会自动标记为已核验；模型不会读取来源全文。'),
+      agentBusy && agentStats ? h('div', { key: 'progress', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 10px', background: C.canvas, borderRadius: 8, fontSize: 12, color: C.muted } }, [
+        h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
+          h('strong', { key: 'phase', style: { color: C.ink } }, agentStats.phase),
+          h('span', { key: 'count' }, `已完成 ${agentStats.completed} / ${agentStats.total} · 跳过 ${agentStats.skipped} · 失败 ${agentStats.failed}`),
+        ]),
+        h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
+          h('div', { style: { width: `${Math.min(100, ((agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total)) * 100)}%`, height: '100%', background: C.teal, transition: 'width 160ms ease' } })),
+        agentStats.last ? h('span', { key: 'last' }, `最近：${agentStats.last}`) : null,
+      ]) : null,
+      h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '可按全部数据或仅按已勾选数据判断；每次点击重新调用当前会话模型。项目用于科研工作区隔离，主题标签用于内容分类，二者职责不同。仅发送标题、链接、标识符、保存原因和笔记；结果与人工评估分开保存，不会自动标记为已核验。'),
     ]),
 
     // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
@@ -701,7 +723,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
     }) : null,
     h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
-      key: item.id,
+      key: item.__displayKey || item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
     }, [
