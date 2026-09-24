@@ -1,6 +1,7 @@
 import resources from './catalog/resources/index.js'
 import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
+import { evidenceAgentAssessRoute } from './dsh/evidence-agent-assess.js'
 import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
 import { Config } from './dsh/config.js'
@@ -70,6 +71,7 @@ export function apply(ctx, config = Config({})) {
   }, 'dsh-research-kit session model routes')
   ctx.effect(() => ctx.webServer.register(semanticEnhanceRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit semantic enhancement')
   ctx.effect(() => ctx.webServer.register(semanticEnhanceStreamRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit semantic enhancement (stream)')
+  ctx.effect(() => ctx.webServer.register(evidenceAgentAssessRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit evidence agent assessment')
   // 宿主能力探测（ROADMAP §6）：只报装配与 MCP 连接事实，不改写目录标注。
   // 全部软依赖：宿主未提供对应服务时按「未知/未连接」如实呈现，探测不抛错。
   ctx.effect(() => ctx.webServer.register(hostCapabilitiesRoute({

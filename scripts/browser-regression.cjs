@@ -205,15 +205,48 @@ const server = http.createServer((req,res)=>{
   assert.equal(await page.getByRole('heading',{name:/^植物科学 · \d+$/}).count(),0);
   await page.getByRole('button',{name:'按主题分组',exact:true}).click();
   await page.getByRole('heading',{name:/^植物科学 · \d+$/}).waitFor();
+  await page.evaluate(async()=>{
+    const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-research-kit-evidence',2);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+    const tx=db.transaction('evidence','readwrite');
+    const entries=[
+      {id:'qa-agent-new',title:'待判断证据',url:'https://example.org/new',project:'',savedAt:Date.now(),status:'unverified'},
+      {id:'qa-agent-human',title:'人工处理证据',url:'https://example.org/human',project:'',savedAt:Date.now()-1,status:'verified',assessedBy:'researcher',assessedAt:Date.now(),assessmentReason:'人工已核对'},
+    ];
+    for(const entry of entries) tx.objectStore('evidence').put(entry);
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
+    db.close();
+  });
+  const assessedBatches=[];
+  await page.route('**/dsh-research-kit/evidence-agent-assess?**',async route=>{
+    const rows=route.request().postDataJSON().entries;
+    assessedBatches.push(rows.map(row=>row.id));
+    await route.fulfill({json:{ok:true,model:'qa-model',assessments:rows.map(row=>({id:row.id,traceability:'identified',studyType:'unknown',claimSupport:'unassessed',strength:'ungraded',confidence:'low',reason:'仅元数据初判，待核验原文。',model:'qa-model',at:Date.now()}))}});
+  });
   await page.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
+  await page.getByRole('button',{name:'一键用 Agent 判断（1）'}).click();
+  await page.getByText(/Agent 判断完成：更新 1 条/).waitFor();
+  assert.deepEqual(assessedBatches,[['qa-agent-new']]);
+  await page.getByText(/Agent 最新判断 · qa-model/).waitFor();
+  await page.getByLabel('包含人工处理过的').check();
+  await page.getByRole('button',{name:'一键用 Agent 判断（2）'}).click();
+  await page.getByText(/Agent 判断完成：更新 2 条/).waitFor();
+  assert.deepEqual(assessedBatches,[['qa-agent-new'],['qa-agent-new','qa-agent-human']]);
+  assert.equal(await page.getByLabel('设置「人工处理证据」的人工评估依据').inputValue(),'人工已核对');
+  if(process.env.RK_QA_AGENT_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_AGENT_SCREENSHOT,fullPage:true});
   await page.getByRole('button',{name:'按主题分组 ✓'}).click();
   await page.getByRole('button',{name:'按主题分组',exact:true}).click();
   await page.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'灵感资产',exact:true}).click();
   console.log('旧资产动态主题标签、自动分组与列表切换：通过');
   await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:false});
+  if(process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT});
   await page.setViewportSize({width:390,height:844});
   await page.evaluate(()=>window.scrollTo(0,0));
   await page.screenshot({path:path.join(artifacts,'mobile.png'),fullPage:false});
+  if(process.env.RK_QA_ASSET_MOBILE_SCREENSHOT){
+    await page.getByRole('heading',{name:/^植物科学 · \d+$/}).scrollIntoViewIfNeeded();
+    await page.evaluate(()=>window.scrollBy(0,-180));
+    await page.screenshot({path:process.env.RK_QA_ASSET_MOBILE_SCREENSHOT});
+  }
   const sizes=await page.evaluate(()=>({viewport:innerWidth,content:document.documentElement.scrollWidth}));
   assert.ok(sizes.content<=sizes.viewport, JSON.stringify(sizes));
   console.log('390px 窄屏无页面横向溢出：通过');

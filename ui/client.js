@@ -2476,6 +2476,22 @@ window.__ModuleLoader__.load({
       return ''
     }
 
+    function normalizeAgentAssessment(value) {
+      if (!value || typeof value !== 'object') return null
+      const id = clampText(value.id, 120)
+      const reason = clampText(value.reason, MAX_EVIDENCE_REASON_CHARS)
+      if (!id || !reason || !Number.isFinite(value.at)) return null
+      return {
+        id,
+        traceability: EVIDENCE_TRACEABILITY.includes(value.traceability) ? value.traceability : 'missing',
+        studyType: EVIDENCE_STUDY_TYPES.includes(value.studyType) ? value.studyType : 'unknown',
+        claimSupport: EVIDENCE_CLAIM_SUPPORT.includes(value.claimSupport) ? value.claimSupport : 'unassessed',
+        strength: EVIDENCE_STRENGTHS.includes(value.strength) ? value.strength : 'ungraded',
+        confidence: ['low', 'medium', 'high'].includes(value.confidence) ? value.confidence : 'low',
+        reason, model: clampText(value.model, 120), at: value.at,
+      }
+    }
+
     // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
     // 这类条目存下来也无法核验，只会污染证据库。
     function normalizeEvidenceEntry(input = {}) {
@@ -2515,6 +2531,9 @@ window.__ModuleLoader__.load({
         assessedAt: Number.isFinite(input.assessedAt) ? input.assessedAt : null,
         assessedBy: clampText(input.assessedBy, 120),
         assessmentReason: clampText(input.assessmentReason, MAX_EVIDENCE_REASON_CHARS),
+        agentAssessment: normalizeAgentAssessment(input.agentAssessment),
+        agentAssessmentHistory: (Array.isArray(input.agentAssessmentHistory) ? input.agentAssessmentHistory : [])
+          .slice(-5).map(normalizeAgentAssessment).filter(Boolean),
         agentProduced: input.agentProduced === true,
         runId: normalizeRunId(input.runId || input.run_id),
       }
@@ -2709,6 +2728,65 @@ window.__ModuleLoader__.load({
         title: allVerified ? '已核验证据 · 证据库' : '证据库来源（含核验状态）',
         items,
       }
+    }
+
+
+
+    const AGENT_MARKER = /^(agent|model)(?::|\/|$)/i
+    const AGENT_ASSESSMENT_BATCH_SIZE = 6
+
+    // 人工核验与 Agent 判断是两条独立记录；旧数据若缺 assessedBy，也按状态和时间保守识别。
+    function isHumanAssessedEvidence(entry) {
+      if (!entry || typeof entry !== 'object') return false
+      if (entry.status && entry.status !== 'unverified') return true
+      const by = String(entry.assessedBy || '').trim()
+      if (by && !AGENT_MARKER.test(by)) return true
+      return !by && (Number(entry.assessedAt) > 0 || Boolean(String(entry.assessmentReason || '').trim()))
+    }
+
+    function planAgentEvidenceBatch(entries, { includeHuman = false } = {}) {
+      const rows = Array.isArray(entries) ? entries : []
+      const eligible = rows.filter(entry => entry?.id && (includeHuman || !isHumanAssessedEvidence(entry)))
+      return {
+        eligible,
+        skippedHuman: includeHuman ? 0 : rows.filter(isHumanAssessedEvidence).length,
+        batches: Array.from({ length: Math.ceil(eligible.length / AGENT_ASSESSMENT_BATCH_SIZE) }, (_, index) =>
+          eligible.slice(index * AGENT_ASSESSMENT_BATCH_SIZE, (index + 1) * AGENT_ASSESSMENT_BATCH_SIZE)),
+      }
+    }
+
+    // 从发起请求到落库期间，人工/其他标签页可能更新条目。只接受仍等于当时快照的结果。
+    function evidenceAssessmentFingerprint(entry) {
+      return JSON.stringify([
+        entry?.title, entry?.identifier, entry?.url, entry?.reason, entry?.note,
+        entry?.status, entry?.traceability, entry?.studyType, entry?.claimSupport,
+        entry?.strength, entry?.assessedAt, entry?.assessedBy, entry?.assessmentReason,
+        entry?.agentAssessment?.at,
+      ])
+    }
+
+    function normalizeAgentEvidenceResult(input, expectedIds, { model = '', at = Date.now() } = {}) {
+      const expected = new Set(expectedIds)
+      const rows = input?.assessments
+      if (!Array.isArray(rows) || rows.length !== expected.size) throw new Error('Agent 返回的条目数量与请求不一致。')
+      const seen = new Set()
+      return rows.map(row => {
+        const id = String(row?.id || '')
+        if (!expected.has(id) || seen.has(id)) throw new Error('Agent 返回了未知或重复的证据 ID。')
+        seen.add(id)
+        if (!EVIDENCE_TRACEABILITY.includes(row.traceability)
+          || !EVIDENCE_STUDY_TYPES.includes(row.studyType)
+          || !EVIDENCE_CLAIM_SUPPORT.includes(row.claimSupport)
+          || !EVIDENCE_STRENGTHS.includes(row.strength)) throw new Error(`Agent 对 ${id} 的判断字段不合法。`)
+        const reason = String(row.reason || '').trim().slice(0, 500)
+        if (!reason) throw new Error(`Agent 对 ${id} 未提供判断依据。`)
+        return {
+          id, traceability: row.traceability, studyType: row.studyType,
+          claimSupport: row.claimSupport, strength: row.strength, reason,
+          confidence: ['low', 'medium', 'high'].includes(row.confidence) ? row.confidence : 'low',
+          model: String(model).slice(0, 120), at: Number(at) || Date.now(),
+        }
+      })
     }
 
 
@@ -4875,7 +4953,7 @@ window.__ModuleLoader__.load({
     // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
     // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
     // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-    function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
+    function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null }) {
       const store = evidenceVaultStore()
       const [entries, setEntries] = React.useState([])
       const [projects, setProjects] = React.useState([])
@@ -4891,6 +4969,10 @@ window.__ModuleLoader__.load({
       const [backup, setBackup] = React.useState('')
       const [backupOpen, setBackupOpen] = React.useState(false)
       const [assessmentNotes, setAssessmentNotes] = React.useState({})
+      const [includeHuman, setIncludeHuman] = React.useState(false)
+      const [agentBusy, setAgentBusy] = React.useState(false)
+      const [agentProgress, setAgentProgress] = React.useState('')
+      const agentAbort = React.useRef(null)
       // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
       const [links, setLinks] = React.useState([])
       // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
@@ -5032,6 +5114,52 @@ window.__ModuleLoader__.load({
       }
       const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
+      const runAgentAssessment = async () => {
+        if (agentBusy) return
+        const plan = planAgentEvidenceBatch(entries, { includeHuman })
+        if (!plan.eligible.length) return setNotice('当前范围没有待 Agent 判断的证据；可勾选「包含人工处理过的」重新判断。')
+        if (!sessionId) return setNotice('⚠️ 当前会话不可用，无法调用 Agent 模型。')
+        const controller = new AbortController()
+        agentAbort.current = controller
+        setAgentBusy(true)
+        let completed = 0
+        let skippedChanged = 0
+        let failed = 0
+        try {
+          for (const batch of plan.batches) {
+            if (controller.signal.aborted) break
+            setAgentProgress(`正在判断 ${completed + 1}–${Math.min(completed + batch.length, plan.eligible.length)} / ${plan.eligible.length}`)
+            const response = await fetch(`/dsh-research-kit/evidence-agent-assess?session_id=${encodeURIComponent(sessionId)}`, {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ entries: batch }), signal: controller.signal,
+            })
+            const body = await response.json()
+            if (!response.ok) throw new Error(body.next_action || `Agent 请求失败：HTTP ${response.status}`)
+            const results = normalizeAgentEvidenceResult(body, batch.map(row => row.id), { model: body.model })
+            for (const result of results) {
+              if (controller.signal.aborted) break
+              const original = batch.find(row => row.id === result.id)
+              const current = (await store.list({ project: original.project || undefined })).find(row => row.id === result.id)
+              if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) { skippedChanged++; continue }
+              const history = current.agentAssessment
+                ? [...(current.agentAssessmentHistory || []), current.agentAssessment].slice(-5)
+                : current.agentAssessmentHistory || []
+              await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history }, { onDuplicate: 'update' })
+              completed++
+              publishEvidenceVault()
+            }
+          }
+          setNotice(`${controller.signal.aborted ? '已取消；' : 'Agent 判断完成：'}更新 ${completed} 条${skippedChanged ? `，跳过运行期间变化的 ${skippedChanged} 条` : ''}${plan.skippedHuman ? `，跳过人工处理过的 ${plan.skippedHuman} 条` : ''}。结果仅基于元数据与笔记，不等于来源核验。`)
+        } catch (error) {
+          failed = plan.eligible.length - completed - skippedChanged
+          setNotice(`⚠️ ${controller.signal.aborted ? '已取消' : error?.message || error}；已完成 ${completed} 条，未处理 ${failed} 条。`)
+        } finally {
+          agentAbort.current = null
+          setAgentBusy(false)
+          setAgentProgress('')
+        }
+      }
+
       // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
       const clearScope = async () => {
         try {
@@ -5094,6 +5222,23 @@ window.__ModuleLoader__.load({
               h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
             ]),
           ]) : null,
+        ]),
+
+        h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
+          h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),
+            h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, project ? `范围：项目「${project}」全部证据` : '范围：全部项目证据'),
+          ]),
+          h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
+              agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
+            agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
+            h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
+              h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
+              '包含人工处理过的',
+            ]),
+          ]),
+          h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '每次点击重新调用当前会话模型；仅发送标题、链接、标识符、保存原因和笔记。结果与人工评估分开保存，不会自动标记为已核验；模型不会读取来源全文。'),
         ]),
 
         // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
@@ -5189,6 +5334,12 @@ window.__ModuleLoader__.load({
             h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveAssessmentReason(item) }, '保存依据'),
           ])),
           ]),
+          item.agentAssessment ? h('div', { key: 'agent-result', style: { display: 'grid', gap: 4, padding: 10, marginTop: 8, background: C.tealTint, borderRadius: 8, fontSize: 12, lineHeight: 1.5 } }, [
+            h('strong', { key: 'title' }, `Agent 最新判断 · ${item.agentAssessment.model || '当前模型'} · ${formatEvidenceTime(item.agentAssessment.at)}`),
+            h('span', { key: 'dimensions' }, `来源：${EVIDENCE_DIMENSION_LABELS.traceability[item.agentAssessment.traceability]} · 类型：${EVIDENCE_DIMENSION_LABELS.studyType[item.agentAssessment.studyType]} · 声明支持：${EVIDENCE_DIMENSION_LABELS.claimSupport[item.agentAssessment.claimSupport]} · 强度：${EVIDENCE_DIMENSION_LABELS.strength[item.agentAssessment.strength]}`),
+            h('span', { key: 'reason' }, item.agentAssessment.reason),
+            h('span', { key: 'history', style: { color: C.muted } }, `置信度：${{ low: '低', medium: '中', high: '高' }[item.agentAssessment.confidence] || '低'}${item.agentAssessmentHistory?.length ? ` · 保留前 ${item.agentAssessmentHistory.length} 次判断` : ''} · 仅元数据初判，待人工核验`),
+          ]) : null,
         ]))),
       ])
     }
@@ -5799,7 +5950,7 @@ window.__ModuleLoader__.load({
       && previous.dependencies.length === next.dependencies.length
       && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-    function ResearchVault({ assetProvider, inputActions, embedded = false }) {
+    function ResearchVault({ assetProvider, inputActions, sessionId, embedded = false }) {
       const [assets, setAssets] = React.useState([])
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
@@ -6085,7 +6236,7 @@ window.__ModuleLoader__.load({
           }) : null,
           h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
         ]) : null,
-        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, assetTitlesById: assetsById }) : null,
+        tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById }) : null,
         tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
         tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
           key: 'empty',
@@ -6221,8 +6372,8 @@ window.__ModuleLoader__.load({
     }
 
     // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-    function ResearchVaultHost({ embedded = false, inputActions }) {
-      return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions })
+    function ResearchVaultHost({ embedded = false, inputActions, sessionId }) {
+      return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId })
     }
 
 
@@ -9565,7 +9716,7 @@ window.__ModuleLoader__.load({
       methods: props => h(ResearchPromptStudioHost, props),
       // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
       // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-      vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, embedded: true }),
+      vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, embedded: true }),
       evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
     }
 

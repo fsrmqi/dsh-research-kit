@@ -89,6 +89,22 @@ function safeUrl(value) {
   return ''
 }
 
+function normalizeAgentAssessment(value) {
+  if (!value || typeof value !== 'object') return null
+  const id = clampText(value.id, 120)
+  const reason = clampText(value.reason, MAX_EVIDENCE_REASON_CHARS)
+  if (!id || !reason || !Number.isFinite(value.at)) return null
+  return {
+    id,
+    traceability: EVIDENCE_TRACEABILITY.includes(value.traceability) ? value.traceability : 'missing',
+    studyType: EVIDENCE_STUDY_TYPES.includes(value.studyType) ? value.studyType : 'unknown',
+    claimSupport: EVIDENCE_CLAIM_SUPPORT.includes(value.claimSupport) ? value.claimSupport : 'unassessed',
+    strength: EVIDENCE_STRENGTHS.includes(value.strength) ? value.strength : 'ungraded',
+    confidence: ['low', 'medium', 'high'].includes(value.confidence) ? value.confidence : 'low',
+    reason, model: clampText(value.model, 120), at: value.at,
+  }
+}
+
 // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
 // 这类条目存下来也无法核验，只会污染证据库。
 export function normalizeEvidenceEntry(input = {}) {
@@ -128,6 +144,9 @@ export function normalizeEvidenceEntry(input = {}) {
     assessedAt: Number.isFinite(input.assessedAt) ? input.assessedAt : null,
     assessedBy: clampText(input.assessedBy, 120),
     assessmentReason: clampText(input.assessmentReason, MAX_EVIDENCE_REASON_CHARS),
+    agentAssessment: normalizeAgentAssessment(input.agentAssessment),
+    agentAssessmentHistory: (Array.isArray(input.agentAssessmentHistory) ? input.agentAssessmentHistory : [])
+      .slice(-5).map(normalizeAgentAssessment).filter(Boolean),
     agentProduced: input.agentProduced === true,
     runId: normalizeRunId(input.runId || input.run_id),
   }

@@ -7,6 +7,7 @@ import {
 import { createEvidenceVaultStore } from './evidence-vault-store.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
+import { planAgentEvidenceBatch, evidenceAssessmentFingerprint, normalizeAgentEvidenceResult } from './lib/agent-evidence-batch.js'
 import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
@@ -386,7 +387,7 @@ export function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onS
 // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
 // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
 // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
+export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
   const [projects, setProjects] = React.useState([])
@@ -402,6 +403,10 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [assessmentNotes, setAssessmentNotes] = React.useState({})
+  const [includeHuman, setIncludeHuman] = React.useState(false)
+  const [agentBusy, setAgentBusy] = React.useState(false)
+  const [agentProgress, setAgentProgress] = React.useState('')
+  const agentAbort = React.useRef(null)
   // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
   const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
@@ -543,6 +548,52 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   }
   const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
+  const runAgentAssessment = async () => {
+    if (agentBusy) return
+    const plan = planAgentEvidenceBatch(entries, { includeHuman })
+    if (!plan.eligible.length) return setNotice('当前范围没有待 Agent 判断的证据；可勾选「包含人工处理过的」重新判断。')
+    if (!sessionId) return setNotice('⚠️ 当前会话不可用，无法调用 Agent 模型。')
+    const controller = new AbortController()
+    agentAbort.current = controller
+    setAgentBusy(true)
+    let completed = 0
+    let skippedChanged = 0
+    let failed = 0
+    try {
+      for (const batch of plan.batches) {
+        if (controller.signal.aborted) break
+        setAgentProgress(`正在判断 ${completed + 1}–${Math.min(completed + batch.length, plan.eligible.length)} / ${plan.eligible.length}`)
+        const response = await fetch(`/dsh-research-kit/evidence-agent-assess?session_id=${encodeURIComponent(sessionId)}`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ entries: batch }), signal: controller.signal,
+        })
+        const body = await response.json()
+        if (!response.ok) throw new Error(body.next_action || `Agent 请求失败：HTTP ${response.status}`)
+        const results = normalizeAgentEvidenceResult(body, batch.map(row => row.id), { model: body.model })
+        for (const result of results) {
+          if (controller.signal.aborted) break
+          const original = batch.find(row => row.id === result.id)
+          const current = (await store.list({ project: original.project || undefined })).find(row => row.id === result.id)
+          if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) { skippedChanged++; continue }
+          const history = current.agentAssessment
+            ? [...(current.agentAssessmentHistory || []), current.agentAssessment].slice(-5)
+            : current.agentAssessmentHistory || []
+          await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history }, { onDuplicate: 'update' })
+          completed++
+          publishEvidenceVault()
+        }
+      }
+      setNotice(`${controller.signal.aborted ? '已取消；' : 'Agent 判断完成：'}更新 ${completed} 条${skippedChanged ? `，跳过运行期间变化的 ${skippedChanged} 条` : ''}${plan.skippedHuman ? `，跳过人工处理过的 ${plan.skippedHuman} 条` : ''}。结果仅基于元数据与笔记，不等于来源核验。`)
+    } catch (error) {
+      failed = plan.eligible.length - completed - skippedChanged
+      setNotice(`⚠️ ${controller.signal.aborted ? '已取消' : error?.message || error}；已完成 ${completed} 条，未处理 ${failed} 条。`)
+    } finally {
+      agentAbort.current = null
+      setAgentBusy(false)
+      setAgentProgress('')
+    }
+  }
+
   // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
   const clearScope = async () => {
     try {
@@ -605,6 +656,23 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
           h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
         ]),
       ]) : null,
+    ]),
+
+    h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
+      h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+        h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),
+        h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, project ? `范围：项目「${project}」全部证据` : '范围：全部项目证据'),
+      ]),
+      h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
+        h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
+          agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
+        agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
+        h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
+          h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
+          '包含人工处理过的',
+        ]),
+      ]),
+      h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '每次点击重新调用当前会话模型；仅发送标题、链接、标识符、保存原因和笔记。结果与人工评估分开保存，不会自动标记为已核验；模型不会读取来源全文。'),
     ]),
 
     // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
@@ -700,6 +768,12 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
         h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveAssessmentReason(item) }, '保存依据'),
       ])),
       ]),
+      item.agentAssessment ? h('div', { key: 'agent-result', style: { display: 'grid', gap: 4, padding: 10, marginTop: 8, background: C.tealTint, borderRadius: 8, fontSize: 12, lineHeight: 1.5 } }, [
+        h('strong', { key: 'title' }, `Agent 最新判断 · ${item.agentAssessment.model || '当前模型'} · ${formatEvidenceTime(item.agentAssessment.at)}`),
+        h('span', { key: 'dimensions' }, `来源：${EVIDENCE_DIMENSION_LABELS.traceability[item.agentAssessment.traceability]} · 类型：${EVIDENCE_DIMENSION_LABELS.studyType[item.agentAssessment.studyType]} · 声明支持：${EVIDENCE_DIMENSION_LABELS.claimSupport[item.agentAssessment.claimSupport]} · 强度：${EVIDENCE_DIMENSION_LABELS.strength[item.agentAssessment.strength]}`),
+        h('span', { key: 'reason' }, item.agentAssessment.reason),
+        h('span', { key: 'history', style: { color: C.muted } }, `置信度：${{ low: '低', medium: '中', high: '高' }[item.agentAssessment.confidence] || '低'}${item.agentAssessmentHistory?.length ? ` · 保留前 ${item.agentAssessmentHistory.length} 次判断` : ''} · 仅元数据初判，待人工核验`),
+      ]) : null,
     ]))),
   ])
 }
