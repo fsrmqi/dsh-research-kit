@@ -1387,7 +1387,7 @@ window.__ModuleLoader__.load({
         if (filter === 'favorites' && !item.favorite) return false
         if (filter === 'derived' && !item.parentId) return false
         if (!text) return true
-        return `${item.title} ${item.body} ${item.note || ''} ${(item.tags || []).join(' ')} ${item.project || ''}`.toLowerCase().includes(text)
+        return `${item.title} ${item.body} ${item.note || ''} ${visibleDepositionTags(item).join(' ')} ${item.project || ''}`.toLowerCase().includes(text)
       })
     }
 
@@ -1894,6 +1894,63 @@ window.__ModuleLoader__.load({
       if (!relation || relation.length > 40) throw new Error('知识关系缺少类型。')
       if (!input.fromKey || !input.toKey) throw new Error('知识关系缺少端点。')
       return { fromKey: String(input.fromKey), toKey: String(input.toKey), relation, polarity, excerpt: clampExcerpt(input.excerpt) }
+    }
+
+
+    // 只用本地、可解释的词表归类；不调用模型，不把原始回答交给外部服务。
+    // 分类不是事实核验，多个主题可并存，未命中时明确留在「待归类」。
+    const DEPOSITION_TOPIC_RULES = [
+      { topic: '植物科学', pattern: /水稻|小麦|玉米|拟南芥|作物|植物|盐胁迫|耐盐|抗旱|产量|rice|wheat|maize|arabidopsis|crop|plant\b/i },
+      { topic: '基因与分子', pattern: /基因|蛋白|转录因子|表达量|突变|变异|基因组|转录组|gene\b|protein|genom|transcript|mutation|variant/i },
+      { topic: '临床医学', pattern: /临床|患者|疾病|肿瘤|治疗|药物|队列|诊断|clinical|patient|disease|cancer|therapy|drug|cohort/i },
+      { topic: '生物信息', pattern: /单细胞|测序|生物信息|组学|批次效应|空间转录|single.cell|sequenc|bioinform|omics|batch.effect/i },
+      { topic: '统计与方法', pattern: /统计|回归|显著性|置信区间|随机对照|荟萃分析|系统综述|方法学|statistic|regression|confidence.interval|randomized|meta.analysis|systematic.review/i },
+      { topic: '文献与证据', pattern: /文献|引用|DOI|PMID|arXiv|证据等级|参考文献|literature|citation|evidence/i },
+    ]
+
+    const UNCLASSIFIED_TOPIC = '待归类'
+    const TOPIC_PREFIX = '主题:'
+    const KIND_TAGS = { question: '研究问题', hypothesis: '待验证假设', finding: '研究发现', method: '研究方法' }
+
+    function inferDepositionTopics(text) {
+      const source = String(text || '').slice(0, 8000)
+      return DEPOSITION_TOPIC_RULES.filter(rule => rule.pattern.test(source)).map(rule => rule.topic)
+    }
+
+    function autoDepositionTags({ text = '', kind = '', identifierKind = '' } = {}) {
+      const tags = ['自动沉淀', ...(KIND_TAGS[kind] ? [KIND_TAGS[kind]] : [])]
+      for (const topic of inferDepositionTopics(text)) tags.push(`${TOPIC_PREFIX}${topic}`)
+      if (identifierKind && identifierKind !== 'none') tags.push(`来源:${String(identifierKind).toUpperCase()}`)
+      return [...new Set(tags)].slice(0, 10)
+    }
+
+    // 新条目读已保存的主题标签；旧条目仅在视图中推导，不修改其人工标签或备份。
+    function topicForDepositedItem(item) {
+      const tags = Array.isArray(item?.tags) ? item.tags : []
+      const saved = tags.find(tag => String(tag).startsWith(TOPIC_PREFIX))
+      if (saved) return saved.slice(TOPIC_PREFIX.length)
+      return inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)[0] || UNCLASSIFIED_TOPIC
+    }
+
+    function visibleDepositionTags(item) {
+      const saved = Array.isArray(item?.tags) ? item.tags : []
+      if (saved.some(tag => String(tag).startsWith(TOPIC_PREFIX))) return saved
+      const inferred = inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)
+      return [...saved, ...inferred.map(topic => `${TOPIC_PREFIX}${topic}`)]
+    }
+
+    function groupDepositedItems(items) {
+      const groups = new Map()
+      for (const item of Array.isArray(items) ? items : []) {
+        const topic = topicForDepositedItem(item)
+        if (!groups.has(topic)) groups.set(topic, [])
+        groups.get(topic).push(item)
+      }
+      const order = DEPOSITION_TOPIC_RULES.map(rule => rule.topic)
+      return [...groups].sort(([a], [b]) => {
+        const ai = order.indexOf(a), bi = order.indexOf(b)
+        return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi)
+      }).map(([topic, rows]) => ({ topic, rows }))
     }
 
 
@@ -2478,7 +2535,7 @@ window.__ModuleLoader__.load({
         .filter(item => (filter && filter !== 'all' ? item.status === filter : true))
         .filter(item => {
           if (!text) return true
-          return `${item.title} ${item.sourceDatabase} ${item.identifier} ${item.project} ${item.reason} ${item.note} ${(item.tags || []).join(' ')}`.toLowerCase().includes(text)
+          return `${item.title} ${item.sourceDatabase} ${item.identifier} ${item.project} ${item.reason} ${item.note} ${visibleDepositionTags(item).join(' ')}`.toLowerCase().includes(text)
         })
         .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
     }
@@ -4826,6 +4883,7 @@ window.__ModuleLoader__.load({
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
       const [filter, setFilter] = React.useState('all')
+      const [groupByTopic, setGroupByTopic] = React.useState(true)
       const [selectedIds, setSelectedIds] = React.useState([])
       const [notice, setNotice] = React.useState('')
       const [newProject, setNewProject] = React.useState('')
@@ -4865,6 +4923,9 @@ window.__ModuleLoader__.load({
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+      const displayedEntries = React.useMemo(() => groupByTopic
+        ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+        : filtered, [filtered, groupByTopic])
       const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
       // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
       const citedByIndex = React.useMemo(() => {
@@ -5041,6 +5102,7 @@ window.__ModuleLoader__.load({
             h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
           ]),
           h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
+          h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
           h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `写入 Prompt（${selectedEntries.length}）`),
         ]),
         selectedEntries.length ? h(Card, { key: 'preview', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
@@ -5054,7 +5116,7 @@ window.__ModuleLoader__.load({
           text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
           hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
         }) : null,
-        h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+        h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
           key: item.id,
           interactive: true,
           style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
@@ -5071,13 +5133,13 @@ window.__ModuleLoader__.load({
             ]),
             h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatEvidenceTime(item.savedAt)}`),
           ]),
-          item.reason || item.note || item.project || (item.tags || []).length
+          item.reason || item.note || item.project || visibleDepositionTags(item).length
             ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
               item.reason ? h('p', { key: 'reason', style: { margin: 0 } }, `保存原因：${item.reason}`) : null,
               item.note ? h('p', { key: 'note', style: { margin: 0 } }, `笔记：${item.note}`) : null,
               item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
-              (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
-                item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+              visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
+                visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
             ])
             : null,
           // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
@@ -5743,6 +5805,7 @@ window.__ModuleLoader__.load({
       const [query, setQuery] = React.useState('')
       const deferredQuery = React.useDeferredValue(query)
       const [filter, setFilter] = React.useState('all')
+      const [groupByTopic, setGroupByTopic] = React.useState(true)
       const [form, setForm] = React.useState(EMPTY_FORM)
       const [formOpen, setFormOpen] = React.useState(false)
       const [compareId, setCompareId] = React.useState('')
@@ -5802,12 +5865,15 @@ window.__ModuleLoader__.load({
       const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
       const byId = React.useMemo(() => new Map(assets.map(item => [item.id, item])), [assets])
       const filtered = React.useMemo(() => filterAssets(assets, { query: deferredQuery, filter }), [assets, deferredQuery, filter])
+      const displayedAssets = React.useMemo(() => groupByTopic
+        ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+        : filtered, [filtered, groupByTopic])
       const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
       const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
       const openEdit = item => {
         setForm({
-          id: item.id, title: item.title || '', body: item.body || '', tags: (item.tags || []).join(', '),
+          id: item.id, title: item.title || '', body: item.body || '', tags: visibleDepositionTags(item).join(', '),
           note: item.note || '', project: item.project || '', type: item.type || 'insight',
           thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred',
           parentId: item.parentId || '', rationale: item.rationale || '', nextAction: item.nextAction || '',
@@ -5816,7 +5882,7 @@ window.__ModuleLoader__.load({
         setFormOpen(true)
       }
       const derive = item => {
-        setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: (item.tags || []).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
+        setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: visibleDepositionTags(item).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
         setFormOpen(true); setCompareId(item.id); setConfirmDeleteId('')
         setNotice(`已载入「${item.title}」作为派生版本；保存后保留来源关系，可做版本对比。`)
       }
@@ -5983,7 +6049,7 @@ window.__ModuleLoader__.load({
           field('标题（留空自动取正文首行）', 'title', { placeholder: '例：单细胞批次效应的待验证假设' }),
           field('内容', 'body', { multiline: true, placeholder: '只保存可复用的提示词、研究问题或假设；不要粘贴原始数据、患者信息或完整查询结果。' }),
           h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 } }, [
-            field('标签（逗号分隔）', 'tags', { placeholder: '批次效应, 单细胞' }),
+            field('标签（逗号分隔）', 'tags', { placeholder: '主题:植物科学, 批次效应；主题标签可人工改写' }),
             field('项目（可选）', 'project', { placeholder: '例：肿瘤队列分析' }),
             select('类型', 'type', Object.entries(VAULT_TYPE_LABELS).map(([value, label]) => ({ value, label }))),
             select('认识分类', 'thinkingKind', Object.entries(THINKING_LABELS).map(([value, label]) => ({ value, label }))),
@@ -6008,6 +6074,7 @@ window.__ModuleLoader__.load({
             h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、内容、标签、项目……', ariaLabel: '搜索灵感资产', style: { paddingLeft: 32 } }),
           ]),
           h(Segmented, { key: 'tabs', value: filter, options: filterTabs, onChange: setFilter, ariaLabel: '资产筛选' }),
+          h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
           projects.length ? h(Select, {
             key: 'projects',
             value: '',
@@ -6028,9 +6095,9 @@ window.__ModuleLoader__.load({
         }) : null,
         tab === 'assets' ? h(MemoizedAssetList, {
           key: 'list',
-          items: filtered,
+          items: displayedAssets,
           dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
-          renderItem: item => h(Card, {
+          renderItem: item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
           key: item.id,
           interactive: true,
           style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
@@ -6057,11 +6124,11 @@ window.__ModuleLoader__.load({
             className: 'rk-scroll',
             style: { whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 13, color: C.ink, maxHeight: 180, overflowY: 'auto' },
           }, item.body),
-          item.rationale || item.nextAction || (item.tags || []).length || item.project ? h('div', { key: 'meta', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
+          item.rationale || item.nextAction || visibleDepositionTags(item).length || item.project ? h('div', { key: 'meta', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
             item.rationale ? h('p', { key: 'rationale', style: { margin: 0 } }, `为什么重要：${item.rationale}`) : null,
             item.nextAction ? h('p', { key: 'next', style: { margin: 0 } }, `下一步：${item.nextAction}`) : null,
             item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
-            (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+            visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
           ]) : null,
           h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
             h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
@@ -7109,6 +7176,7 @@ window.__ModuleLoader__.load({
         claims: selectedKeys ? extracted.claims.filter(claim => selectedKeys.has(claim.fromKey) && selectedKeys.has(claim.toKey)) : extracted.claims,
         citations: selectedCitations ? extracted.citations.filter((_, index) => selectedCitations.has(index)) : extracted.citations,
       }
+      const taxonomyText = `${source} ${extraction.nodes.filter(node => node.kind === 'entity').map(node => node.entityKind).join(' ')}`
       summary.citations = extraction.citations.length
       if (!extraction.nodes.length && !extraction.claims.length && !extraction.citations.length) return summary
       summary.extracted = true
@@ -7134,7 +7202,7 @@ window.__ModuleLoader__.load({
             identifierKind: citation.identifierKind,
             url: citation.url,
             project,
-            tags: [DEPOSITION_TAG],
+            tags: autoDepositionTags({ text: `${taxonomyText} ${citation.title || ''}`, identifierKind: citation.identifierKind }),
             reason: `自动沉淀：助手回答中引用的来源（消息 seq ${summary.seq ?? '未知'}），需逐条人工核验。`,
             note: `来源摘录：${(citation.title || '').slice(0, 160)}`,
           })
@@ -7176,7 +7244,7 @@ window.__ModuleLoader__.load({
             epistemicStatus: 'to_verify',
             verification: { status: 'pending', evidence: '', checkedAt: 0 },
             project,
-            tags: [DEPOSITION_TAG],
+            tags: autoDepositionTags({ text: `${taxonomyText} ${node.label} ${body}`, kind: node.kind }),
             note: `自动沉淀自助手回答，默认待验证；来源消息：会话 ${summary.sessionId || '本地'} seq ${summary.seq ?? '未知'}。`,
             provenance: { kind: 'auto-deposition', sessionId: summary.sessionId, seq: summary.seq },
           })

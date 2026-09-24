@@ -1,4 +1,5 @@
 import { extractKnowledge, normalizeKnowledgeLabel } from './lib/knowledge-extract.js'
+import { autoDepositionTags } from './lib/deposition-taxonomy.js'
 import { knowledgeStore, publishKnowledge } from './knowledge-store.js'
 import { saveEvidenceEntry, getActiveProject } from './research-evidence-vault.js'
 
@@ -118,6 +119,7 @@ export async function depositAssistantMessage({
     claims: selectedKeys ? extracted.claims.filter(claim => selectedKeys.has(claim.fromKey) && selectedKeys.has(claim.toKey)) : extracted.claims,
     citations: selectedCitations ? extracted.citations.filter((_, index) => selectedCitations.has(index)) : extracted.citations,
   }
+  const taxonomyText = `${source} ${extraction.nodes.filter(node => node.kind === 'entity').map(node => node.entityKind).join(' ')}`
   summary.citations = extraction.citations.length
   if (!extraction.nodes.length && !extraction.claims.length && !extraction.citations.length) return summary
   summary.extracted = true
@@ -143,7 +145,7 @@ export async function depositAssistantMessage({
         identifierKind: citation.identifierKind,
         url: citation.url,
         project,
-        tags: [DEPOSITION_TAG],
+        tags: autoDepositionTags({ text: `${taxonomyText} ${citation.title || ''}`, identifierKind: citation.identifierKind }),
         reason: `自动沉淀：助手回答中引用的来源（消息 seq ${summary.seq ?? '未知'}），需逐条人工核验。`,
         note: `来源摘录：${(citation.title || '').slice(0, 160)}`,
       })
@@ -185,7 +187,7 @@ export async function depositAssistantMessage({
         epistemicStatus: 'to_verify',
         verification: { status: 'pending', evidence: '', checkedAt: 0 },
         project,
-        tags: [DEPOSITION_TAG],
+        tags: autoDepositionTags({ text: `${taxonomyText} ${node.label} ${body}`, kind: node.kind }),
         note: `自动沉淀自助手回答，默认待验证；来源消息：会话 ${summary.sessionId || '本地'} seq ${summary.seq ?? '未知'}。`,
         provenance: { kind: 'auto-deposition', sessionId: summary.sessionId, seq: summary.seq },
       })

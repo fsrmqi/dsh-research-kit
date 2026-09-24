@@ -88,6 +88,7 @@ test('自动沉淀全链路：知识入库、证据入库、资产创建并相�
   assert.equal(evidence.project, '测试项目')
   assert.equal(evidence.identifier, '10.1038/test1234')
   assert.ok((evidence.tags || []).includes('自动沉淀'), '自动沉淀的证据必须带标记，便于用户辨认与筛选')
+  assert.ok(evidence.tags.includes('主题:植物科学') && evidence.tags.includes('主题:基因与分子') && evidence.tags.includes('来源:DOI'), '证据应按内容和来源自动多标签化')
   assert.ok(summary.savedAssets >= 1, '发现应沉淀为灵感资产')
   const asset = assetProvider.assets[0]
   assert.equal(asset.epistemicStatus, 'to_verify')
@@ -95,6 +96,7 @@ test('自动沉淀全链路：知识入库、证据入库、资产创建并相�
   assert.equal(asset.thinkingKind, 'conclusion')
   assert.equal(asset.project, '测试项目')
   assert.equal(asset.provenance?.kind, 'auto-deposition')
+  assert.ok(asset.tags.includes('研究发现') && asset.tags.includes('主题:植物科学'), '灵感资产应自动标明内容类型和主题')
   const nodes = await store.listNodes()
   const finding = nodes.find(node => node.kind === 'finding')
   assert.ok(finding, '应有发现节点')

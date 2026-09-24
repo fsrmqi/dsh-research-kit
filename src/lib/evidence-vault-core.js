@@ -1,4 +1,5 @@
 // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
+import { visibleDepositionTags } from './deposition-taxonomy.js'
 //
 // 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
 // 证据条目必须可追溯——有稳定标识符或原始链接，否则后续无法核验，也就失去了保存意义。
@@ -147,7 +148,7 @@ export function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
     .filter(item => (filter && filter !== 'all' ? item.status === filter : true))
     .filter(item => {
       if (!text) return true
-      return `${item.title} ${item.sourceDatabase} ${item.identifier} ${item.project} ${item.reason} ${item.note} ${(item.tags || []).join(' ')}`.toLowerCase().includes(text)
+      return `${item.title} ${item.sourceDatabase} ${item.identifier} ${item.project} ${item.reason} ${item.note} ${visibleDepositionTags(item).join(' ')}`.toLowerCase().includes(text)
     })
     .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
 }

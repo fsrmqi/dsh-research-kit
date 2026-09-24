@@ -6,6 +6,7 @@ import {
   Field, Input, Textarea, Select, Notice, Segmented, EmptyState, Spinner,
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'
+import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
 import { deriveAssetEvidenceCandidates } from './lib/asset-evidence-links.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import {
@@ -60,6 +61,7 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   const [query, setQuery] = React.useState('')
   const deferredQuery = React.useDeferredValue(query)
   const [filter, setFilter] = React.useState('all')
+  const [groupByTopic, setGroupByTopic] = React.useState(true)
   const [form, setForm] = React.useState(EMPTY_FORM)
   const [formOpen, setFormOpen] = React.useState(false)
   const [compareId, setCompareId] = React.useState('')
@@ -119,12 +121,15 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
   const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
   const byId = React.useMemo(() => new Map(assets.map(item => [item.id, item])), [assets])
   const filtered = React.useMemo(() => filterAssets(assets, { query: deferredQuery, filter }), [assets, deferredQuery, filter])
+  const displayedAssets = React.useMemo(() => groupByTopic
+    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+    : filtered, [filtered, groupByTopic])
   const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
   const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
   const openEdit = item => {
     setForm({
-      id: item.id, title: item.title || '', body: item.body || '', tags: (item.tags || []).join(', '),
+      id: item.id, title: item.title || '', body: item.body || '', tags: visibleDepositionTags(item).join(', '),
       note: item.note || '', project: item.project || '', type: item.type || 'insight',
       thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred',
       parentId: item.parentId || '', rationale: item.rationale || '', nextAction: item.nextAction || '',
@@ -133,7 +138,7 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
     setFormOpen(true)
   }
   const derive = item => {
-    setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: (item.tags || []).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
+    setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: visibleDepositionTags(item).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
     setFormOpen(true); setCompareId(item.id); setConfirmDeleteId('')
     setNotice(`已载入「${item.title}」作为派生版本；保存后保留来源关系，可做版本对比。`)
   }
@@ -300,7 +305,7 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
       field('标题（留空自动取正文首行）', 'title', { placeholder: '例：单细胞批次效应的待验证假设' }),
       field('内容', 'body', { multiline: true, placeholder: '只保存可复用的提示词、研究问题或假设；不要粘贴原始数据、患者信息或完整查询结果。' }),
       h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 } }, [
-        field('标签（逗号分隔）', 'tags', { placeholder: '批次效应, 单细胞' }),
+        field('标签（逗号分隔）', 'tags', { placeholder: '主题:植物科学, 批次效应；主题标签可人工改写' }),
         field('项目（可选）', 'project', { placeholder: '例：肿瘤队列分析' }),
         select('类型', 'type', Object.entries(VAULT_TYPE_LABELS).map(([value, label]) => ({ value, label }))),
         select('认识分类', 'thinkingKind', Object.entries(THINKING_LABELS).map(([value, label]) => ({ value, label }))),
@@ -325,6 +330,7 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
         h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、内容、标签、项目……', ariaLabel: '搜索灵感资产', style: { paddingLeft: 32 } }),
       ]),
       h(Segmented, { key: 'tabs', value: filter, options: filterTabs, onChange: setFilter, ariaLabel: '资产筛选' }),
+      h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
       projects.length ? h(Select, {
         key: 'projects',
         value: '',
@@ -345,9 +351,9 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
     }) : null,
     tab === 'assets' ? h(MemoizedAssetList, {
       key: 'list',
-      items: filtered,
+      items: displayedAssets,
       dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
-      renderItem: item => h(Card, {
+      renderItem: item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
@@ -374,11 +380,11 @@ export function ResearchVault({ assetProvider, inputActions, embedded = false })
         className: 'rk-scroll',
         style: { whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 13, color: C.ink, maxHeight: 180, overflowY: 'auto' },
       }, item.body),
-      item.rationale || item.nextAction || (item.tags || []).length || item.project ? h('div', { key: 'meta', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
+      item.rationale || item.nextAction || visibleDepositionTags(item).length || item.project ? h('div', { key: 'meta', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
         item.rationale ? h('p', { key: 'rationale', style: { margin: 0 } }, `为什么重要：${item.rationale}`) : null,
         item.nextAction ? h('p', { key: 'next', style: { margin: 0 } }, `下一步：${item.nextAction}`) : null,
         item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
-        (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+        visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
       ]) : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
         h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),

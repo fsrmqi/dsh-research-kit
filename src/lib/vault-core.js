@@ -1,4 +1,5 @@
 // 研究灵感资产的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
+import { visibleDepositionTags } from './deposition-taxonomy.js'
 
 // 超长正文通常是粘贴的原始数据或完整查询结果；导入与保存时拒绝，守住隐私边界。
 export const MAX_ASSET_BODY_CHARS = 8000
@@ -19,7 +20,7 @@ export function filterAssets(assets, { query = '', filter = 'all' } = {}) {
     if (filter === 'favorites' && !item.favorite) return false
     if (filter === 'derived' && !item.parentId) return false
     if (!text) return true
-    return `${item.title} ${item.body} ${item.note || ''} ${(item.tags || []).join(' ')} ${item.project || ''}`.toLowerCase().includes(text)
+    return `${item.title} ${item.body} ${item.note || ''} ${visibleDepositionTags(item).join(' ')} ${item.project || ''}`.toLowerCase().includes(text)
   })
 }
 

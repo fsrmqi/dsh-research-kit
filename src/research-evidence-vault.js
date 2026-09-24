@@ -6,6 +6,7 @@ import {
 } from './ui.js'
 import { createEvidenceVaultStore } from './evidence-vault-store.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
+import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
 import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
   EVIDENCE_STATUSES, EVIDENCE_STATUS_LABELS, EVIDENCE_IDENTIFIER_LABELS,
@@ -393,6 +394,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
   const [filter, setFilter] = React.useState('all')
+  const [groupByTopic, setGroupByTopic] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState([])
   const [notice, setNotice] = React.useState('')
   const [newProject, setNewProject] = React.useState('')
@@ -432,6 +434,9 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
 
   const counts = React.useMemo(() => statusCounts(entries), [entries])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
+  const displayedEntries = React.useMemo(() => groupByTopic
+    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows])
+    : filtered, [filtered, groupByTopic])
   const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
   const citedByIndex = React.useMemo(() => {
@@ -608,6 +613,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
         h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
       ]),
       h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
+      h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
       h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `写入 Prompt（${selectedEntries.length}）`),
     ]),
     selectedEntries.length ? h(Card, { key: 'preview', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
@@ -621,7 +627,7 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
       text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
       hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
     }) : null,
-    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, filtered.map(item => h(Card, {
+    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
@@ -638,13 +644,13 @@ export function EvidenceVaultPane({ inputActions, assetTitlesById = null }) {
         ]),
         h('span', { key: 'time', style: { fontSize: 12, color: C.muted, flexShrink: 0 } }, `保存于 ${formatEvidenceTime(item.savedAt)}`),
       ]),
-      item.reason || item.note || item.project || (item.tags || []).length
+      item.reason || item.note || item.project || visibleDepositionTags(item).length
         ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
           item.reason ? h('p', { key: 'reason', style: { margin: 0 } }, `保存原因：${item.reason}`) : null,
           item.note ? h('p', { key: 'note', style: { margin: 0 } }, `笔记：${item.note}`) : null,
           item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
-          (item.tags || []).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
-            item.tags.map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
+          visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
+            visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
         ])
         : null,
       // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
