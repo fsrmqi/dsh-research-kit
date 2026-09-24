@@ -303,7 +303,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     try {
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
       const run = recordUse('active')
-      inputActions.setDraft(runPrompt(run, finalPrompt))
+      const written = writeDraftText(inputActions, runPrompt(run, finalPrompt))
+      if (!written.ok) throw new Error('草稿已变化，未自动发送；请复制后手动粘贴。')
       await inputActions.submit()
       setNotice(`已发送到当前会话。研究运行${run ? `「${run.workflowName}」已开始` : '已开始'}。`)
     } catch (error) { setNotice(error.message) }

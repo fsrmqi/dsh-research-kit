@@ -53,3 +53,15 @@ test('生成产物包含新模块并使用 research-kit 命名空间', () => {
   assert.ok(!source.includes('/dsh-promptkit/semantic-enhance'), '浏览器端不得回退到 PromptKit 独立插件路由')
   assert.ok(!source.includes("storagePrefix: 'promptkit.'"), '不得使用 PromptKit 默认 storage 前缀')
 })
+
+test('新版 DSH 工具详情卡覆盖全部 research MCP 工具', async () => {
+  const { researchToolNames, researchToolDetailModel } = await import('../src/research-toolview.js')
+  const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')
+  assert.ok(researchToolNames.length >= 30)
+  assert.ok(researchToolNames.every(name => name.startsWith('research_')))
+  assert.match(glue, /slots\.inject\('tool\.call\.toolview',[\s\S]*?researchToolNames\.map\(key => ctx\.slots\.register\(\{ name: 'tool\.call\.toolview', key \}, ResearchToolView\)\)/)
+  const model = researchToolDetailModel('research_literature_search', { result: JSON.stringify({ data: { sources: [{ title: '可追溯来源', doi: '10.1000/example', source_id: 'crossref', url: 'https://doi.org/10.1000/example', verification: { status: 'verified' }, grade: 'empirical' }] } }) })
+  assert.deepEqual(model.evidence[0], { title: '可追溯来源', doi: '10.1000/example', source: 'crossref', url: 'https://doi.org/10.1000/example', grade: 'empirical', verification: 'verified' })
+  assert.ok(model.pending.length === 0)
+  assert.ok(researchToolDetailModel('research_evidence_grade_apply', { result: { data: { apply: false } } }).pending.some(item => item.includes('人工确认')))
+})

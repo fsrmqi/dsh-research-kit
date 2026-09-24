@@ -104,6 +104,6 @@ test('源码接线：四处宿主动作守卫必须存在', async () => {
   assert.match(vaultPane, /const canWrite = canWriteDraft\(inputActions\)/, '证据库缺少草稿写入守卫')
   assert.match(vaultPane, /disabled: !selectedEntries\.length \|\| !canWrite/, '证据库写入按钮未接守卫')
   const overlay = await read('../src/composer-overlay.js')
-  assert.match(overlay, /const hasDraftAction = typeof inputActions\?\.setDraft === 'function'/, '输入框浮层缺少 setDraft 守卫')
+  assert.match(overlay, /const hasDraftAction = canWriteDraft\(inputActions\)/, '输入框浮层缺少安全写入守卫')
   assert.match(overlay, /if \(!hasDraftAction\) return setNotice\(/, '输入框浮层缺少写入前的降级提示')
 })

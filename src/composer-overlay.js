@@ -10,6 +10,7 @@ import {
   Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Segmented, EmptyState,
 } from './ui.js'
 import { RESEARCH_COMPOSER_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
+import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 
 const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
 import { CatalogCategoryFilter, WORKBENCH_CATEGORY_COLORS, workbenchFallbackCategoryColor } from './catalog-category-filter.js'
@@ -47,7 +48,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   }
   const assembled = composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: skillIds, extraDatabaseIds: databaseIds }).prompt
   const finalPrompt = editedPrompt ?? assembled
-  const hasDraftAction = typeof inputActions?.setDraft === 'function'
+  const hasDraftAction = canWriteDraft(inputActions)
   const missingSet = new Set(missing)
   const update = (key, value) => setValues(current => ({ ...current, [key]: value }))
   const useWorkflow = () => {
@@ -55,7 +56,8 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法使用。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
-      inputActions.setDraft(finalPrompt)
+      const written = writeDraftText(inputActions, finalPrompt)
+      if (!written.ok) return setNotice('草稿已变化，未自动写入；请复制提示词后手动粘贴。')
       recordUse()
       onClose()
     } catch (error) { setMissing([]); setNotice(error.message) }

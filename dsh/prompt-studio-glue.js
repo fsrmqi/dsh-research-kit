@@ -1,4 +1,5 @@
 import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
+import { canWriteDraft, writeDraftText } from '../src/lib/input-actions.js'
 
 // Provider 只在 PromptKit 首次加载后创建；独立 storagePrefix 避免污染或依赖独立
 // dsh-promptkit 的资产。三个消费入口共用这两个实例。
@@ -16,7 +17,7 @@ export function ensureResearchProviders(PromptKit = getPromptKit()) {
 class ResearchStudioComposer {
   constructor(input, inputActions) { this.input = input; this.inputActions = inputActions }
   getDraft() { return this.input?.draft ?? '' }
-  write(text) { this.inputActions?.setDraft(String(text ?? '')) }
+  write(text) { return writeDraftText(this.inputActions, text).ok }
 }
 
 function LoadedResearchPromptStudioHost(props) {
@@ -31,10 +32,10 @@ function LoadedResearchPromptStudioHost(props) {
   const composer = React.useMemo(() => new ResearchStudioComposer({ draft }, inputActions), [sessionId, inputActions])
   composer.input = { draft }
   const onSend = async text => {
-    if (typeof inputActions?.setDraft !== 'function' || typeof inputActions?.submit !== 'function') {
+    if (!canWriteDraft(inputActions) || typeof inputActions?.submit !== 'function') {
       throw new Error('当前 DSH 会话尚未提供发送操作。')
     }
-    inputActions.setDraft(String(text || ''))
+    if (!writeDraftText(inputActions, text).ok) throw new Error('草稿已变化，未自动发送；请复制后手动粘贴。')
     await inputActions.submit()
   }
   // 外层 .rk-studio-host 不承担业务职责，只为 style 源中的宽度解绑提供稳定锚点：

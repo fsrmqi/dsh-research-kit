@@ -63,7 +63,8 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
   }
   const runWithAgent = async sources => {
     if (!canSubmit) return setState(current => ({ ...current, message: '当前 DSH 会话未提供发送操作，无法直接调用 Agent。' }))
-    inputActions.setDraft(agentTask(sources))
+    const written = writeDraftText(inputActions, agentTask(sources))
+    if (!written.ok) return setState(current => ({ ...current, message: '草稿已变化，未自动发送；请复制任务后手动粘贴。' }))
     try {
       await inputActions.submit()
       setState(current => ({ ...current, message: '已发送给当前 DSH Agent 查询；结果会在聊天会话中返回。' }))
