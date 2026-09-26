@@ -4,6 +4,7 @@ import {
   currentResearchContext, setResearchProject, startResearchRun,
   activeResearchRun, listResearchRuns,
 } from '../src/research-context-store.js'
+import { workspaceIdForProject } from '../src/lib/research-workspaces.js'
 
 function installStorage() {
   const rows = new Map()
@@ -22,6 +23,7 @@ test('研究上下文：项目与运行可跨读取复用，且不保存 Prompt'
     const run = startResearchRun({ sessionId: 's-1', workflowId: 'review-paper', workflowName: '审阅论文', stages: ['检索', '核验'], status: 'active', now: 123 })
     assert.equal(currentResearchContext().project, '水稻耐盐性')
     assert.equal(activeResearchRun()?.id, run.id)
+    assert.equal(run.workspaceId, workspaceIdForProject('水稻耐盐性'))
     assert.equal(listResearchRuns({ project: '水稻耐盐性', sessionId: 's-1' }).length, 1)
     assert.equal('prompt' in run, false)
     assert.equal('text' in run, false)

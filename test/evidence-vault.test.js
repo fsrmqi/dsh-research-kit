@@ -304,7 +304,7 @@ test('存储：批量导入一次写回，之后可读到', async () => {
 
 test('备份：序列化后可原样解析回来，版本与 kind 用于挡住错文件', () => {
   const entries = [normalizeEvidenceEntry({ title: '备份条目', url: 'https://x.org/1', project: '甲' })]
-  const text = serializeEvidenceBackup({ entries, project: '甲', claims: [{ id: 'c1' }], links: [{ id: 'l1' }], ledger: [{ id: 'r1' }] })
+  const text = serializeEvidenceBackup({ entries, project: '甲', claims: [{ id: 'c1' }], links: [{ id: 'l1' }], ledger: [{ id: 'r1' }], workspaces: [{ id: 'w1' }] })
   const parsed = parseEvidenceBackup(text)
   assert.equal(parsed.project, '甲')
   assert.equal(parsed.entries.length, 1)
@@ -312,7 +312,9 @@ test('备份：序列化后可原样解析回来，版本与 kind 用于挡住�
   assert.equal(parsed.claims[0].id, 'c1')
   assert.equal(parsed.links[0].id, 'l1')
   assert.equal(parsed.ledger[0].id, 'r1')
+  assert.equal(parsed.workspaces[0].id, 'w1')
   assert.deepEqual(parseEvidenceBackup('{"kind":"dsh-research-kit-evidence","version":1,"entries":[]}').ledger, [])
+  assert.deepEqual(parseEvidenceBackup('{"kind":"dsh-research-kit-evidence","version":2,"entries":[],"claims":[],"links":[],"ledger":[]}').workspaces, [])
 
   assert.throws(() => parseEvidenceBackup(''), /为空/)
   assert.throws(() => parseEvidenceBackup('{ not json'), /合法 JSON/)

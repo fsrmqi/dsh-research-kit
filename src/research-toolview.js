@@ -1,5 +1,6 @@
 import React from 'react'
 import { TOOL_REGISTRY } from '../mcp/tool-registry.js'
+import { C } from './theme.js'
 
 // DSH 的 keyed toolview 使用模型实际看到的完整 MCP 工具名。
 const MCP_TOOL_PREFIX = 'mcp__dsh-research-kit__'
@@ -70,7 +71,7 @@ export function researchToolDetailModel(toolName, block) {
 function PreparingResearchToolView({ toolName, useToolCallArgumentsPartial }) {
   const raw = typeof useToolCallArgumentsPartial === 'function' ? useToolCallArgumentsPartial() : ''
   const tool = byName.get(toolName)
-  return React.createElement('section', { 'aria-label': `${tool?.labelZh || toolName} 工具详情`, role: 'status', style: { margin: '8px 0', padding: '10px 12px', border: '1px solid #0969da33', borderRadius: 9, background: '#f6f8fa', fontSize: 12 } }, [
+  return React.createElement('section', { 'aria-label': `${tool?.labelZh || toolName} 工具详情`, role: 'status', style: { margin: '8px 0', padding: '10px 12px', maxWidth: '100%', minWidth: 0, overflowWrap: 'anywhere', border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.blue}`, borderRadius: 9, background: C.surface, color: C.ink, fontSize: 12 } }, [
     React.createElement('strong', { key: 'name' }, `${tool?.labelZh || toolName} · 准备中`),
     React.createElement('div', { key: 'arguments' }, researchToolArgumentSummary(raw)),
   ])
@@ -86,22 +87,22 @@ function StartedResearchToolView({ toolName, phase, block, inspect }) {
   const value = phase === 'result' ? resultValue(block) : null
   const failed = phase === 'result' && (block?.isError === true || value?.error === true)
   const state = phase === 'start' ? '执行中' : failed ? '失败' : '已完成'
-  const tone = failed ? '#cf222e' : tool?.access === 'writes' ? '#9a6700' : tool?.access === 'external' ? '#0969da' : '#1a7f37'
+  const tone = failed ? C.red : tool?.access === 'writes' ? C.amber : tool?.access === 'external' ? C.blue : C.teal
   return React.createElement('section', {
     'aria-label': `${tool?.labelZh || toolName} 工具详情`,
-    style: { margin: '8px 0', padding: '10px 12px', border: `1px solid ${tone}33`, borderRadius: 9, background: '#f6f8fa', fontSize: 12, lineHeight: 1.5 },
+    style: { margin: '8px 0', padding: '10px 12px', maxWidth: '100%', minWidth: 0, overflowWrap: 'anywhere', border: `1px solid ${C.line}`, borderLeft: `3px solid ${tone}`, borderRadius: 9, background: C.surface, color: C.ink, fontSize: 12, lineHeight: 1.5 },
   }, [
     React.createElement('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, [React.createElement('strong', { key: 'name' }, tool?.labelZh || toolName), React.createElement('span', { key: 'state', style: { color: tone } }, state)]),
-    React.createElement('div', { key: 'summary', style: { color: '#57606a' } }, tool?.summaryZh || '科研 MCP 工具'),
+    React.createElement('div', { key: 'summary', style: { color: C.muted } }, tool?.summaryZh || '科研 MCP 工具'),
     phase === 'start' ? React.createElement('div', { key: 'arguments', style: { marginTop: 5 } }, researchToolArgumentSummary(block?.argsRaw)) : null,
     failed ? React.createElement('div', { key: 'error', role: 'alert', style: { marginTop: 5, color: tone } }, String(value?.message || block?.error?.message || '工具执行失败').slice(0, 240)) : null,
-    evidence.length ? React.createElement('div', { key: 'evidence', style: { display: 'grid', gap: 6, marginTop: 7 } }, evidence.map((item, index) => React.createElement('div', { key: `${item.title}:${index}`, style: { padding: '6px 8px', borderLeft: `3px solid ${tone}`, background: '#fff' } }, [
+    evidence.length ? React.createElement('div', { key: 'evidence', style: { display: 'grid', gap: 6, marginTop: 7, minWidth: 0 } }, evidence.map((item, index) => React.createElement('div', { key: `${item.title}:${index}`, style: { padding: '6px 8px', minWidth: 0, borderLeft: `3px solid ${tone}`, background: C.surfaceAlt } }, [
       React.createElement('div', { key: 'title' }, item.title),
-      React.createElement('div', { key: 'meta', style: { color: '#57606a' } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, ...item.grades.map(fact => `${fact.label}：${fact.value}`), verificationLabel(item.verification)].filter(Boolean).join(' · ')),
+      React.createElement('div', { key: 'meta', style: { color: C.muted } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, ...item.grades.map(fact => `${fact.label}：${fact.value}`), verificationLabel(item.verification)].filter(Boolean).join(' · ')),
       item.url ? React.createElement('a', { key: 'url', href: item.url, target: '_blank', rel: 'noreferrer' }, '打开来源') : null,
     ]))) : null,
-    pending.length ? React.createElement('div', { key: 'pending', style: { marginTop: 7, color: '#9a6700' } }, pending.map((item, index) => React.createElement('div', { key: index }, `人工确认：${item}`))) : null,
-    text ? React.createElement('div', { key: 'out', style: { marginTop: 5, color: '#24292f', whiteSpace: 'pre-wrap' } }, text.replace(/\s+/g, ' ')) : null,
+    pending.length ? React.createElement('div', { key: 'pending', style: { marginTop: 7, color: C.amber } }, pending.map((item, index) => React.createElement('div', { key: index }, `人工确认：${item}`))) : null,
+    text ? React.createElement('div', { key: 'out', style: { marginTop: 5, color: C.ink, whiteSpace: 'pre-wrap' } }, text.replace(/\s+/g, ' ')) : null,
     typeof inspect === 'function' ? React.createElement('button', { key: 'inspect', type: 'button', onClick: inspect, style: { marginTop: 7 } }, '查看调用详情') : null,
   ])
 }

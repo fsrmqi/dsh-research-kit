@@ -5,7 +5,7 @@ import { catalogDataRoute } from '../dsh/catalog-data.js'
 import { archifyTemplateRoute } from '../dsh/archify-template.js'
 import { promptKitClientRoute } from '../dsh/promptkit-client.js'
 import { loadArchifyTemplate } from '../src/route-replay.js'
-import { invalidateEvidenceSync, syncEvidenceVaultWithFiles } from '../src/research-evidence-vault.js'
+import { evidenceVaultStore, invalidateEvidenceSync, syncEvidenceVaultWithFiles } from '../src/research-evidence-vault.js'
 
 function captureRoute(route, method = 'GET', requestHeaders = {}) {
   return new Promise((resolve, reject) => {
@@ -71,6 +71,63 @@ test('证据同步：同项目并发和短时重复刷新只发一个请求，�
     await syncEvidenceVaultWithFiles(project)
     assert.equal(requests, 2)
   } finally {
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('迁移备份只拉取文件侧证据，不因反向回写的重复来源阻断导出', async () => {
+  const originalWindow = globalThis.window
+  const originalFetch = globalThis.fetch
+  const project = `transfer-pull-${Date.now()}`
+  let posts = 0
+  globalThis.window = {}
+  globalThis.fetch = async (_url, options = {}) => {
+    if (options.method === 'POST') {
+      posts++
+      return { ok: true, json: async () => ({ ok: true, added: 0, skipped: 1 }) }
+    }
+    return { ok: true, json: async () => ({ ok: true, entries: [{
+      id: `${project}-file`, title: '文件侧来源', identifier_type: 'doi',
+      identifier: '10.1234/file-side', project, saved_at: new Date().toISOString(),
+    }] }) }
+  }
+  try {
+    const store = evidenceVaultStore()
+    await store.save({ id: `${project}-local`, title: '页面侧来源', identifierKind: 'doi',
+      identifier: '10.1234/page-side', project })
+    const result = await syncEvidenceVaultWithFiles(project, { force: true, pullOnly: true })
+    assert.equal(result.skipped, false)
+    assert.equal(result.imported, 1)
+    assert.equal(result.exported, 0)
+    assert.equal(posts, 0)
+    assert.equal((await store.list({ project })).length, 2)
+  } finally {
+    invalidateEvidenceSync(project)
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('迁移同步只计数文件侧已有同源，日常严格同步仍报告冲突', async () => {
+  const originalWindow = globalThis.window
+  const originalFetch = globalThis.fetch
+  const project = `transfer-existing-${Date.now()}`
+  globalThis.window = {}
+  globalThis.fetch = async (_url, options = {}) => options.method === 'POST'
+    ? { ok: true, json: async () => ({ ok: true, added: 0, skipped: 1 }) }
+    : { ok: true, json: async () => ({ ok: true, entries: [] }) }
+  try {
+    await evidenceVaultStore().save({ id: `${project}-local`, title: '待同步来源',
+      identifierKind: 'doi', identifier: '10.1234/already-file-side', project })
+    await assert.rejects(syncEvidenceVaultWithFiles(project, { force: true }), /重复来源/)
+    const result = await syncEvidenceVaultWithFiles(project, { force: true, allowExistingSources: true })
+    assert.equal(result.exported, 0)
+    assert.equal(result.existingSources, 1)
+  } finally {
+    invalidateEvidenceSync(project)
     if (originalWindow === undefined) delete globalThis.window
     else globalThis.window = originalWindow
     globalThis.fetch = originalFetch

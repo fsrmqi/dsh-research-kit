@@ -1,3 +1,4 @@
+import { workspaceIdForProject } from './research-workspaces.js'
 const KINDS = new Set(['search', 'screening', 'artifact'])
 const DECISIONS = new Set(['include', 'exclude', 'pending'])
 
@@ -11,6 +12,7 @@ export function normalizeResearchLedgerEvent(input = {}) {
     id: clean(input.id, 100) || `ledger-${at.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     kind,
     project: clean(input.project, 100),
+    workspaceId: workspaceIdForProject(clean(input.project, 100)),
     runId: clean(input.runId, 100),
     question: clean(input.question, 500),
     at,
@@ -62,4 +64,17 @@ export function latestResearchScreening(events = []) {
     if (!previous || event.at > previous.at) latest.set(event.evidenceId, event)
   }
   return latest
+}
+
+export function summarizeSearchSnapshot({ databaseId = '', query = '', sources = [] } = {}) {
+  const rows = Array.isArray(sources) ? sources : []
+  const ids = rows.map(item => String(item?.id || item?.url || item?.title || '').trim()).filter(Boolean)
+  const uniqueIds = [...new Set(ids)]
+  const payload = JSON.stringify([String(databaseId), String(query), [...uniqueIds].sort()])
+  // 非加密的本地快照标识，仅用于发现同一次有限候选列表；不宣称是数据库完整结果集。
+  let hash = 2166136261
+  for (let index = 0; index < payload.length; index++) hash = Math.imul(hash ^ payload.charCodeAt(index), 16777619) >>> 0
+  return { sourceIds: uniqueIds, resultCount: rows.length,
+    deduplicatedCount: ids.length - uniqueIds.length,
+    snapshotId: `page-fnv1a32:${hash.toString(16).padStart(8, '0')}:${uniqueIds.length}` }
 }

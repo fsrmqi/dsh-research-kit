@@ -11,6 +11,8 @@ import { planAgentEvidenceBatch, evidenceAssessmentFingerprint, normalizeAgentEv
 import { RESEARCH_EVIDENCE_STANCES } from './lib/research-claims.js'
 import { researchLedgerSummary, latestResearchScreening } from './lib/research-ledger.js'
 import { RESEARCH_TOPIC_OPTIONS, isControlledResearchTopic } from './lib/research-taxonomy.js'
+import { workspaceIdForProject } from './lib/research-workspaces.js'
+import { auditResearchDataQuality } from './lib/research-quality.js'
 import { previewProjectOrganization, applyProjectOrganization, undoProjectOrganization, recoverProjectOrganizationJournal, finalizeProjectOrganization } from './project-organizer.js'
 import { currentResearchContext, setResearchProject, activeResearchRun } from './research-context-store.js'
 import {
@@ -44,7 +46,7 @@ export function subscribeEvidenceVault(listener) {
   return () => listeners.delete(listener)
 }
 
-function publishEvidenceVault() {
+export function publishEvidenceVault() {
   for (const listener of listeners) { try { listener() } catch { /* 单个监听失败不影响其余 */ } }
 }
 
@@ -68,16 +70,22 @@ function pruneEvidenceSyncCache(now = Date.now()) {
 }
 
 export function invalidateEvidenceSync(project) {
-  if (project) evidenceSyncFreshUntil.delete(evidenceSyncScope(project))
+  if (project) {
+    evidenceSyncFreshUntil.delete(evidenceSyncScope(project))
+    evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:pull`)
+    evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:allow-existing`)
+  }
   // 全量读取覆盖任意项目；任一项目写入后都必须让全量缓存失效。
   evidenceSyncFreshUntil.delete('*')
+  evidenceSyncFreshUntil.delete('*:pull')
+  evidenceSyncFreshUntil.delete('*:allow-existing')
 }
 
 function canUseFileSync() {
   return typeof window !== 'undefined' && typeof fetch === 'function'
 }
 
-function fileEvidenceInput(entry) {
+export function fileEvidenceInput(entry) {
   return {
     id: entry.id,
     title: entry.title,
@@ -87,7 +95,8 @@ function fileEvidenceInput(entry) {
     url: entry.url,
     savedAt: entry.saved_at ? Date.parse(entry.saved_at) : undefined,
     updatedAt: entry.updated_at ? Date.parse(entry.updated_at) : undefined,
-    project: entry.project || 'default',
+    project: entry.project === 'default' && entry.workspace_id === 'workspace:unassigned' ? '' : entry.project || 'default',
+    workspaceId: entry.workspace_id || entry.workspaceId || '',
     legacyProject: entry.legacy_project || entry.legacyProject || '',
     tags: Array.isArray(entry.tags) ? entry.tags : [],
     reason: entry.reason || '',
@@ -112,7 +121,7 @@ function fileEvidenceInput(entry) {
   }
 }
 
-function vaultEvidenceFileEntry(entry) {
+export function vaultEvidenceFileEntry(entry) {
   return {
     id: entry.id,
     identifier_type: entry.identifierKind || 'accession',
@@ -124,6 +133,7 @@ function vaultEvidenceFileEntry(entry) {
     reason: entry.reason || '',
     note: entry.note || '',
     project: entry.project || 'default',
+    workspace_id: entry.workspaceId || workspaceIdForProject(entry.project || ''),
     legacy_project: entry.legacyProject || '',
     grade: entry.grade || 'ungraded',
     status: entry.status || 'unverified',
@@ -147,8 +157,8 @@ function vaultEvidenceFileEntry(entry) {
   }
 }
 
-function evidenceSyncKey(entry) {
-  const project = String(entry.project || '').trim().toLowerCase()
+export function evidenceSyncKey(entry) {
+  const project = String(entry.workspaceId || entry.workspace_id || workspaceIdForProject(entry.project || '')).trim()
   const identifier = String(entry.identifier || '').trim().toLowerCase()
   if (identifier) return `${project}::${entry.identifierKind || entry.identifier_type || 'accession'}:${identifier}`
   const url = String(entry.url || '').trim().toLowerCase().replace(/\/$/, '')
@@ -165,13 +175,14 @@ async function fetchFileEvidenceEntries(project) {
   return payload.entries
 }
 
-async function postFileEvidenceEntries(entries) {
+async function postFileEvidenceEntries(entries, { allowExistingSources = false } = {}) {
   const byProject = new Map()
   for (const entry of entries) {
     const project = entry.project || 'default'
     if (!byProject.has(project)) byProject.set(project, [])
     byProject.get(project).push(entry)
   }
+  let existingSources = 0
   for (const [project, rows] of byProject) {
     const response = await fetch(EVIDENCE_SYNC_PATH, {
       method: 'POST',
@@ -181,8 +192,16 @@ async function postFileEvidenceEntries(entries) {
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const result = await response.json()
-    if (!result?.ok || result.added !== rows.length) throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+    const added = Number(result?.added)
+    const skipped = Number(result?.skipped)
+    if (!result?.ok || !Number.isInteger(added) || !Number.isInteger(skipped)
+      || added < 0 || skipped < 0 || added + skipped !== rows.length
+      || (!allowExistingSources && skipped)) {
+      throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+    }
+    existingSources += skipped
   }
+  return existingSources
 }
 
 async function updateFileEvidenceEntry(entry) {
@@ -198,7 +217,7 @@ async function updateFileEvidenceEntry(entry) {
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
 }
 
-async function performEvidenceVaultSync(project) {
+async function performEvidenceVaultSync(project, { pullOnly = false, allowExistingSources = false } = {}) {
   if (!canUseFileSync()) return { skipped: true, imported: 0, exported: 0 }
   const store = evidenceVaultStore()
   const fileEntries = await fetchFileEvidenceEntries(project)
@@ -222,32 +241,37 @@ async function performEvidenceVaultSync(project) {
     }
   }
 
+  // 迁移备份只需收齐文件侧证据，不应因反向回写时的不同去重规则而拒绝导出。
+  if (pullOnly) return { skipped: false, imported, exported: 0 }
+
   const nextLocalEntries = await store.list(project ? { project } : {})
   const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
   const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
+  let existingSources = 0
   if (missing.length) {
-    await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry))
+    existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
     publishEvidenceVault()
   }
-  return { skipped: false, imported, exported: missing.length }
+  return { skipped: false, imported, exported: missing.length - existingSources, existingSources }
 }
 
-export function syncEvidenceVaultWithFiles(project, { force = false } = {}) {
+export function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {
   const scope = evidenceSyncScope(project)
+  const cacheScope = pullOnly ? `${scope}:pull` : allowExistingSources ? `${scope}:allow-existing` : scope
   const now = Date.now()
   pruneEvidenceSyncCache(now)
-  if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > now) {
+  if (!force && (evidenceSyncFreshUntil.get(cacheScope) || 0) > now) {
     return Promise.resolve({ skipped: false, cached: true, imported: 0, exported: 0 })
   }
-  if (evidenceSyncInFlight.has(scope)) return evidenceSyncInFlight.get(scope)
-  const task = performEvidenceVaultSync(project)
+  if (evidenceSyncInFlight.has(cacheScope)) return evidenceSyncInFlight.get(cacheScope)
+  const task = performEvidenceVaultSync(project, { pullOnly, allowExistingSources })
     .then(result => {
-      evidenceSyncFreshUntil.set(scope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
+      evidenceSyncFreshUntil.set(cacheScope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
       pruneEvidenceSyncCache()
       return result
     })
-    .finally(() => evidenceSyncInFlight.delete(scope))
-  evidenceSyncInFlight.set(scope, task)
+    .finally(() => evidenceSyncInFlight.delete(cacheScope))
+  evidenceSyncInFlight.set(cacheScope, task)
   return task
 }
 
@@ -434,7 +458,11 @@ export function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onS
 export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
-  const [projects, setProjects] = React.useState([])
+  const [workspaces, setWorkspaces] = React.useState([])
+  const [showArchivedWorkspaces, setShowArchivedWorkspaces] = React.useState(false)
+  const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState('')
+  const [workspaceRenameOpen, setWorkspaceRenameOpen] = React.useState(false)
+  const [confirmArchiveWorkspace, setConfirmArchiveWorkspace] = React.useState(false)
   const [project, setProject] = React.useState(() => store.getActiveProject())
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -496,11 +524,11 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     Promise.resolve()
       .then(() => syncEvidenceVaultWithFiles(project || undefined))
       .catch(() => {})
-      .then(() => Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
+      .then(() => Promise.all([store.list({ project: project || undefined }), store.listWorkspaces({ includeArchived: true }), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
       .then(([rows, names, links, claims, ledger]) => {
         if (version !== refreshVersion.current) return
         setEntries(rows || [])
-        setProjects(names || [])
+        setWorkspaces(names || [])
         setLinks(Array.isArray(links) ? links : [])
         setClaims(Array.isArray(claims) ? claims : [])
         setLedger(Array.isArray(ledger) ? ledger : [])
@@ -517,6 +545,11 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   React.useEffect(() => { recoverProjectOrganizationJournal(store).then(setOrganizerJournal).catch(error => setNotice(`⚠️ 项目整理恢复检查失败：${error.message}`)) }, [store])
 
   const counts = React.useMemo(() => statusCounts(entries), [entries])
+  const quality = React.useMemo(() => auditResearchDataQuality({
+    evidence: entries,
+    links: project ? links.filter(item => item.project === project) : links,
+    assetIds: assetTitlesById ? Object.keys(assetTitlesById) : null,
+  }), [entries, links, project, assetTitlesById])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
   const displayedEntries = React.useMemo(() => groupByTopic
     ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
@@ -548,6 +581,8 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     setConfirmClear(false)
     setConfirmDeleteId('')
     setSelectedIds([])
+    setWorkspaceRenameOpen(false)
+    setConfirmArchiveWorkspace(false)
   }
   const writeSelected = () => {
     if (writePlan.action !== 'write') return setNotice(writePlan.notice)
@@ -655,12 +690,33 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     finally { setSourceCheckBusy(false); setSourceCheckProgress('') }
   }
 
-  const createProject = () => {
-    const name = String(newProject || '').trim()
-    if (!name) return
-    switchProject(name)
-    setNewProject('')
-    setNewProjectOpen(false)
+  const createProject = async () => {
+    try {
+      const workspace = await store.createWorkspace(newProject)
+      switchProject(workspace.projectKey)
+      setNewProject('')
+      setNewProjectOpen(false)
+      setNotice(`已创建课题空间「${workspace.name}」；其 ID 不随显示名变化。`)
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+  }
+  const renameProject = async () => {
+    try {
+      const workspace = await store.renameWorkspace(project, workspaceNameDraft)
+      setWorkspaceRenameOpen(false)
+      refresh()
+      setNotice(`显示名已改为「${workspace.name}」；原项目键与证据归属保持不变。`)
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+  }
+  const toggleProjectArchive = async () => {
+    try {
+      const current = (await store.listWorkspaces({ includeArchived: true })).find(item => item.projectKey === project)
+      const archived = !current?.archived
+      await store.setWorkspaceArchived(project, archived)
+      setConfirmArchiveWorkspace(false)
+      if (archived) switchProject('')
+      else refresh()
+      setNotice(archived ? '课题空间已归档；证据、论断和运行记录均未删除。' : '课题空间已恢复到可选列表。')
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
   const previewOrganizer = async () => {
@@ -729,10 +785,12 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       const entryIds = new Set(entries.map(item => item.id))
       const scopedClaims = claims.filter(item => item.links.every(link => entryIds.has(link.evidenceId)))
       const scopedLinks = links.filter(item => entryIds.has(item.evidenceId))
-      const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger })
+      const scopedWorkspaces = workspaces.filter(item => (!project || item.projectKey === project)
+        && (item.origin === 'user' || item.updatedAt > 0))
+      const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger, workspaces: scopedWorkspaces })
       const suffix = project || '全部项目'
       downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
-      setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联与 ${ledger.length} 条账本事件。`)
+      setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联、${ledger.length} 条账本事件与 ${scopedWorkspaces.length} 个课题设置。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
@@ -767,6 +825,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       const merged = mergeEntries(all, parsed.entries)
       const fresh = merged.rows.filter(row => !all.some(item => item.id === row.id))
       if (fresh.length) await store.importMany(fresh)
+      const restoredWorkspaces = await store.importWorkspaces(parsed.workspaces)
       const availableIds = new Set((await store.list()).map(item => item.id))
       const claimIds = new Set((await store.listResearchClaims()).map(item => item.id))
       let restoredClaims = 0, restoredLinks = 0, restoredLedger = 0, skippedRelated = 0
@@ -795,7 +854,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       publishEvidenceVault()
       const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
       const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
-      setNotice(`已恢复 ${merged.added} 条证据、${restoredClaims} 条论断、${restoredLinks} 条关联、${restoredLedger} 条账本事件${tail}${bad}${skippedRelated ? `；${skippedRelated} 条关联对象不存在，已跳过` : ''}。`)
+      setNotice(`已恢复 ${merged.added} 条证据、${restoredClaims} 条论断、${restoredLinks} 条关联、${restoredLedger} 条账本事件、${restoredWorkspaces} 个课题设置${tail}${bad}${skippedRelated ? `；${skippedRelated} 条关联对象不存在，已跳过` : ''}。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
@@ -910,10 +969,11 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     ...EVIDENCE_STATUSES.map(status => ({ value: status, label: `${EVIDENCE_STATUS_LABELS[status]} ${counts[status] || 0}` })),
   ]
   const projectOptions = [
-    { value: '', label: '全部项目' },
-    ...projects.map(name => ({ value: name, label: name })),
-    ...(project && !projects.includes(project) ? [{ value: project, label: project }] : []),
+    { value: '', label: '全部课题（含归档）' },
+    ...workspaces.filter(item => showArchivedWorkspaces || !item.archived).map(item => ({ value: item.projectKey, label: item.archived ? `${item.name}（已归档）` : item.name })),
+    ...(project && !workspaces.some(item => item.projectKey === project && (showArchivedWorkspaces || !item.archived)) ? [{ value: project, label: `${workspaces.find(item => item.projectKey === project)?.name || project}（已归档或未登记）` }] : []),
   ]
+  const activeWorkspace = workspaces.find(item => item.projectKey === project)
 
   return h('div', { key: 'evidence-vault', style: { display: 'grid', gap: 12 } }, [
     degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
@@ -924,11 +984,15 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     // 项目与维护动作：一次性操作，不随滚动吸顶（分层原则见 docs/ARCHITECTURE.md §2.3）。
     h(Card, { key: 'project-bar', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h('strong', { key: 'label', style: { fontSize: 13 } }, '当前项目'),
+        h('strong', { key: 'label', style: { fontSize: 13 } }, '当前课题'),
         h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换项目', style: { width: 'auto', minWidth: 140 } }),
-        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建项目'),
+        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建课题'),
+        project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
+        project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
+        confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认：只归档，不删除数据') : null,
+        h(Button, { key: 'archived-toggle', size: 'sm', variant: 'ghost', onClick: () => setShowArchivedWorkspaces(value => !value) }, showArchivedWorkspaces ? '隐藏已归档' : '显示已归档'),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length }, '导出备份'),
+        h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length && !workspaces.some(item => (!project || item.projectKey === project) && (item.origin === 'user' || item.updatedAt > 0)) }, '导出备份'),
         h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
         h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
         confirmClear
@@ -938,8 +1002,12 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
             project ? '清空本项目' : '清空全部'),
       ]),
       newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-        h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '项目名称，例：肿瘤队列分析', ariaLabel: '新项目名称', style: { flex: '1 1 200px' } }),
+        h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '稳定课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
         h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
+      ]) : null,
+      workspaceRenameOpen ? h('div', { key: 'rename-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+        h(Input, { key: 'input', value: workspaceNameDraft, onChange: setWorkspaceNameDraft, placeholder: '新的课题显示名', ariaLabel: '课题显示名', style: { flex: '1 1 200px' } }),
+        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !workspaceNameDraft.trim(), onClick: renameProject }, '保存显示名'),
       ]) : null,
       h('div', { key: 'organizer-actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || (organizerJournal && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)), onClick: previewOrganizer }, '一键整理项目'),
@@ -972,13 +1040,19 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       ]) : null,
     ]),
 
+    h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
+      h('strong', { key: 'title', style: { fontSize: 13 } }, '数据质量提示 · 只读，不自动修改'),
+      h('span', { key: 'counts', style: { fontSize: 12, color: C.muted } }, `缺稳定标识符 ${quality.missingIdentifier} · 未核验 ${quality.unverified} · 标为失效／官方记录未找到 ${quality.staleOrMissing} · 疑似同源组 ${quality.duplicateGroups.length} · 关联断链 ${quality.orphanLinks.length}`),
+      quality.duplicateGroups.length ? h('span', { key: 'duplicates', style: { fontSize: 12, color: C.muted } }, `待人工复核的同源候选：${quality.duplicateGroups.slice(0, 3).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 3 ? '…' : ''}。跨课题重复可能是有意引用，不会自动合并。`) : null,
+      !quality.assetSideChecked ? h('span', { key: 'asset-limit', style: { fontSize: 11, color: C.muted } }, '当前未载入完整资产列表；断链数仅核对证据端。') : null,
+    ]),
     h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
       h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),
         h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, project ? `范围：项目「${project}」全部证据` : '范围：全部项目证据'),
       ]),
       h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
+        h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: () => runAgentAssessment() },
           agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
         agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
         h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [

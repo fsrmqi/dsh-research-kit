@@ -1,4 +1,5 @@
 // 论断与来源之间是逐边评估：同一论文可支持一个论断、反驳另一个论断。
+import { workspaceIdForProject } from './research-workspaces.js'
 export const RESEARCH_EVIDENCE_STANCES = ['unassessed', 'supports', 'refutes', 'insufficient']
 
 const short = (value, max) => String(value || '').trim().slice(0, max)
@@ -27,6 +28,7 @@ export function normalizeResearchClaim(input = {}, now = Date.now()) {
   return {
     id: short(input.id, 120) || `research-claim-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     project: short(input.project, 120),
+    workspaceId: workspaceIdForProject(short(input.project, 120)),
     question: short(input.question, 500),
     statement,
     links,

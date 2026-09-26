@@ -3,6 +3,7 @@ import { appendFile, mkdir, open, readFile, readdir, rename, stat, unlink, write
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
+import { workspaceIdForProject } from '../../src/lib/research-workspaces.js'
 
 const BASE_DIR = dataPath('evidence')
 const LOCK_TIMEOUT_MS = 2_000
@@ -183,7 +184,10 @@ export async function replaceProjectEntry(project, incoming) {
     if (incoming.project && safeProjectName(incoming.project) !== safeProjectName(project)) {
       throw invalidProject('更新条目的项目与目标项目不一致。')
     }
-    entries[index] = { ...previous, ...incoming, id: previous.id, project: safeProjectName(project) }
+    const projectName = safeProjectName(project)
+    const workspaceId = projectName === 'default' && incoming.workspace_id === 'workspace:unassigned'
+      ? 'workspace:unassigned' : workspaceIdForProject(projectName)
+    entries[index] = { ...previous, ...incoming, id: previous.id, project: projectName, workspace_id: workspaceId }
     await writeEntriesUnlocked(project, entries)
     return { updated: true, entry: entries[index] }
   })
@@ -234,7 +238,7 @@ export async function organizeEvidenceProjects(moves) {
         if (after[to].some(item => item.id === entry.id || dedupKey(item) === dedupKey(entry))) {
           throw new Error(`「${from}」→「${to}」存在重复 ID 或来源；未修改任何证据。`)
         }
-        after[to].push({ ...entry, project: to, legacy_project: entry.legacy_project || from })
+        after[to].push({ ...entry, project: to, workspace_id: workspaceIdForProject(to), legacy_project: entry.legacy_project || from })
       }
       after[from] = []
     }
@@ -322,6 +326,7 @@ async function saveEvidence({ identifier_type, identifier, title, url, note, pro
     url: url || '',
     note: note || '',
     project: safeProjectName(project),
+    workspace_id: workspaceIdForProject(safeProjectName(project)),
     grade: grade_hint || 'ungraded',
     status: 'unverified',
     source: 'mcp-agent',
@@ -357,6 +362,7 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
       url: String(item.url || ''),
       note: String(item.note || ''),
       project: projectName,
+      workspace_id: workspaceIdForProject(projectName),
       grade: item.grade_hint || 'ungraded',
       status: 'unverified',
       source: 'mcp-agent',

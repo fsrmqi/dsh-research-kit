@@ -4,6 +4,7 @@ import { Card, Button, Input, Notice, Spinner, Badge } from './ui.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { EvidenceSaveForm, evidenceVaultStore } from './research-evidence-vault.js'
 import { activeResearchRun } from './research-context-store.js'
+import { summarizeSearchSnapshot } from './lib/research-ledger.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 
 const QUERY_PATH = '/dsh-research-kit/query'
@@ -53,7 +54,7 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
       if (request.signal.aborted) return
       if (!response.ok) throw new Error(body.message || body.error || `查询失败（HTTP ${response.status}）`)
       evidence.recordQuery({ databaseId: database.id, databaseName: database.name, mode: body.mode === 'agent-fallback' ? 'agent' : 'direct', sources: body.sources || [] })
-      setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: body, message: body.reason || '' })
+      setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: { ...body, queriedAt: Date.now() }, message: body.reason || '' })
     } catch (error) { if (!request.signal.aborted) setState({ status: 'error', result: null, message: String(error?.message || error) }) }
   }
   const writeAgentFallback = () => {
@@ -87,13 +88,13 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
     try {
       const result = state.result || {}
       const sources = Array.isArray(result.sources) ? result.sources : []
+      const snapshot = summarizeSearchSnapshot({ databaseId: database.id, query: result.query || databaseSearchText(query, englishQuery), sources })
       const store = evidenceVaultStore()
       await store.saveResearchLedgerEvent({
         kind: 'search', project: store.getActiveProject(), runId: activeResearchRun()?.id || '',
         question: query, database: database.name, query: result.query || databaseSearchText(query, englishQuery),
-        mode: result.mode || 'direct', resultCount: sources.length,
-        sourceIds: sources.map(item => item.id || item.url).filter(Boolean),
-        snapshotId: result.snapshotId || '',
+        mode: result.mode || 'direct', at: result.queriedAt,
+        ...snapshot,
       })
       setRecordedQuery(true)
       setState(current => ({ ...current, message: `已记录本次检索（当前返回 ${sources.length} 条候选）；检索记录不代表来源已纳入或核验。` }))

@@ -207,6 +207,8 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 
 ## 隐私与安全
 
+以 DSH Desktop App 为主使用时，旧 Web 端的本地数据不会自动共享；请使用科研工作台的「迁移到 App」完成预览、校验和增量导入。步骤、保留范围与已知限制见 [App 迁移说明](docs/APP-MIGRATION.md)。
+
 | 访问 | 用途 | 说明 |
 | --- | --- | --- |
 | 当前会话输入框 | 仅在点击「写入/发送」时写入或提交最终 Prompt | 不拦截 Enter，不自动发送，不改动其他会话历史 |
@@ -234,7 +236,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 
 当前版本 `0.2.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、378 项回归测试（47 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）、真实 DSH Web profile 上的两轮启动烟测（快线 F1–F4、发布门槛 R1、观测项 O1–O3 全部通过），以及证据库写入 Prompt（W1–W3：勾选后按钮可用、未选择时不注入、写入不自动发送且条数一致）与证据图谱接入已保存证据（G1–G4：证据节点只带来源库 / 稳定标识符 / 核验状态，与同库资源连成关系，箭头按实际方向选锚点）的现场验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、418 项回归测试（61 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -243,7 +245,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（378 项 / 47 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（418 项 / 61 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

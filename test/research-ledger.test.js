@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import { createEvidenceVaultStore } from '../src/evidence-vault-store.js'
-import { normalizeResearchLedgerEvent, researchLedgerSummary, latestResearchScreening } from '../src/lib/research-ledger.js'
+import { normalizeResearchLedgerEvent, researchLedgerSummary, latestResearchScreening, summarizeSearchSnapshot } from '../src/lib/research-ledger.js'
 
 test('科研账本区分检索、筛选与执行产出，排除须有理由', () => {
   assert.throws(() => normalizeResearchLedgerEvent({ kind: 'screening', evidenceId: 'e1', decision: 'exclude' }), /理由/)
@@ -33,4 +33,14 @@ test('科研账本跨 store 持久化，项目整理与撤销保持原归属', a
     await store.restoreProjectOrganization(snapshot)
     assert.equal((await store.listResearchLedger({ project: 'barley-NP1-IPE1-family' })).length, 2)
   } finally { fake.restore() }
+})
+
+test('检索快照标识稳定，只代表当前返回页；重复来源计数可复核', () => {
+  const input = { databaseId: 'pubmed', query: 'barley NP1', sources: [{ id: 'pmid:1' }, { id: 'pmid:1' }, { id: 'pmid:2' }] }
+  const first = summarizeSearchSnapshot(input)
+  assert.equal(first.resultCount, 3)
+  assert.equal(first.deduplicatedCount, 1)
+  assert.deepEqual(first.sourceIds, ['pmid:1', 'pmid:2'])
+  assert.equal(first.snapshotId, summarizeSearchSnapshot({ ...input, sources: [...input.sources].reverse() }).snapshotId)
+  assert.notEqual(first.snapshotId, summarizeSearchSnapshot({ ...input, query: 'other' }).snapshotId)
 })

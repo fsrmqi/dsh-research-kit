@@ -1,12 +1,13 @@
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
-import { Page, Segmented, Spinner, Notice } from './ui.js'
+import { Page, Segmented, Spinner, Notice, Button } from './ui.js'
 import { catalogReady, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { ensureResearchProviders } from '../dsh/prompt-studio-glue.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { AgentActivityPanel } from './agent-activity.js'
+import { ResearchTransferPanel } from './research-transfer-panel.js'
 import { currentResearchContext, setResearchProject, setResearchContext as updateResearchContext, subscribeResearchContext, activeResearchRun } from './research-context-store.js'
 
 // 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
@@ -53,6 +54,7 @@ export function ResearchConsole(props) {
   const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
   const [catalogError, setCatalogError] = React.useState('')
   const [promptKitError, setPromptKitError] = React.useState('')
+  const [transferOpen, setTransferOpen] = React.useState(false)
   const current = findConsoleSection(section)
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
@@ -138,9 +140,11 @@ export function ResearchConsole(props) {
             style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
           }),
           activeRun ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeRun.workflowName || '未命名工作流'} · ${activeRun.status}`) : null,
+          h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '迁移到 App'),
         ]),
       ]),
     ]),
+    transferOpen ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
       ? (view ? view(props) : null)
       : resourceError

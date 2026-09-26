@@ -41,6 +41,15 @@ const server = http.createServer((req,res)=>{
   res.setHeader('Content-Type','application/json; charset=utf-8');
   return res.end(JSON.stringify({ok:true,capabilities:{services:{web:true,shell:false,fs:false,llm:false},mcpServers:[],toolProbeAvailable:true,toolCount:0}}));
  }
+ if(req.url?.startsWith('/dsh-research-kit/evidence-sync')){
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  if(req.method==='GET') return res.end(JSON.stringify({ok:true,entries:[]}));
+  let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
+   const input=JSON.parse(body||'{}');
+   res.end(JSON.stringify({ok:true,added:Array.isArray(input.entries)?input.entries.length:0,skipped:0,entry:input.entry||null}));
+  });
+  return;
+ }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
@@ -206,7 +215,7 @@ const server = http.createServer((req,res)=>{
   await page.getByRole('button',{name:'按主题分组',exact:true}).click();
   await page.getByRole('heading',{name:/^植物科学 · \d+$/}).waitFor();
   await page.evaluate(async()=>{
-    const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-research-kit-evidence',2);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+    const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
     const tx=db.transaction('evidence','readwrite');
     const entries=[
       {id:'qa-agent-new',title:'待判断证据',url:'https://example.org/new',project:'',savedAt:Date.now(),status:'unverified'},
@@ -227,7 +236,7 @@ const server = http.createServer((req,res)=>{
   await page.getByRole('button',{name:'一键用 Agent 判断（2）'}).click();
   await page.getByText(/Agent 判断完成：/).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human']]);
-  await page.getByText(/Agent 最新判断 · qa-model/).waitFor();
+  assert.equal(await page.getByText(/Agent 最新判断 · qa-model/).count(),2);
   await page.getByRole('button',{name:'一键用 Agent 判断（2）'}).click();
   await page.getByText(/Agent 判断完成：/).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human'],['qa-agent-new','qa-agent-human']]);
@@ -237,6 +246,42 @@ const server = http.createServer((req,res)=>{
   await page.getByRole('button',{name:'按主题分组',exact:true}).click();
   await page.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'灵感资产',exact:true}).click();
   console.log('旧资产动态主题标签、自动分组与列表切换：通过');
+  await page.getByRole('button',{name:'迁移到 App'}).click();
+  const transfer=page.getByText('迁移到 DSH App');
+  await transfer.waitFor();
+  const exportWait=page.waitForEvent('download');
+  await page.getByRole('button',{name:'导出本端完整迁移包'}).click();
+  const migration=await exportWait;
+  const migrationText=fs.readFileSync(await migration.path(),'utf8');
+  assert.equal(JSON.parse(migrationText).kind,'dsh-research-kit-app-transfer');
+  await page.getByLabel('选择 Research Kit 迁移文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
+  await page.getByText('导入预览（总数／预计新增／本端已有）').waitFor();
+  const backupWait=page.waitForEvent('download');
+  await page.getByRole('button',{name:'先下载本端备份'}).click();
+  assert.match((await backupWait).suggestedFilename(),/^research-kit-before-import-/);
+  await page.getByRole('button',{name:'确认增量导入'}).click();
+  await page.getByText(/导入完成：新增证据 0 条/).waitFor();
+  await page.getByRole('button',{name:'关闭',exact:true}).click();
+  console.log('App 迁移包导出、校验预览、导入前备份与重复数据跳过：通过');
+  const isolated=await browser.newContext();
+  const appPage=await isolated.newPage();
+  await appPage.goto('http://127.0.0.1:'+server.address().port);
+  await appPage.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
+  await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
+  await appPage.getByRole('button',{name:'迁移到 App'}).click();
+  await appPage.getByLabel('选择 Research Kit 迁移文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
+  await appPage.getByText('导入预览（总数／预计新增／本端已有）').waitFor();
+  await appPage.getByText(/^灵感资产：\d+／\d+／0$/).waitFor();
+  const isolatedBackupWait=appPage.waitForEvent('download');
+  await appPage.getByRole('button',{name:'先下载本端备份'}).click();
+  await isolatedBackupWait;
+  await appPage.getByRole('button',{name:'确认增量导入'}).click();
+  await appPage.getByText(/导入完成：/).waitFor();
+  await appPage.getByRole('button',{name:'关闭',exact:true}).click();
+  await appPage.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await appPage.getByText('水稻耐盐性研究',{exact:true}).first().waitFor();
+  await isolated.close();
+  console.log('独立页面存储空间导入新增资产：通过');
   await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:false});
   if(process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT});
   await page.setViewportSize({width:390,height:844});

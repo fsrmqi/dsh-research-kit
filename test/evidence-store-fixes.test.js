@@ -104,6 +104,7 @@ test('项目整理：先检查目标冲突；成功后保留原项目并可按�
   const target = await readProjectEntries(to)
   assert.equal(target.length, 1)
   assert.equal(target[0].legacy_project, from)
+  assert.equal(target[0].workspace_id, `workspace:${encodeURIComponent(to)}`)
   await assert.rejects(() => organizeEvidenceProjects([{ from, to }]), /已有可撤销/)
   await undoEvidenceProjectOrganization(moved.id)
   assert.equal((await readProjectEntries(from)).length, 1)

@@ -227,7 +227,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.2.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries), 378 regression tests in 47 files (including 6 render-level degradation assertions for missing host actions), two rounds of real DSH web-profile smoke testing (fast lane F1–F4, release gate R1 and observation items O1–O3 all passed), and on-site acceptance of evidence-vault-to-prompt writing (W1–W3: the button is enabled once entries are selected, nothing is injected when nothing is selected, and the write lands in the composer without auto-sending, with the announced count matching) and of saved evidence in the graph (G1–G4: evidence nodes carry only source / identifier / verification status, link to their source database, and edges anchor by actual direction).
+Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries) and 418 regression tests in 61 files. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -236,7 +236,7 @@ Verified so far: catalog contract validation (587 entries, 587 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (378 / 47 files)
+npm test        # pure-logic, contract and render-level regression tests (418 / 61 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

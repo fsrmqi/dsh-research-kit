@@ -1,6 +1,7 @@
 // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
 import { visibleDepositionTags } from './deposition-taxonomy.js'
 import { normalizeResearchClassification } from './research-taxonomy.js'
+import { workspaceIdForProject } from './research-workspaces.js'
 //
 // 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
 // 证据条目必须可追溯——有稳定标识符或原始链接，否则后续无法核验，也就失去了保存意义。
@@ -148,6 +149,7 @@ export function normalizeEvidenceEntry(input = {}) {
     savedAt: Number.isFinite(input.savedAt) ? input.savedAt : Date.now(),
     updatedAt: Number.isFinite(input.updatedAt) ? input.updatedAt : (Number.isFinite(input.savedAt) ? input.savedAt : Date.now()),
     project: clampText(input.project, 120),
+    workspaceId: workspaceIdForProject(clampText(input.project, 120)),
     legacyProject: clampText(input.legacyProject || input.legacy_project, 120),
     tags: normalizeTags(input.tags),
     reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
@@ -199,7 +201,7 @@ export function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
 // 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
 
 export const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
-export const EVIDENCE_BACKUP_VERSION = 2
+export const EVIDENCE_BACKUP_VERSION = 3
 
 // URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
 // 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
@@ -235,7 +237,7 @@ export function findDuplicate(entries, candidate) {
 // 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
 // 而不是把旧格式静默解析成残缺条目。
 
-export function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [] } = {}) {
+export function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [], workspaces = [] } = {}) {
   return JSON.stringify({
     kind: EVIDENCE_BACKUP_KIND,
     version: EVIDENCE_BACKUP_VERSION,
@@ -245,6 +247,7 @@ export function serializeEvidenceBackup({ entries = [], project = '', claims = [
     claims: Array.isArray(claims) ? claims : [],
     links: Array.isArray(links) ? links : [],
     ledger: Array.isArray(ledger) ? ledger : [],
+    workspaces: Array.isArray(workspaces) ? workspaces : [],
   }, null, 2)
 }
 
@@ -263,6 +266,8 @@ export function parseEvidenceBackup(text) {
     if (Number(parsed.version) >= 2 && !Array.isArray(parsed[key])) throw new Error(`备份文件缺少 ${key} 字段。`)
     optional[key] = Array.isArray(parsed[key]) ? parsed[key] : []
   }
+  if (Number(parsed.version) >= 3 && !Array.isArray(parsed.workspaces)) throw new Error('备份文件缺少 workspaces 字段。')
+  optional.workspaces = Array.isArray(parsed.workspaces) ? parsed.workspaces : []
   return { project: String(parsed.project || ''), entries: rows, ...optional }
 }
 

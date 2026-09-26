@@ -8,6 +8,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const catalogData = await loadCatalogEntries()
 const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/research-context-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/promptkit-loader.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/research-taxonomy.js', 'src/lib/deposition-taxonomy.js', 'src/lib/project-organizer.js', 'src/lib/research-claims.js', 'src/lib/asset-evidence-links.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/agent-evidence-batch.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/lib/input-actions.js', 'src/host-capabilities-client.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/project-organizer.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/message-deposit-action.js', 'src/composer-deposit-button.js', 'src/route-replay.js', 'src/research-workbench.js', 'mcp/tool-registry.js', 'src/research-toolview.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/plugin-status.js', 'src/agent-activity.js', 'src/research-console.js', 'dsh/standalone-glue.js']
 files.splice(files.indexOf('src/lib/research-claims.js') + 1, 0, 'src/lib/research-ledger.js')
+files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/research-workspaces.js')
+files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
+files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-transfer.js')
+files.splice(files.indexOf('src/agent-activity.js') + 1, 0, 'src/research-transfer-panel.js')
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
 // 若 import 跨行则只删掉首行，剩余行会残留成非法语句（产物语法错误）。
 function collapseImports(source) {

@@ -2,6 +2,7 @@ import { normalizeEvidenceEntry, findDuplicate } from './lib/evidence-vault-core
 import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
 import { normalizeResearchClaim } from './lib/research-claims.js'
 import { normalizeResearchLedgerEvent } from './lib/research-ledger.js'
+import { normalizeWorkspaceName, workspaceForProject, workspaceIdForProject } from './lib/research-workspaces.js'
 
 // 证据库持久化：IndexedDB 最小 schema。
 //
@@ -16,12 +17,13 @@ const DB_NAME = 'dsh-research-kit-evidence'
 // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
 // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
 // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
-const DB_VERSION = 5
+const DB_VERSION = 6
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
 const ORGANIZER_STORE = 'projectOrganizer'
 const CLAIMS_STORE = 'researchClaims'
 const LEDGER_STORE = 'researchLedger'
+const WORKSPACES_STORE = 'researchWorkspaces'
 // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
 const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
@@ -57,6 +59,11 @@ function sortBySavedAt(rows) {
   return [...rows].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
 }
 
+function withWorkspaceIdentity(rows) {
+  return rows.map(item => item.workspaceId === workspaceIdForProject(item.project)
+    ? item : { ...item, workspaceId: workspaceIdForProject(item.project) })
+}
+
 export function createEvidenceVaultStore() {
   let dbPromise = null
   let degraded = false
@@ -65,6 +72,7 @@ export function createEvidenceVaultStore() {
   let memoryOrganizerJournal = null
   let memoryResearchClaims = []
   let memoryResearchLedger = []
+  let memoryWorkspaces = []
 
   const connect = () => {
     if (degraded) return Promise.resolve(null)
@@ -98,6 +106,7 @@ export function createEvidenceVaultStore() {
           const ledger = db.createObjectStore(LEDGER_STORE, { keyPath: 'id' })
           ledger.createIndex('project', 'project')
         }
+        if (!db.objectStoreNames.contains(WORKSPACES_STORE)) db.createObjectStore(WORKSPACES_STORE, { keyPath: 'id' })
       }
       request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
       request.onerror = () => { degraded = true; resolve(null) }
@@ -125,7 +134,7 @@ export function createEvidenceVaultStore() {
 
   const readAll = async () => {
     const rows = await withStore('readonly', store => requestToPromise(store.getAll()))
-    return sortBySavedAt(Array.isArray(rows) ? rows : memory)
+    return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory))
   }
 
   // 项目是最常用的列表边界；不要在 IndexedDB 已建索引的情况下把整库搬到 JS 再过滤。
@@ -133,7 +142,7 @@ export function createEvidenceVaultStore() {
   const readProject = async project => {
     if (typeof project !== 'string') return readAll()
     const rows = await withStore('readonly', store => requestToPromise(store.index('project').getAll(project)))
-    return sortBySavedAt(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project))
+    return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project)))
   }
 
   // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
@@ -157,7 +166,7 @@ export function createEvidenceVaultStore() {
     async listResearchClaims({ project } = {}) {
       const rows = await withStore('readonly', store => requestToPromise(
         typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
-      return (Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
+      return withWorkspaceIdentity(Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
         .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     },
     async saveResearchClaim(input) {
@@ -172,7 +181,7 @@ export function createEvidenceVaultStore() {
     async listResearchLedger({ project, kind, runId } = {}) {
       const rows = await withStore('readonly', store => requestToPromise(
         typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), LEDGER_STORE)
-      return (Array.isArray(rows) ? rows : memoryResearchLedger)
+      return withWorkspaceIdentity(Array.isArray(rows) ? rows : memoryResearchLedger)
         .filter(item => (project === undefined || item.project === project)
           && (kind === undefined || item.kind === kind) && (runId === undefined || item.runId === runId))
         .sort((a, b) => (b.at || 0) - (a.at || 0))
@@ -185,6 +194,78 @@ export function createEvidenceVaultStore() {
       const result = await withStore('readwrite', store => requestToPromise(store.put(event)), LEDGER_STORE)
       if (result === undefined) memoryResearchLedger = [event, ...memoryResearchLedger.filter(item => item.id !== event.id)]
       return event
+    },
+
+    // 旧 project 仍是文件/MCP 兼容键；课题空间拥有稳定 ID 和可独立修改的显示名。
+    // 仅从已有证据派生虚拟 legacy 课题，不从临时任务或研究运行自动创建课题。
+    async listWorkspaces({ includeArchived = false } = {}) {
+      const persisted = await withStore('readonly', store => requestToPromise(store.getAll()), WORKSPACES_STORE)
+      const records = Array.isArray(persisted) ? persisted : memoryWorkspaces
+      const byKey = new Map(records.map(row => [row.projectKey, workspaceForProject(row.projectKey, row)]))
+      for (const projectKey of await this.listProjects()) {
+        if (!byKey.has(projectKey)) byKey.set(projectKey, workspaceForProject(projectKey))
+      }
+      return [...byKey.values()].filter(row => row && (includeArchived || !row.archived))
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    },
+    async createWorkspace(inputName) {
+      const name = normalizeWorkspaceName(inputName)
+      const all = await this.listWorkspaces({ includeArchived: true })
+      if (all.some(row => row.name === name && !row.archived)) throw new Error('同名课题已存在，请直接选择。')
+      if (all.some(row => row.projectKey === name)) throw new Error('该名称已被旧项目占用，请先整理或重命名。')
+      const now = Date.now()
+      const row = workspaceForProject(name, { name, origin: 'user', createdAt: now, updatedAt: now })
+      const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+      if (result === undefined) memoryWorkspaces = [...memoryWorkspaces, row]
+      return row
+    },
+    async renameWorkspace(projectKey, inputName) {
+      const name = normalizeWorkspaceName(inputName)
+      const all = await this.listWorkspaces({ includeArchived: true })
+      const current = all.find(row => row.projectKey === projectKey)
+      if (!current) throw new Error('找不到该课题。')
+      if (all.some(row => row.projectKey !== projectKey && row.name === name && !row.archived)) throw new Error('同名课题已存在。')
+      const row = workspaceForProject(projectKey, { ...current, name, updatedAt: Date.now() })
+      const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+      if (result === undefined) memoryWorkspaces = [row, ...memoryWorkspaces.filter(item => item.id !== row.id)]
+      return row
+    },
+    async setWorkspaceArchived(projectKey, archived) {
+      const all = await this.listWorkspaces({ includeArchived: true })
+      const current = all.find(row => row.projectKey === projectKey)
+      if (!current) throw new Error('找不到该课题。')
+      const row = workspaceForProject(projectKey, { ...current, archived: archived === true, updatedAt: Date.now() })
+      const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+      if (result === undefined) memoryWorkspaces = [row, ...memoryWorkspaces.filter(item => item.id !== row.id)]
+      return row
+    },
+    async importWorkspaces(inputs = []) {
+      if (!Array.isArray(inputs)) throw new Error('课题备份格式无效。')
+      const persisted = await withStore('readonly', store => requestToPromise(store.getAll()), WORKSPACES_STORE)
+      const existing = Array.isArray(persisted) ? persisted : memoryWorkspaces
+      const knownKeys = new Set(existing.map(item => item.projectKey))
+      const names = new Map((await this.listWorkspaces({ includeArchived: true }))
+        .filter(item => !item.archived).map(item => [item.name, item.projectKey]))
+      const rows = []
+      for (const input of inputs) {
+        const projectKey = String(input?.projectKey || '').trim()
+        if (!projectKey || projectKey.length > 120) throw new Error('课题备份的项目键无效。')
+        const name = normalizeWorkspaceName(input?.name)
+        if (input.id !== workspaceIdForProject(projectKey)) throw new Error('课题备份 ID 与项目键不一致。')
+        if (knownKeys.has(projectKey)) continue // 增量恢复不覆盖现有显示名或归档状态。
+        if (!input.archived && names.has(name) && names.get(name) !== projectKey) throw new Error(`课题显示名「${name}」与现有课题冲突。`)
+        const row = workspaceForProject(projectKey, {
+          name, archived: input.archived === true,
+          origin: input.origin === 'user' ? 'user' : 'legacy',
+          createdAt: input.createdAt, updatedAt: input.updatedAt,
+        })
+        rows.push(row); knownKeys.add(projectKey)
+        if (!row.archived) names.set(row.name, row.projectKey)
+      }
+      if (!rows.length) return 0
+      const result = await withStore('readwrite', store => Promise.all(rows.map(row => requestToPromise(store.put(row)))), WORKSPACES_STORE)
+      if (result === undefined) memoryWorkspaces = [...rows, ...memoryWorkspaces]
+      return rows.length
     },
 
     // ── 项目上下文 ──────────────────────────────────────────
@@ -341,11 +422,12 @@ export function createEvidenceVaultStore() {
       const claimsBefore = (await this.listResearchClaims()).filter(item => map.has(item.project))
       const ledgerBefore = (await this.listResearchLedger()).filter(item => map.has(item.project))
       const evidenceAfter = evidenceBefore.map(item => ({
-        ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project, updatedAt: now,
+        ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)),
+        legacyProject: item.legacyProject || item.project, updatedAt: now,
       }))
       const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-      const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
+      const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
       const all = await readAll()
       const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]
       for (const item of evidenceAfter) {

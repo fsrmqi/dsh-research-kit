@@ -356,7 +356,7 @@ window.__ModuleLoader__.load({
 
     const RESEARCH_CONTEXT_KEY = 'dsh-research-kit.research-context.v1'
     const RESEARCH_RUNS_KEY = 'dsh-research-kit.research-runs.v1'
-    const MAX_RESEARCH_RUNS = 80
+    const MAX_RESEARCH_RUNS = 500
 
     let contextMemory = { project: '', activeRunId: '' }
     const contextListeners = new Set()
@@ -416,7 +416,8 @@ window.__ModuleLoader__.load({
     function readRuns() {
       try {
         const rows = JSON.parse(safeStorageGet(RESEARCH_RUNS_KEY) || '[]')
-        return Array.isArray(rows) ? rows.filter(row => row && typeof row === 'object') : []
+        return Array.isArray(rows) ? rows.filter(row => row && typeof row === 'object')
+          .map(row => ({ ...row, workspaceId: workspaceIdForProject(row.project) })) : []
       } catch { return [] }
     }
 
@@ -435,7 +436,7 @@ window.__ModuleLoader__.load({
       const context = currentResearchContext()
       const resolvedProject = normalizeProject(project === undefined ? context.project : project)
       const run = {
-        id: runId(), project: resolvedProject, sessionId: String(sessionId || ''),
+        id: runId(), project: resolvedProject, workspaceId: workspaceIdForProject(resolvedProject), sessionId: String(sessionId || ''),
         workflowId: String(workflowId || ''), workflowName: String(workflowName || ''),
         stages: (Array.isArray(stages) ? stages : []).map(label => String(label)).filter(Boolean).slice(0, 30),
         status: ['draft', 'active', 'waiting_review', 'completed', 'failed'].includes(status) ? status : 'draft',
@@ -458,11 +459,26 @@ window.__ModuleLoader__.load({
       )
     }
 
+    // App 迁移只补入缺失运行；既有运行的状态和当前活跃运行都不被旧备份覆盖。
+    function importResearchRuns(incoming = []) {
+      const rows = readRuns()
+      const known = new Set(rows.map(row => row.id))
+      const added = []
+      for (const raw of Array.isArray(incoming) ? incoming : []) {
+        if (!raw || typeof raw.id !== 'string' || !raw.id || known.has(raw.id)) continue
+        const project = normalizeProject(raw.project)
+        added.push({ ...raw, project, workspaceId: workspaceIdForProject(project) })
+        known.add(raw.id)
+      }
+      writeRuns([...rows, ...added])
+      return { added: added.length, skipped: incoming.length - added.length }
+    }
+
     function remapResearchRuns(mappings, { dryRun = false } = {}) {
       const map = new Map(mappings.map(item => [item.from, item.to]))
       const before = readRuns()
       const after = before.map(run => map.has(run.project)
-        ? { ...run, project: map.get(run.project), legacyProject: run.legacyProject || run.project }
+        ? { ...run, project: map.get(run.project), workspaceId: workspaceIdForProject(map.get(run.project)), legacyProject: run.legacyProject || run.project }
         : run)
       const contextBefore = currentResearchContext()
       const contextAfter = map.has(contextBefore.project)
@@ -1982,6 +1998,77 @@ window.__ModuleLoader__.load({
     }
 
 
+    // projectKey 是兼容旧文件和 MCP project 参数的不可变存储键；name 只是可改的显示名。
+    // 可逆编码避免把不同 Unicode 项目名压成同一短 hash。
+    function workspaceIdForProject(projectKey) {
+      const key = String(projectKey || '').trim()
+      if (!key) return 'workspace:unassigned'
+      try { return `workspace:${encodeURIComponent(key)}` }
+      catch {
+        // 旧数据可能含孤立 surrogate；UTF-16 逐码元编码仍可无损区分不同项目键。
+        let hex = ''
+        for (let index = 0; index < key.length; index++) hex += key.charCodeAt(index).toString(16).padStart(4, '0')
+        return `workspace:u16:${hex}`
+      }
+    }
+
+    function normalizeWorkspaceName(value) {
+      const name = String(value || '').trim()
+      if (!name || name.length > 100 || /[\\/:*?"<>|\u0000-\u001f]/.test(name) || name === '.' || name === '..') {
+        throw new Error('课题名称须为 1–100 字，且不能包含路径或控制字符。')
+      }
+      return name
+    }
+
+    function workspaceForProject(projectKey, record = null) {
+      const key = String(projectKey || '').trim()
+      if (!key) return null
+      return {
+        id: workspaceIdForProject(key), projectKey: key,
+        name: String(record?.name || key), archived: record?.archived === true,
+        origin: record?.origin || 'legacy', createdAt: Number(record?.createdAt) || 0,
+        updatedAt: Number(record?.updatedAt) || 0,
+      }
+    }
+
+
+    // 只读质量审计：提示人工复核，不自动合并、删除或宣称来源失效。
+    const sourceKey = item => {
+      const kind = String(item?.identifierKind || '').toLowerCase()
+      const identifier = String(item?.identifier || '').trim().toLowerCase()
+      if (identifier && kind !== 'none') return `${kind}:${identifier}`
+      const url = String(item?.url || '').trim().toLowerCase().replace(/\/$/, '')
+      return url ? `url:${url}` : ''
+    }
+
+    function auditResearchDataQuality({ evidence = [], links = [], assetIds = null } = {}) {
+      const entries = Array.isArray(evidence) ? evidence : []
+      const relationships = Array.isArray(links) ? links : []
+      const evidenceIds = new Set(entries.map(item => item.id))
+      const knownAssets = assetIds ? new Set(assetIds) : null
+      const bySource = new Map()
+      for (const item of entries) {
+        const key = sourceKey(item)
+        if (!key) continue
+        if (!bySource.has(key)) bySource.set(key, [])
+        bySource.get(key).push(item)
+      }
+      const duplicateGroups = [...bySource.values()].filter(rows => rows.length > 1)
+        .map(rows => ({ key: sourceKey(rows[0]), ids: rows.map(item => item.id), projects: [...new Set(rows.map(item => item.project || '未归属'))] }))
+      const orphanLinks = relationships.filter(link => !evidenceIds.has(link.evidenceId)
+        || (knownAssets && !knownAssets.has(String(link.assetId))))
+      return {
+        total: entries.length,
+        missingIdentifier: entries.filter(item => !item.identifier || item.identifierKind === 'none').length,
+        unverified: entries.filter(item => item.status === 'unverified').length,
+        staleOrMissing: entries.filter(item => item.status === 'stale' || item.sourceCheck?.status === 'not_found').length,
+        duplicateGroups,
+        orphanLinks,
+        assetSideChecked: knownAssets !== null,
+      }
+    }
+
+
     // 只用本地、可解释的词表归类；不调用模型，不把原始回答交给外部服务。
     // 分类不是事实核验，多个主题可并存，未命中时明确留在「待归类」。
     const DEPOSITION_TOPIC_RULES = [
@@ -2131,6 +2218,7 @@ window.__ModuleLoader__.load({
       return {
         id: short(input.id, 120) || `research-claim-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         project: short(input.project, 120),
+        workspaceId: workspaceIdForProject(short(input.project, 120)),
         question: short(input.question, 500),
         statement,
         links,
@@ -2153,6 +2241,7 @@ window.__ModuleLoader__.load({
         id: clean(input.id, 100) || `ledger-${at.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         kind,
         project: clean(input.project, 100),
+        workspaceId: workspaceIdForProject(clean(input.project, 100)),
         runId: clean(input.runId, 100),
         question: clean(input.question, 500),
         at,
@@ -2204,6 +2293,19 @@ window.__ModuleLoader__.load({
         if (!previous || event.at > previous.at) latest.set(event.evidenceId, event)
       }
       return latest
+    }
+
+    function summarizeSearchSnapshot({ databaseId = '', query = '', sources = [] } = {}) {
+      const rows = Array.isArray(sources) ? sources : []
+      const ids = rows.map(item => String(item?.id || item?.url || item?.title || '').trim()).filter(Boolean)
+      const uniqueIds = [...new Set(ids)]
+      const payload = JSON.stringify([String(databaseId), String(query), [...uniqueIds].sort()])
+      // 非加密的本地快照标识，仅用于发现同一次有限候选列表；不宣称是数据库完整结果集。
+      let hash = 2166136261
+      for (let index = 0; index < payload.length; index++) hash = Math.imul(hash ^ payload.charCodeAt(index), 16777619) >>> 0
+      return { sourceIds: uniqueIds, resultCount: rows.length,
+        deduplicatedCount: ids.length - uniqueIds.length,
+        snapshotId: `page-fnv1a32:${hash.toString(16).padStart(8, '0')}:${uniqueIds.length}` }
     }
 
 
@@ -2803,6 +2905,7 @@ window.__ModuleLoader__.load({
         savedAt: Number.isFinite(input.savedAt) ? input.savedAt : Date.now(),
         updatedAt: Number.isFinite(input.updatedAt) ? input.updatedAt : (Number.isFinite(input.savedAt) ? input.savedAt : Date.now()),
         project: clampText(input.project, 120),
+        workspaceId: workspaceIdForProject(clampText(input.project, 120)),
         legacyProject: clampText(input.legacyProject || input.legacy_project, 120),
         tags: normalizeTags(input.tags),
         reason: clampText(input.reason, MAX_EVIDENCE_REASON_CHARS),
@@ -2854,7 +2957,7 @@ window.__ModuleLoader__.load({
     // 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
 
     const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
-    const EVIDENCE_BACKUP_VERSION = 2
+    const EVIDENCE_BACKUP_VERSION = 3
 
     // URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
     // 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
@@ -2890,7 +2993,7 @@ window.__ModuleLoader__.load({
     // 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
     // 而不是把旧格式静默解析成残缺条目。
 
-    function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [] } = {}) {
+    function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [], workspaces = [] } = {}) {
       return JSON.stringify({
         kind: EVIDENCE_BACKUP_KIND,
         version: EVIDENCE_BACKUP_VERSION,
@@ -2900,6 +3003,7 @@ window.__ModuleLoader__.load({
         claims: Array.isArray(claims) ? claims : [],
         links: Array.isArray(links) ? links : [],
         ledger: Array.isArray(ledger) ? ledger : [],
+        workspaces: Array.isArray(workspaces) ? workspaces : [],
       }, null, 2)
     }
 
@@ -2918,6 +3022,8 @@ window.__ModuleLoader__.load({
         if (Number(parsed.version) >= 2 && !Array.isArray(parsed[key])) throw new Error(`备份文件缺少 ${key} 字段。`)
         optional[key] = Array.isArray(parsed[key]) ? parsed[key] : []
       }
+      if (Number(parsed.version) >= 3 && !Array.isArray(parsed.workspaces)) throw new Error('备份文件缺少 workspaces 字段。')
+      optional.workspaces = Array.isArray(parsed.workspaces) ? parsed.workspaces : []
       return { project: String(parsed.project || ''), entries: rows, ...optional }
     }
 
@@ -4146,12 +4252,13 @@ window.__ModuleLoader__.load({
     // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
     // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
     // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
-    const DB_VERSION = 5
+    const DB_VERSION = 6
     const STORE = 'evidence'
     const LINKS_STORE = 'assetEvidenceLinks'
     const ORGANIZER_STORE = 'projectOrganizer'
     const CLAIMS_STORE = 'researchClaims'
     const LEDGER_STORE = 'researchLedger'
+    const WORKSPACES_STORE = 'researchWorkspaces'
     // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
     const MAX_LINKS = 500
     const PROJECT_KEY = 'dsh-research-kit.evidence.project'
@@ -4187,6 +4294,11 @@ window.__ModuleLoader__.load({
       return [...rows].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
     }
 
+    function withWorkspaceIdentity(rows) {
+      return rows.map(item => item.workspaceId === workspaceIdForProject(item.project)
+        ? item : { ...item, workspaceId: workspaceIdForProject(item.project) })
+    }
+
     function createEvidenceVaultStore() {
       let dbPromise = null
       let degraded = false
@@ -4195,6 +4307,7 @@ window.__ModuleLoader__.load({
       let memoryOrganizerJournal = null
       let memoryResearchClaims = []
       let memoryResearchLedger = []
+      let memoryWorkspaces = []
 
       const connect = () => {
         if (degraded) return Promise.resolve(null)
@@ -4228,6 +4341,7 @@ window.__ModuleLoader__.load({
               const ledger = db.createObjectStore(LEDGER_STORE, { keyPath: 'id' })
               ledger.createIndex('project', 'project')
             }
+            if (!db.objectStoreNames.contains(WORKSPACES_STORE)) db.createObjectStore(WORKSPACES_STORE, { keyPath: 'id' })
           }
           request.onsuccess = () => { if (!request.result) degraded = true; resolve(request.result || null) }
           request.onerror = () => { degraded = true; resolve(null) }
@@ -4255,7 +4369,7 @@ window.__ModuleLoader__.load({
 
       const readAll = async () => {
         const rows = await withStore('readonly', store => requestToPromise(store.getAll()))
-        return sortBySavedAt(Array.isArray(rows) ? rows : memory)
+        return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory))
       }
 
       // 项目是最常用的列表边界；不要在 IndexedDB 已建索引的情况下把整库搬到 JS 再过滤。
@@ -4263,7 +4377,7 @@ window.__ModuleLoader__.load({
       const readProject = async project => {
         if (typeof project !== 'string') return readAll()
         const rows = await withStore('readonly', store => requestToPromise(store.index('project').getAll(project)))
-        return sortBySavedAt(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project))
+        return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project)))
       }
 
       // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
@@ -4287,7 +4401,7 @@ window.__ModuleLoader__.load({
         async listResearchClaims({ project } = {}) {
           const rows = await withStore('readonly', store => requestToPromise(
             typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
-          return (Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
+          return withWorkspaceIdentity(Array.isArray(rows) ? rows : memoryResearchClaims.filter(item => project === undefined || item.project === project))
             .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
         },
         async saveResearchClaim(input) {
@@ -4302,7 +4416,7 @@ window.__ModuleLoader__.load({
         async listResearchLedger({ project, kind, runId } = {}) {
           const rows = await withStore('readonly', store => requestToPromise(
             typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), LEDGER_STORE)
-          return (Array.isArray(rows) ? rows : memoryResearchLedger)
+          return withWorkspaceIdentity(Array.isArray(rows) ? rows : memoryResearchLedger)
             .filter(item => (project === undefined || item.project === project)
               && (kind === undefined || item.kind === kind) && (runId === undefined || item.runId === runId))
             .sort((a, b) => (b.at || 0) - (a.at || 0))
@@ -4315,6 +4429,78 @@ window.__ModuleLoader__.load({
           const result = await withStore('readwrite', store => requestToPromise(store.put(event)), LEDGER_STORE)
           if (result === undefined) memoryResearchLedger = [event, ...memoryResearchLedger.filter(item => item.id !== event.id)]
           return event
+        },
+
+        // 旧 project 仍是文件/MCP 兼容键；课题空间拥有稳定 ID 和可独立修改的显示名。
+        // 仅从已有证据派生虚拟 legacy 课题，不从临时任务或研究运行自动创建课题。
+        async listWorkspaces({ includeArchived = false } = {}) {
+          const persisted = await withStore('readonly', store => requestToPromise(store.getAll()), WORKSPACES_STORE)
+          const records = Array.isArray(persisted) ? persisted : memoryWorkspaces
+          const byKey = new Map(records.map(row => [row.projectKey, workspaceForProject(row.projectKey, row)]))
+          for (const projectKey of await this.listProjects()) {
+            if (!byKey.has(projectKey)) byKey.set(projectKey, workspaceForProject(projectKey))
+          }
+          return [...byKey.values()].filter(row => row && (includeArchived || !row.archived))
+            .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+        },
+        async createWorkspace(inputName) {
+          const name = normalizeWorkspaceName(inputName)
+          const all = await this.listWorkspaces({ includeArchived: true })
+          if (all.some(row => row.name === name && !row.archived)) throw new Error('同名课题已存在，请直接选择。')
+          if (all.some(row => row.projectKey === name)) throw new Error('该名称已被旧项目占用，请先整理或重命名。')
+          const now = Date.now()
+          const row = workspaceForProject(name, { name, origin: 'user', createdAt: now, updatedAt: now })
+          const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+          if (result === undefined) memoryWorkspaces = [...memoryWorkspaces, row]
+          return row
+        },
+        async renameWorkspace(projectKey, inputName) {
+          const name = normalizeWorkspaceName(inputName)
+          const all = await this.listWorkspaces({ includeArchived: true })
+          const current = all.find(row => row.projectKey === projectKey)
+          if (!current) throw new Error('找不到该课题。')
+          if (all.some(row => row.projectKey !== projectKey && row.name === name && !row.archived)) throw new Error('同名课题已存在。')
+          const row = workspaceForProject(projectKey, { ...current, name, updatedAt: Date.now() })
+          const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+          if (result === undefined) memoryWorkspaces = [row, ...memoryWorkspaces.filter(item => item.id !== row.id)]
+          return row
+        },
+        async setWorkspaceArchived(projectKey, archived) {
+          const all = await this.listWorkspaces({ includeArchived: true })
+          const current = all.find(row => row.projectKey === projectKey)
+          if (!current) throw new Error('找不到该课题。')
+          const row = workspaceForProject(projectKey, { ...current, archived: archived === true, updatedAt: Date.now() })
+          const result = await withStore('readwrite', store => requestToPromise(store.put(row)), WORKSPACES_STORE)
+          if (result === undefined) memoryWorkspaces = [row, ...memoryWorkspaces.filter(item => item.id !== row.id)]
+          return row
+        },
+        async importWorkspaces(inputs = []) {
+          if (!Array.isArray(inputs)) throw new Error('课题备份格式无效。')
+          const persisted = await withStore('readonly', store => requestToPromise(store.getAll()), WORKSPACES_STORE)
+          const existing = Array.isArray(persisted) ? persisted : memoryWorkspaces
+          const knownKeys = new Set(existing.map(item => item.projectKey))
+          const names = new Map((await this.listWorkspaces({ includeArchived: true }))
+            .filter(item => !item.archived).map(item => [item.name, item.projectKey]))
+          const rows = []
+          for (const input of inputs) {
+            const projectKey = String(input?.projectKey || '').trim()
+            if (!projectKey || projectKey.length > 120) throw new Error('课题备份的项目键无效。')
+            const name = normalizeWorkspaceName(input?.name)
+            if (input.id !== workspaceIdForProject(projectKey)) throw new Error('课题备份 ID 与项目键不一致。')
+            if (knownKeys.has(projectKey)) continue // 增量恢复不覆盖现有显示名或归档状态。
+            if (!input.archived && names.has(name) && names.get(name) !== projectKey) throw new Error(`课题显示名「${name}」与现有课题冲突。`)
+            const row = workspaceForProject(projectKey, {
+              name, archived: input.archived === true,
+              origin: input.origin === 'user' ? 'user' : 'legacy',
+              createdAt: input.createdAt, updatedAt: input.updatedAt,
+            })
+            rows.push(row); knownKeys.add(projectKey)
+            if (!row.archived) names.set(row.name, row.projectKey)
+          }
+          if (!rows.length) return 0
+          const result = await withStore('readwrite', store => Promise.all(rows.map(row => requestToPromise(store.put(row)))), WORKSPACES_STORE)
+          if (result === undefined) memoryWorkspaces = [...rows, ...memoryWorkspaces]
+          return rows.length
         },
 
         // ── 项目上下文 ──────────────────────────────────────────
@@ -4471,11 +4657,12 @@ window.__ModuleLoader__.load({
           const claimsBefore = (await this.listResearchClaims()).filter(item => map.has(item.project))
           const ledgerBefore = (await this.listResearchLedger()).filter(item => map.has(item.project))
           const evidenceAfter = evidenceBefore.map(item => ({
-            ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project, updatedAt: now,
+            ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)),
+            legacyProject: item.legacyProject || item.project, updatedAt: now,
           }))
           const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-          const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-          const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
+          const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
+          const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
           const all = await readAll()
           const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]
           for (const item of evidenceAfter) {
@@ -5088,6 +5275,67 @@ window.__ModuleLoader__.load({
 
 
 
+    const RESEARCH_TRANSFER_KIND = 'dsh-research-kit-app-transfer'
+    const RESEARCH_TRANSFER_VERSION = 1
+
+    async function transferDigest(payload) {
+      if (!globalThis.crypto?.subtle) throw new Error('当前环境不支持安全校验，无法迁移研究数据。')
+      const bytes = new TextEncoder().encode(JSON.stringify(payload))
+      const hash = await globalThis.crypto.subtle.digest('SHA-256', bytes)
+      return [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('')
+    }
+
+    async function serializeResearchTransfer(payload) {
+      const checksum = await transferDigest(payload)
+      return JSON.stringify({ kind: RESEARCH_TRANSFER_KIND, version: RESEARCH_TRANSFER_VERSION,
+        exportedAt: Date.now(), checksum, payload }, null, 2) + '\n'
+    }
+
+    async function parseResearchTransfer(text) {
+      let input
+      try { input = JSON.parse(String(text || '')) } catch { throw new Error('迁移文件不是合法 JSON。') }
+      if (input?.kind !== RESEARCH_TRANSFER_KIND || input?.version !== RESEARCH_TRANSFER_VERSION) {
+        throw new Error('迁移文件类型或版本不受支持。')
+      }
+      if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) throw new Error('迁移文件缺少数据。')
+      if (!/^[0-9a-f]{64}$/.test(input.checksum || '') || await transferDigest(input.payload) !== input.checksum) {
+        throw new Error('迁移文件校验失败；请从原 Web 端重新导出。')
+      }
+      const { evidence, knowledge, assets, runs } = input.payload
+      if (!evidence || !knowledge) throw new Error('迁移文件缺少证据库或知识库。')
+      const parsedEvidence = parseEvidenceBackup(JSON.stringify(evidence))
+      const parsedKnowledge = parseKnowledgeBackup(JSON.stringify(knowledge))
+      if (!Array.isArray(assets) || !Array.isArray(runs)) throw new Error('迁移文件缺少灵感资产或研究运行。')
+      if (assets.some(item => !item || typeof item.id !== 'string' || !item.id || typeof item.body !== 'string' || !item.body.trim())
+        || runs.some(item => !item || typeof item.id !== 'string' || !item.id)) {
+        throw new Error('迁移文件包含无效的资产或研究运行。')
+      }
+      return { evidence: parsedEvidence, knowledge: parsedKnowledge, assets, runs }
+    }
+
+    function previewResearchTransfer(incoming, current) {
+      const summarize = (rows, existing, key = 'id') => {
+        const known = new Set(existing.map(item => item[key]))
+        return { total: rows.length, add: rows.filter(item => !known.has(item[key])).length,
+          existing: rows.filter(item => known.has(item[key])).length }
+      }
+      const evidenceMerge = mergeEntries(current.evidence.entries, incoming.evidence.entries)
+      return {
+        evidence: { total: incoming.evidence.entries.length, add: evidenceMerge.added,
+          existing: evidenceMerge.skipped, invalid: evidenceMerge.invalid },
+        claims: summarize(incoming.evidence.claims, current.evidence.claims),
+        links: summarize(incoming.evidence.links, current.evidence.links),
+        ledger: summarize(incoming.evidence.ledger, current.evidence.ledger),
+        workspaces: summarize(incoming.evidence.workspaces, current.evidence.workspaces, 'projectKey'),
+        knowledgeNodes: summarize(incoming.knowledge.nodes, current.knowledge.nodes, 'key'),
+        knowledgeClaims: summarize(incoming.knowledge.claims, current.knowledge.claims, 'id'),
+        assets: summarize(incoming.assets, current.assets),
+        runs: summarize(incoming.runs, current.runs),
+      }
+    }
+
+
+
     const PROJECT_ORGANIZER_PATH = '/dsh-research-kit/evidence-sync'
 
     async function projectOrganizerRequest(body) {
@@ -5271,9 +5519,15 @@ window.__ModuleLoader__.load({
     }
 
     function invalidateEvidenceSync(project) {
-      if (project) evidenceSyncFreshUntil.delete(evidenceSyncScope(project))
+      if (project) {
+        evidenceSyncFreshUntil.delete(evidenceSyncScope(project))
+        evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:pull`)
+        evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:allow-existing`)
+      }
       // 全量读取覆盖任意项目；任一项目写入后都必须让全量缓存失效。
       evidenceSyncFreshUntil.delete('*')
+      evidenceSyncFreshUntil.delete('*:pull')
+      evidenceSyncFreshUntil.delete('*:allow-existing')
     }
 
     function canUseFileSync() {
@@ -5290,7 +5544,8 @@ window.__ModuleLoader__.load({
         url: entry.url,
         savedAt: entry.saved_at ? Date.parse(entry.saved_at) : undefined,
         updatedAt: entry.updated_at ? Date.parse(entry.updated_at) : undefined,
-        project: entry.project || 'default',
+        project: entry.project === 'default' && entry.workspace_id === 'workspace:unassigned' ? '' : entry.project || 'default',
+        workspaceId: entry.workspace_id || entry.workspaceId || '',
         legacyProject: entry.legacy_project || entry.legacyProject || '',
         tags: Array.isArray(entry.tags) ? entry.tags : [],
         reason: entry.reason || '',
@@ -5327,6 +5582,7 @@ window.__ModuleLoader__.load({
         reason: entry.reason || '',
         note: entry.note || '',
         project: entry.project || 'default',
+        workspace_id: entry.workspaceId || workspaceIdForProject(entry.project || ''),
         legacy_project: entry.legacyProject || '',
         grade: entry.grade || 'ungraded',
         status: entry.status || 'unverified',
@@ -5351,7 +5607,7 @@ window.__ModuleLoader__.load({
     }
 
     function evidenceSyncKey(entry) {
-      const project = String(entry.project || '').trim().toLowerCase()
+      const project = String(entry.workspaceId || entry.workspace_id || workspaceIdForProject(entry.project || '')).trim()
       const identifier = String(entry.identifier || '').trim().toLowerCase()
       if (identifier) return `${project}::${entry.identifierKind || entry.identifier_type || 'accession'}:${identifier}`
       const url = String(entry.url || '').trim().toLowerCase().replace(/\/$/, '')
@@ -5368,13 +5624,14 @@ window.__ModuleLoader__.load({
       return payload.entries
     }
 
-    async function postFileEvidenceEntries(entries) {
+    async function postFileEvidenceEntries(entries, { allowExistingSources = false } = {}) {
       const byProject = new Map()
       for (const entry of entries) {
         const project = entry.project || 'default'
         if (!byProject.has(project)) byProject.set(project, [])
         byProject.get(project).push(entry)
       }
+      let existingSources = 0
       for (const [project, rows] of byProject) {
         const response = await fetch(EVIDENCE_SYNC_PATH, {
           method: 'POST',
@@ -5384,8 +5641,16 @@ window.__ModuleLoader__.load({
         })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const result = await response.json()
-        if (!result?.ok || result.added !== rows.length) throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+        const added = Number(result?.added)
+        const skipped = Number(result?.skipped)
+        if (!result?.ok || !Number.isInteger(added) || !Number.isInteger(skipped)
+          || added < 0 || skipped < 0 || added + skipped !== rows.length
+          || (!allowExistingSources && skipped)) {
+          throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+        }
+        existingSources += skipped
       }
+      return existingSources
     }
 
     async function updateFileEvidenceEntry(entry) {
@@ -5401,7 +5666,7 @@ window.__ModuleLoader__.load({
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
     }
 
-    async function performEvidenceVaultSync(project) {
+    async function performEvidenceVaultSync(project, { pullOnly = false, allowExistingSources = false } = {}) {
       if (!canUseFileSync()) return { skipped: true, imported: 0, exported: 0 }
       const store = evidenceVaultStore()
       const fileEntries = await fetchFileEvidenceEntries(project)
@@ -5425,32 +5690,37 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // 迁移备份只需收齐文件侧证据，不应因反向回写时的不同去重规则而拒绝导出。
+      if (pullOnly) return { skipped: false, imported, exported: 0 }
+
       const nextLocalEntries = await store.list(project ? { project } : {})
       const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
       const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
+      let existingSources = 0
       if (missing.length) {
-        await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry))
+        existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
         publishEvidenceVault()
       }
-      return { skipped: false, imported, exported: missing.length }
+      return { skipped: false, imported, exported: missing.length - existingSources, existingSources }
     }
 
-    function syncEvidenceVaultWithFiles(project, { force = false } = {}) {
+    function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {
       const scope = evidenceSyncScope(project)
+      const cacheScope = pullOnly ? `${scope}:pull` : allowExistingSources ? `${scope}:allow-existing` : scope
       const now = Date.now()
       pruneEvidenceSyncCache(now)
-      if (!force && (evidenceSyncFreshUntil.get(scope) || 0) > now) {
+      if (!force && (evidenceSyncFreshUntil.get(cacheScope) || 0) > now) {
         return Promise.resolve({ skipped: false, cached: true, imported: 0, exported: 0 })
       }
-      if (evidenceSyncInFlight.has(scope)) return evidenceSyncInFlight.get(scope)
-      const task = performEvidenceVaultSync(project)
+      if (evidenceSyncInFlight.has(cacheScope)) return evidenceSyncInFlight.get(cacheScope)
+      const task = performEvidenceVaultSync(project, { pullOnly, allowExistingSources })
         .then(result => {
-          evidenceSyncFreshUntil.set(scope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
+          evidenceSyncFreshUntil.set(cacheScope, Date.now() + EVIDENCE_SYNC_FRESH_MS)
           pruneEvidenceSyncCache()
           return result
         })
-        .finally(() => evidenceSyncInFlight.delete(scope))
-      evidenceSyncInFlight.set(scope, task)
+        .finally(() => evidenceSyncInFlight.delete(cacheScope))
+      evidenceSyncInFlight.set(cacheScope, task)
       return task
     }
 
@@ -5637,7 +5907,11 @@ window.__ModuleLoader__.load({
     function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
       const store = evidenceVaultStore()
       const [entries, setEntries] = React.useState([])
-      const [projects, setProjects] = React.useState([])
+      const [workspaces, setWorkspaces] = React.useState([])
+      const [showArchivedWorkspaces, setShowArchivedWorkspaces] = React.useState(false)
+      const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState('')
+      const [workspaceRenameOpen, setWorkspaceRenameOpen] = React.useState(false)
+      const [confirmArchiveWorkspace, setConfirmArchiveWorkspace] = React.useState(false)
       const [project, setProject] = React.useState(() => store.getActiveProject())
       const [loading, setLoading] = React.useState(true)
       const [query, setQuery] = React.useState('')
@@ -5699,11 +5973,11 @@ window.__ModuleLoader__.load({
         Promise.resolve()
           .then(() => syncEvidenceVaultWithFiles(project || undefined))
           .catch(() => {})
-          .then(() => Promise.all([store.list({ project: project || undefined }), store.listProjects(), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
+          .then(() => Promise.all([store.list({ project: project || undefined }), store.listWorkspaces({ includeArchived: true }), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
           .then(([rows, names, links, claims, ledger]) => {
             if (version !== refreshVersion.current) return
             setEntries(rows || [])
-            setProjects(names || [])
+            setWorkspaces(names || [])
             setLinks(Array.isArray(links) ? links : [])
             setClaims(Array.isArray(claims) ? claims : [])
             setLedger(Array.isArray(ledger) ? ledger : [])
@@ -5720,6 +5994,11 @@ window.__ModuleLoader__.load({
       React.useEffect(() => { recoverProjectOrganizationJournal(store).then(setOrganizerJournal).catch(error => setNotice(`⚠️ 项目整理恢复检查失败：${error.message}`)) }, [store])
 
       const counts = React.useMemo(() => statusCounts(entries), [entries])
+      const quality = React.useMemo(() => auditResearchDataQuality({
+        evidence: entries,
+        links: project ? links.filter(item => item.project === project) : links,
+        assetIds: assetTitlesById ? Object.keys(assetTitlesById) : null,
+      }), [entries, links, project, assetTitlesById])
       const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
       const displayedEntries = React.useMemo(() => groupByTopic
         ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
@@ -5751,6 +6030,8 @@ window.__ModuleLoader__.load({
         setConfirmClear(false)
         setConfirmDeleteId('')
         setSelectedIds([])
+        setWorkspaceRenameOpen(false)
+        setConfirmArchiveWorkspace(false)
       }
       const writeSelected = () => {
         if (writePlan.action !== 'write') return setNotice(writePlan.notice)
@@ -5858,12 +6139,33 @@ window.__ModuleLoader__.load({
         finally { setSourceCheckBusy(false); setSourceCheckProgress('') }
       }
 
-      const createProject = () => {
-        const name = String(newProject || '').trim()
-        if (!name) return
-        switchProject(name)
-        setNewProject('')
-        setNewProjectOpen(false)
+      const createProject = async () => {
+        try {
+          const workspace = await store.createWorkspace(newProject)
+          switchProject(workspace.projectKey)
+          setNewProject('')
+          setNewProjectOpen(false)
+          setNotice(`已创建课题空间「${workspace.name}」；其 ID 不随显示名变化。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const renameProject = async () => {
+        try {
+          const workspace = await store.renameWorkspace(project, workspaceNameDraft)
+          setWorkspaceRenameOpen(false)
+          refresh()
+          setNotice(`显示名已改为「${workspace.name}」；原项目键与证据归属保持不变。`)
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+      }
+      const toggleProjectArchive = async () => {
+        try {
+          const current = (await store.listWorkspaces({ includeArchived: true })).find(item => item.projectKey === project)
+          const archived = !current?.archived
+          await store.setWorkspaceArchived(project, archived)
+          setConfirmArchiveWorkspace(false)
+          if (archived) switchProject('')
+          else refresh()
+          setNotice(archived ? '课题空间已归档；证据、论断和运行记录均未删除。' : '课题空间已恢复到可选列表。')
+        } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
       const previewOrganizer = async () => {
@@ -5932,10 +6234,12 @@ window.__ModuleLoader__.load({
           const entryIds = new Set(entries.map(item => item.id))
           const scopedClaims = claims.filter(item => item.links.every(link => entryIds.has(link.evidenceId)))
           const scopedLinks = links.filter(item => entryIds.has(item.evidenceId))
-          const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger })
+          const scopedWorkspaces = workspaces.filter(item => (!project || item.projectKey === project)
+            && (item.origin === 'user' || item.updatedAt > 0))
+          const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger, workspaces: scopedWorkspaces })
           const suffix = project || '全部项目'
           downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
-          setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联与 ${ledger.length} 条账本事件。`)
+          setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联、${ledger.length} 条账本事件与 ${scopedWorkspaces.length} 个课题设置。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
@@ -5970,6 +6274,7 @@ window.__ModuleLoader__.load({
           const merged = mergeEntries(all, parsed.entries)
           const fresh = merged.rows.filter(row => !all.some(item => item.id === row.id))
           if (fresh.length) await store.importMany(fresh)
+          const restoredWorkspaces = await store.importWorkspaces(parsed.workspaces)
           const availableIds = new Set((await store.list()).map(item => item.id))
           const claimIds = new Set((await store.listResearchClaims()).map(item => item.id))
           let restoredClaims = 0, restoredLinks = 0, restoredLedger = 0, skippedRelated = 0
@@ -5998,7 +6303,7 @@ window.__ModuleLoader__.load({
           publishEvidenceVault()
           const tail = merged.skipped ? `，跳过 ${merged.skipped} 条已存在` : ''
           const bad = merged.invalid ? `，${merged.invalid} 条无法追溯已忽略` : ''
-          setNotice(`已恢复 ${merged.added} 条证据、${restoredClaims} 条论断、${restoredLinks} 条关联、${restoredLedger} 条账本事件${tail}${bad}${skippedRelated ? `；${skippedRelated} 条关联对象不存在，已跳过` : ''}。`)
+          setNotice(`已恢复 ${merged.added} 条证据、${restoredClaims} 条论断、${restoredLinks} 条关联、${restoredLedger} 条账本事件、${restoredWorkspaces} 个课题设置${tail}${bad}${skippedRelated ? `；${skippedRelated} 条关联对象不存在，已跳过` : ''}。`)
         } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
       }
 
@@ -6113,10 +6418,11 @@ window.__ModuleLoader__.load({
         ...EVIDENCE_STATUSES.map(status => ({ value: status, label: `${EVIDENCE_STATUS_LABELS[status]} ${counts[status] || 0}` })),
       ]
       const projectOptions = [
-        { value: '', label: '全部项目' },
-        ...projects.map(name => ({ value: name, label: name })),
-        ...(project && !projects.includes(project) ? [{ value: project, label: project }] : []),
+        { value: '', label: '全部课题（含归档）' },
+        ...workspaces.filter(item => showArchivedWorkspaces || !item.archived).map(item => ({ value: item.projectKey, label: item.archived ? `${item.name}（已归档）` : item.name })),
+        ...(project && !workspaces.some(item => item.projectKey === project && (showArchivedWorkspaces || !item.archived)) ? [{ value: project, label: `${workspaces.find(item => item.projectKey === project)?.name || project}（已归档或未登记）` }] : []),
       ]
+      const activeWorkspace = workspaces.find(item => item.projectKey === project)
 
       return h('div', { key: 'evidence-vault', style: { display: 'grid', gap: 12 } }, [
         degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
@@ -6127,11 +6433,15 @@ window.__ModuleLoader__.load({
         // 项目与维护动作：一次性操作，不随滚动吸顶（分层原则见 docs/ARCHITECTURE.md §2.3）。
         h(Card, { key: 'project-bar', style: { display: 'grid', gap: 10 } }, [
           h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-            h('strong', { key: 'label', style: { fontSize: 13 } }, '当前项目'),
+            h('strong', { key: 'label', style: { fontSize: 13 } }, '当前课题'),
             h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换项目', style: { width: 'auto', minWidth: 140 } }),
-            h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建项目'),
+            h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建课题'),
+            project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
+            project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
+            confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认：只归档，不删除数据') : null,
+            h(Button, { key: 'archived-toggle', size: 'sm', variant: 'ghost', onClick: () => setShowArchivedWorkspaces(value => !value) }, showArchivedWorkspaces ? '隐藏已归档' : '显示已归档'),
             h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-            h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length }, '导出备份'),
+            h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length && !workspaces.some(item => (!project || item.projectKey === project) && (item.origin === 'user' || item.updatedAt > 0)) }, '导出备份'),
             h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
             h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
             confirmClear
@@ -6141,8 +6451,12 @@ window.__ModuleLoader__.load({
                 project ? '清空本项目' : '清空全部'),
           ]),
           newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-            h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '项目名称，例：肿瘤队列分析', ariaLabel: '新项目名称', style: { flex: '1 1 200px' } }),
+            h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '稳定课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
             h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
+          ]) : null,
+          workspaceRenameOpen ? h('div', { key: 'rename-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+            h(Input, { key: 'input', value: workspaceNameDraft, onChange: setWorkspaceNameDraft, placeholder: '新的课题显示名', ariaLabel: '课题显示名', style: { flex: '1 1 200px' } }),
+            h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !workspaceNameDraft.trim(), onClick: renameProject }, '保存显示名'),
           ]) : null,
           h('div', { key: 'organizer-actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
             h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || (organizerJournal && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)), onClick: previewOrganizer }, '一键整理项目'),
@@ -6175,13 +6489,19 @@ window.__ModuleLoader__.load({
           ]) : null,
         ]),
 
+        h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
+          h('strong', { key: 'title', style: { fontSize: 13 } }, '数据质量提示 · 只读，不自动修改'),
+          h('span', { key: 'counts', style: { fontSize: 12, color: C.muted } }, `缺稳定标识符 ${quality.missingIdentifier} · 未核验 ${quality.unverified} · 标为失效／官方记录未找到 ${quality.staleOrMissing} · 疑似同源组 ${quality.duplicateGroups.length} · 关联断链 ${quality.orphanLinks.length}`),
+          quality.duplicateGroups.length ? h('span', { key: 'duplicates', style: { fontSize: 12, color: C.muted } }, `待人工复核的同源候选：${quality.duplicateGroups.slice(0, 3).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 3 ? '…' : ''}。跨课题重复可能是有意引用，不会自动合并。`) : null,
+          !quality.assetSideChecked ? h('span', { key: 'asset-limit', style: { fontSize: 11, color: C.muted } }, '当前未载入完整资产列表；断链数仅核对证据端。') : null,
+        ]),
         h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
           h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
             h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),
             h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, project ? `范围：项目「${project}」全部证据` : '范围：全部项目证据'),
           ]),
           h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
-            h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: runAgentAssessment },
+            h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: () => runAgentAssessment() },
               agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
             agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
             h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
@@ -6433,7 +6753,7 @@ window.__ModuleLoader__.load({
           if (request.signal.aborted) return
           if (!response.ok) throw new Error(body.message || body.error || `查询失败（HTTP ${response.status}）`)
           evidence.recordQuery({ databaseId: database.id, databaseName: database.name, mode: body.mode === 'agent-fallback' ? 'agent' : 'direct', sources: body.sources || [] })
-          setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: body, message: body.reason || '' })
+          setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: { ...body, queriedAt: Date.now() }, message: body.reason || '' })
         } catch (error) { if (!request.signal.aborted) setState({ status: 'error', result: null, message: String(error?.message || error) }) }
       }
       const writeAgentFallback = () => {
@@ -6467,13 +6787,13 @@ window.__ModuleLoader__.load({
         try {
           const result = state.result || {}
           const sources = Array.isArray(result.sources) ? result.sources : []
+          const snapshot = summarizeSearchSnapshot({ databaseId: database.id, query: result.query || databaseSearchText(query, englishQuery), sources })
           const store = evidenceVaultStore()
           await store.saveResearchLedgerEvent({
             kind: 'search', project: store.getActiveProject(), runId: activeResearchRun()?.id || '',
             question: query, database: database.name, query: result.query || databaseSearchText(query, englishQuery),
-            mode: result.mode || 'direct', resultCount: sources.length,
-            sourceIds: sources.map(item => item.id || item.url).filter(Boolean),
-            snapshotId: result.snapshotId || '',
+            mode: result.mode || 'direct', at: result.queriedAt,
+            ...snapshot,
           })
           setRecordedQuery(true)
           setState(current => ({ ...current, message: `已记录本次检索（当前返回 ${sources.length} 条候选）；检索记录不代表来源已纳入或核验。` }))
@@ -10126,7 +10446,7 @@ window.__ModuleLoader__.load({
     function PreparingResearchToolView({ toolName, useToolCallArgumentsPartial }) {
       const raw = typeof useToolCallArgumentsPartial === 'function' ? useToolCallArgumentsPartial() : ''
       const tool = byName.get(toolName)
-      return React.createElement('section', { 'aria-label': `${tool?.labelZh || toolName} 工具详情`, role: 'status', style: { margin: '8px 0', padding: '10px 12px', border: '1px solid #0969da33', borderRadius: 9, background: '#f6f8fa', fontSize: 12 } }, [
+      return React.createElement('section', { 'aria-label': `${tool?.labelZh || toolName} 工具详情`, role: 'status', style: { margin: '8px 0', padding: '10px 12px', maxWidth: '100%', minWidth: 0, overflowWrap: 'anywhere', border: `1px solid ${C.line}`, borderLeft: `3px solid ${C.blue}`, borderRadius: 9, background: C.surface, color: C.ink, fontSize: 12 } }, [
         React.createElement('strong', { key: 'name' }, `${tool?.labelZh || toolName} · 准备中`),
         React.createElement('div', { key: 'arguments' }, researchToolArgumentSummary(raw)),
       ])
@@ -10142,22 +10462,22 @@ window.__ModuleLoader__.load({
       const value = phase === 'result' ? resultValue(block) : null
       const failed = phase === 'result' && (block?.isError === true || value?.error === true)
       const state = phase === 'start' ? '执行中' : failed ? '失败' : '已完成'
-      const tone = failed ? '#cf222e' : tool?.access === 'writes' ? '#9a6700' : tool?.access === 'external' ? '#0969da' : '#1a7f37'
+      const tone = failed ? C.red : tool?.access === 'writes' ? C.amber : tool?.access === 'external' ? C.blue : C.teal
       return React.createElement('section', {
         'aria-label': `${tool?.labelZh || toolName} 工具详情`,
-        style: { margin: '8px 0', padding: '10px 12px', border: `1px solid ${tone}33`, borderRadius: 9, background: '#f6f8fa', fontSize: 12, lineHeight: 1.5 },
+        style: { margin: '8px 0', padding: '10px 12px', maxWidth: '100%', minWidth: 0, overflowWrap: 'anywhere', border: `1px solid ${C.line}`, borderLeft: `3px solid ${tone}`, borderRadius: 9, background: C.surface, color: C.ink, fontSize: 12, lineHeight: 1.5 },
       }, [
         React.createElement('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8 } }, [React.createElement('strong', { key: 'name' }, tool?.labelZh || toolName), React.createElement('span', { key: 'state', style: { color: tone } }, state)]),
-        React.createElement('div', { key: 'summary', style: { color: '#57606a' } }, tool?.summaryZh || '科研 MCP 工具'),
+        React.createElement('div', { key: 'summary', style: { color: C.muted } }, tool?.summaryZh || '科研 MCP 工具'),
         phase === 'start' ? React.createElement('div', { key: 'arguments', style: { marginTop: 5 } }, researchToolArgumentSummary(block?.argsRaw)) : null,
         failed ? React.createElement('div', { key: 'error', role: 'alert', style: { marginTop: 5, color: tone } }, String(value?.message || block?.error?.message || '工具执行失败').slice(0, 240)) : null,
-        evidence.length ? React.createElement('div', { key: 'evidence', style: { display: 'grid', gap: 6, marginTop: 7 } }, evidence.map((item, index) => React.createElement('div', { key: `${item.title}:${index}`, style: { padding: '6px 8px', borderLeft: `3px solid ${tone}`, background: '#fff' } }, [
+        evidence.length ? React.createElement('div', { key: 'evidence', style: { display: 'grid', gap: 6, marginTop: 7, minWidth: 0 } }, evidence.map((item, index) => React.createElement('div', { key: `${item.title}:${index}`, style: { padding: '6px 8px', minWidth: 0, borderLeft: `3px solid ${tone}`, background: C.surfaceAlt } }, [
           React.createElement('div', { key: 'title' }, item.title),
-          React.createElement('div', { key: 'meta', style: { color: '#57606a' } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, ...item.grades.map(fact => `${fact.label}：${fact.value}`), verificationLabel(item.verification)].filter(Boolean).join(' · ')),
+          React.createElement('div', { key: 'meta', style: { color: C.muted } }, [`来源：${item.source}`, item.doi ? `DOI：${item.doi}` : null, ...item.grades.map(fact => `${fact.label}：${fact.value}`), verificationLabel(item.verification)].filter(Boolean).join(' · ')),
           item.url ? React.createElement('a', { key: 'url', href: item.url, target: '_blank', rel: 'noreferrer' }, '打开来源') : null,
         ]))) : null,
-        pending.length ? React.createElement('div', { key: 'pending', style: { marginTop: 7, color: '#9a6700' } }, pending.map((item, index) => React.createElement('div', { key: index }, `人工确认：${item}`))) : null,
-        text ? React.createElement('div', { key: 'out', style: { marginTop: 5, color: '#24292f', whiteSpace: 'pre-wrap' } }, text.replace(/\s+/g, ' ')) : null,
+        pending.length ? React.createElement('div', { key: 'pending', style: { marginTop: 7, color: C.amber } }, pending.map((item, index) => React.createElement('div', { key: index }, `人工确认：${item}`))) : null,
+        text ? React.createElement('div', { key: 'out', style: { marginTop: 5, color: C.ink, whiteSpace: 'pre-wrap' } }, text.replace(/\s+/g, ' ')) : null,
         typeof inspect === 'function' ? React.createElement('button', { key: 'inspect', type: 'button', onClick: inspect, style: { marginTop: 7 } }, '查看调用详情') : null,
       ])
     }
@@ -10787,6 +11107,186 @@ window.__ModuleLoader__.load({
 
 
 
+    const TRANSFER_SECTIONS = [
+      ['evidence', '证据'], ['claims', '论断'], ['links', '资产关联'], ['ledger', '筛选账本'],
+      ['workspaces', '课题设置'], ['knowledgeNodes', '知识节点'], ['knowledgeClaims', '知识关系'],
+      ['assets', '灵感资产'], ['runs', '研究运行'],
+    ]
+
+    function transferDownload(text, name) {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    }
+
+    async function captureResearchTransfer(assetProvider) {
+      if (!assetProvider?.list || !assetProvider?.save) throw new Error('灵感资产服务尚未就绪。')
+      const synced = await syncEvidenceVaultWithFiles('', { force: true, pullOnly: true })
+      const evidence = evidenceVaultStore()
+      const knowledge = knowledgeStore()
+      const [entries, claims, links, ledger, workspaces, nodes, knowledgeClaims, assets] = await Promise.all([
+        evidence.list(), evidence.listResearchClaims(), evidence.listAssetEvidenceLinks(),
+        evidence.listResearchLedger(), evidence.listWorkspaces({ includeArchived: true }),
+        knowledge.listNodes(), knowledge.listClaims(), assetProvider.list(),
+      ])
+      if (evidence.isDegraded() || knowledge.isDegraded()) throw new Error('本地数据库不可用；为防止只迁移到临时内存，已停止。')
+      if (synced.skipped) throw new Error('文件同步不可用；为防止遗漏 Agent 保存的证据，已停止。')
+      const evidenceBackup = JSON.parse(serializeEvidenceBackup({ entries, claims, links, ledger,
+        workspaces: workspaces.filter(row => row.origin === 'user' || row.updatedAt > 0) }))
+      const knowledgeBackup = JSON.parse(serializeKnowledgeBackup({ nodes, claims: knowledgeClaims }))
+      // 导出时间只属于外层迁移文件；基线比较必须只比较业务数据。
+      evidenceBackup.exportedAt = 0
+      knowledgeBackup.exportedAt = 0
+      return {
+        evidence: evidenceBackup,
+        knowledge: knowledgeBackup,
+        assets, runs: listResearchRuns(),
+      }
+    }
+
+    async function applyResearchTransfer(incoming, current, assetProvider, progress) {
+      const store = evidenceVaultStore()
+      const existing = current.evidence.entries
+      const merged = mergeEntries(existing, incoming.evidence.entries)
+      const addedEntries = merged.rows.filter(row => !existing.some(item => item.id === row.id))
+      progress('正在导入证据与课题…')
+      if (addedEntries.length) await store.importMany(addedEntries)
+      await store.importWorkspaces(incoming.evidence.workspaces)
+
+      progress('正在导入灵感资产…')
+      const assetIds = new Set(current.assets.map(item => item.id))
+      for (const item of incoming.assets) {
+        if (assetIds.has(item.id)) continue
+        await assetProvider.save(item)
+        assetIds.add(item.id)
+      }
+
+      progress('正在恢复证据关联与账本…')
+      const evidenceIds = new Set((await store.list()).map(item => item.id))
+      let skippedRelated = 0
+      const claimIds = new Set(current.evidence.claims.map(item => item.id))
+      for (const item of incoming.evidence.claims) {
+        if (claimIds.has(item.id)) continue
+        if (item.links?.some(link => !evidenceIds.has(link.evidenceId))) { skippedRelated++; continue }
+        await store.saveResearchClaim(item)
+        claimIds.add(item.id)
+      }
+      const linkIds = new Set(current.evidence.links.map(item => item.id))
+      for (const item of incoming.evidence.links) {
+        if (linkIds.has(item.id)) continue
+        if (!evidenceIds.has(item.evidenceId) || !assetIds.has(item.assetId)) { skippedRelated++; continue }
+        await store.linkAssetEvidence(item)
+        linkIds.add(item.id)
+      }
+      const ledgerIds = new Set(current.evidence.ledger.map(item => item.id))
+      for (const item of incoming.evidence.ledger) {
+        if (ledgerIds.has(item.id)) continue
+        if (item.kind === 'screening' && !evidenceIds.has(item.evidenceId)) { skippedRelated++; continue }
+        await store.saveResearchLedgerEvent(item)
+        ledgerIds.add(item.id)
+      }
+
+      progress('正在导入知识与研究运行…')
+      await knowledgeStore().importBackup(incoming.knowledge)
+      importResearchRuns(incoming.runs)
+      progress('正在同步文件侧证据…')
+      invalidateEvidenceSync()
+      const synced = await syncEvidenceVaultWithFiles('', { force: true, allowExistingSources: true })
+      publishEvidenceVault()
+      publishKnowledge()
+      return { addedEvidence: addedEntries.length, skippedEvidence: merged.skipped, invalidEvidence: merged.invalid,
+        skippedRelated, existingSources: synced.existingSources || 0 }
+    }
+
+    function ResearchTransferPanel({ assetProvider, onClose }) {
+      const [incoming, setIncoming] = React.useState(null)
+      const [preview, setPreview] = React.useState(null)
+      const [baseline, setBaseline] = React.useState(null)
+      const [backupReady, setBackupReady] = React.useState(false)
+      const [busy, setBusy] = React.useState(false)
+      const [notice, setNotice] = React.useState('')
+      const [progress, setProgress] = React.useState('')
+
+      const exportCurrent = async () => {
+        setBusy(true)
+        try {
+          const data = await captureResearchTransfer(assetProvider)
+          transferDownload(await serializeResearchTransfer(data), `research-kit-app-transfer-${Date.now()}.json`)
+          setNotice('已生成完整迁移包。请妥善保管；它包含笔记、灵感资产及来源摘录。')
+        } catch (error) { setNotice(`导出失败：${error?.message || error}`) }
+        finally { setBusy(false) }
+      }
+      const selectFile = async event => {
+        setIncoming(null); setPreview(null); setBaseline(null); setBackupReady(false)
+        const file = event.target.files?.[0]
+        if (!file) return
+        if (file.size > 30_000_000) return setNotice('迁移文件超过 30 MB；请分批导出或联系维护者。')
+        setBusy(true)
+        try {
+          const data = await parseResearchTransfer(await file.text())
+          const current = await captureResearchTransfer(assetProvider)
+          setIncoming(data)
+          setPreview(previewResearchTransfer(data, current))
+          setBaseline(JSON.stringify(current))
+          setNotice('校验通过。请检查预览，先下载本端备份，再确认增量导入。已有 ID 不覆盖。')
+        } catch (error) { setNotice(`预览失败：${error?.message || error}`) }
+        finally { setBusy(false); event.target.value = '' }
+      }
+      const backupCurrent = async () => {
+        setBusy(true)
+        try {
+          const current = await captureResearchTransfer(assetProvider)
+          if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，请重新选择迁移文件并预览。')
+          transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
+          setBackupReady(true)
+          setNotice('已生成本端导入前备份。确认文件已保存后，再点击“确认增量导入”。')
+        } catch (error) { setBackupReady(false); setNotice(`备份失败：${error?.message || error}`) }
+        finally { setBusy(false) }
+      }
+      const apply = async () => {
+        if (!incoming || !backupReady) return
+        setBusy(true)
+        try {
+          const current = await captureResearchTransfer(assetProvider)
+          if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，未导入；请重新选择迁移文件并预览。')
+          if (current.runs.length + preview.runs.add > MAX_RESEARCH_RUNS) throw new Error(`合并后研究运行超过 ${MAX_RESEARCH_RUNS} 条上限，已停止；请先备份并整理旧运行。`)
+          const result = await applyResearchTransfer(incoming, current, assetProvider, setProgress)
+          setNotice(`导入完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条，拒收无效 ${result.invalidEvidence} 条，未恢复关联 ${result.skippedRelated} 条。${result.existingSources ? `文件侧已有同源证据 ${result.existingSources} 条，未覆盖原记录；` : ''}其余数据按稳定 ID 增量合并，请刷新核对。`)
+          setIncoming(null); setPreview(null); setBackupReady(false)
+        } catch (error) { setNotice(`导入未完成：${error?.message || error}。原数据未清空；可用导入前备份核对，重新预览后续导。`) }
+        finally { setBusy(false); setProgress('') }
+      }
+
+      return h(Card, { style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 10, maxWidth: 780 } }, [
+        h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
+          h('strong', { key: 'title' }, '迁移到 DSH App'),
+          h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: onClose }, '关闭'),
+        ]),
+        h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '在旧 Web 端导出迁移包；在 App 中选择该文件，预览后增量导入。两端页面源不同，不会自动共享浏览器数据。'),
+        h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+          h(Button, { key: 'export', size: 'sm', disabled: busy, onClick: exportCurrent }, '导出本端完整迁移包'),
+          h('label', { key: 'file', style: { display: 'inline-grid', gap: 4, fontSize: 12, color: C.ink } }, [
+            '选择迁移文件', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 迁移文件' }),
+          ]),
+        ]),
+        preview ? h('div', { key: 'preview', role: 'status', style: { display: 'grid', gap: 4, fontSize: 12 } }, [
+          h('strong', { key: 'label' }, '导入预览（总数／预计新增／本端已有）'),
+          ...TRANSFER_SECTIONS.map(([key, label]) => h('div', { key }, `${label}：${preview[key].total}／${preview[key].add}／${preview[key].existing}${preview[key].invalid ? `（无效 ${preview[key].invalid}）` : ''}`)),
+          h('div', { key: 'confirm', style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 } }, [
+            h(Button, { key: 'backup', size: 'sm', disabled: busy, onClick: backupCurrent }, '先下载本端备份'),
+            h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy || !backupReady, onClick: apply }, '确认增量导入'),
+          ]),
+        ]) : null,
+        progress ? h('span', { key: 'progress', role: 'status', style: { color: C.teal } }, progress) : null,
+        notice ? h(Notice, { key: 'notice', tone: notice.includes('失败') || notice.includes('未完成') ? 'error' : 'info' }, notice) : null,
+      ])
+    }
+
+
+
     // 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
     // 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
     //
@@ -10831,6 +11331,7 @@ window.__ModuleLoader__.load({
       const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
       const [catalogError, setCatalogError] = React.useState('')
       const [promptKitError, setPromptKitError] = React.useState('')
+      const [transferOpen, setTransferOpen] = React.useState(false)
       const current = findConsoleSection(section)
       const navRef = React.useRef(null)
       // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
@@ -10916,9 +11417,11 @@ window.__ModuleLoader__.load({
                 style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
               }),
               activeRun ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeRun.workflowName || '未命名工作流'} · ${activeRun.status}`) : null,
+              h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '迁移到 App'),
             ]),
           ]),
         ]),
+        transferOpen ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
         h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
           ? (view ? view(props) : null)
           : resourceError

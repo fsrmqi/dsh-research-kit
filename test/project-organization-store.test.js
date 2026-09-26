@@ -4,6 +4,7 @@ import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import { createEvidenceVaultStore } from '../src/evidence-vault-store.js'
 import { createKnowledgeStore } from '../src/knowledge-store.js'
 import { extractKnowledge } from '../src/lib/knowledge-extract.js'
+import { workspaceIdForProject } from '../src/lib/research-workspaces.js'
 
 test('浏览器项目整理：证据、关联与知识节点迁移后可撤销，重建 store 可读快照', async () => {
   const fake = installFakeIndexedDB()
@@ -22,12 +23,14 @@ test('浏览器项目整理：证据、关联与知识节点迁移后可撤销�
     await knowledge.remapProjects(moves, { expectedSnapshot: knowledgePlan })
     assert.equal((await evidence.list({ project: '大麦雄性不育' })).length, 1)
     assert.equal((await evidence.list({ project: '大麦雄性不育' }))[0].legacyProject, 'barley-NP1-IPE1-family')
+    assert.equal((await evidence.list({ project: '大麦雄性不育' }))[0].workspaceId, workspaceIdForProject('大麦雄性不育'))
     assert.equal((await evidence.listAssetEvidenceLinks({ project: '大麦雄性不育' })).length, 1)
     assert.ok((await knowledge.listNodes()).some(item => item.project === '大麦雄性不育'))
     assert.equal((await createEvidenceVaultStore().readOrganizerJournal()).fileId, 'file-1')
     await knowledge.restoreProjectOrganization(knowledgePlan)
     await evidence.restoreProjectOrganization(evidencePlan)
     assert.equal((await evidence.list({ project: 'barley-NP1-IPE1-family' })).length, 1)
+    assert.equal((await evidence.list({ project: 'barley-NP1-IPE1-family' }))[0].workspaceId, workspaceIdForProject('barley-NP1-IPE1-family'))
     assert.equal((await evidence.listAssetEvidenceLinks({ project: 'barley-NP1-IPE1-family' })).length, 1)
   } finally { fake.restore() }
 })
