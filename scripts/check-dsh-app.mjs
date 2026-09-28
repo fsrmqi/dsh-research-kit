@@ -26,14 +26,23 @@ import {
 const PACKAGE = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const INJECT = PACKAGE.dsh?.client?.inject || []
 
-const args = process.argv.slice(2)
-const flags = new Set(args.filter(arg => arg.startsWith('--')))
-const pathArg = args.find(arg => !arg.startsWith('--'))
+const KNOWN_FLAGS = new Set(['--require-source'])
 
+// 失败即终止：以前只设 exitCode 然后继续跑，会出现「退出码 2、最后一行却打印兼容性检查通过」
+// 这种自相矛盾；更糟的是拼错 --require-source 时整条硬门禁静默退化成"跳过"，CI 只看退出码。
 function fail(message) {
   process.stderr.write(`${message}\n`)
-  process.exitCode = 2
+  process.exit(2)
 }
+
+const args = process.argv.slice(2)
+const flags = new Set()
+for (const arg of args) {
+  if (!arg.startsWith('--')) continue
+  if (!KNOWN_FLAGS.has(arg)) fail(`未知参数：${arg}（已知参数：${[...KNOWN_FLAGS].join(' / ')}）`)
+  flags.add(arg)
+}
+const pathArg = args.find(arg => !arg.startsWith('--'))
 
 function report(label, ok) {
   process.stdout.write(`  ${ok ? '✓' : '✗'} ${label}\n`)
@@ -86,10 +95,20 @@ if (worktree) {
     targets.push({ baseline, source })
   }
 } else {
+  const skipped = []
   for (const baseline of BASELINES) {
     const picked = sourceForBaseline(baseline)
     if (picked.source) targets.push({ baseline, source: picked.source })
-    else process.stdout.write(`○ 跳过 ${baseline.version}：${picked.skip}\n`)
+    else {
+      skipped.push({ baseline, reason: picked.skip })
+      process.stdout.write(`○ 跳过 ${baseline.version}：${picked.skip}\n`)
+    }
+  }
+  // --require-source 的语义是「每个声明的基线都真的核对过」，不是「至少核对了一个」。
+  // 只拉到一个 tag 就报"1 个基线 × 全部 seam 成立"，等于把硬门禁悄悄变窄。
+  if (skipped.length && flags.has('--require-source')) {
+    fail(`--require-source：有 ${skipped.length} 个基线没有源码，不得只核对部分基线\n`
+      + skipped.map(item => `  ✗ ${item.baseline.version}：${item.reason}`).join('\n'))
   }
 }
 

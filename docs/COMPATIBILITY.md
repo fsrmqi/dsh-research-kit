@@ -24,7 +24,7 @@
 
 ## 3. 我们依赖的宿主契约
 
-`HOST_SEAMS` 共 12 条，逐条对应宿主源码里的一个文件与若干**逐字**存在的 token：
+`HOST_SEAMS` 共 **11 条**（下表 10 条必需 + 1 条可选），逐条对应宿主源码里的一个文件与若干**逐字**存在的 token。CLI 报的「12 条 seam」是再加上一条动态检查（浏览器模块表能回答产物的每个 `require`），它不是 `HOST_SEAMS` 的成员：
 
 | seam | 宿主位置 | 覆盖的槽位/能力 |
 | --- | --- | --- |
@@ -71,13 +71,22 @@ npm run check:dsh-app -- ~/dev/deepseek-harness           # 核对本地工作�
 npm test                                                  # 含 test/dsh-compat-matrix.test.mjs
 ```
 
-退出码：`0` 通过；`1` 有必需 seam 或契约失败；`2` 用法错误 / 找不到可用源码。
+退出码：
 
-源码解析顺序（`scripts/lib/dsh-compat.mjs` 的 `resolveDshRepo`）：
+| 码 | 含义 |
+| --- | --- |
+| `0` | 全部核对通过；**或者**未找到任何源码且没加 `--require-source`（明确跳过，输出里会打印 `○ 跳过 …`） |
+| `1` | 有必需 seam、平台模块表、版本自证或插件自身契约失败 |
+| `2` | 用法/前置条件错误：未知参数、路径不存在、工作树版本不在基线里；`--require-source` 下少任何一个基线的源码也归此类 |
+
+`--require-source` 的语义是「**每个**声明的基线都真的核对过」，不是「至少核对了一个」——少一个就退出 2 并点名缺哪个。未知参数（例如把 `--require-source` 拼错）同样直接退出 2，不允许静默降级成跳过：CI 只看退出码，静默跳过等于门禁消失。
+
+源码解析顺序（`scripts/lib/dsh-compat.mjs` 的 `resolveDshRepo` 与 `sourceForBaseline`）：
 
 1. `$DSH_REPO`（指向宿主仓库或工作树）；
 2. `.tmp/dsh-repo`（`npm run baselines:fetch` 的落点，CI 用）；
-3. `~/dev/deepseek-harness`（本机常见克隆位置）。
+3. `~/dev/deepseek-harness`（本机常见克隆位置）；
+4. `.tmp/dsh-tags/<基线 id>`（离线时把基线 tag 解包成工作树；也可用 `DSH_TAGS_DIR` 改目录）——本机没网、没克隆时靠这一条，前三处都找不到它才生效。
 
 **离线时矩阵自动跳过**（`test/dsh-compat-matrix.test.mjs` 用 `skip` 而不是静默通过），CI 则用 `--require-source` 把「没源码」变成硬失败。除宿主源码外，同文件里还有一组**永远可跑**的断言：基线数据自洽、seam 形状合法、插件注册的每个槽位都在矩阵里被看守、插件自身接线契约、以及上面两条缺口绊线。
 
