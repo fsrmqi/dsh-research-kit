@@ -91,6 +91,8 @@ Research Kit 把这四点做成可复用的资产。
 
 **科研 Claim 与 Context Pack**：MCP 新增显式 Claim 台账。每条 Claim 必须带认识论状态：`extracted`、`inferred`、`ambiguous`、`verified` 或 `rejected`；只有人工提供证据 ID、操作人和评估理由才能写成 `verified`。`research_run_checkpoint_approve` 可附带验证回执，而 `research_context_pack` 只投影 Claim、证据元数据与人工回执，要求用户审阅后再选择注入，绝不把未确认结论改写为事实，也不携带论文全文、笔记或检索词。
 
+**Claim 审阅面板**：研究资产库新增「Claim 审阅」子模块，直接读取同一份 MCP Claim 台账。可登记摘取草稿、逐条选择确认／存疑／驳回、填写评估人和理由并勾选当前课题已保存的证据；确认时服务端再次校验证据 ID。界面只展示证据标题与标识符，不返回笔记或全文。
+
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
 

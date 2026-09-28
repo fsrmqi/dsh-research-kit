@@ -110,6 +110,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
 - **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 35 `research_*` tools (literature search and verification, evidence inventory and manual assessment, an explicit Claim ledger, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+- **Claim review panel** — in Research Assets, reviewers can register Claim drafts, mark each Claim verified, ambiguous, or rejected, record their name and rationale, and link saved evidence from the current project. The panel uses the same file-backed Claim ledger as the MCP tools and displays evidence metadata without notes or full text.
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
 

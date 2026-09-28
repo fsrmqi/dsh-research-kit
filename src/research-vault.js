@@ -14,6 +14,7 @@ import {
   linkAssetToEvidence, removeAssetEvidenceLinkEntry,
 } from './research-evidence-vault.js'
 import { knowledgeStore } from './knowledge-store.js'
+import { ResearchClaimReview } from './research-claim-review.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
 // StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
@@ -31,12 +32,12 @@ const VERIFICATION_LABELS = { confirmed: '已证实', pending: '待验证', refu
 const VERIFICATION_COLORS = { confirmed: C.statusVerified, pending: C.statusToVerify, refuted: C.statusRefuted, inconclusive: C.muted }
 const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '研究见解' }
 
-// 沉淀层的两个子模块：灵感资产回答「想过什么」，证据库回答「依据什么」。
-// 刻意不做成第五个并列分区——ROADMAP §4 的产品定位是「沉淀层升级为研究资产库」，
-// 先把两个子模块收在同一层里，等 4b–4d 落地后再整体更名。
+// 沉淀层的三个子模块：灵感资产回答「想过什么」，证据库回答「依据什么」，
+// Claim 审阅回答「研究者如何判断这条结论」。
 const VAULT_TABS = [
   { value: 'assets', label: '灵感资产' },
   { value: 'evidence', label: '证据库' },
+  { value: 'claims', label: 'Claim 审阅' },
 ]
 
 function formatAssetTime(at) {
@@ -277,11 +278,12 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
-      title: tab === 'evidence' ? '研究证据库' : '研究资产库',
+      title: tab === 'evidence' ? '研究证据库' : tab === 'claims' ? '科研 Claim 审阅' : '研究资产库',
       lead: tab === 'evidence'
         ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「未核验」。'
-        : '两个子模块并列：灵感资产沉淀可复用的提示词、研究问题与待验证假设；证据库存放逐条确认的公开来源。原始数据与完整查询结果不入库。',
-      actions: tab === 'evidence' ? [] : [
+        : tab === 'claims' ? '逐条审阅科研结论，记录评估人、理由和关联证据。'
+          : '灵感资产沉淀研究问题与假设；证据库存放公开来源；Claim 审阅记录结论的人工判断。',
+      actions: tab !== 'assets' ? [] : [
         h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
         h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
       ],
@@ -342,6 +344,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
     tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider }) : null,
+    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review' }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',

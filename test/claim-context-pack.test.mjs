@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { createServer } from 'node:http'
 
 process.env.HOME = await mkdtemp(path.join(os.tmpdir(), 'dsh-claim-context-'))
 
@@ -10,6 +11,7 @@ const { saveEvidence } = await import('../mcp/execution/evidence-store.js')
 const { initializeCheckpoints, recordApproval } = await import('../mcp/state/checkpoint-manager.js')
 const { listResearchClaims, recordResearchClaim } = await import('../mcp/state/claim-ledger.js')
 const { buildResearchContextPack } = await import('../mcp/state/research-context-pack.js')
+const { claimReviewRoute } = await import('../dsh/claim-review.js')
 
 test.after(async () => { await rm(process.env.HOME, { recursive: true, force: true }) })
 
@@ -56,4 +58,35 @@ test('科研 Context Pack：只投影证据元数据与验证回执，未确认 
   assert.equal(pack.validation_receipts[0].evidence_ids[0], saved.id)
   assert.ok(pack.warnings.some(warning => warning.includes('未确认 Claim')))
   assert.ok(!JSON.stringify(pack).includes('note'), 'Context Pack 不应投影证据笔记或全文')
+})
+
+test('Claim 审阅 HTTP：草稿、人工确认与证据元数据同源往返', async () => {
+  const project = 'review-http-demo'
+  const saved = await saveEvidence({ identifier_type: 'doi', identifier: '10.9999/review-http',
+    title: 'Review HTTP Evidence', note: '不应返回的私人笔记', project })
+  const route = claimReviewRoute()
+  const server = createServer((req, res) => route.handler(req, res))
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  const url = `http://127.0.0.1:${server.address().port}/dsh-research-kit/claim-review`
+  const post = async body => {
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    return { status: response.status, result: await response.json() }
+  }
+  try {
+    const draft = await post({ project, statement: '干预 A 改善结局 B', state: 'extracted' })
+    assert.equal(draft.status, 200)
+    const invalid = await post({ project, claim_id: draft.result.claim.id, statement: draft.result.claim.statement,
+      state: 'verified', evidence_ids: ['not-here'], assessed_by: '研究者', assessment_reason: '已核对研究方法' })
+    assert.equal(invalid.status, 400)
+    const confirmed = await post({ project, claim_id: draft.result.claim.id, statement: draft.result.claim.statement,
+      state: 'verified', evidence_ids: [saved.id], assessed_by: '研究者', assessment_reason: '已核对研究方法' })
+    assert.equal(confirmed.status, 200)
+    const response = await fetch(`${url}?project=${project}`)
+    const payload = await response.json()
+    assert.equal(payload.claims[0].state, 'verified')
+    assert.equal(payload.evidence[0].id, saved.id)
+    assert.ok(!JSON.stringify(payload).includes('不应返回的私人笔记'))
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
 })

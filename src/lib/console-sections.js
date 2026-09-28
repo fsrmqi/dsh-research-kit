@@ -31,9 +31,9 @@ export const RESEARCH_CONSOLE_SECTIONS = [
     id: 'vault',
     label: '研究资产库',
     position: '沉淀层 · 把产出与结论存成可追溯、可验证的资产',
-    purpose: '两个子模块并列：①「灵感资产」的增删改查、派生版本与版本对比、验证状态跟进（待验证 / 已证实 / 已被推翻）、收藏、JSON 导出与增量恢复；②「证据库」逐条保存公开来源的元数据与用户笔记，按项目隔离与去重，支持导出、导入与彻底删除。',
-    boundary: '不生成提示词，只向生成环节提供素材；原始数据、患者信息与完整查询结果不入库；证据条目必须由用户逐条确认，不自动入库、不静默注入提示词；单条灵感资产正文上限 8000 字符。',
-    ownership: '灵感资产（PromptKit asset provider 命名空间）；证据条目（IndexedDB dsh-research-kit-evidence）',
+    purpose: '三个子模块并列：①「灵感资产」管理研究问题与可复用内容；②「证据库」保存可追溯公开来源；③「Claim 审阅」逐条记录科研结论的确认、存疑或驳回，以及评估人、理由和证据关联。',
+    boundary: '不生成提示词，只向生成环节提供素材；原始数据、患者信息与完整查询结果不入库；证据条目由用户逐条确认；Claim 不能由自动检索升级为已确认；单条灵感资产正文上限 8000 字符。',
+    ownership: '灵感资产（PromptKit asset provider）；证据条目（IndexedDB 与文件证据库）；科研 Claim（MCP 文件台账）',
   },
   {
     id: 'evidence',

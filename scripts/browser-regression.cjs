@@ -7,6 +7,7 @@ const repo = path.resolve(__dirname, '..');
 const artifacts = path.join(repo, 'browser-results');
 fs.mkdirSync(artifacts, { recursive: true });
 let catalogRequests=0, promptKitRequests=0, archifyRequests=0, hostCapabilitiesRequests=0;
+let claimRecords=[];
 const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>科研工作台回归验证</title><div id="root"></div><div id="plugin-status"></div><div id="composer" data-composer-card style="position:fixed;bottom:12px;left:12px;width:min(560px,calc(100vw - 24px));z-index:30000"></div>
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(id=>id==='react-dom'?ReactDOM:React)}};</script>
@@ -50,6 +51,20 @@ const server = http.createServer((req,res)=>{
   });
   return;
  }
+ if(req.url?.startsWith('/dsh-research-kit/claim-review')){
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  if(req.method==='GET') return res.end(JSON.stringify({ok:true,project:'default',claims:[...claimRecords].reverse(),evidence:[{id:'qa-evidence-1',title:'人工核对的文献',identifier_type:'doi',identifier:'10.9999/qa'}]}));
+  if(req.method==='POST'){
+   let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
+    const input=JSON.parse(body||'{}');
+    const previous=claimRecords.find(item=>item.id===input.claim_id);
+    const claim={...previous,...input,id:input.claim_id||'qa-claim-1'};
+    claimRecords=claimRecords.filter(item=>item.id!==claim.id).concat(claim);
+    res.end(JSON.stringify({ok:true,claim,updated:Boolean(previous)}));
+   });
+   return;
+  }
+ }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
@@ -66,6 +81,32 @@ const server = http.createServer((req,res)=>{
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
   await page.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
+  await page.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await page.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
+  await page.getByLabel('新建 Claim 内容').fill('干预 A 改善结局 B');
+  await page.getByRole('button',{name:'登记草稿'}).click();
+  await page.getByText('干预 A 改善结局 B').waitFor();
+  assert.equal(claimRecords[0].state,'extracted');
+  await page.getByRole('button',{name:'逐条审阅'}).click();
+  await page.getByRole('button',{name:'确认',exact:true}).click();
+  await page.getByLabel('Claim 评估人').fill('测试研究者');
+  await page.getByLabel('Claim 评估理由').fill('已核对研究方法和结果');
+  await page.getByRole('button',{name:'保存审阅'}).click();
+  await page.getByRole('status').getByText('确认 Claim 前至少关联一条已保存证据。').waitFor();
+  assert.equal(claimRecords[0].state,'extracted');
+  await page.getByLabel('关联证据：人工核对的文献').check();
+  await page.getByRole('button',{name:'保存审阅'}).click();
+  await page.getByText('已人工确认',{exact:true}).waitFor();
+  assert.deepEqual(claimRecords[0].evidence_ids,['qa-evidence-1']);
+  if(process.env.RK_CLAIM_QA_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_SCREENSHOT});
+  await page.setViewportSize({width:390,height:900});
+  const claimLayout=await page.getByLabel('Claim 审阅').evaluate(element=>({width:element.getBoundingClientRect().width,scrollWidth:element.scrollWidth}));
+  assert.ok(claimLayout.scrollWidth<=claimLayout.width+2,'Claim 面板不应出现横向溢出');
+  await page.getByText('干预 A 改善结局 B').scrollIntoViewIfNeeded();
+  if(process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT});
+  await page.setViewportSize({width:1280,height:900});
+  console.log('Claim 审阅：草稿登记、确认门禁、证据关联及窄屏布局通过');
+  await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();
   await page.evaluate(()=>{
     const target=document.createElement('div'); target.id='tool-card-smoke'; document.body.append(target);
     const result={data:{entries:[{title:'证据样本',identifier:'10.1000/example',source_id:'crossref',stored_grade:'ungraded',suggested_grade:'empirical'}]}};
