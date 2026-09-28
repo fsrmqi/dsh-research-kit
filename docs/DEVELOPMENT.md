@@ -27,11 +27,11 @@ npm run test:browser            # 加载生成产物，执行真实浏览器交�
 兼容性与质量门（细节见 [COMPATIBILITY.md](COMPATIBILITY.md)）：
 
 ```bash
-npm run baselines:fetch          # 拉取基线 DSH tag 到 .tmp/dsh-repo（CI 用；离线时矩阵自动跳过）
+npm run baselines:fetch          # 拉取基线 DSH tag 到 .tmp/dsh-repo（CI 用；离线时矩阵改核对降级路径）
 npm run check:dsh-app            # 对照基线源码逐条核查宿主契约；-- --require-source 让"缺源码"变成失败
 npm run check:test-count         # 文档里的测试数字必须与实测一致（跑一遍套件比对）
-npm run coverage                 # 覆盖率棘轮：低于 coverage-baseline.json 记录的地板即失败
-npm run coverage:update          # 重新测量并抬高地板（会自检一次）
+npm run coverage                 # 覆盖率棘轮：低于当前 Node 主版本的地板即失败
+npm run coverage:update          # 重新测量当前主版本的地板（只抬不降，先自检后落盘）
 ```
 
 本地开发回路（各自只管理自己记录的 pid，**绝不**按进程名杀 `dsh web`——那可能是你正在用的界面）：
@@ -89,9 +89,9 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
 | 宿主动作缺失降级的**交互级**断言（点击后不写入、不发送） | 未完成——渲染级已覆盖初始状态（react-dom/server），「点击」路径还需一个能构造缺失 `inputActions` 的真实 DOM 事件运行时（jsdom 或等价 harness） | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
-| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；缺源码时跳过，CI 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
+| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；无源码时改核对降级路径，用例数不随环境变；CI 用 --require-source 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
 | 可选能力软探测（缺服务只降级、不进 inject） | 已实现 | `dsh/optional-service.js` + `test/optional-service.test.mjs` |
-| 覆盖率棘轮（地板只许涨不许跌） | 已实现（地板 73 / 66 / 67） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
+| 覆盖率棘轮（地板只许涨不许跌，按 Node 主版本分别记录） | 已实现（Node 26 → 73 / 68 / 67，Node 22.19 → 80 / 73 / 75；缺当前主版本的地板即失败） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
 | 文档测试数字真值校验（文档 == 实测） | 已实现 | `scripts/check-test-count.mjs` + `scripts/lib/doc-test-count.mjs` |
 | 敌意输入加固（外部数据形状异常不升级为崩溃 / 502） | 已实现（TOP5 路径 + 同族路径） | `test/hostile-input.test.mjs`；规则见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md) |
 
@@ -250,7 +250,7 @@ const actions = {
 
 - [ ] 登记三处：`scripts/build-client.mjs` 的 `files`、`package.json` 的 `check`（宿主半区文件也要进）、[ARCHITECTURE.md 的受控清单](ARCHITECTURE.md)；
 - [ ] 解析外部数据的函数是 total 的（见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md)），并在 `test/hostile-input.test.mjs` 补一条敌意 fixture；
-- [ ] 覆盖率不低于地板（`npm run coverage`）；有意下降时用 `npm run coverage:update` 记录新地板，并在 PR 说明理由。
+- [ ] 覆盖率不低于当前 Node 主版本的地板（`npm run coverage`）。`coverage:update` **只抬不降**：下降时它会失败并要求补测试；若下降确实是设计取舍，直接改 `coverage-baseline.json` 并在 PR 写明理由。换 Node 主版本后要在那台版本上重新记录地板。
 
 ### 新增或修改工作流
 
