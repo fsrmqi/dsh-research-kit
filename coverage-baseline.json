@@ -1,16 +1,34 @@
 {
-  "note": "覆盖率地板（棘轮）。低于此值 npm run coverage 失败；提高后用 npm run coverage:update 抬高。",
-  "enforced": {
-    "lines": 73,
-    "branches": 66,
-    "functions": 67
-  },
+  "note": "覆盖率地板（棘轮，按 Node 主版本分别记录）。低于当前主版本的地板即失败；提高后用 npm run coverage:update 抬高，它只抬不降。换 Node 主版本要重新记录该版本的地板。",
   "tolerance": 2,
-  "recorded": {
-    "statements": 75.43,
-    "branches": 68.99,
-    "functions": 69.33,
-    "node": "v26.10.0",
-    "at": "2026-09-28"
+  "floors": {
+    "22": {
+      "enforced": {
+        "lines": 80,
+        "branches": 73,
+        "functions": 75
+      },
+      "measured": {
+        "lines": 82.33,
+        "branches": 75.42,
+        "functions": 77.81
+      },
+      "node": "v22.19.0",
+      "at": "2026-09-28"
+    },
+    "26": {
+      "enforced": {
+        "lines": 73,
+        "branches": 68,
+        "functions": 67
+      },
+      "measured": {
+        "lines": 75.72,
+        "branches": 70.04,
+        "functions": 69.95
+      },
+      "node": "v26.10.0",
+      "at": "2026-09-28"
+    }
   }
 }

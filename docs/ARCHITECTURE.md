@@ -197,7 +197,7 @@ dsh-research-kit/
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   ├── add-agent-fields.mjs         # 一次性迁移脚本：为工作流条目批量补 tool_mode / input_schema 字段
 │   ├── check-dsh-app.mjs            # DSH 兼容性矩阵 CLI：对照基线 tag 核查宿主 seam（0 通过 / 1 失败 / 2 用法或缺源码）
-│   ├── check-coverage.mjs           # 覆盖率棘轮：低于 coverage-baseline.json 记录的地板即失败（--update 抬地板并自检）
+│   ├── check-coverage.mjs           # 覆盖率棘轮：低于当前 Node 主版本的地板即失败（--update 只抬不降、先自检后落盘）
 │   ├── check-test-count.mjs         # 文档里的测试数字必须等于实测（跑套件 + 数测试文件）
 │   ├── fetch-baselines.sh           # 拉取基线 DSH tag 到 .tmp/dsh-repo（浅克隆）
 │   ├── register.sh / watch.sh / web.sh # 本地开发回路：登记 profile / 变更重建 / 受管启动本机 dsh web（各自只管理自己记录的 pid）
@@ -210,7 +210,7 @@ dsh-research-kit/
 ├── test/                            # 469 项测试（66 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
-├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，由 npm run coverage:update 维护）
+├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；npm run coverage:update 只抬不降）
 ├── package.json
 └── cordis.patch.yml                 # DSH bundle 注册补丁
 ```
