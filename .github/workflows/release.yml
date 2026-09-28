@@ -1,0 +1,76 @@
+name: Release
+
+# tag（v*）推送即发布。发布前把整条门禁重跑一遍：目录契约、测试、DSH 兼容性矩阵、
+# 产物可复现性、测试数字一致性、覆盖率棘轮、浏览器回归——发布机上过的门禁与 CI 一致。
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # npm 侧的 Trusted Publishing（OIDC）需要在 npmjs.com 上按本 workflow 文件名配置。
+    # 尚未配置时，在仓库 Secrets 里放 NPM_TOKEN 作为退路（下面两步二选一）。
+    permissions:
+      id-token: write
+      contents: read
+    # secrets 不能直接用在 step 的 if 里（GitHub 只在特定位置暴露 secrets 上下文），
+    # 先落到 job 级 env，再用 env 判空。
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 发布用 Node 24：它带的 npm 11 才支持 OIDC 可信发布（Node 22 带 npm 10）。
+          # 兼容下限（engines >=22.19）由 CI 那条流水线看守。
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - run: npm ci
+      - run: npm run check
+
+      - name: Fetch DSH baseline tags
+        run: npm run baselines:fetch
+        env:
+          DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
+
+      - run: npm test
+
+      - name: DSH compatibility matrix (hard gate)
+        run: npm run check:dsh-app -- --require-source
+        env:
+          DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
+
+      - run: npm run check:test-count
+      - run: npm run coverage
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+      # 产物必须与源码一致：发布的是提交进仓库的构建产物，这里再确认一次。
+      - run: git diff --exit-code -- ui/client.js
+
+      - name: Verify version matches the tag
+        run: |
+          TAG="${{ github.ref_name }}"
+          VER="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::tag $TAG 与 package.json 版本 $VER 不一致"
+            exit 1
+          fi
+
+      - name: Publish (Trusted Publishing / OIDC)
+        if: env.NPM_TOKEN == ''
+        run: npm publish
+
+      - name: Publish (NPM_TOKEN fallback)
+        if: env.NPM_TOKEN != ''
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -14,10 +18,33 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.6.0
+          # package.json 的 engines 是 >=22.19（与 DSH 宿主的 ^22.19.0 || >=24.0.0 对齐）。
+          # 22.6 不满足 engines，也拿不到 node --test 的覆盖率阈值旗标（22.8+ 才有）。
+          node-version: 22.19.0
       - run: npm ci
       - run: npm run check
+
+      # 兼容性矩阵要在测试前拿到宿主源码：只拉基线 tag（浅克隆，见 scripts/lib/dsh-baselines.mjs）。
+      # npm test 里的 test/dsh-compat-matrix.test.mjs 会自动发现 .tmp/dsh-repo；
+      # 拉取失败不让整条 CI 静默降级——矩阵必须真跑，所以下面还有一步显式的 --require-source。
+      - name: Fetch DSH baseline tags
+        run: npm run baselines:fetch
+        env:
+          DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
+
       - run: npm test
+
+      - name: DSH compatibility matrix (hard gate)
+        run: npm run check:dsh-app -- --require-source
+        env:
+          DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
+
+      # 文档里的测试数字必须与实测一致（check-doc-stats 只管跨文档一致，管不了真值）。
+      - run: npm run check:test-count
+
+      # 覆盖率棘轮：低于 coverage-baseline.json 记录的门槛即失败。
+      - run: npm run coverage
+
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
       - uses: actions/upload-artifact@v4
