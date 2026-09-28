@@ -250,7 +250,7 @@ const actions = {
 
 - [ ] 登记三处：`scripts/build-client.mjs` 的 `files`、`package.json` 的 `check`（宿主半区文件也要进）、[ARCHITECTURE.md 的受控清单](ARCHITECTURE.md)；
 - [ ] 解析外部数据的函数是 total 的（见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md)），并在 `test/hostile-input.test.mjs` 补一条敌意 fixture；
-- [ ] 覆盖率不低于当前 Node 主版本的地板（`npm run coverage`）。`coverage:update` **只抬不降**：下降时它会失败并要求补测试；若下降确实是设计取舍，直接改 `coverage-baseline.json` 并在 PR 写明理由。换 Node 主版本后要在那台版本上重新记录地板。
+- [ ] 覆盖率不低于当前 Node 主版本的地板（`npm run coverage`）。`coverage:update` **只抬不降**：下降时它会失败并要求补测试；若下降确实是设计取舍，直接改 `coverage-baseline.json` 并在 PR 写明理由。换 Node 主版本后要在那台版本上重新记录地板。地板块缺失、字段非法（含 `0 < 值 < 1`——Node 会把阈值向下取整成 0，那条指标的门禁会当场消失）时判为配置错误（exit 2）；`coverage:update` 也不会替你静默重建非法条目。
 
 ### 新增或修改工作流
 

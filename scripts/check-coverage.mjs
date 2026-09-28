@@ -89,7 +89,9 @@ function parseCoverage(output) {
     if (!line.includes('|')) continue
     const cells = line.split('|').map(cell => cell.trim())
     if (!columns) {
-      if (!/line/i.test(line) || !/branch/i.test(line)) continue
+      // 表头必须锚定第一格是 file：否则测试往 stdout 写的一行（TAP 不转义不以 # 开头的行）
+      // 就能冒充表头，把真实 all files 行按错列解析（实测把 funcs 100 报成 0）。
+      if (cells[0] !== 'file') continue
       const index = {
         lines: cells.findIndex(cell => /line/i.test(cell) && !/uncovered/i.test(cell)),
         branches: cells.findIndex(cell => /branch/i.test(cell)),
@@ -98,7 +100,10 @@ function parseCoverage(output) {
       if (METRICS.every(metric => index[metric] >= 0)) columns = index
       continue
     }
-    const numbers = Object.fromEntries(METRICS.map(metric => [metric, Number(cells[columns[metric]])]))
+    // 空单元格必须丢弃：`Number('')` 是 0，会被当成"该项覆盖率 0%"或"100%"悄悄算进地板。
+    const raw = METRICS.map(metric => cells[columns[metric]])
+    if (raw.some(value => value === undefined || value === '')) continue
+    const numbers = Object.fromEntries(METRICS.map((metric, index) => [metric, Number(raw[index])]))
     if (METRICS.some(metric => Number.isNaN(numbers[metric]))) continue
     if (cells[0] === 'all files') total = numbers
     else files.push({ file: cells[0], ...numbers })
@@ -115,12 +120,16 @@ function readBaseline() {
   }
 }
 
-/** 阈值兜底：Node 会静默忽略非法值，所以必须自己拒绝。 */
+/**
+ * 阈值兜底：Node 会静默忽略非法值，所以必须自己拒绝。
+ * 下界是 1 而不是 0：Node 对阈值**向下取整**，`0 < v < 1` 会被取整成 0 → 那条指标的门禁
+ * 彻底消失，而脚本还会打印「通过」（实测 enforced=0.5 时确实如此）。
+ */
 function thresholdProblems(thresholds) {
   if (!thresholds || typeof thresholds !== 'object') return ['整个 enforced 对象缺失']
   return METRICS.filter(metric => {
     const value = thresholds[metric]
-    return !Number.isFinite(value) || value <= 0 || value > 100
+    return !Number.isFinite(value) || value < 1 || value > 100
   }).map(metric => `${metric}=${JSON.stringify(thresholds[metric])}`)
 }
 
@@ -128,7 +137,10 @@ function thresholdProblems(thresholds) {
 function suiteProblems(run) {
   const problems = []
   if (run.summary.fail > 0) problems.push(`有 ${run.summary.fail} 个用例失败`)
-  if (run.summary.tests === 0) problems.push('一个用例都没跑到')
+  // 用 isFinite 而不是 === 0：解析不到汇总行时 summary.tests 是 undefined，
+  // `undefined === 0` 为假会让「没解析到」被当成没问题。
+  if (!Number.isFinite(run.summary.tests)) problems.push('没能从 TAP 输出里解析出用例数（汇总行缺失）')
+  else if (run.summary.tests === 0) problems.push('一个用例都没跑到')
   if (testFiles.length === 0) problems.push('test/ 下没有任何 *.test.js|mjs（glob 匹配不到文件时 node --test 会报 all files 100% 并退出 0）')
   return problems
 }
@@ -166,7 +178,18 @@ if (update) {
   }
   const measured = Object.fromEntries(METRICS.map(metric => [metric, total[metric]]))
   const candidate = Object.fromEntries(METRICS.map(metric => [metric, Math.max(0, Math.floor(total[metric]) - TOLERANCE)]))
-  const previous = thresholdProblems(entry?.enforced).length ? undefined : entry.enforced
+  // F4：以前 enforced 非法就把 previous 丢掉，于是「先把字段改成 null，再跑一次官方
+  // --update」会带着"自检通过"把地板从 90/90/90 降到 73/67/67。要降就必须显式改文件。
+  let previous
+  if (entry) {
+    const existing = thresholdProblems(entry.enforced)
+    if (existing.length) {
+      fail(`coverage-baseline.json 里已有 Node ${nodeMajor} 条目，但它的地板非法（${existing.join('、')}）：\n`
+        + '--update 不会静默重建它——否则「先把字段弄坏、再跑 update」就绕过了只抬不降。\n'
+        + '请先把该条目改成合法值或**显式删掉整个条目**，再运行 npm run coverage:update。', 2)
+    }
+    previous = entry.enforced
+  }
   // 只抬不降：地板一旦写进仓库就只许往上走，否则「覆盖率下降那天跑一次 update」就把线降了。
   const enforced = previous
     ? Object.fromEntries(METRICS.map(metric => [metric, Math.max(previous[metric], candidate[metric])]))
