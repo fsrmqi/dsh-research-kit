@@ -5,6 +5,7 @@ import { contract } from '../execution/contract.js'
 import { inventoryEvidence } from '../execution/evidence-inventory.js'
 import { err, wrap } from '../execution/wrapper.js'
 import { getCheckpointState, initializeCheckpoints, recordApproval } from '../state/checkpoint-manager.js'
+import { buildResearchContextPack } from '../state/research-context-pack.js'
 import { exportPassport, importPassport } from '../state/material-passport.js'
 import { buildRunOverview, listRecentRuns } from '../state/run-overview.js'
 
@@ -110,6 +111,8 @@ export const runLifecycleTools = [
           checkpoints: { pending, approved: overview.checkpoint_state.approved || [] },
           stage_progress: overview.stage_progress,
           evidence: evidence.summary,
+          validation_receipts: Object.entries(overview.checkpoint_state.checkpoints || {}).flatMap(([stage, checkpoint]) =>
+            checkpoint?.validation_receipt ? [{ stage, ...checkpoint.validation_receipt }] : []),
         }, {
           source: 'research-run-status',
           confidence: 'cached',
@@ -141,6 +144,29 @@ export const runLifecycleTools = [
   },
 
   {
+    name: 'research_context_pack',
+    description: 'Build a bounded, read-only research context pack from explicit Claims, linked evidence metadata, and human checkpoint validation receipts. The caller must review and choose whether to inject it; it never upgrades a Claim to verified.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID'),
+      budget_chars: z.number().int().min(800).max(12000).optional().default(6000).describe('Maximum serialized context size'),
+      claim_limit: z.number().int().min(1).max(100).optional().default(20).describe('Maximum claims considered'),
+      evidence_limit: z.number().int().min(1).max(100).optional().default(30).describe('Maximum linked evidence metadata entries'),
+    },
+    async execute(input) {
+      try {
+        const pack = await buildResearchContextPack(input)
+        return contract(pack, {
+          source: 'research-context-pack',
+          confidence: 'cached',
+          disclaimer: '上下文包只投影显式 Claim、证据元数据和人工回执；用户必须审阅后自行选择是否注入，未确认 Claim 绝不等同于事实。',
+          run_id: input.run_id,
+        })
+      } catch (e) { return err(`生成研究 Context Pack 失败：${e.message}`) }
+    },
+  },
+
+  {
     name: 'research_run_export',
     description: 'Export a Material Passport (cross-session research state snapshot) as YAML.',
     inputSchema: {
@@ -161,6 +187,16 @@ export const runLifecycleTools = [
           if (!workflow || workflow.type !== 'workflow') return err(`工作流 "${input.workflow_id}" 不存在。`)
           const completedStages = (input.completed || []).map(step => step.stage)
           result.checkpoint_state = await initializeCheckpoints(result.run_id, workflow, completedStages)
+        }
+        // 让跨宿主的资产发布流程能够引用这次运行的不可变快照，而无需暴露本机文件路径或护照正文。
+        // 它仅证明“该快照被导出”，不证明研究结论、工作流或后续 Skill 已通过验证。
+        result.release_evidence = {
+          schema_version: 1,
+          kind: 'research_run_passport',
+          ref: `dsh-research-kit:run:${result.run_id}:passport:${result.hash}`,
+          content_sha256: result.hash,
+          verification_status: 'snapshot_exported',
+          evidence_ids: [...new Set((input.evidence_ids || []).filter(Boolean))],
         }
         return wrap(result, { source: 'material-passport', confidence: 'verified' })
       } catch (e) {
@@ -206,10 +242,12 @@ export const runCheckpointTools = [
       run_id: z.string().describe('Run ID'),
       stage: z.string().describe('Stage name to approve'),
       note: z.string().optional().describe('Optional note about the approval'),
+      evidence_ids: z.array(z.string()).max(30).optional().describe('Evidence IDs reviewed for this approval; recorded as a validation receipt, not as automatic claim verification.'),
+      validation_summary: z.string().max(500).optional().describe('Short human validation basis recorded with the checkpoint receipt.'),
     },
-    async execute({ run_id, stage, note }) {
+    async execute({ run_id, stage, note, evidence_ids, validation_summary }) {
       try {
-        const result = await recordApproval(run_id, stage, { approved_by: 'user', note })
+        const result = await recordApproval(run_id, stage, { approved_by: 'user', note, evidence_ids, validation_summary })
         return wrap(result, { source: 'checkpoint-manager', confidence: 'verified' })
       } catch (e) {
         return err(e.message)

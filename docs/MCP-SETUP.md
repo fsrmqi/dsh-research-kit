@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 32 个科研 Tool（文献检索、引用验证、证据管理、人工评估、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 35 个科研 Tool（文献检索、引用验证、证据管理、人工评估、Claim 台账、Context Pack、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。工具会同时暴露 MCP annotations（只读、外呼、幂等提示），业务错误统一带 `isError`，大结果默认使用紧凑 JSON。
 
@@ -54,7 +54,7 @@ node mcp/server.js
 
 ## 写入确认
 
-`research_evidence_save`、`research_evidence_save_batch`、`research_run_start`、`research_run_export`、`research_evidence_link`、`research_evidence_grade_apply` 和 `research_run_checkpoint_approve` 默认都会触发 MCP form elicitation。宿主接受并勾选确认后工具才执行；取消时返回 `CONFIRMATION_DECLINED`。宿主不支持 elicitation 时，可配置确认令牌作为受控回落。
+`research_claim_record`、`research_evidence_save`、`research_evidence_save_batch`、`research_run_start`、`research_run_export`、`research_evidence_link`、`research_evidence_grade_apply` 和 `research_run_checkpoint_approve` 默认都会触发 MCP form elicitation。宿主接受并勾选确认后工具才执行；取消时返回 `CONFIRMATION_DECLINED`。宿主不支持 elicitation 时，可配置确认令牌作为受控回落。
 
 ```bash
 DSH_RESEARCH_KIT_HOME=/path/to/data \
@@ -89,7 +89,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 32 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 35 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -258,6 +258,8 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_source_query` | 直查 Crossref / OpenAlex / Semantic Scholar 等公开数据源 |
 | `research_literature_search` | 默认文献检索入口：多源检索、去重、可选核验与显式证据保存（默认入口） |
 | `research_citation_verify` | 核验 DOI / PMID / arXiv 存在性，提供关键词线索；声明支持性待人工核验 |
+| `research_claim_record` | 显式登记或更新 Claim、认识论状态及关联证据；verified 必须有人工作者、理由与证据 |
+| `research_claim_list` | 读取显式 Claim 及其认识论状态，不从文本自动推断或升级状态 |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
 | `research_evidence_list` | 检索已保存证据；默认摘要输出，支持分页与字段过滤 |
 | `research_evidence_grade` | 检查来源线索：缺失或未分级；实证 / 推论需人工核验 |
@@ -268,6 +270,7 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_evidence_save_batch` | 默认批量保存入口：将检索结果中人工挑选的候选一次性显式保存（默认入口） |
 | `research_evidence_grade_apply` | 预览→确认两段式写回来源线索缺失；不自动判定证据强度 |
 | `research_run_status` | 运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步（默认入口） |
+| `research_context_pack` | 有界汇总显式 Claim、关联证据元数据与人工检查点验证回执，供用户审阅后选择注入 |
 | `research_run_export` | 导出跨会话状态快照 |
 | `research_run_import` | 导入状态快照恢复执行 |
 | `research_run_checkpoint_status` | 查看管道检查点状态 |

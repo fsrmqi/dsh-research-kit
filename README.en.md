@@ -109,7 +109,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 32 `research_*` tools (literature search and verification, evidence inventory and manual assessment, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+- **MCP tool set and Agent activity panel** — the plugin also ships an MCP Server: 35 `research_*` tools (literature search and verification, evidence inventory and manual assessment, an explicit Claim ledger, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI; the Agent activity panel shows the call trail and waits for human confirmation at each checkpoint, and the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
 
@@ -135,7 +135,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball (offline / audit)**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```
 
 > The generated `ui/client.js`, `ui/catalog-data.json`, and `ui/promptkit.js` artifacts are committed, so a clone installs without building.
@@ -225,7 +225,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 ## Compatibility & status
 
-Current version `0.2.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
+Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
 Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries) and 429 regression tests in 62 files. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
@@ -248,7 +248,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | --- | --- |
 | [docs/README.md](docs/README.md) | **Documentation index and recommended reading order** |
 | [Paper workflow handbook](docs/PAPER-WORKFLOW.md) | End-to-end paper work: the nine stages, literature search paths, submission packages, and the MCP operation chain (Chinese only) |
-| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 32 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
+| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 35 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
 | [Architecture & data contracts](docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
 | [Development guide](docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
 | [Manual QA checklist](docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |

@@ -11,7 +11,7 @@ import { runWithExecutionContext } from './execution/execution-context.js'
 
 const server = new McpServer({
   name: 'dsh-research-kit',
-  version: '0.2.0',
+  version: '0.3.0',
 }, {
   capabilities: {
     tools: {},

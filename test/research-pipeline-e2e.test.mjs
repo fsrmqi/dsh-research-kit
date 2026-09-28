@@ -123,6 +123,14 @@ test('研究旅程：导出护照交接，run_status 保持可查', async () => 
   })
   assert.equal(exported.data.run_id, RUN_ID)
   assert.ok(exported.data.passport_yaml || exported.data.file_path)
+  assert.deepEqual(exported.data.release_evidence, {
+    schema_version: 1,
+    kind: 'research_run_passport',
+    ref: `dsh-research-kit:run:${RUN_ID}:passport:${exported.data.hash}`,
+    content_sha256: exported.data.hash,
+    verification_status: 'snapshot_exported',
+    evidence_ids: [],
+  })
 
   const status = await callTool('research_run_status', { run_id: RUN_ID })
   assert.equal(status.data.current_stage, 'synthesis', '导出后的阶段应反映在总览中')

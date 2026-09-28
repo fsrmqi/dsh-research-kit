@@ -5,8 +5,52 @@ import { applyEvidenceGrades, inventoryEvidence } from '../execution/evidence-in
 import { contract } from '../execution/contract.js'
 import { err, wrap } from '../execution/wrapper.js'
 import { EVIDENCE_FIELDS, INVENTORY_FIELDS, evidenceProjection, inventoryProjection } from './shared.js'
+import { CLAIM_STATES, listResearchClaims, recordResearchClaim } from '../state/claim-ledger.js'
 
 export const evidenceTools = [
+  {
+    name: 'research_claim_record',
+    description: 'Explicitly record or update a bounded research Claim with its epistemic state and linked evidence IDs. Only a human-supplied reviewer, reason, and evidence IDs can mark a Claim verified; automated retrieval never promotes it.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID'),
+      claim_id: z.string().optional().describe('Existing claim ID to update; omit to create'),
+      statement: z.string().min(1).max(800).describe('Bounded scientific claim or hypothesis'),
+      state: z.enum([...CLAIM_STATES]).optional().default('extracted').describe('Epistemic state: extracted, inferred, ambiguous, verified, or rejected'),
+      evidence_ids: z.array(z.string()).max(30).optional().describe('Saved evidence IDs linked to this Claim'),
+      assessed_by: z.string().max(120).optional().describe('Human reviewer name or role; required for verified'),
+      assessment_reason: z.string().max(500).optional().describe('Human assessment basis; required for verified and rejected'),
+    },
+    async execute(input) {
+      try {
+        const result = await recordResearchClaim(input)
+        return contract(result, {
+          source: 'research-claim-ledger',
+          confidence: result.claim.state === 'verified' ? 'verified' : 'unverified',
+          disclaimer: 'Claim 状态记录的是研究过程中的认识论位置；verified 仅代表人工基于所列证据确认，仍不替代同行评议或伦理审查。',
+          run_id: input.run_id,
+        })
+      } catch (e) { return err(`登记 Claim 失败：${e.message}`) }
+    },
+  },
+  {
+    name: 'research_claim_list',
+    description: 'Read explicit research Claims and their epistemic states. It never infers missing Claims from text or upgrades their state.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional research run ID'),
+      limit: z.number().int().min(1).max(200).optional().default(50).describe('Maximum Claims returned'),
+    },
+    async execute(input) {
+      try {
+        const claims = await listResearchClaims(input)
+        return contract({ project: input.project, run_id: input.run_id || '', claims }, {
+          source: 'research-claim-ledger', confidence: 'cached',
+          disclaimer: '只返回显式登记的 Claim；没有 Claim 不代表研究结论不存在。', run_id: input.run_id,
+        })
+      } catch (e) { return err(`读取 Claim 台账失败：${e.message}`) }
+    },
+  },
   {
     name: 'research_evidence_save',
     description: 'Save an evidence entry (paper metadata + user note) to the evidence vault. Only saves metadata, never full text.',

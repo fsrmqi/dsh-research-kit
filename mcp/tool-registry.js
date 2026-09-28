@@ -72,6 +72,22 @@ export const TOOL_REGISTRY = [
     artifactKind: '',
   },
   {
+    name: 'research_claim_record',
+    category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+    helpRoute: null, labelZh: '登记科研 Claim',
+    summaryZh: '显式登记或更新 Claim、认识论状态及关联证据；verified 必须有人工作者、理由与证据',
+    example: "{ project: 'demo', statement: '干预可能改善结果', state: 'inferred', evidence_ids: ['<evidence-id>'] }",
+    artifactKind: '',
+  },
+  {
+    name: 'research_claim_list',
+    category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+    helpRoute: null, labelZh: '查看科研 Claim',
+    summaryZh: '读取显式 Claim 及其认识论状态，不从文本自动推断或升级状态',
+    example: "{ project: 'demo', run_id: 'run-1a2b3c' }",
+    artifactKind: '',
+  },
+  {
     name: 'research_evidence_save',
     category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
     helpRoute: 'evidence', labelZh: '保存证据',
@@ -149,6 +165,14 @@ export const TOOL_REGISTRY = [
     helpRoute: 'resume', labelZh: '运行状态总览',
     summaryZh: '运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步',
     example: "{ run_id: 'run-1a2b3c' }",
+    artifactKind: '',
+  },
+  {
+    name: 'research_context_pack',
+    category: 'run', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+    helpRoute: null, labelZh: '科研 Context Pack',
+    summaryZh: '有界汇总显式 Claim、关联证据元数据与人工检查点验证回执，供用户审阅后选择注入',
+    example: "{ project: 'demo', run_id: 'run-1a2b3c', budget_chars: 6000 }",
     artifactKind: '',
   },
   {

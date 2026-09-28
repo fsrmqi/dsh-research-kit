@@ -116,7 +116,7 @@ dsh-research-kit/
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
-├── mcp/                           # MCP Server：32 个 research_* 工具的注册、实现与执行层
+├── mcp/                           # MCP Server：35 个 research_* 工具的注册、实现与执行层
 │   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
 │   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
 │   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）
@@ -134,7 +134,9 @@ dsh-research-kit/
 │   │   └── shared.js              # 证据字段投影与多源文献去重（跨工具共享）
 │   ├── state/                     # 运行状态与产物
 │   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
+│   │   ├── claim-ledger.js         # 显式科研 Claim 台账：认识论状态与证据引用，不存正文
 │   │   ├── material-passport.js    # 跨会话状态快照（护照 YAML）
+│   │   ├── research-context-pack.js # Claim/证据/验证回执的有界只读上下文包
 │   │   └── run-overview.js         # 运行总览聚合（阶段/检查点/证据/最近产物/下一步）
 │   └── execution/                 # 审阅与生成执行层（纯逻辑 + 外呼适配器）
 │       ├── anomaly-detector.js     # 冗余/矛盾/缺失异常检测

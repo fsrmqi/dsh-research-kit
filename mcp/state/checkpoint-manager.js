@@ -157,7 +157,7 @@ async function initializeCheckpoints(runId, workflow, completedStages = []) {
   })
 }
 
-async function recordApproval(runId, stage, { approved_by = 'user', note } = {}) {
+async function recordApproval(runId, stage, { approved_by = 'user', note, evidence_ids, validation_summary } = {}) {
   assertId(runId, 'run_id')
   assertId(stage, 'stage')
   return withRunLock(runId, async () => {
@@ -168,16 +168,31 @@ async function recordApproval(runId, stage, { approved_by = 'user', note } = {})
       error.code = 'CHECKPOINT_NOT_FOUND'
       throw error
     }
+    const evidenceIds = [...new Set((Array.isArray(evidence_ids) ? evidence_ids : [])
+      .map(String).map(value => value.trim()).filter(Boolean).slice(0, 30))]
+    const summary = String(validation_summary || '').trim().slice(0, 500)
+    const receipt = evidenceIds.length || summary
+      ? {
+          schema_version: 1,
+          receipt_id: `research-checkpoint:${runId}:${stage}:${Date.now().toString(36)}`,
+          status: 'approved',
+          evidence_ids: evidenceIds,
+          validation_summary: summary,
+          approved_by: String(approved_by || 'user').slice(0, 80),
+          recorded_at: new Date().toISOString(),
+        }
+      : undefined
     state.checkpoints[stage] = {
       ...checkpoint,
       approved: true,
       approved_by: String(approved_by || 'user').slice(0, 80),
       note: String(note || '').slice(0, 500),
       approved_at: new Date().toISOString(),
+      ...(receipt ? { validation_receipt: receipt } : {}),
     }
     state.updated_at = new Date().toISOString()
     await saveState(state)
-    return { approved: true, stage, run_id: runId }
+    return { approved: true, stage, run_id: runId, ...(receipt ? { validation_receipt: receipt } : {}) }
   })
 }
 

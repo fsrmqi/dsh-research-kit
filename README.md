@@ -87,6 +87,10 @@ Research Kit 把这四点做成可复用的资产。
 **⏱ 组装回放：把 Prompt 是怎么拼出来的放给你看**
 启动工作流后，工作台把 `composeWorkflow` 的**真实组装事实**逐段回放——工作流 → 参数 → 附加技能 → 数据源边界 → 人工核验；每一段都能在生成的 Prompt 文本中定位到对应锚点，回放与正文互相印证。详情栏内嵌紧凑回放，「弹出回放窗口」打开独立的 archify 交互 viewer（四种视觉预设、章节叙事、语义透镜、雷达总览）。回放只呈现**已经发生的组装动作**，不预测执行结果，也不代表 Agent 已执行任何工具；`prefers-reduced-motion` 时降级为静态。
 
+`research_run_export` 还会返回 `release_evidence`：这是一个不含本机路径或护照正文的运行快照引用，带 run ID 与内容哈希，可供其他受控资产系统关联发布记录。它的 `verification_status="snapshot_exported"` 只表示护照已导出，**不是**研究结论、工作流或 Skill 的验证通过凭据；发布高影响资产仍须另附真实任务验证证据并经过人工确认。
+
+**科研 Claim 与 Context Pack**：MCP 新增显式 Claim 台账。每条 Claim 必须带认识论状态：`extracted`、`inferred`、`ambiguous`、`verified` 或 `rejected`；只有人工提供证据 ID、操作人和评估理由才能写成 `verified`。`research_run_checkpoint_approve` 可附带验证回执，而 `research_context_pack` 只投影 Claim、证据元数据与人工回执，要求用户审阅后再选择注入，绝不把未确认结论改写为事实，也不携带论文全文、笔记或检索词。
+
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
 
@@ -112,7 +116,7 @@ Research Kit 把这四点做成可复用的资产。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
 - **手动编辑保护** — 手动编辑后变更参数/技能会提示不会自动合并；筛选后详情始终属于当前结果集。
 - **宿主动作降级** — `setDraft`/`submit` 缺失时按钮禁用、灰化并说明原因，视图不崩溃。
-- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：32 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
+- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：35 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
 
 **深色主题与窄屏** — 跟随系统与 DSH 主题切换；880px 以下单列布局；原生 `aria-*` 与焦点环。
 
@@ -138,7 +142,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball（离线 / 审计）**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```
 
 > 构建产物 `ui/client.js`、`ui/catalog-data.json` 与 `ui/promptkit.js` 已提交到仓库——克隆后即可安装，无需本地构建。
@@ -234,7 +238,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 
 ## 兼容性与状态
 
-当前版本 `0.2.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
+当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
 已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、429 项回归测试（62 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
@@ -257,7 +261,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | --- | --- |
 | [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序** |
 | [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿的完整走法：九阶段、三条查询路径、投稿包清单、MCP 操作链 |
-| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 32 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
+| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 35 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
 | [手工验收清单](docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |

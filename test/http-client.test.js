@@ -1,8 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { crossrefUrl, fetchWithRetry, USER_AGENT } from '../mcp/execution/http-client.js'
 import { runWithExecutionContext } from '../mcp/execution/execution-context.js'
 import { stableIdentifier } from '../mcp/execution/identifiers.js'
+
+const pluginPkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
 function response(status, headers = {}) {
   return new Response(status === 200 ? '{}' : 'service unavailable', { status, headers })
@@ -21,6 +24,8 @@ test('HTTP 客户端：429 读取 Retry-After 后重试，并携带 User-Agent',
   assert.equal(calls.length, 2)
   assert.equal(calls[0].userAgent, USER_AGENT)
   assert.match(USER_AGENT, /^dsh-research-kit\//)
+  // 版本号在 UA 里是硬编码字面量，改版本时容易漏改；绑定 package.json 以防漂移。
+  assert.ok(USER_AGENT.includes(`/${pluginPkg.version}`), `User-Agent 应携带 package.json 的版本 ${pluginPkg.version}`)
 })
 
 test('HTTP 客户端：连续可重试失败会打开短时熔断；客户端 4xx 不计入熔断', async () => {

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 // 产物把构建期常量定义在模块作用域最前面；本文件直接 import 源码，没有该常量。
 // 按产物契约把它挂到 globalThis，覆盖「徽章/诊断载荷读烘焙值」的正路径；
 // 缺省（不设置）时组件必须退化为不渲染，见「缺数据」用例。
-globalThis.RESEARCH_KIT_BUILD_STATS = { version: '0.2.0', workflows: 349, skills: 109, resources: 129, direct: 11 }
+globalThis.RESEARCH_KIT_BUILD_STATS = { version: '0.3.0', workflows: 349, skills: 109, resources: 129, direct: 11 }
 
 const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
 const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')
@@ -20,7 +20,7 @@ const {
 } = await import('../src/plugin-status.js')
 const { loadCatalogEntries } = await import('../scripts/lib/catalog-entries.mjs')
 
-const researchSubject = { kind: 'bundle', pkg: { name: 'dsh-research-kit', version: '0.2.0', installed: true, enabled: true, rows: [] } }
+const researchSubject = { kind: 'bundle', pkg: { name: 'dsh-research-kit', version: '0.3.0', installed: true, enabled: true, rows: [] } }
 const foreignBundle = { kind: 'bundle', pkg: { name: 'dsh-promptkit', version: '1.0.0', installed: true, enabled: true, rows: [] } }
 
 test('规模标签只接受完整烘焙数据，缺字段返回 null 而不是 0', () => {

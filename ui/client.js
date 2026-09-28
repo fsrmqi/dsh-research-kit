@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
     const skills = []
     const resources = []
     const databaseMetadataConfig = { groups: [], accessOverrides: {} }
-    const RESEARCH_KIT_BUILD_STATS = {"version":"0.2.0","workflows":349,"skills":109,"resources":129,"direct":11}
+    const RESEARCH_KIT_BUILD_STATS = {"version":"0.3.0","workflows":349,"skills":109,"resources":129,"direct":11}
 
     // 目录数据只经三个聚合入口进入（分片见 catalog/*/index.js）；对外 API 与文件拆分解耦。
 
@@ -10129,6 +10129,22 @@ window.__ModuleLoader__.load({
         artifactKind: '',
       },
       {
+        name: 'research_claim_record',
+        category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+        helpRoute: null, labelZh: '登记科研 Claim',
+        summaryZh: '显式登记或更新 Claim、认识论状态及关联证据；verified 必须有人工作者、理由与证据',
+        example: "{ project: 'demo', statement: '干预可能改善结果', state: 'inferred', evidence_ids: ['<evidence-id>'] }",
+        artifactKind: '',
+      },
+      {
+        name: 'research_claim_list',
+        category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+        helpRoute: null, labelZh: '查看科研 Claim',
+        summaryZh: '读取显式 Claim 及其认识论状态，不从文本自动推断或升级状态',
+        example: "{ project: 'demo', run_id: 'run-1a2b3c' }",
+        artifactKind: '',
+      },
+      {
         name: 'research_evidence_save',
         category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
         helpRoute: 'evidence', labelZh: '保存证据',
@@ -10206,6 +10222,14 @@ window.__ModuleLoader__.load({
         helpRoute: 'resume', labelZh: '运行状态总览',
         summaryZh: '运行总览入口：一次汇总 run 阶段、检查点、证据盘点、最近产物与推荐下一步',
         example: "{ run_id: 'run-1a2b3c' }",
+        artifactKind: '',
+      },
+      {
+        name: 'research_context_pack',
+        category: 'run', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+        helpRoute: null, labelZh: '科研 Context Pack',
+        summaryZh: '有界汇总显式 Claim、关联证据元数据与人工检查点验证回执，供用户审阅后选择注入',
+        example: "{ project: 'demo', run_id: 'run-1a2b3c', budget_chars: 6000 }",
         artifactKind: '',
       },
       {
