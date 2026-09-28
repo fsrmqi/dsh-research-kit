@@ -16,6 +16,22 @@ const fake = installFakeIndexedDB()
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
+// 等「异步沉淀落地」不能用固定 `await sleep(毫秒)`：node --test 并行跑测试文件时 CPU 争抢会让
+// 固定等待偶发不够（本文件曾因此在全量套件里约 1/3 概率红，且只在全量跑时复现）。
+// 谓词必须盯**可观测结果**（知识节点 / 资产 / 水位线）：水位线是在入队时同步推进的，
+// 只等水位线不足以证明异步沉淀已经落地。
+async function waitFor(predicate, label, timeout = 3000) {
+  const deadline = Date.now() + timeout
+  for (;;) {
+    if (await predicate()) return
+    if (Date.now() >= deadline) throw new Error(`等待超时：${label}`)
+    await sleep(5)
+  }
+}
+
+// 只断言「没有发生」的场合没有可等的事件，给一段稳定窗口即可。
+const settle = () => sleep(60)
+
 function installFakeLocalStorage() {
   const store = new Map()
   const previous = globalThis.localStorage
@@ -144,14 +160,14 @@ test('事件接线：回答完成事件触发沉淀，水位线防止事件重�
       type: 'assistant/message', seq: 5, time: 111,
       data: { turn: 1, step: 1, message: { content: [{ type: 'text', text: '研究表明，Ghd7 促进水稻耐盐性。' }] } },
     })
-    await sleep(30)
+    await waitFor(async () => (await knowledgeStore().listNodes()).length > before && assetProvider.assets.length >= 1, 'sess-live：seq=5 的知识与资产落地')
     const after = await knowledgeStore().listNodes()
     assert.ok(after.length > before, '回答完成后应自动沉淀知识节点')
     assert.equal(readDepositionCursor('sess-live'), 5, '处理后水位线应推进')
     assert.ok(assetProvider.assets.length >= 1, '事件驱动的沉淀也应创建灵感资产')
     // 再次通知（模拟刷新后事件窗口重放同一段历史）：水位线保证不重复入库。
     eventSource.push({ type: 'tool/call', seq: 6, data: {} })
-    await sleep(30)
+    await settle()
     assert.equal((await knowledgeStore().listNodes()).length, after.length, '旧消息不得因事件重放而重复沉淀')
     dispose()
   } finally {
@@ -170,7 +186,7 @@ test('开关语义：关闭时不沉淀但水位线照常前进；interrupted �
       type: 'assistant/message', seq: 10,
       data: { message: { content: [{ type: 'text', text: '研究表明，OsNAC3 促进水稻耐盐性。' }] } },
     })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-off') === 10, 'sess-off：扫到 seq=10')
     assert.equal(readDepositionCursor('sess-off'), 10, '关闭期间水位线仍前进')
     assert.equal((await knowledgeStore().listNodes()).filter(node => node.label.includes('OsNAC3')).length, 0)
     // interrupted = 被取消的半截回答：即使开启也不提取，但水位线照常推进。
@@ -178,7 +194,7 @@ test('开关语义：关闭时不沉淀但水位线照常前进；interrupted �
       type: 'assistant/message', seq: 11,
       data: { interrupted: true, message: { content: [{ type: 'text', text: '研究表明，OsNAC3 促进水稻耐盐性。' }] } },
     })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-off') === 11, 'sess-off：扫到 seq=11（interrupted）')
     assert.equal(readDepositionCursor('sess-off'), 11)
     // 开启开关：只处理新回答，绝不回放关闭期间的消息。
     setAutoDepositEnabled(true)
@@ -186,7 +202,7 @@ test('开关语义：关闭时不沉淀但水位线照常前进；interrupted �
       type: 'assistant/message', seq: 12,
       data: { message: { content: [{ type: 'text', text: '研究表明，OsNAC3 促进水稻耐盐性。' }] } },
     })
-    await sleep(30)
+    await waitFor(async () => (await knowledgeStore().listNodes()).some(node => node.label.includes('OsNAC3')), 'sess-off：开启后 seq=12 的沉淀落地')
     assert.ok((await knowledgeStore().listNodes()).some(node => node.label.includes('OsNAC3')), '开启后的新回答应被沉淀')
     // 过短消息跳过提取，但水位线照常推进。
     const count = (await knowledgeStore().listNodes()).length
@@ -194,7 +210,7 @@ test('开关语义：关闭时不沉淀但水位线照常前进；interrupted �
       type: 'assistant/message', seq: 13,
       data: { message: { content: [{ type: 'text', text: '太短' }] } },
     })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-off') === 13, 'sess-off：扫到 seq=13（过短消息）')
     assert.equal(readDepositionCursor('sess-off'), 13)
     assert.equal((await knowledgeStore().listNodes()).length, count)
     dispose()
@@ -254,7 +270,7 @@ test('事件接线增量扫描：穿插非回答事件不漏沉淀；重复通�
     eventSource.push({ type: 'assistant/message', seq: 5, data: { message: { content: [{ type: 'text', text: '研究表明，Ghd7 促进水稻耐盐性。' }] } } })
     eventSource.push({ type: 'tool/call', seq: 6, data: {} })
     eventSource.push({ type: 'assistant/message', seq: 7, data: { message: { content: [{ type: 'text', text: '研究表明，OsNAC3 抑制水稻耐盐性。' }] } } })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-incr') === 7 && assetProvider.assets.length >= 2, 'sess-incr：两条回答的资产都落地')
     assert.equal(readDepositionCursor('sess-incr'), 7, '水位线应推进到最后一条 assistant/message')
     const assetsAfterPushes = assetProvider.assets.length
     assert.ok(assetsAfterPushes >= 2, '两条回答都应创建灵感资产')
@@ -262,17 +278,17 @@ test('事件接线增量扫描：穿插非回答事件不漏沉淀；重复通�
     // 同一窗口反复通知（宿主每次会话活动都回调订阅）——增量扫描后不得重复入库。
     eventSource.notify()
     eventSource.notify()
-    await sleep(30)
+    await settle()
     assert.equal(assetProvider.assets.length, assetsAfterPushes, '重复通知不得重复建资产')
     assert.equal((await knowledgeStore().listNodes()).length, nodesAfterPushes, '重复通知不得重复入库知识')
     // 窗口被整体替换成只剩最后一条（模拟宿主裁剪/重放）——同样不得重复。
     eventSource.replaceEntries([eventSource.getSnapshot().entries.at(-1)])
     eventSource.notify()
-    await sleep(30)
+    await settle()
     assert.equal((await knowledgeStore().listNodes()).length, nodesAfterPushes, '窗口替换后旧消息不得重复入库')
     // 裁剪后的窗口继续追加：新回答照常沉淀。
     eventSource.push({ type: 'assistant/message', seq: 8, data: { message: { content: [{ type: 'text', text: '研究表明，OsWRKY71 可能影响水稻耐盐性。' }] } } })
-    await sleep(30)
+    await waitFor(async () => (await knowledgeStore().listNodes()).length > nodesAfterPushes && readDepositionCursor('sess-incr') === 8, 'sess-incr：裁剪窗口上的 seq=8 沉淀落地')
     assert.ok((await knowledgeStore().listNodes()).length > nodesAfterPushes, '裁剪后的窗口上追加新回答仍能沉淀')
     assert.equal(readDepositionCursor('sess-incr'), 8)
     dispose()
@@ -290,7 +306,7 @@ test('事件接线重挂：水位线已推进的会话不回溯重复沉淀，�
     const sessions = makeSessionHarness('sess-reattach', eventSource)
     const assetProvider = makeAssetProviderStub()
     const first = attachKnowledgeDeposition({ sessions }, { assetProvider })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-reattach') === 5 && assetProvider.assets.length >= 1, 'sess-reattach：首条回答落地')
     const assetsAfterFirst = assetProvider.assets.length
     assert.ok(assetsAfterFirst >= 1)
     assert.equal(readDepositionCursor('sess-reattach'), 5)
@@ -299,11 +315,11 @@ test('事件接线重挂：水位线已推进的会话不回溯重复沉淀，�
     const second = attachKnowledgeDeposition({ sessions }, { assetProvider })
     eventSource.notify()
     eventSource.push({ type: 'tool/call', seq: 6, data: {} })
-    await sleep(30)
+    await settle()
     assert.equal(assetProvider.assets.length, assetsAfterFirst, '重挂后重放历史不得重复建资产')
     assert.equal(readDepositionCursor('sess-reattach'), 5, '非回答事件不推进处理水位线')
     eventSource.push({ type: 'assistant/message', seq: 7, data: { message: { content: [{ type: 'text', text: '研究表明，SD7 促进水稻耐盐性。' }] } } })
-    await sleep(30)
+    await waitFor(() => assetProvider.assets.length > assetsAfterFirst && readDepositionCursor('sess-reattach') === 7, 'sess-reattach：重挂后的 seq=7 落地')
     assert.ok(assetProvider.assets.length > assetsAfterFirst, '重挂后的新回答应正常沉淀')
     assert.equal(readDepositionCursor('sess-reattach'), 7)
     second()
@@ -357,7 +373,7 @@ test('手动沉淀：不开自动开关也能经挂接登记的会话服务入�
     const sessions = makeSessionHarness('sess-manual', eventSource)
     const assetProvider = makeAssetProviderStub()
     const dispose = attachKnowledgeDeposition({ sessions }, { assetProvider })
-    await sleep(30)
+    await waitFor(() => readDepositionCursor('sess-manual') === 12, 'sess-manual：扫到 seq=12（开关关闭）')
     assert.equal(assetProvider.assets.length, 0, '开关关闭：挂接本身不沉淀')
     assert.equal(readDepositionCursor('sess-manual'), 12, '水位线在挂接期间照常推进')
     const result = await depositLatestAssistantMessage({ assetProvider })
