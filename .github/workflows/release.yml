@@ -53,8 +53,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
 
-      # 产物必须与源码一致：发布的是提交进仓库的构建产物，这里再确认一次。
-      - run: git diff --exit-code -- ui/client.js
+      # 产物必须与源码一致：发布的是提交进仓库的**三个**构建产物，这里逐个确认。
+      - run: git diff --exit-code -- ui/client.js ui/catalog-data.json ui/promptkit.js
 
       - name: Verify version matches the tag
         run: |

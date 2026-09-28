@@ -53,4 +53,6 @@ jobs:
           name: browser-regression
           path: browser-results/
           if-no-files-found: ignore
-      - run: git diff --exit-code -- ui/client.js
+      # 三个构建产物都提交进仓库（ui/client.js / ui/catalog-data.json / ui/promptkit.js），
+      # 任何一个与源码不同步都会把过期内容发出去。以前只查 client.js，另两个可静默漂移。
+      - run: git diff --exit-code -- ui/client.js ui/catalog-data.json ui/promptkit.js
