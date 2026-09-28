@@ -228,7 +228,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries) and 429 regression tests in 62 files. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries) and 469 regression tests in 66 files, including a host-contract matrix across two DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -237,7 +237,7 @@ Verified so far: catalog contract validation (587 entries, 587 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (429 / 62 files)
+npm test        # pure-logic, contract and render-level regression tests (469 / 66 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

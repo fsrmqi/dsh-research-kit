@@ -14,6 +14,7 @@
 | 改代码：加工作流 / 技能 / 数据源 | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | 搭本地开发环境、跑测试 | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | 搞懂模块职责、数据流、目录 schema | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| 知道它支持哪些 DSH 版本、依赖宿主什么、CI 怎么看守 | [COMPATIBILITY.md](COMPATIBILITY.md) |
 | 改方法工坊或草稿增强器 | [METHOD-WORKSHOP.md](METHOD-WORKSHOP.md) |
 | 做或校验研究结果解释图（diagram IR） | [ARCHITECTURE.md](ARCHITECTURE.md) §7 · `scripts/render-diagrams.mjs` · `scripts/validate-diagrams.mjs` |
 | 确认改动没把界面改坏 | [MANUAL-QA.md](MANUAL-QA.md) |
@@ -29,7 +30,7 @@
 | 使用 | 怎么用？边界在哪？ | README 使用流程 · [PAPER-WORKFLOW.md](PAPER-WORKFLOW.md) · [MCP-SETUP.md](MCP-SETUP.md) · [PRODUCT.md](PRODUCT.md) | 中文 |
 | 贡献 | 我能改什么？怎么改？ | [CONTRIBUTING.md](../CONTRIBUTING.md) · [DEVELOPMENT.md](DEVELOPMENT.md) | 中文 |
 | 原理 | 为什么这样设计？ | [ARCHITECTURE.md](ARCHITECTURE.md) · [METHOD-WORKSHOP.md](METHOD-WORKSHOP.md) | 中文 |
-| 验证 | 我怎么确认它是好的？ | [MANUAL-QA.md](MANUAL-QA.md) | 中文 |
+| 验证 | 我怎么确认它是好的？ | [MANUAL-QA.md](MANUAL-QA.md) · [COMPATIBILITY.md](COMPATIBILITY.md) | 中文 |
 | 出处 | 改了什么？接下来做什么？ | [CHANGELOG.md](../CHANGELOG.md) · [ROADMAP.md](../ROADMAP.md) | 中文 |
 
 ## 语言说明
@@ -64,4 +65,4 @@
 
 1. **`ui/client.js`、`ui/catalog-data.json` 与 `ui/promptkit.js` 是构建产物，不得手改。** 改源码后必须 `npm run build` 并提交产物，CI 会校验一致性。
 2. **`vendor/` 下的工件均为 SHA 锁定快照，不得手改。** 当前 3 个（`promptkit-embed.js`、`archify/template.html`、`archify/i18n.mjs`），清单与校验方式见 `vendor/vendor-manifest.json` 与 [NOTICE](../NOTICE)；改动任何一个都会让 `npm run check` 失败。
-3. **自动化测试无法替代真实 profile 验收。** 仓库内 429 项测试（62 个测试文件）覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。
+3. **自动化测试无法替代真实 profile 验收。** 仓库内 469 项测试（66 个测试文件）覆盖纯逻辑断言、渲染级初始状态（真实 react-dom/server）、宿主契约矩阵与源码/产物文本断言，但交互（点击 / 事件）与宿主 props 形状仍只有真实 profile 能证明；升级 DSH 后必须重跑 [MANUAL-QA.md](MANUAL-QA.md)。

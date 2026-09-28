@@ -159,6 +159,21 @@
 
 **后续候选（按痛点登记，未定案）**：P1 草稿三出口互不知情（最小解：写入成功提示带来源标签 + 当前草稿前 N 字预览，不新增出口）；P2 目录「浏览型」缺下一步动线（注意：推荐下一步工作流 `recommendedWorkflowsForResources` 已存在于输入框弹层，工作台侧未接入——先复用再新造）；P9 领域预设「假全局」（最小解：分区①常驻条 + 目录默认收窄到相关类目，不碰工坊）；P6 核验激励（挂点在 P5：核验状态决定边的视觉权重）；P8 开启说明的防御性措辞精简（小活）。
 
+### 13. DSH 兼容性矩阵与两条已知缺口（矩阵已落地 · 2026-09-28）
+
+**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：2 个基线 tag、12 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（离线跳过，CI 用 `--require-source` 硬失败）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+
+**已知缺口 1 · 跨页视图导航**：Plugins 详情页的「打开工作台」按钮在 0.1.7 线上**永不渲染**。`dsh/standalone-glue.js` 适配的是 `uiConversation.openView(sessionId, view, focus)`，而 0.1.7-rc.1/rc.2 的实际导航面是 `uiConversation.binding(source)` + `ConversationBinding.activate(target)`（`packages/client/ui-conversation/src/client/conversation/assembly.ts`）——没有 `openView`，探测恒为 `undefined`，按钮整块不渲染（静默缺席，不是崩）。
+
+- **修法**：改 glue 层用 `binding(...)` + `activate(...)`，然后在真实 profile 上验证按钮真的能把主区切到科研工作台视图；不要为了让 seam 变绿而放宽 token。
+- **验收**：真实 profile 点击一次（[MANUAL-QA.md](docs/MANUAL-QA.md)）+ 修好后 `KNOWN_GAPS` 的绊线测试**必须失败**，届时同步删除本段、[COMPATIBILITY.md](docs/COMPATIBILITY.md) 的缺口表与 `scripts/lib/dsh-baselines.mjs` 里的记录。
+- **为什么不在本次直接改**：客户端接线改动属于「必须真实 profile 验收」的一类（宿主 props 形状与调用时序无法由单测证明），在无法运行真实 profile 的环境里改它只会把一个已知缺口换成一个未知缺口。
+
+**已知缺口 2 · `dsh.client.inject` 里的幽灵包名**：`package.json` 的 `dsh.client.inject` 含 `@deepseek-ai/dsh-client-runtime`，该名字在 0.1.7-rc.1/rc.2 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到（另两个注入项两处都能查到）。客户端产物实际只 require `react`/`react-dom`，因此不影响装载，只是「我依赖谁」失真。
+
+- **修法**：核实真实包名后替换或删除该条目；`npm run check:dsh-app` 目前已把它作为警告打印。
+- **验收**：绊线（`package.json` 里仍有该字符串）失败后同步删除记录。
+
 ## 明确暂缓（不做或暂不做）
 
 以下方向**刻意不做**，理由是它们会重复 DSH 已承担的能力，并带来权限、保密、成本与状态同步问题：

@@ -24,9 +24,11 @@
 | --- | --- |
 | DSH 本体 | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) · [官方站点](https://deepseek.com/harness) |
 | 插件生态 | [GitHub topic: dsh-plugin](https://github.com/topics/dsh-plugin) |
-| Node.js | `>= 22.6` |
+| Node.js | `>= 22.19`（与 DSH 宿主的 `^22.19.0 \|\| >=24.0.0` 对齐） |
 
 > DSH 目前处于 **Developer Preview**，官方明示会快速迭代、可能出现破坏性变更。本插件依赖的 `conversation.view` 槽位与 `inputActions` 契约随 DSH 版本演进——升级 DSH 后请按[手工验收清单](docs/MANUAL-QA.md)复验。
+
+> **与同类插件共存。** 同一槽位可以注册多个视图，`order` 只决定标签顺序：本插件的科研工作台在 `conversation.view` 的 `order` 是 91，上下文类插件（如 `dsh-context`，`order` 20）可与它同时安装。两者的数据与状态互不共享——本插件不读写其它插件的存储。
 
 ## 它解决什么问题
 
@@ -242,7 +244,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、429 项回归测试（62 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、469 项回归测试（66 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 2 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -251,7 +253,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（429 项 / 62 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（469 项 / 66 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

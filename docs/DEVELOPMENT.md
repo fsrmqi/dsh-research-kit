@@ -8,7 +8,7 @@
 
 ### 环境
 
-- Node.js `>= 22.6`（运行时零依赖；开发态运行 `npm test` 需先 `npm install` 安装 devDependencies 里的 react / react-dom——渲染级降级测试用真实 react-dom/server 渲染初始状态，不引入 jsdom；CI 已含 `npm ci`）；
+- Node.js `>= 22.19`（与 DSH 宿主的 `^22.19.0 || >=24.0.0` 对齐；运行时零依赖；开发态运行 `npm test` 需先 `npm install` 安装 devDependencies 里的 react / react-dom——渲染级降级测试用真实 react-dom/server 渲染初始状态，不引入 jsdom；CI 已含 `npm ci`）；
 - 可运行的 DSH Web profile —— DSH 是独立开源项目，见 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)；
 - 参照 [dsh-promptkit](https://github.com/fsrmqi/dsh-promptkit) 的 DSH slot 适配方式（同为 DSH 浏览器插件）。
 
@@ -19,9 +19,27 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约与 DSH 槽位注册测试（429 项 / 62 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（469 项 / 66 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
+```
+
+兼容性与质量门（细节见 [COMPATIBILITY.md](COMPATIBILITY.md)）：
+
+```bash
+npm run baselines:fetch          # 拉取基线 DSH tag 到 .tmp/dsh-repo（CI 用；离线时矩阵自动跳过）
+npm run check:dsh-app            # 对照基线源码逐条核查宿主契约；-- --require-source 让"缺源码"变成失败
+npm run check:test-count         # 文档里的测试数字必须与实测一致（跑一遍套件比对）
+npm run coverage                 # 覆盖率棘轮：低于 coverage-baseline.json 记录的地板即失败
+npm run coverage:update          # 重新测量并抬高地板（会自检一次）
+```
+
+本地开发回路（各自只管理自己记录的 pid，**绝不**按进程名杀 `dsh web`——那可能是你正在用的界面）：
+
+```bash
+npm run dev:register   # 把当前仓库登记进本机 DSH profile
+npm run dev:watch      # 源码一变就重建 ui/ 产物
+npm run dev:web        # 启动一个受管的本机 dsh web（端口冲突时报错而不是抢占）
 ```
 
 浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React、`ui/client.js` 及其延迟工件，通过插件槽位挂载工作台、方法工坊、输入框弹层与增强器。覆盖延迟资源单次请求、三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果，以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
@@ -71,6 +89,11 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
 | 宿主动作缺失降级的**交互级**断言（点击后不写入、不发送） | 未完成——渲染级已覆盖初始状态（react-dom/server），「点击」路径还需一个能构造缺失 `inputActions` 的真实 DOM 事件运行时（jsdom 或等价 harness） | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
+| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；缺源码时跳过，CI 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
+| 可选能力软探测（缺服务只降级、不进 inject） | 已实现 | `dsh/optional-service.js` + `test/optional-service.test.mjs` |
+| 覆盖率棘轮（地板只许涨不许跌） | 已实现（地板 73 / 66 / 67） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
+| 文档测试数字真值校验（文档 == 实测） | 已实现 | `scripts/check-test-count.mjs` + `scripts/lib/doc-test-count.mjs` |
+| 敌意输入加固（外部数据形状异常不升级为崩溃 / 502） | 已实现（TOP5 路径 + 同族路径） | `test/hostile-input.test.mjs`；规则见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md) |
 
 ## 3. 实现里程碑
 
@@ -104,7 +127,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 429 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。
+**本项无法由单元测试替代。** 仓库内 469 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
@@ -219,8 +242,15 @@ const actions = {
 - [ ] `npm run build && npm run check && npm test && node --check ui/client.js` 通过；
 - [ ] 不手工编辑 `ui/client.js`；
 - [ ] README 或相应文档已同步；
+- [ ] 改了测试数量或文件数时，`npm run check:test-count` 通过（它会直接告诉你该改成多少）；
 - [ ] 不新增模型密钥、遥测或未说明的网络请求；
 - [ ] 所有面向用户的中文文本清楚标明草案、核验与能力边界。
+
+### 新增源码模块 / 外部数据解析
+
+- [ ] 登记三处：`scripts/build-client.mjs` 的 `files`、`package.json` 的 `check`（宿主半区文件也要进）、[ARCHITECTURE.md 的受控清单](ARCHITECTURE.md)；
+- [ ] 解析外部数据的函数是 total 的（见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md)），并在 `test/hostile-input.test.mjs` 补一条敌意 fixture；
+- [ ] 覆盖率不低于地板（`npm run coverage`）；有意下降时用 `npm run coverage:update` 记录新地板，并在 PR 说明理由。
 
 ### 新增或修改工作流
 
@@ -234,6 +264,7 @@ const actions = {
 ### DSH 适配变更
 
 - [ ] 新旧目标 DSH 版本的 props 契约已记录；
+- [ ] `npm run baselines:fetch && npm run check:dsh-app -- --require-source` 通过（宿主 seam 逐条核对，见 [COMPATIBILITY.md](COMPATIBILITY.md)）；
 - [ ] 真实 profile 已验证写入与发送；
 - [ ] 不会重复注册 view；
 - [ ] 会话切换时操作仍指向正确会话；
