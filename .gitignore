@@ -7,12 +7,17 @@ browser-results/
 /.workbuddy/
 /.mcp.json
 
+# 一次性临时目录：DSH 基线源码 stage、watch 的 pid、覆盖率原始输出
+/.tmp/
+/coverage/
+
 # 内部开发笔记：仅本地保留，不随仓库发布
 /docs-internal/
 /.github/*
 !/.github/workflows/
 /.github/workflows/*
 !/.github/workflows/ci.yml
+!/.github/workflows/release.yml
 /AGENTS.md
 /CLAUDE.md
 /.claude/
