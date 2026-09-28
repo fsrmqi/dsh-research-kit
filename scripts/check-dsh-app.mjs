@@ -20,14 +20,27 @@ if (!root) {
     const tools = read('packages/client/ui-tool/src/client/contract/slots.ts')
     const pluginDetail = read('packages/client/ui-plugin-manager/src/client/slot-contract.ts')
     const desktop = read('apps/desktop/README.md')
+    const desktopMain = read('apps/desktop/src/main.ts')
+    const desktopDocument = read('apps/desktop/src/web-document.ts')
     for (const [name, source, tokens] of [
       ['输入框', input, ['captureInsertion()', 'insertText(text: string, span: TokenSpan)', 'setDraft(text: string)']],
       ['工具卡', tools, ["'tool.call.toolview'", "phase: 'preparing'", "phase: 'start'", "phase: 'result'"]],
       // 详情页徽章与诊断动作依赖 subject 形状（bundle + 包名）和两个槽位名，任一改名都要人工重新适配。
       ['插件详情页', pluginDetail, ["'plugins.detail.actions'", "'plugins.detail.badge'", 'owner: PluginDetailProps', "kind: 'bundle'", 'readonly name: string']],
       ['Desktop', desktop, ['dsh-app://app/', '$DSH_HOME/profiles/desktop', 'Plugins page']],
+      ['Desktop 插件 API 转发', desktopMain, ["url.hostname === 'app'", 'return forwardWebRequest(request, hostUrl, hostCookie)']],
+      ['Desktop 请求转发', desktopDocument, ["origin !== 'dsh-app://app'", 'target.pathname = source.pathname', 'target.search = source.search', 'body: request.body']],
     ]) {
       for (const token of tokens) if (!source.includes(token)) throw new Error(`${name} 接口缺少 ${token}；需人工重新适配。`)
+    }
+    const kitRead = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+    for (const [name, file, tokens] of [
+      ['Claim 宿主路由', 'index.js', ['webServer.register(claimReviewRoute({ logger }))', 'webServer.register(claimAgentReviewRoute({ llm: ctx.llm, routes, logger }))']],
+      ['Claim App 会话传递', 'src/research-vault.js', ["h(ResearchClaimReview, { key: 'claim-review', sessionId })"]],
+      ['Claim App 请求', 'src/research-claim-review.js', ["'/dsh-research-kit/claim-review'", "'/dsh-research-kit/claim-agent-review'", 'session_id=${encodeURIComponent(sessionId)}']],
+    ]) {
+      const source = kitRead(file)
+      for (const token of tokens) if (!source.includes(token)) throw new Error(`${name} 缺少 ${token}；需人工重新适配。`)
     }
     // 可选通道：跨页打开对话视图（详情页「打开工作台」）。宿主未提供时插件只是不显示该按钮，
     // 因此这里只报告存在性，不计入失败 —— 缺它不构成不兼容，改名则等于按钮自动消失。
@@ -38,7 +51,7 @@ if (!root) {
           .every(token => service.includes(token))
       } catch { return false }
     })()
-    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡、插件详情页和 Desktop profile 静态契约通过；跨页视图导航（可选）：${viewNavigation ? '可用' : '宿主未提供'}。仍需真实 App 验收。\n`)
+    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡、插件详情页、Claim Agent/发布路由与 Desktop 转发静态契约通过；跨页视图导航（可选）：${viewNavigation ? '可用' : '宿主未提供'}。仍需真实 App 验收。\n`)
   } catch (error) {
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 1

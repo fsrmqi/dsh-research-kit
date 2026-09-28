@@ -91,6 +91,16 @@ test('两个新槽位已接入 glue 与产物，并被 check:dsh-app 契约检�
   assert.match(contractCheck, /'plugins\.detail\.actions'/)
 })
 
+test('Desktop 契约检查覆盖 Claim Agent 路由、会话传递与自定义协议转发', () => {
+  assert.match(contractCheck, /apps\/desktop\/src\/main\.ts/)
+  assert.match(contractCheck, /apps\/desktop\/src\/web-document\.ts/)
+  assert.match(contractCheck, /claimAgentReviewRoute/)
+  assert.match(contractCheck, /session_id=\$\{encodeURIComponent\(sessionId\)\}/)
+  assert.match(contractCheck, /target\.pathname = source\.pathname/)
+  assert.match(bundle, /dsh-research-kit\/claim-agent-review/)
+  assert.match(bundle, /发布检查并导出/)
+})
+
 test('跳转动作向宿主请求当前会话的科研工作台视图', () => {
   const calls = []
   const accepted = (sessionId, view, focus) => { calls.push([sessionId, view, focus]); return true }

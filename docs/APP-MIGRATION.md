@@ -14,6 +14,6 @@ DSH Desktop 复用 Web 客户端，但页面位于 `dsh-app://app/`；原浏览�
 
 ## 升级门禁
 
-对本地 DSH 源码运行 `npm run check:dsh-app -- /path/to/deepseek-harness`。它检查 Research Kit 的版本声明、输入框、工具卡阶段和 Desktop profile 的静态契约；通过不等于实际安装成功。每次升级还需按 [手工验收清单](MANUAL-QA.md) 的 Desktop 项执行窄窗口、暗色、准备／执行／结果工具卡与迁移往返验证。不要用插件管理器的版本豁免代替适配。
+对本地 DSH 源码运行 `npm run check:dsh-app -- /path/to/deepseek-harness`。它检查 Research Kit 的版本声明、输入框、工具卡阶段、Claim Agent／发布路由和 Desktop 自定义协议转发的静态契约；通过不等于实际安装成功。Desktop profile 已安装本地链接时，源码与构建产物更新后仍须刷新 App 插件／页面，不能把旧的已加载实例当作新版验收。每次升级还需按 [手工验收清单](MANUAL-QA.md) 的 Desktop 项执行 Claim 初审与发布门禁、窄窗口、暗色、工具卡与迁移往返验证。不要用插件管理器的版本豁免代替适配。
 
 2026-09-26 已在已安装的 DSH Desktop App 上完成入口、导出与导入预览的真实交互验收：本端 192 条证据导出后通过完整性校验，回选时显示预计新增 0 条。尚未在真实 App 中点击最终导入，因为该动作会写入当前用户的生产证据库；隔离浏览器回归已覆盖实际写入与重复导入。真实 App 的跨 Web 迁移、窄窗口、暗色和工具卡仍需完整验收。
