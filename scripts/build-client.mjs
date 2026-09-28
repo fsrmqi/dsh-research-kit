@@ -70,7 +70,7 @@ const ORDERED_SYMBOLS = [
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
   'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
   'ResearchPluginStatusSection',   // src/plugin-status.js（standalone-glue 注册状态区）
-  'ResearchKitBadge', 'ResearchKitDiagnosticsAction', // src/plugin-status.js（Plugins 页徽章与诊断动作）
+  'ResearchKitBadge', 'ResearchKitDiagnosticsAction', 'ResearchKitOpenWorkbenchAction', // src/plugin-status.js（Plugins 页徽章、诊断与跨页跳转动作）
   'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
   'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
   'ResearchDepositButton',         // src/composer-deposit-button.js（增强器伴生钮，prompt-enhancer-glue 渲染）

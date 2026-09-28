@@ -10945,8 +10945,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Plugins 页头部动作：按需复制诊断信息。跳转类动作（打开工作台／会话视图）暂不提供 ——
-     * DSH 没有「跨页打开某个 conversation.view」的公开契约，插件详情页与对话视图不在同一挂载树。
+     * Plugins 页头部动作：按需复制诊断信息。只写入本机剪贴板，不触网。
      */
     function ResearchKitDiagnosticsAction({ subject }) {
       const [state, setState] = React.useState('idle')
@@ -10975,6 +10974,51 @@ window.__ModuleLoader__.load({
           disabled: state === 'busy', onClick: copy,
           title: '复制插件版本、目录规模与宿主能力探测结果，便于反馈问题；只写入本机剪贴板，不会上传。',
         }, label),
+      ])
+    }
+
+    /**
+     * 本插件唯一对话视图的 id。必须与 dsh/slot-registry.js 的 RESEARCH_SLOTS 条目一致，
+     * 否则「打开工作台」会请求一个宿主不认识、因而不予选中的视图（单测断言两者相等）。
+     */
+    const RESEARCH_KIT_CONSOLE_VIEW = 'dsh-research-kit-console'
+
+    /**
+     * 请求宿主把主区切到科研工作台视图（宿主 side：`uiConversation.openView`）。
+     * sessionId 传 undefined 表示「主区当前持有的那个会话」，由宿主解析 ——
+     * 插件详情页与对话挂载树无关，拿到会话 id 的合法途径只有宿主自己。
+     * @param {unknown} openView 宿主注入的视图导航；缺失时为 undefined。
+     * @returns {boolean} 宿主是否接受了请求（false = 无可展示会话或视图未注册）。
+     */
+    function researchKitOpenWorkbench(openView) {
+      if (typeof openView !== 'function') return false
+      return openView(undefined, RESEARCH_KIT_CONSOLE_VIEW) !== false
+    }
+
+    /**
+     * Plugins 页头部动作：跳到对话区里的科研工作台。
+     * 宿主需同时提供 `uiConversation.openView`（跨页选中视图）与主区可见的会话；
+     * 通道缺失时整个按钮不渲染 —— 留一个点了毫无反应的死按钮比没有更糟。
+     * 宿主补通道的方式见 docs/PRODUCT.md 的集成边界表。
+     */
+    function ResearchKitOpenWorkbenchAction({ subject, openView }) {
+      const [denied, setDenied] = React.useState(false)
+      const timer = React.useRef(null)
+      React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+      if (!isResearchBundle(subject)) return null
+      if (typeof openView !== 'function') return null
+      const open = () => {
+        if (researchKitOpenWorkbench(openView)) return
+        if (timer.current) clearTimeout(timer.current)
+        setDenied(true)
+        timer.current = setTimeout(() => setDenied(false), 2000)
+      }
+      return h(React.Fragment, null, [
+        h(GlobalStyle, { key: 'style' }),
+        h(Button, {
+          key: 'open', size: 'sm', variant: 'ghost', icon: 'layers', onClick: open,
+          title: '把主区切回当前会话并打开「科研工作台」视图；宿主未提供跨页视图导航时不显示此按钮。',
+        }, denied ? '暂不可用' : '打开工作台'),
       ])
     }
 
@@ -11566,6 +11610,17 @@ window.__ModuleLoader__.load({
         name: 'plugins.detail.actions',
         id: 'dsh-research-kit-diagnostics',
       }, ResearchKitDiagnosticsAction)))
+      // 跨页跳转（详情页 → 对话区「科研工作台」）依赖宿主公开的视图导航服务。
+      // 与 Node half 的 ctx.get?.('tools') 同法软探测：旧宿主没有该服务时按钮整块不渲染，
+      // 插件照常加载 —— 不把它写进 inject 列表，避免旧宿主因缺少服务而拒绝加载整个插件。
+      const conversationViews = ctx.get?.('uiConversation')
+      const openWorkbenchView = typeof conversationViews?.openView === 'function'
+        ? (sessionId, view, focus) => conversationViews.openView(sessionId, view, focus)
+        : null
+      disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
+        name: 'plugins.detail.actions',
+        id: 'dsh-research-kit-open-workbench',
+      }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, openView: openWorkbenchView }))))
       disposers.push(ctx.slots.inject('tool.call.toolview', () => {
         const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
         return () => toolDisposers.forEach(dispose => dispose?.())

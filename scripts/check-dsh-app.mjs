@@ -29,7 +29,16 @@ if (!root) {
     ]) {
       for (const token of tokens) if (!source.includes(token)) throw new Error(`${name} 接口缺少 ${token}；需人工重新适配。`)
     }
-    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡、插件详情页和 Desktop profile 静态契约通过。仍需真实 App 验收。\n`)
+    // 可选通道：跨页打开对话视图（详情页「打开工作台」）。宿主未提供时插件只是不显示该按钮，
+    // 因此这里只报告存在性，不计入失败 —— 缺它不构成不兼容，改名则等于按钮自动消失。
+    const viewNavigation = (() => {
+      try {
+        const service = read('packages/client/ui-conversation/src/client/conversation/assembly.ts')
+        return ['installViewNavigator', 'openView(sessionId: SessionId | undefined, view: string, focus?: string): boolean']
+          .every(token => service.includes(token))
+      } catch { return false }
+    })()
+    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡、插件详情页和 Desktop profile 静态契约通过；跨页视图导航（可选）：${viewNavigation ? '可用' : '宿主未提供'}。仍需真实 App 验收。\n`)
   } catch (error) {
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 1

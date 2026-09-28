@@ -3,7 +3,7 @@ import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
-import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction } from '../src/plugin-status.js'
+import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
 
@@ -36,6 +36,17 @@ export function researchKitApply(ctx) {
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-diagnostics',
   }, ResearchKitDiagnosticsAction)))
+  // 跨页跳转（详情页 → 对话区「科研工作台」）依赖宿主公开的视图导航服务。
+  // 与 Node half 的 ctx.get?.('tools') 同法软探测：旧宿主没有该服务时按钮整块不渲染，
+  // 插件照常加载 —— 不把它写进 inject 列表，避免旧宿主因缺少服务而拒绝加载整个插件。
+  const conversationViews = ctx.get?.('uiConversation')
+  const openWorkbenchView = typeof conversationViews?.openView === 'function'
+    ? (sessionId, view, focus) => conversationViews.openView(sessionId, view, focus)
+    : null
+  disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
+    name: 'plugins.detail.actions',
+    id: 'dsh-research-kit-open-workbench',
+  }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, openView: openWorkbenchView }))))
   disposers.push(ctx.slots.inject('tool.call.toolview', () => {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())

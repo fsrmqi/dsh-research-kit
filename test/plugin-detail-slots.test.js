@@ -14,7 +14,10 @@ const pluginPkg = JSON.parse(readFileSync(new URL('../package.json', import.meta
 
 const React = (await import('react')).default
 const { renderToStaticMarkup } = await import('react-dom/server')
-const { ResearchKitBadge, ResearchKitDiagnosticsAction, researchKitScaleLabel, researchKitDiagnosticsPayload } = await import('../src/plugin-status.js')
+const {
+  ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction,
+  researchKitScaleLabel, researchKitDiagnosticsPayload, researchKitOpenWorkbench, RESEARCH_KIT_CONSOLE_VIEW,
+} = await import('../src/plugin-status.js')
 const { loadCatalogEntries } = await import('../scripts/lib/catalog-entries.mjs')
 
 const researchSubject = { kind: 'bundle', pkg: { name: 'dsh-research-kit', version: '0.2.0', installed: true, enabled: true, rows: [] } }
@@ -86,4 +89,44 @@ test('两个新槽位已接入 glue 与产物，并被 check:dsh-app 契约检�
   assert.match(contractCheck, /ui-plugin-manager\/src\/client\/slot-contract\.ts/)
   assert.match(contractCheck, /'plugins\.detail\.badge'/)
   assert.match(contractCheck, /'plugins\.detail\.actions'/)
+})
+
+test('跳转动作向宿主请求当前会话的科研工作台视图', () => {
+  const calls = []
+  const accepted = (sessionId, view, focus) => { calls.push([sessionId, view, focus]); return true }
+  assert.equal(researchKitOpenWorkbench(accepted), true)
+  // sessionId 留空 = 由宿主解析「主区当前持有的会话」；详情页拿不到会话 id，也不该去猜。
+  assert.deepEqual(calls, [[undefined, RESEARCH_KIT_CONSOLE_VIEW, undefined]])
+  // 宿主拒绝（无会话 / 视图未注册）时如实返回 false，UI 据此给 2 秒短提示。
+  assert.equal(researchKitOpenWorkbench(() => false), false)
+  assert.equal(researchKitOpenWorkbench(undefined), false)
+  assert.equal(researchKitOpenWorkbench({ openView: () => true }), false)
+})
+
+test('跳转目标视图 id 与 slot-registry 注册完全一致', () => {
+  const registry = readFileSync(new URL('../dsh/slot-registry.js', import.meta.url), 'utf8')
+  assert.ok(
+    registry.includes(`slot: 'conversation.view', id: '${RESEARCH_KIT_CONSOLE_VIEW}'`),
+    'RESEARCH_KIT_CONSOLE_VIEW 必须与 RESEARCH_SLOTS 的 conversation.view 条目一致，否则宿主不予选中',
+  )
+  assert.ok(bundle.includes(`const RESEARCH_KIT_CONSOLE_VIEW = '${RESEARCH_KIT_CONSOLE_VIEW}'`))
+})
+
+test('没有宿主视图导航时不渲染跳转按钮，有通道才渲染', () => {
+  // 通道缺失时整块不渲染：留个点了没反应的死按钮比没有更糟。
+  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, openView: 'nope' })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: foreignBundle, openView: () => true })), '')
+  const markup = renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, openView: () => true }))
+  assert.match(markup, /打开工作台/)
+  assert.match(markup, /跨页视图导航/)
+})
+
+test('跨页跳转是软探测：不写进客户端 inject 列表，检查脚本按可选能力报告', () => {
+  // 客户端 inject 清单硬编码在构建脚本里；新增服务若写进去，旧宿主的客户端会因缺服务拒绝加载整插件。
+  assert.ok(bundle.includes("inject: ['slots', 'sessions']"), '产物必须保持最小 inject 列表')
+  assert.match(glue, /ctx\.get\?\.\('uiConversation'\)/)
+  assert.ok(glue.includes('dsh-research-kit-open-workbench'))
+  assert.match(contractCheck, /跨页视图导航（可选）/)
+  assert.match(contractCheck, /installViewNavigator/)
 })

@@ -98,7 +98,7 @@ Research Kit 把这四点做成可复用的资产。
 - **逐条审阅沉淀** — 每条已完成的助手回答旁可打开预览，按知识节点和引用来源逐项勾选，确认后才写入图谱、证据库及灵感资产；取消不写入，所有新内容仍以待核验起步。
 - **研究工具执行态** — DSH 工具卡显示准备中的参数摘要、执行中状态与失败原因；完成后展示 DOI、来源、已记录等级和建议等级。
 - **安全草稿插入** — 支持新版 DSH `captureInsertion()` / `insertText()` 契约的异步结果会插入光标处，并校验草稿修订；宿主不支持时才回落到整草稿写入。草稿已被用户改过时，插件会提示手动粘贴，而不是覆盖新内容。
-- **插件页运行状态** — Plugins 页的 Research Kit 详情下展示 Web / Shell / FS / LLM 装配事实、实际连接的 MCP 服务器与直查适配器数量；标题旁的规模徽章给出构建期烘焙的工作流 / 技能 / 数据源数量（不做运行时探测，避免先闪 0 再跳数），头部「复制诊断」按钮把插件版本、目录规模与上述探测结果一次性写入本机剪贴板（不上传、不含会话内容）。它只报告部署事实，不会把某条数据源改标为已验证可用。
+- **插件页运行状态** — Plugins 页的 Research Kit 详情下展示 Web / Shell / FS / LLM 装配事实、实际连接的 MCP 服务器与直查适配器数量；标题旁的规模徽章给出构建期烘焙的工作流 / 技能 / 数据源数量（不做运行时探测，避免先闪 0 再跳数），头部「复制诊断」按钮把插件版本、目录规模与上述探测结果一次性写入本机剪贴板（不上传、不含会话内容）。宿主提供跨页视图导航时，头部另有一个「打开工作台」按钮：一次点击把主区切回当前会话并选中科研工作台标签页。它只报告部署事实，不会把某条数据源改标为已验证可用。
 - **即时查询配置** — `memoryServer`、`memoryTimeoutMs`、`databaseTimeoutMs`、`databaseRequestsPerMinute` 和 `allowAgentFallback` 是 volatile Config 字段，可在插件页修改并在下一次请求生效；默认值分别对应 Memory Center、15 秒、15 秒、每分钟 12 次和允许 Agent 回退。
 - **收藏与使用历史** — 列表条目一键星标；成功写入/发送/复制自动记入历史（本地仅存 ID、名称、首行摘要与时间，最多 20 条）。
 - **研究证据库** — 公开数据源查询结果可逐条「保存到证据库」，条目带稳定标识符（DOI / PMID / NCT / arXiv）与来源链接，默认「未核验」；按项目隔离去重，可导出 / 导入 JSON 与彻底删除。**只保存来源元数据与你写下的笔记，不保存全文与检索词；默认不自动入库。显式开启自动沉淀或手动确认逐条沉淀后，助手回答引用的来源才会以「未核验」状态入库。**证据库还提供「一键用 Agent 判断」：默认只处理未人工评估条目，可勾选包含人工处理过的条目重新取得当前会话模型的最新初判；Agent 判断与人工评估分开保存并保留历史，不会自动推进核验状态。该按钮只把标题、链接、标识符、保存原因和笔记发送给模型，不读取来源全文，结果必须人工核验。**
@@ -120,7 +120,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.6`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。
+要求 Node `>= 22.6`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「打开工作台」还要求宿主提供公开的跨页视图导航 `uiConversation.openView(sessionId, view, focus?)`（DSH `0.1.7` 尚未提供，缺失时该按钮不渲染）；`npm run check:dsh-app -- <dsh 仓库>` 会把这一通道按「可选能力」报告。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -236,7 +236,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 
 当前版本 `0.2.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、425 项回归测试（62 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、429 项回归测试（62 个测试文件，含 6 项宿主动作缺失的渲染级降级断言）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -245,7 +245,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.2.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（425 项 / 62 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（429 项 / 62 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

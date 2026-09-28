@@ -185,6 +185,7 @@ Prompt 中的参数使用 `{topic}` 这种显式占位符。启动器只替换�
 | 插件页运行状态 | `plugins.detail.section` | 详情页下部的部署事实区：服务装配、已连接 MCP 服务器、直查适配器数量。 |
 | 插件详情页规模徽章 | `plugins.detail.badge` | 标题旁显示构建期烘焙的工作流 / 技能 / 数据源数量；不做运行时探测，不推断可用性。 |
 | 插件详情页诊断复制 | `plugins.detail.actions` | 头部「复制诊断」把版本、目录规模、能力探测与 UA 写入本机剪贴板；不上传、不含会话内容或凭据。 |
+| 插件详情页打开工作台 | `plugins.detail.actions` + 宿主 `uiConversation.openView` | 头部「打开工作台」把主区切回当前会话并选中 `dsh-research-kit-console`。宿主未提供跨页视图导航时按钮不渲染（软探测，不写进客户端 `inject` 列表）；`check:dsh-app` 按可选能力报告该通道。 |
 | 当前草稿 | `useInput` / `inputActions` | 最终 Prompt 可写入输入框，保留用户再次编辑的机会。 |
 | 发送任务 | `inputActions.submit()` | 只经宿主当前会话发送。 |
 | 文件材料 | DSH 原生 `@文件` | 插件只提示使用该能力，不重复上传功能、不读取文件内容。 |
