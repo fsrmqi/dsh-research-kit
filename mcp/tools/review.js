@@ -1,6 +1,7 @@
 import { z } from 'zod/v3'
 import { detectTextAnomalies } from '../execution/anomaly-detector.js'
 import { auditClaims } from '../execution/claim-auditor.js'
+import { extractClaimDrafts } from '../execution/claim-drafts.js'
 import { contract } from '../execution/contract.js'
 import { generateDisclosureStatement, listDisclosurePolicies } from '../execution/disclosure-generator.js'
 import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
@@ -25,6 +26,7 @@ export const reviewCoreTools = [
       ])
       return contract({
         claims: claims.data,
+        claim_drafts: extractClaimDrafts(text.slice(0, 20_000), [], { limit: max_claims }),
         anomalies: anomalies.data,
         writing: writing.data,
         hedging: hedging.data,

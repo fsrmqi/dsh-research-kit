@@ -38,6 +38,7 @@ function extractClaims(text) {
           claim: claimText.slice(0, 300),
           citation: cleaned,
           citation_type: pattern.type,
+          citation_text: match[0],
           context: context.slice(0, 300),
           index: match.index,
         })
@@ -56,7 +57,8 @@ function extractClaims(text) {
     const lastIndex = lastByIdentifier.get(lowerId)
     if (lastIndex !== undefined && Math.abs(match.index - lastIndex) < 10) continue
     lastByIdentifier.set(lowerId, match.index)
-    claims.push({ claim: match.claim, citation: match.citation, citation_type: match.citation_type, context: match.context })
+    claims.push({ claim: match.claim, citation: match.citation, citation_type: match.citation_type,
+      citation_text: match.citation_text, context: match.context, index: match.index })
   }
   
   return claims

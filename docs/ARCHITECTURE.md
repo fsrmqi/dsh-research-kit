@@ -116,7 +116,7 @@ dsh-research-kit/
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
-├── mcp/                           # MCP Server：35 个 research_* 工具的注册、实现与执行层
+├── mcp/                           # MCP Server：36 个 research_* 工具的注册、实现与执行层
 │   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
 │   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
 │   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）

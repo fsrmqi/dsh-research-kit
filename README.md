@@ -91,7 +91,7 @@ Research Kit 把这四点做成可复用的资产。
 
 **科研 Claim 与 Context Pack**：MCP 新增显式 Claim 台账。每条 Claim 必须带认识论状态：`extracted`、`inferred`、`ambiguous`、`verified` 或 `rejected`；只有人工提供证据 ID、操作人和评估理由才能写成 `verified`。`research_run_checkpoint_approve` 可附带验证回执，而 `research_context_pack` 只投影 Claim、证据元数据与人工回执，要求用户审阅后再选择注入，绝不把未确认结论改写为事实，也不携带论文全文、笔记或检索词。
 
-**Claim 审阅面板**：研究资产库新增「Claim 审阅」子模块，直接读取同一份 MCP Claim 台账。可登记摘取草稿、逐条选择确认／存疑／驳回、填写评估人和理由并勾选当前课题已保存的证据；确认时服务端再次校验证据 ID。界面只展示证据标题与标识符，不返回笔记或全文。
+**Claim 审阅面板**：研究资产库的「Claim 审阅」子模块直接读取同一份 MCP Claim 台账。可从带 DOI、PMID、arXiv 引用的研究段落提取候选，逐条勾选后登记为 `extracted`，并保留短引用锚点；也可手工登记。使用当前会话模型的「Agent 审阅」会生成独立的状态建议和理由，不改变人工状态。研究者再逐条确认／存疑／驳回、填写评估人和理由并关联当前课题已保存的证据。草稿导出保留状态；发布导出遇到未人工确认或证据缺失的 Claim 会给出阻断清单。界面与导出只携带证据元数据，不含笔记或全文。
 
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
@@ -118,7 +118,7 @@ Research Kit 把这四点做成可复用的资产。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
 - **手动编辑保护** — 手动编辑后变更参数/技能会提示不会自动合并；筛选后详情始终属于当前结果集。
 - **宿主动作降级** — `setDraft`/`submit` 缺失时按钮禁用、灰化并说明原因，视图不崩溃。
-- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：35 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
+- **MCP 工具集与 Agent 活动面板** — 插件同时提供 MCP Server：36 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账与发布检查、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；Agent 活动面板展示调用轨迹并在 checkpoint 处等待人工确认，研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
 
 **深色主题与窄屏** — 跟随系统与 DSH 主题切换；880px 以下单列布局；原生 `aria-*` 与焦点环。
 
@@ -263,7 +263,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | --- | --- |
 | [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序** |
 | [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿的完整走法：九阶段、三条查询路径、投稿包清单、MCP 操作链 |
-| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 35 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
+| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 36 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
 | [手工验收清单](docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |

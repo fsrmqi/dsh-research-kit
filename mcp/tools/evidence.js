@@ -6,6 +6,7 @@ import { contract } from '../execution/contract.js'
 import { err, wrap } from '../execution/wrapper.js'
 import { EVIDENCE_FIELDS, INVENTORY_FIELDS, evidenceProjection, inventoryProjection } from './shared.js'
 import { CLAIM_STATES, listResearchClaims, recordResearchClaim } from '../state/claim-ledger.js'
+import { buildResearchEvidenceExport } from '../state/research-evidence-export.js'
 
 export const evidenceTools = [
   {
@@ -20,6 +21,10 @@ export const evidenceTools = [
       evidence_ids: z.array(z.string()).max(30).optional().describe('Saved evidence IDs linked to this Claim'),
       assessed_by: z.string().max(120).optional().describe('Human reviewer name or role; required for verified'),
       assessment_reason: z.string().max(500).optional().describe('Human assessment basis; required for verified and rejected'),
+      source_ref: z.object({
+        citation: z.string().max(160), citation_type: z.enum(['doi', 'pmid', 'arxiv', 'other']).optional(),
+        locator: z.string().max(120).optional(), excerpt: z.string().max(300).optional(),
+      }).optional().describe('Optional bounded citation anchor and source excerpt; never paper full text'),
     },
     async execute(input) {
       try {
@@ -49,6 +54,25 @@ export const evidenceTools = [
           disclaimer: '只返回显式登记的 Claim；没有 Claim 不代表研究结论不存在。', run_id: input.run_id,
         })
       } catch (e) { return err(`读取 Claim 台账失败：${e.message}`) }
+    },
+  },
+  {
+    name: 'research_claim_export',
+    description: 'Build a bounded research-evidence JSON manifest. Publication mode blocks unverified Claims or missing saved evidence; draft mode preserves every epistemic state. Does not export evidence notes or full text.',
+    inputSchema: {
+      project: z.string().optional().default('default').describe('Project name'),
+      run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/).optional().describe('Optional run scope'),
+      mode: z.enum(['publication', 'draft']).optional().default('publication').describe('publication enforces human verification; draft keeps explicit states'),
+    },
+    async execute(input) {
+      try {
+        const result = await buildResearchEvidenceExport(input)
+        return contract(result, {
+          source: 'research-claim-ledger', confidence: 'cached', run_id: input.run_id,
+          disclaimer: '发布检查只验证 Claim 的人工状态与本项目证据引用完整性，不代表论文内容已通过同行评议。',
+          warnings: result.ready ? [] : [`${result.blockers.length} 条 Claim 未通过发布检查。`],
+        })
+      } catch (e) { return err(`导出科研 Claim 失败：${e.message}`) }
     },
   },
   {

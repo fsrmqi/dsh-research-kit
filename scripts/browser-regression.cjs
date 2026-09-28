@@ -57,13 +57,33 @@ const server = http.createServer((req,res)=>{
   if(req.method==='POST'){
    let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
     const input=JSON.parse(body||'{}');
+    if(input.action==='extract') return res.end(JSON.stringify({ok:true,drafts:[{statement:'候选 Claim 显示研究结果',state:'extracted',evidence_ids:['qa-evidence-1'],source_ref:{citation:'10.9999/qa',citation_type:'doi',locator:'char:18',excerpt:'候选 Claim 显示研究结果 [1](https://doi.org/10.9999/qa)。'},matched_evidence:true}]}));
+    if(input.action==='save_drafts'){
+     const claim={id:'qa-claim-2',project:'default',statement:'候选 Claim 显示研究结果',state:'extracted',evidence_ids:['qa-evidence-1'],source_ref:{citation:'10.9999/qa',citation_type:'doi',locator:'char:18'}};
+     claimRecords.push(claim);
+     return res.end(JSON.stringify({ok:true,saved:[claim],duplicates:[]}));
+    }
+    if(input.action==='export'){
+     const blockers=claimRecords.filter(item=>item.state!=='verified').map(item=>({claim_id:item.id,state:item.state,reason:'未人工确认的 Claim 不得作为确定结论发布。'}));
+     if(input.mode==='publication'&&blockers.length)return res.end(JSON.stringify({ok:true,ready:false,blockers}));
+     return res.end(JSON.stringify({ok:true,ready:true,payload:{kind:'research-evidence',mode:input.mode,claims:claimRecords},blockers:[]}));
+    }
     const previous=claimRecords.find(item=>item.id===input.claim_id);
     const claim={...previous,...input,id:input.claim_id||'qa-claim-1'};
     claimRecords=claimRecords.filter(item=>item.id!==claim.id).concat(claim);
     res.end(JSON.stringify({ok:true,claim,updated:Boolean(previous)}));
    });
-   return;
-  }
+  return;
+ }
+ }
+ if(req.url?.startsWith('/dsh-research-kit/claim-agent-review')){
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
+   const input=JSON.parse(body||'{}');
+   for(const id of input.claim_ids||[]){const item=claimRecords.find(row=>row.id===id);if(item)item.agent_review={suggested_state:'ambiguous',confidence:'low',reason:'需核对全文和结果范围。',model:'qa-model'};}
+   res.end(JSON.stringify({ok:true,reviewed:(input.claim_ids||[]).length,model:'qa-model'}));
+  });
+  return;
  }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
@@ -98,6 +118,25 @@ const server = http.createServer((req,res)=>{
   await page.getByRole('button',{name:'保存审阅'}).click();
   await page.getByText('已人工确认',{exact:true}).waitFor();
   assert.deepEqual(claimRecords[0].evidence_ids,['qa-evidence-1']);
+  await page.getByLabel('待提取的研究段落').fill('候选 Claim 显示研究结果 [1](https://doi.org/10.9999/qa)。');
+  await page.getByRole('button',{name:'提取候选'}).click();
+  await page.getByRole('group',{name:'Claim 候选列表'}).getByText('候选 Claim 显示研究结果').waitFor();
+  await page.getByLabel('登记候选 1').check();
+  await page.getByRole('button',{name:'登记所选 1 条'}).click();
+  await page.getByText('候选 Claim 显示研究结果',{exact:true}).waitFor();
+  assert.equal(claimRecords[1].state,'extracted');
+  await page.getByRole('button',{name:/Agent 审阅待核验 1 条/}).click();
+  await page.getByText(/Agent 建议「存疑」/).waitFor();
+  assert.equal(claimRecords[1].state,'extracted','Agent 不得改写人工状态');
+  await page.getByRole('button',{name:'发布检查并导出'}).click();
+  await page.getByRole('status').getByText(/发布检查未通过：1 条 Claim/).waitFor();
+  await page.getByRole('button',{name:'逐条审阅'}).first().click();
+  await page.getByRole('button',{name:'确认',exact:true}).click();
+  await page.getByLabel('Claim 评估理由').fill('人工核对了来源方法和结果范围');
+  await page.getByRole('button',{name:'保存审阅'}).click();
+  await page.getByRole('button',{name:'发布检查并导出'}).click();
+  await page.getByRole('status').getByText(/发布检查通过/).waitFor();
+  assert.equal(claimRecords[1].state,'verified');
   if(process.env.RK_CLAIM_QA_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_SCREENSHOT});
   await page.setViewportSize({width:390,height:900});
   const claimLayout=await page.getByLabel('Claim 审阅').evaluate(element=>({width:element.getBoundingClientRect().width,scrollWidth:element.scrollWidth}));

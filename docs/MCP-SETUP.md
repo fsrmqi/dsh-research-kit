@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 35 个科研 Tool（文献检索、引用验证、证据管理、人工评估、Claim 台账、Context Pack、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 36 个科研 Tool（文献检索、引用验证、证据管理、人工评估、Claim 台账与发布检查、Context Pack、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。工具会同时暴露 MCP annotations（只读、外呼、幂等提示），业务错误统一带 `isError`，大结果默认使用紧凑 JSON。
 
@@ -89,7 +89,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 35 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 36 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -260,6 +260,7 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_citation_verify` | 核验 DOI / PMID / arXiv 存在性，提供关键词线索；声明支持性待人工核验 |
 | `research_claim_record` | 显式登记或更新 Claim、认识论状态及关联证据；verified 必须有人工作者、理由与证据 |
 | `research_claim_list` | 读取显式 Claim 及其认识论状态，不从文本自动推断或升级状态 |
+| `research_claim_export` | 草稿模式保留状态；发布模式阻断未人工确认或证据缺失的 Claim |
 | `research_evidence_save` | 保存证据条目（元数据，不存全文） |
 | `research_evidence_list` | 检索已保存证据；默认摘要输出，支持分页与字段过滤 |
 | `research_evidence_grade` | 检查来源线索：缺失或未分级；实证 / 推论需人工核验 |

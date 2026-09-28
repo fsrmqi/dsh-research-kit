@@ -17,6 +17,7 @@ const EXPECTED_TOOL_ORDER = [
   'research_literature_search',
   'research_claim_record',
   'research_claim_list',
+  'research_claim_export',
   'research_evidence_save',
   'research_evidence_list',
   'research_evidence_grade',

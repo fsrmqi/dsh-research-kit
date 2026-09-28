@@ -88,6 +88,14 @@ export const TOOL_REGISTRY = [
     artifactKind: '',
   },
   {
+    name: 'research_claim_export',
+    category: 'evidence', tier: 'fine', access: 'read-only', requiresConfirmation: false,
+    helpRoute: null, labelZh: '导出科研 Claim',
+    summaryZh: '草稿模式保留状态；发布模式阻断未人工确认或证据缺失的 Claim',
+    example: "{ project: 'demo', run_id: 'run-1a2b3c', mode: 'publication' }",
+    artifactKind: '',
+  },
+  {
     name: 'research_evidence_save',
     category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
     helpRoute: 'evidence', labelZh: '保存证据',

@@ -7,6 +7,7 @@ import { memorySearchRoute } from './dsh/memory-search.js'
 import { Config } from './dsh/config.js'
 import { evidenceSyncRoute } from './dsh/evidence-sync.js'
 import { claimReviewRoute } from './dsh/claim-review.js'
+import { claimAgentReviewRoute } from './dsh/claim-agent-review.js'
 import { evidenceSourceCheckRoute } from './dsh/evidence-source-check.js'
 import { agentActivityRoute } from './dsh/agent-activity.js'
 import { catalogDataRoute } from './dsh/catalog-data.js'
@@ -85,6 +86,7 @@ export function apply(ctx, config = Config({})) {
   // 证据同步（Agent 化改造 §6.3）：文件系统为单一真源，IndexedDB 仅作 UI 缓存层。
   ctx.effect(() => ctx.webServer.register(evidenceSyncRoute({ logger })), 'dsh-research-kit evidence sync')
   ctx.effect(() => ctx.webServer.register(claimReviewRoute({ logger })), 'dsh-research-kit claim review')
+  ctx.effect(() => ctx.webServer.register(claimAgentReviewRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit claim agent review')
   ctx.effect(() => ctx.webServer.register(evidenceSourceCheckRoute({ web: ctx.web, logger })), 'dsh-research-kit evidence source metadata check')
   // Agent 活动面板数据源：MCP 调用日志 + checkpoint 状态（Agent 化改造 §8.1）。
   ctx.effect(() => ctx.webServer.register(agentActivityRoute({ logger })), 'dsh-research-kit agent activity')

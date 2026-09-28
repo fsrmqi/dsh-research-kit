@@ -344,7 +344,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
     tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider }) : null,
-    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review' }) : null,
+    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',

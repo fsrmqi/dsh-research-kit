@@ -1,29 +1,23 @@
 import { readProjectEntries, safeProjectName } from '../mcp/execution/evidence-store.js'
-import { listResearchClaims, recordResearchClaim } from '../mcp/state/claim-ledger.js'
+import { listResearchClaims, recordClaimDrafts, recordResearchClaim } from '../mcp/state/claim-ledger.js'
+import { extractClaimDrafts } from '../mcp/execution/claim-drafts.js'
+import { buildResearchEvidenceExport } from '../mcp/state/research-evidence-export.js'
 
 export const CLAIM_REVIEW_PATH = '/dsh-research-kit/claim-review'
-const MAX_BODY_BYTES = 16 * 1024
+const MAX_BODY_BYTES = 64 * 1024
 
 function reply(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
   res.end(JSON.stringify(body))
 }
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    req.on('data', chunk => {
-      body += chunk
-      if (Buffer.byteLength(body) > MAX_BODY_BYTES) {
-        reject(new Error('body_too_large'))
-        req.destroy()
-      }
-    })
-    req.on('end', () => {
-      try { resolve(JSON.parse(body)) } catch { reject(new Error('invalid_json')) }
-    })
-    req.on('error', reject)
-  })
+async function readBody(req) {
+  let body = ''
+  for await (const chunk of req) {
+    body += chunk
+    if (Buffer.byteLength(body) > MAX_BODY_BYTES) throw new Error('body_too_large')
+  }
+  try { return JSON.parse(body) } catch { throw new Error('invalid_json') }
 }
 
 function requestClaim(input) {
@@ -68,7 +62,27 @@ export function claimReviewRoute({ logger } = {}) {
             claim_limit_reached: claims.length === 200, evidence_limit_reached: entries.length > 200 })
         }
         if (req.method === 'POST') {
-          const input = requestClaim(await readBody(req))
+          const body = await readBody(req)
+          if (body?.action === 'extract' || body?.action === 'save_drafts') {
+            const project = safeProjectName(body.project || 'default')
+            const text = String(body.text || '')
+            if (text.length > 12_000) return reply(res, 400, { ok: false, error: '研究文本不能超过 12000 字符。' })
+            const drafts = extractClaimDrafts(text, await readProjectEntries(project), { limit: 20 })
+            if (body.action === 'extract') return reply(res, 200, { ok: true, drafts })
+            const selected = body.selected_indices
+            if (!Array.isArray(selected) || !selected.length || selected.length > 20
+              || new Set(selected).size !== selected.length
+              || selected.some(index => !Number.isInteger(index) || index < 0 || index >= drafts.length)) {
+              return reply(res, 400, { ok: false, error: '请选择有效的 Claim 候选。' })
+            }
+            const result = await recordClaimDrafts({ project, run_id: String(body.run_id || ''), drafts: selected.map(index => drafts[index]) })
+            return reply(res, 200, { ok: true, ...result })
+          }
+          if (body?.action === 'export') {
+            const result = await buildResearchEvidenceExport({ project: body.project, run_id: body.run_id || '', mode: body.mode || 'publication' })
+            return reply(res, 200, { ok: true, ...result })
+          }
+          const input = requestClaim(body)
           const result = await recordResearchClaim(input)
           return reply(res, 200, { ok: true, claim: result.claim, updated: result.updated })
         }
@@ -78,7 +92,8 @@ export function claimReviewRoute({ logger } = {}) {
         const status = error?.message === 'body_too_large' ? 413
           : error?.code === 'INVALID_PROJECT' || error?.message === 'invalid_json'
             || error?.message?.startsWith('invalid_') || error?.message?.includes('必须')
-            || error?.message?.includes('不存在') ? 400 : 500
+            || error?.message?.includes('不存在') || error?.message?.includes('不能为空')
+            || error?.message?.includes('不合法') || error?.message?.includes('无法导出') ? 400 : 500
         return reply(res, status, { ok: false, error: error?.message || 'internal_error' })
       }
     },
