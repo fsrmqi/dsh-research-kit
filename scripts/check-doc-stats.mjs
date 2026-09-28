@@ -15,6 +15,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadCatalogEntries } from './lib/catalog-entries.mjs'
+import { collectDocTestCounts } from './lib/doc-test-count.mjs'
 import { TOOL_REGISTRY, toolCount } from '../mcp/tool-registry.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -132,24 +133,9 @@ for (const tool of TOOL_REGISTRY) {
 }
 
 // 测试用例数：真值需运行测试套件，这里只查「各文档彼此一致」，抓的是 168/152 那类互相矛盾。
-const testPat = [
-  [/(\d+) 项回归测试（(\d+) 个测试文件/, 'README.md'],
-  [/(\d+) 项 \/ (\d+) 个测试文件/, 'README.md'],
-  [/(\d+) 项 \/ (\d+) 个测试文件/, 'README.en.md'],
-  [/(\d+) regression tests in (\d+) files/, 'README.en.md'],
-  [/(\d+) 项测试（(\d+) 个测试文件）/, 'docs/README.md'],
-  [/(\d+) 项测试（(\d+) 个测试文件/, 'docs/ARCHITECTURE.md'],
-  [/(\d+) 项 \/ (\d+) 个测试文件/, 'docs/DEVELOPMENT.md'],
-  [/仓库内 (\d+) 项测试/, 'docs/DEVELOPMENT.md'],
-]
-const testValues = new Set()
-const fileValues = new Set()
-for (const [re, file] of testPat) {
-  const m = re.exec(readOnce(file))
-  if (!m) continue
-  testValues.add(Number(m[1]))
-  if (m[2] !== undefined) fileValues.add(Number(m[2]))
-}
+// 「文档 == 实测」由 scripts/check-test-count.mjs 负责（npm run check:test-count），
+// 两者共用 scripts/lib/doc-test-count.mjs 的句式清单，避免正则各自漂移。
+const { testValues, fileValues } = collectDocTestCounts(readOnce)
 if (testValues.size > 1) errors.push(`测试用例数在各文档间不一致：${[...testValues].join(' / ')}`)
 if (fileValues.size > 1) errors.push(`测试文件数在各文档间不一致：${[...fileValues].join(' / ')}`)
 

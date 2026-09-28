@@ -1,0 +1,16 @@
+{
+  "note": "覆盖率地板（棘轮）。低于此值 npm run coverage 失败；提高后用 npm run coverage:update 抬高。",
+  "enforced": {
+    "lines": 73,
+    "branches": 66,
+    "functions": 67
+  },
+  "tolerance": 2,
+  "recorded": {
+    "statements": 75.43,
+    "branches": 68.99,
+    "functions": 69.33,
+    "node": "v26.10.0",
+    "at": "2026-09-28"
+  }
+}

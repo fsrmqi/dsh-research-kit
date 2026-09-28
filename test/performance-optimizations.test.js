@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { catalogDataRoute } from '../dsh/catalog-data.js'
 import { archifyTemplateRoute } from '../dsh/archify-template.js'
 import { promptKitClientRoute } from '../dsh/promptkit-client.js'
@@ -164,4 +164,20 @@ test('大图与长列表性能守卫已接线', () => {
   assert.match(activityRoute, /record\.at >= since/)
   assert.match(activityRoute, /checkpointSnapshots/)
   assert.match(activityView, /activityKey\(call\)/)
+})
+
+test('轮询策略：唯一的定时轮询在 Agent 活动面板，且受「展开 + 页面可见」双闸门约束', () => {
+  // 决策与理由见 docs-internal/projection-vs-polling.md：本仓库不做全局投影层，
+  // 允许的唯一轮询必须能被用户「收起面板 / 切走标签页」立即停掉。
+  // 常驻 setInterval 是最容易悄悄加进来、又最难在评审里发现的一类回归，故用一条断言钉住。
+  const srcDir = new URL('../src/', import.meta.url)
+  const sources = readdirSync(srcDir, { recursive: true }).filter(name => String(name).endsWith('.js'))
+  const polling = sources.filter(name => readFileSync(new URL(String(name), srcDir), 'utf8').includes('setInterval'))
+  assert.deepEqual(polling.map(name => String(name).split('/').pop()), ['agent-activity.js'],
+    '新增定时轮询前先读 docs-internal/projection-vs-polling.md：需要持续更新时优先用宿主事件或显式刷新')
+  const activityView = readFileSync(new URL('../src/agent-activity.js', import.meta.url), 'utf8')
+  assert.match(activityView, /if \(!expanded \|\| typeof document === 'undefined' \|\| document\.visibilityState === 'hidden'\) return undefined/,
+    '面板收起或页面隐藏时必须根本不启动轮询')
+  assert.match(activityView, /document\.visibilityState !== 'hidden'/, '每个 tick 也要复查可见性（切走标签页应立即停）')
+  assert.match(activityView, /return \(\) => clearInterval\(timer\)/, '卸载必须清掉定时器')
 })
