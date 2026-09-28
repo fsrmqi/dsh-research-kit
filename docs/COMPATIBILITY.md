@@ -88,7 +88,7 @@ npm test                                                  # 含 test/dsh-compat-
 3. `~/dev/deepseek-harness`（本机常见克隆位置）；
 4. `.tmp/dsh-tags/<基线 id>`（离线时把基线 tag 解包成工作树；也可用 `DSH_TAGS_DIR` 改目录）——本机没网、没克隆时靠这一条，前三处都找不到它才生效。
 
-**离线时矩阵自动跳过**（`test/dsh-compat-matrix.test.mjs` 用 `skip` 而不是静默通过），CI 则用 `--require-source` 把「没源码」变成硬失败。除宿主源码外，同文件里还有一组**永远可跑**的断言：基线数据自洽、seam 形状合法、插件注册的每个槽位都在矩阵里被看守、插件自身接线契约、以及上面两条缺口绊线。
+**离线时矩阵不跳过、也不静默通过**：`test/dsh-compat-matrix.test.mjs` 每个基线恒定 5 个用例——有源码就核对宿主，没源码就核对**降级路径本身**（跳过原因是否可读可操作、`checkHostSeams` / `checkPlatformModules` 对缺失源码是否 fail-closed、CLI 是否把误用与「没源码」都拒绝成退出码 2）。用例数因此不随环境变化（`# tests` 计不计被 skip 的 suite 会让文档数字忽 459 忽 469，`check:test-count` 在干净 clone 上必红）。CI 用 `--require-source` 把「没源码」变成硬失败。除宿主源码外，同文件里还有一组**永远可跑**的断言：基线数据自洽、seam 形状合法、插件注册的每个槽位都在矩阵里被看守、插件自身接线契约、以及上面两条缺口绊线。
 
 ## 6. 升级 DSH 的操作步骤
 
@@ -101,6 +101,6 @@ npm test                                                  # 含 test/dsh-compat-
 
 ## 7. 边界：这里**不**做什么
 
-- 不引入宿主仓库的构建或类型依赖：矩阵只做 `git show tag:file` 的文本核对 + 正则抽取，离线可跑（无网络时跳过）。
+- 不引入宿主仓库的构建或类型依赖：矩阵只做 `git show tag:file` 的文本核对 + 正则抽取，离线可跑——无源码时核对的是上面的降级路径，而不是「跳过」。
 - 不复制参考项目 `dsh-context` 的代码（它是 Apache-2.0，本仓库是 MIT）；借鉴的是**工程方法**（多基线矩阵、发布流水线、覆盖率棘轮），不是内容。二者的槽位取向不冲突：同一 `conversation.view` 槽可注册多个视图，`order` 只决定标签顺序——`dsh-context` 的视图 `order` 20，本仓库的科研工作台 `order` 91，可同时安装。
 - 不把「源码里存在某个字符串」当成兼容性证明。矩阵是**下限保险**，真实交互验收仍是 [MANUAL-QA.md](MANUAL-QA.md)。

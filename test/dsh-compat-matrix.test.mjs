@@ -2,14 +2,21 @@
 //
 // 分两层：
 //   1. 永远可跑（不需要 DSH 源码）——基线数据自洽、插件自身接线、槽位看守完整性、已知缺口绊线；
-//   2. 有源码才跑——每个基线 tag 上逐条核对 HOST_SEAMS，并验证浏览器产物 require 的模块
-//      都由该代宿主的模块表回答。
+//   2. 需要基线源码——每个基线 tag 上逐条核对 HOST_SEAMS，并验证浏览器产物 require 的模块
+//      都由该代宿主的模块表回答；**没有源码时改核对降级路径本身**（见下）。
 //
-// 源码从哪来（任一即可，缺失时第 2 层整体 skip 并打印原因）：
+// 源码从哪来（任一即可）：
 //   npm run baselines:fetch   → .tmp/dsh-repo（浅拉取基线 tag）
 //   DSH_REPO=/path/to/deepseek-harness
 //   .tmp/dsh-tags/<baseline id>/（已解包工作树）
+//
+// 第 2 层为什么不再用 { skip }：TAP 的 `# tests` 不计被 skip 的 suite，于是同一个仓库会
+// 「干净 clone 实测 459 / 有源码 469」，文档数字在对与错之间反复横跳——`check:test-count`
+// 在干净 clone 上必红，而 `prepublishOnly` 串了它，干净 clone 上连 npm publish 都会被挡。
+// 现在每个基线恒定 5 个用例：有源码就核对宿主；没源码就核对降级路径（跳过原因可读可操作、
+// 检查函数对缺失源码 fail-closed、CLI 拒绝把「没源码」当通过）。用例数不再随环境变化。
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -21,6 +28,7 @@ import {
   checkPlatformModules,
   checkPluginContracts,
   clientInjectAudit,
+  dirSource,
   sourceForBaseline,
   unprobedSlots,
 } from '../scripts/lib/dsh-compat.mjs'
@@ -72,19 +80,35 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
   })
 })
 
-describe('compat 矩阵 —— 真实宿主源码（需要基线 tag，缺失则跳过）', () => {
-  for (const baseline of BASELINES) {
-    const picked = sourceForBaseline(baseline)
-    const reason = picked.skip ? `跳过 ${baseline.version}：${picked.skip}` : undefined
-    if (reason) console.warn(`[compat] ${reason}`)
+describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路径）', () => {
+  // 探针：一个必然读不到任何宿主文件的副本。用它把「读不到源码会不会被当成通过」测出来。
+  const ghost = () => dirSource({ dir: join(ROOT, '.tmp/definitely-missing-source'), label: '缺失源码探针' })
+  const CLI = join(ROOT, 'scripts/check-dsh-app.mjs')
 
-    describe(`DSH ${baseline.version}`, { skip: reason }, () => {
-      test('源码版本自证：tag 指向的 package.json 就是基线声明的版本', () => {
+  BASELINES.forEach(baseline => {
+    const picked = sourceForBaseline(baseline)
+    if (!picked.source) console.warn(`[compat] 跳过 ${baseline.version}：${picked.skip}`)
+
+    describe(`DSH ${baseline.version}${picked.source ? '' : '（无源码）'}`, () => {
+      test('源码版本自证：tag 指向的 package.json 就是基线声明的版本', t => {
+        if (!picked.source) {
+          assert.ok(picked.skip, '没有源码时必须给出跳过原因，不能静默通过')
+          assert.match(picked.skip, /baselines:fetch|DSH_REPO/, '跳过原因必须给出补救办法')
+          t.diagnostic(`未核对宿主（无源码）：${picked.skip}`)
+          return
+        }
         const actual = JSON.parse(picked.source.read('package.json') || '{}').version
         assert.equal(actual, baseline.version)
       })
 
-      test('全部必需 seam 成立（失败会点名是哪个宿主文件少了什么）', () => {
+      test('全部必需 seam 成立（失败会点名是哪个宿主文件少了什么）', t => {
+        if (!picked.source) {
+          // fail-closed：读不到源码必须报失败，绝不能零检查就算通过。
+          const outcome = checkHostSeams(ghost())
+          assert.ok(outcome.failures.length > 0, '源码缺失时 seam 检查必须失败，而不是零检查通过')
+          t.diagnostic(`已验证 fail-closed：缺失源码报出 ${outcome.failures.length} 处失败`)
+          return
+        }
         const outcome = checkHostSeams(picked.source)
         assert.deepEqual(
           outcome.failures.map(f => `${f.label} → ${f.missing.join(' / ')}`),
@@ -93,22 +117,58 @@ describe('compat 矩阵 —— 真实宿主源码（需要基线 tag，缺失则
         assert.ok(outcome.required.length >= 8, '必需 seam 数量骤降，检查 HOST_SEAMS')
       })
 
-      test('可选 seam 的状态如实报告，且不参与失败判定', () => {
-        const outcome = checkHostSeams(picked.source)
-        for (const seam of outcome.unavailableOptional) {
-          assert.ok(seam.optional, '只有声明 optional 的 seam 才允许缺失')
+      test('可选 seam 的状态如实报告，且不参与失败判定', t => {
+        // 这条断言过去是恒真的：unavailableOptional 的定义就是 !ok && optional，断言它
+        // 「都是 optional」不可能失败。改成对探针做行为断言——探针里必需与可选 seam 都缺，
+        // 两类必须分开统计，否则「可选」会变成整体放行的借口。
+        const probe = checkHostSeams(ghost())
+        assert.ok(probe.failures.length > 0, '探针应产生必需失败，否则这条断言没有区分力')
+        assert.ok(probe.unavailableOptional.every(seam => seam.optional), '可选缺失清单里混进了必需 seam')
+        assert.ok(probe.failures.every(seam => !seam.optional), '必需失败清单里混进了可选 seam')
+        if (picked.source) {
+          const real = checkHostSeams(picked.source)
+          if (real.unavailableOptional.length) {
+            assert.equal(real.failures.length, 0, '可选 seam 缺失不得计入失败判定')
+          }
+          t.diagnostic(`真实基线：可选缺失 ${real.unavailableOptional.length} 条 / 失败 ${real.failures.length} 条`)
+        } else {
+          t.diagnostic('无源码：仅验证了必需失败与可选缺失的统计分离')
         }
-        assert.ok(outcome.unavailableOptional.every(seam => seam.label.length > 0))
       })
 
-      test('浏览器模块表能回答产物的每个 require（回答不了的 require 是必然启动崩溃）', () => {
+      test('浏览器模块表能回答产物的每个 require（回答不了的 require 是必然启动崩溃）', t => {
+        if (!picked.source) {
+          const platform = checkPlatformModules(ghost())
+          assert.equal(platform.ok, false, '源码缺失时模块表检查必须失败，而不是零检查通过')
+          t.diagnostic(`已验证 fail-closed：缺失源码报出 ${platform.missing.join(' / ')}`)
+          return
+        }
         const platform = checkPlatformModules(picked.source)
         assert.deepEqual(platform.missing, [])
       })
 
-      test('dsh.client.inject 的每个未命中项都已在 KNOWN_GAPS 里挂号（不许有未追踪的失真声明）', () => {
+      test('dsh.client.inject 的每个未命中项都已在 KNOWN_GAPS 里挂号（不许有未追踪的失真声明）', t => {
+        if (!picked.source) {
+          // 无源码时守住 CLI 的硬门禁语义（这正是「看起来在守、其实没守」的高发处）：
+          // 未知/拼错参数、路径不存在、--require-source 配不存在的路径，都必须退出 2。
+          const missingPath = join(ROOT, '.tmp/definitely-missing-worktree')
+          const cases = [
+            { args: ['--require-sourc'], hint: '未知参数' },
+            { args: [missingPath], hint: '路径不存在' },
+            { args: ['--require-source', missingPath], hint: '路径不存在' },
+          ]
+          for (const item of cases) {
+            const run = spawnSync(process.execPath, [CLI, ...item.args], { cwd: ROOT, encoding: 'utf8' })
+            assert.equal(run.status, 2, `check-dsh-app ${item.args.join(' ')} 应退出 2，实际 ${run.status}：${run.stdout}${run.stderr}`)
+            assert.match(run.stderr, new RegExp(item.hint), `失败原因应点名「${item.hint}」：${run.stderr}`)
+          }
+          t.diagnostic('已验证 CLI 的三种误用都退出 2')
+          return
+        }
         const audit = clientInjectAudit(picked.source, PACKAGE.dsh.client.inject)
-        if (!audit.checked) return // 该代宿主没带依赖清单，无从核对
+        // 以前这里是 if (!audit.checked) return —— 宿主依赖清单读不到就等于这条断言没跑，
+        // 而且没有任何信号。改成显式失败：读不到清单说明清单被改名/删了，必须有人处理。
+        assert.equal(audit.checked, true, '宿主依赖清单读不到，等于这条断言没跑：请确认 docs/dependency-catalog.json 仍存在且可解析')
         assert.ok(audit.known.length >= 1, '注入清单与宿主包清单完全不相交，八成是清单口径写错了')
         const tracked = KNOWN_GAPS.find(gap => gap.id === 'phantom-client-inject')
         assert.ok(tracked, '未命中的注入项必须在 KNOWN_GAPS 中有记录，否则没人知道它一直对不上')
@@ -119,7 +179,8 @@ describe('compat 矩阵 —— 真实宿主源码（需要基线 tag，缺失则
             `注入项 ${spec} 在宿主里查不到，却没被 KNOWN_GAPS 的绊线覆盖`,
           )
         }
+        t.diagnostic(`真实基线：命中 ${audit.known.length} 项 / 未命中 ${audit.unknown.length} 项`)
       })
     })
-  }
+  })
 })
