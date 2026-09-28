@@ -40,14 +40,22 @@ const readOnce = file => {
   if (!cache.has(file)) cache.set(file, readFileSync(resolve(ROOT, file), 'utf8'))
   return cache.get(file)
 }
-const { hits } = collectDocTestCounts(readOnce)
+const { hits, uncovered } = collectDocTestCounts(readOnce)
+
+// 句式未命中不是「文档恰好换了说法」这么简单：它意味着这条数字**再也没有人看守**。
+// 本脚本存在的理由正是「门禁看住了互相不矛盾，却没看住说的是真的」，所以这里必须失败。
+for (const item of uncovered) {
+  failures.push(`${item.file} 的「${item.label}」句式已失效：正则不再命中任何内容——`
+    + `文档换了措辞就同步 scripts/lib/doc-test-count.mjs 的 TEST_COUNT_PATTERNS，`
+    + `确实是这条数字不需要看守了就把该句式删掉（否则它会一直静默失效）`)
+}
 
 for (const hit of hits) {
   if (hit.testCount !== summary.tests) {
-    failures.push(`${hit.file} 的「${hit.raw}」写作 ${hit.testCount} 项，实测 ${summary.tests} 项（${hit.label}）`)
+    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.testCount} 项，实测 ${summary.tests} 项（${hit.label}）`)
   }
   if (hit.fileCount !== undefined && hit.fileCount !== testFiles.length) {
-    failures.push(`${hit.file} 的「${hit.raw}」写作 ${hit.fileCount} 个测试文件，实测 ${testFiles.length} 个（${hit.label}）`)
+    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.fileCount} 个测试文件，实测 ${testFiles.length} 个（${hit.label}）`)
   }
 }
 

@@ -135,9 +135,11 @@ for (const tool of TOOL_REGISTRY) {
 // 测试用例数：真值需运行测试套件，这里只查「各文档彼此一致」，抓的是 168/152 那类互相矛盾。
 // 「文档 == 实测」由 scripts/check-test-count.mjs 负责（npm run check:test-count），
 // 两者共用 scripts/lib/doc-test-count.mjs 的句式清单，避免正则各自漂移。
-const { testValues, fileValues } = collectDocTestCounts(readOnce)
+const { testValues, fileValues, uncovered: uncoveredTestCounts } = collectDocTestCounts(readOnce)
 if (testValues.size > 1) errors.push(`测试用例数在各文档间不一致：${[...testValues].join(' / ')}`)
 if (fileValues.size > 1) errors.push(`测试文件数在各文档间不一致：${[...fileValues].join(' / ')}`)
+// 句式未命中在 check-test-count 里是硬失败；这里补一条提示，方便一眼看出哪条数字没人看守。
+for (const item of uncoveredTestCounts) uncovered.push(`${item.file}：${item.label}（测试数字句式）`)
 
 if (process.argv.includes('--verbose')) {
   console.log('被看守的数字（规则 → 命中行号）：')
