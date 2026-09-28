@@ -3,7 +3,7 @@ import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
-import { ResearchPluginStatusSection } from '../src/plugin-status.js'
+import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
 
@@ -26,6 +26,16 @@ export function researchKitApply(ctx) {
     name: 'plugins.detail.section',
     id: 'dsh-research-kit-status',
   }, ResearchPluginStatusSection)))
+  // 标题徽章与头部动作同样只在科研套件的详情页渲染；其他 subject 一律返回 null，
+  // 因此这些槽位缺失（旧宿主／无 plugin-manager）时只是不显示，不报错。
+  disposers.push(ctx.slots.inject('plugins.detail.badge', () => ctx.slots.register({
+    name: 'plugins.detail.badge',
+    id: 'dsh-research-kit-badge',
+  }, ResearchKitBadge)))
+  disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
+    name: 'plugins.detail.actions',
+    id: 'dsh-research-kit-diagnostics',
+  }, ResearchKitDiagnosticsAction)))
   disposers.push(ctx.slots.inject('tool.call.toolview', () => {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())

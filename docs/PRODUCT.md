@@ -182,6 +182,9 @@ Prompt 中的参数使用 `{topic}` 这种显式占位符。启动器只替换�
 | 工作台页面 | `conversation.view` | 统一容器，内部分四个二级分区。 |
 | 输入框快捷入口 | `conversation.input.left` + `conversation.input.overlay` | 工具行「资源 / 工作流程」按钮与上方弹层选择器。 |
 | 草稿增强 | `conversation.input.right` | 输入框旁的增强入口（order 80，低于宿主发送控件）。 |
+| 插件页运行状态 | `plugins.detail.section` | 详情页下部的部署事实区：服务装配、已连接 MCP 服务器、直查适配器数量。 |
+| 插件详情页规模徽章 | `plugins.detail.badge` | 标题旁显示构建期烘焙的工作流 / 技能 / 数据源数量；不做运行时探测，不推断可用性。 |
+| 插件详情页诊断复制 | `plugins.detail.actions` | 头部「复制诊断」把版本、目录规模、能力探测与 UA 写入本机剪贴板；不上传、不含会话内容或凭据。 |
 | 当前草稿 | `useInput` / `inputActions` | 最终 Prompt 可写入输入框，保留用户再次编辑的机会。 |
 | 发送任务 | `inputActions.submit()` | 只经宿主当前会话发送。 |
 | 文件材料 | DSH 原生 `@文件` | 插件只提示使用该能力，不重复上传功能、不读取文件内容。 |

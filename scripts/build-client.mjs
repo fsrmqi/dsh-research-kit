@@ -6,6 +6,16 @@ import { loadCatalogEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const catalogData = await loadCatalogEntries()
+// Plugins 页徽章与诊断载荷的数字在构建期烘焙：客户端在挂载时还没有目录数据，
+// 运行期取值会先渲染 0 再跳变，且独立页（无目录请求）永远拿不到数字。
+const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+const buildStats = {
+  version: String(pkg.version || ''),
+  workflows: catalogData.workflows.length,
+  skills: catalogData.skills.length,
+  resources: catalogData.resources.length,
+  direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
+}
 const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/research-context-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/promptkit-loader.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/research-taxonomy.js', 'src/lib/deposition-taxonomy.js', 'src/lib/project-organizer.js', 'src/lib/research-claims.js', 'src/lib/asset-evidence-links.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/agent-evidence-batch.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/lib/input-actions.js', 'src/host-capabilities-client.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/project-organizer.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/message-deposit-action.js', 'src/composer-deposit-button.js', 'src/route-replay.js', 'src/research-workbench.js', 'mcp/tool-registry.js', 'src/research-toolview.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/plugin-status.js', 'src/agent-activity.js', 'src/research-console.js', 'dsh/standalone-glue.js']
 files.splice(files.indexOf('src/lib/research-claims.js') + 1, 0, 'src/lib/research-ledger.js')
 files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/research-workspaces.js')
@@ -39,7 +49,7 @@ const projects = files.map(file => ({ file, source: strip(readFileSync(resolve(r
 let body = projects.map(entry => entry.source).join('\n\n')
 // 大目录由 Node half 的同源路由按需提供。空壳保持源码模块契约不变，首次视图挂载后
 // catalog.js 会原子替换 live binding，并通知所有已挂载消费者。
-body = `const workflows = []\nconst skills = []\nconst resources = []\nconst databaseMetadataConfig = { groups: [], accessOverrides: {} }\n\n${body}`
+body = `const workflows = []\nconst skills = []\nconst resources = []\nconst databaseMetadataConfig = { groups: [], accessOverrides: {} }\nconst RESEARCH_KIT_BUILD_STATS = ${JSON.stringify(buildStats)}\n\n${body}`
 // 模块间没有 import：符号全部依赖 files 的拼接顺序可见。顺序一旦错位，
 // node --check 查不出，只有运行时才 ReferenceError。这里在构建期把顺序约束固化：
 // 下列符号的定义位置必须早于 standalone-glue 使用它们的位置。
@@ -60,6 +70,7 @@ const ORDERED_SYMBOLS = [
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
   'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
   'ResearchPluginStatusSection',   // src/plugin-status.js（standalone-glue 注册状态区）
+  'ResearchKitBadge', 'ResearchKitDiagnosticsAction', // src/plugin-status.js（Plugins 页徽章与诊断动作）
   'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
   'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
   'ResearchDepositButton',         // src/composer-deposit-button.js（增强器伴生钮，prompt-enhancer-glue 渲染）

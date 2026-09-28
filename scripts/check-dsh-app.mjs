@@ -18,15 +18,18 @@ if (!root) {
     }
     const input = read('packages/client/ui-conversation/src/client/contract/input.ts')
     const tools = read('packages/client/ui-tool/src/client/contract/slots.ts')
+    const pluginDetail = read('packages/client/ui-plugin-manager/src/client/slot-contract.ts')
     const desktop = read('apps/desktop/README.md')
     for (const [name, source, tokens] of [
       ['输入框', input, ['captureInsertion()', 'insertText(text: string, span: TokenSpan)', 'setDraft(text: string)']],
       ['工具卡', tools, ["'tool.call.toolview'", "phase: 'preparing'", "phase: 'start'", "phase: 'result'"]],
+      // 详情页徽章与诊断动作依赖 subject 形状（bundle + 包名）和两个槽位名，任一改名都要人工重新适配。
+      ['插件详情页', pluginDetail, ["'plugins.detail.actions'", "'plugins.detail.badge'", 'owner: PluginDetailProps', "kind: 'bundle'", 'readonly name: string']],
       ['Desktop', desktop, ['dsh-app://app/', '$DSH_HOME/profiles/desktop', 'Plugins page']],
     ]) {
       for (const token of tokens) if (!source.includes(token)) throw new Error(`${name} 接口缺少 ${token}；需人工重新适配。`)
     }
-    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡和 Desktop profile 静态契约通过。仍需真实 App 验收。\n`)
+    process.stdout.write(`DSH ${version}：插件版本、输入框、工具卡、插件详情页和 Desktop profile 静态契约通过。仍需真实 App 验收。\n`)
   } catch (error) {
     process.stderr.write(`${error.message}\n`)
     process.exitCode = 1
