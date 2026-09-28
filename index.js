@@ -3,6 +3,7 @@ import { databaseQueryRoute } from './dsh/database-query.js'
 import { semanticEnhanceRoute, semanticEnhanceStreamRoute } from './dsh/semantic-enhance.js'
 import { evidenceAgentAssessRoute } from './dsh/evidence-agent-assess.js'
 import { hostCapabilitiesRoute } from './dsh/host-capabilities.js'
+import { resolveOptionalServices } from './dsh/optional-service.js'
 import { memorySearchRoute } from './dsh/memory-search.js'
 import { Config } from './dsh/config.js'
 import { evidenceSyncRoute } from './dsh/evidence-sync.js'
@@ -77,12 +78,15 @@ export function apply(ctx, config = Config({})) {
   ctx.effect(() => ctx.webServer.register(evidenceAgentAssessRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit evidence agent assessment')
   // 宿主能力探测（ROADMAP §6）：只报装配与 MCP 连接事实，不改写目录标注。
   // 全部软依赖：宿主未提供对应服务时按「未知/未连接」如实呈现，探测不抛错。
+  // 取用统一走 resolveOptionalServices（dsh/optional-service.js）：可选服务不进 inject 清单，
+  // 缺服务只让对应功能降级，不让插件装载失败。
+  const optional = resolveOptionalServices(ctx)
   ctx.effect(() => ctx.webServer.register(hostCapabilitiesRoute({
-    tools: ctx.get?.('tools'), web: ctx.web, shell: ctx.get?.('shell'), fs: ctx.get?.('fs'), llm: ctx.llm, logger,
+    tools: optional.services.tools, web: ctx.web, shell: optional.services.shell, fs: optional.services.fs, llm: ctx.llm, logger,
   })), 'dsh-research-kit host capabilities')
   // Memory Center 项目记忆检索（ROADMAP §5）：只代为执行 mcp__ 前缀的检索工具，
   // 结果交浏览器端预览；是否进入 Prompt 由用户在增强面板显式勾选（禁止静默注入）。
-  ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: ctx.get?.('tools'), logger, config })), 'dsh-research-kit memory search')
+  ctx.effect(() => ctx.webServer.register(memorySearchRoute({ tools: optional.services.tools, logger, config })), 'dsh-research-kit memory search')
   // 证据同步（Agent 化改造 §6.3）：文件系统为单一真源，IndexedDB 仅作 UI 缓存层。
   ctx.effect(() => ctx.webServer.register(evidenceSyncRoute({ logger })), 'dsh-research-kit evidence sync')
   ctx.effect(() => ctx.webServer.register(claimReviewRoute({ logger })), 'dsh-research-kit claim review')

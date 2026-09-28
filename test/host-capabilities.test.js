@@ -131,8 +131,11 @@ test('接线：Node half 注册两条路由；工作台只读摘要不改写目�
   const entry = readFileSync(new URL('../index.js', import.meta.url), 'utf8')
   assert.match(entry, /hostCapabilitiesRoute\(\{/)
   assert.match(entry, /memorySearchRoute\(\{/)
-  // 软依赖：探测服务经 ctx.get 读取，不进入 inject 硬依赖（缺失时降级而非拒载）。
-  assert.match(entry, /ctx\.get\?\.\('tools'\)/)
+  // 软依赖：探测服务统一经 dsh/optional-service.js 读取（ctx.get 缺失 / 抛错都退化为「不可用」），
+  // 不进入 inject 硬依赖（缺失时降级而非拒载）。
+  assert.match(entry, /resolveOptionalServices\(ctx\)/)
+  assert.match(entry, /tools: optional\.services\.tools/)
+  assert.doesNotMatch(entry, /ctx\.get\?\.\('tools'\)/, '不再各处手写探测：散落的写法会出现「有的兜了有的没兜」')
   assert.doesNotMatch(entry, /inject = \[.*'tools'/)
   const workbench = readFileSync(new URL('../src/research-workbench.js', import.meta.url), 'utf8')
   assert.match(workbench, /fetchHostCapabilitiesSummary/, '工作台未消费能力摘要')
