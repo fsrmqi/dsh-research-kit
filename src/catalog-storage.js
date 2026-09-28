@@ -33,6 +33,13 @@ function readIds(key, storage) {
   return readStore(key, storage).filter(id => typeof id === 'string')
 }
 
+// 历史记录的合法行：{ id, name, summary, at }。localStorage 里的合法 JSON 也可能是
+// 别的东西写的（旧版本、外部脚本、手工改过）——元素级的 null / 原始值必须在读的入口剔掉，
+// 否则 research-workbench 的 `history.map(row => itemById(row.id))` 会整页崩。
+function readHistoryRows(storage) {
+  return readStore(HISTORY_KEY, storage).filter(row => row && typeof row === 'object' && typeof row.id === 'string')
+}
+
 export function createCatalogStorage({ storage } = {}) {
   const store = storage || safeStorage()
   const listeners = new Set()
@@ -57,8 +64,8 @@ export function createCatalogStorage({ storage } = {}) {
     getRecents() {
       const seen = new Set()
       const ids = []
-      for (const row of readStore(HISTORY_KEY, store)) {
-        if (row?.id && !seen.has(row.id)) { seen.add(row.id); ids.push(row.id) }
+      for (const row of readHistoryRows(store)) {
+        if (row.id && !seen.has(row.id)) { seen.add(row.id); ids.push(row.id) }
       }
       return ids
     },
@@ -67,17 +74,17 @@ export function createCatalogStorage({ storage } = {}) {
      * 去重置顶、截断到 MAX_HISTORY，并广播 history-changed 供界面即时刷新。
      */
     recordHistory(entry) {
-      if (!entry?.id) return readStore(HISTORY_KEY, store)
+      if (!entry?.id) return readHistoryRows(store)
       const summary = String(entry.summary || '').split('\n')[0].trim().slice(0, 80)
       const row = { id: entry.id, name: String(entry.name || ''), summary, at: Date.now() }
-      const next = [row, ...readStore(HISTORY_KEY, store).filter(item => item?.id !== row.id)].slice(0, MAX_HISTORY)
+      const next = [row, ...readHistoryRows(store).filter(item => item.id !== row.id)].slice(0, MAX_HISTORY)
       writeStore(HISTORY_KEY, next, store)
       return notifyHistory(next)
     },
-    getHistory() { return readStore(HISTORY_KEY, store) },
+    getHistory() { return readHistoryRows(store) },
     clearHistory() { writeStore(HISTORY_KEY, [], store); return notifyHistory([]) },
     onHistoryChange(callback) {
-      const refresh = () => { try { callback(readStore(HISTORY_KEY, store)) } catch { /* 忽略 */ } }
+      const refresh = () => { try { callback(readHistoryRows(store)) } catch { /* 忽略 */ } }
       const onCustom = event => { if (event?.detail?.key === HISTORY_KEY) refresh() }
       const onStorage = event => { if (event?.key === HISTORY_KEY) refresh() }
       listeners.add(callback)

@@ -2,7 +2,25 @@
 // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
 import { KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUS_LABELS } from './knowledge-extract.js'
 import { assetEvidenceGraphEdges } from './asset-evidence-links.js'
-export function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [], researchClaims = [] } = {}) {
+
+// 图谱的输入全部来自外部（索引库、持久化会话、导入物）：数组可能是 null，
+// 也可能混入 null / 原始值。先统一收敛成「对象数组」，让建图对任何输入都 total——
+// 一条坏记录最多少一个节点，绝不让整个图谱面板抛异常。
+function evidenceGraphList(value) {
+  return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+}
+
+export function buildEvidenceGraph(params) {
+  const input = params && typeof params === 'object' ? params : {}
+  const resources = evidenceGraphList(input.resources)
+  const workflows = evidenceGraphList(input.workflows)
+  const queries = evidenceGraphList(input.queries)
+  const assets = evidenceGraphList(input.assets)
+  const savedEvidence = evidenceGraphList(input.savedEvidence)
+  const plans = evidenceGraphList(input.plans)
+  const assetEvidenceLinks = evidenceGraphList(input.assetEvidenceLinks)
+  const researchClaims = evidenceGraphList(input.researchClaims)
+  const knowledge = input.knowledge && typeof input.knowledge === 'object' ? input.knowledge : {}
   const nodes = new Map()
   const edges = []
   const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -14,10 +32,11 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
     for (const resourceId of workflow.resourceIds || []) link(`workflow:${workflow.id}`, `resource:${resourceId}`, 'uses')
   }
   for (const plan of plans) {
+    const stages = evidenceGraphList(plan.stages)
     const planId = `plan:${plan.id}`
-    add({ id: planId, kind: 'plan', label: `${plan.name || plan.id} 计划`, detail: `${(plan.stages || []).filter(stage => stage.done).length}/${(plan.stages || []).length} 阶段已确认` })
+    add({ id: planId, kind: 'plan', label: `${plan.name || plan.id} 计划`, detail: `${stages.filter(stage => stage.done).length}/${stages.length} 阶段已确认` })
     link(planId, `workflow:${plan.id}`, 'plans')
-    for (const [index, stage] of (plan.stages || []).entries()) {
+    for (const [index, stage] of stages.entries()) {
       const stageId = `${planId}:stage:${index}`
       add({ id: stageId, kind: 'stage', label: stage.label, detail: stage.done ? '用户已确认完成' : '待人工确认' })
       link(stageId, planId, stage.done ? 'confirmed-stage' : 'planned-stage')
@@ -27,7 +46,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
     const queryId = `query:${query.id}`
     add({ id: queryId, kind: query.mode === 'agent' ? 'agent-query' : 'query', label: query.databaseName || query.databaseId, detail: query.at ? new Date(query.at).toLocaleString('zh-CN') : '' })
     link(queryId, `resource:${query.databaseId}`, 'queries')
-    for (const source of query.sources || []) {
+    for (const source of evidenceGraphList(query.sources)) {
       const sourceId = `source:${source.id || source.url}`
       add({ id: sourceId, kind: 'source', label: source.title || source.url || '候选来源', detail: source.meta || source.url || '' })
       link(queryId, sourceId, 'returns')
@@ -49,7 +68,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
     })
     const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
     if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')
-    for (const query of queries) for (const source of query.sources || []) {
+    for (const query of queries) for (const source of evidenceGraphList(query.sources)) {
       const sameUrl = entry.url && source.url && entry.url === source.url
       const sameIdentifier = entry.identifier && source.id && String(entry.identifier) === String(source.id)
       if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
@@ -65,7 +84,7 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
       add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })
       link(questionId, claimId, 'frames')
     }
-    for (const evidence of claim.links || []) {
+    for (const evidence of evidenceGraphList(claim.links)) {
       const kind = ({ supports: 'supports', refutes: 'refutes', insufficient: 'insufficient' })[evidence.stance] || 'linked'
       link(claimId, `evidence:${evidence.evidenceId}`, kind)
     }
@@ -73,8 +92,8 @@ export function buildEvidenceGraph({ resources = [], workflows = [], queries = [
   // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
   // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
   // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
-  const knowledgeNodes = Array.isArray(knowledge?.nodes) ? knowledge.nodes : []
-  const knowledgeClaims = Array.isArray(knowledge?.claims) ? knowledge.claims : []
+  const knowledgeNodes = evidenceGraphList(knowledge.nodes)
+  const knowledgeClaims = evidenceGraphList(knowledge.claims)
   for (const record of knowledgeNodes) {
     if (!record?.id || nodes.has(record.id)) continue
     const kindLabel = KNOWLEDGE_KIND_LABELS[record.kind] || record.kind || '知识'
@@ -123,9 +142,11 @@ const GRAPH_MARGIN = 24
 // 这是本函数与「按遍历顺序填行」的关键区别：新增一个节点只让同列中排在它后面的
 // 节点顺延，不会让已有节点整体跳位（节点重排）；且同一份图重复布局必得完全相同
 // 的结果（有回归测试钉住这两个性质）。
-export function layoutEvidenceGraph(graph = {}, options = {}) {
-  const nodes = graph.nodes || []
-  const edges = graph.edges || []
+export function layoutEvidenceGraph(graph, options = {}) {
+  // 布局是建图的下游：任何输入（含 null / 半成品图）都要能算出结果，而不是把面板打空。
+  const source = graph && typeof graph === 'object' ? graph : {}
+  const nodes = evidenceGraphList(source.nodes)
+  const edges = evidenceGraphList(source.edges)
   const edgeRatio = nodes.length > 0 ? edges.length / nodes.length : 0
 
   // 稀疏图检测：节点 > 50 或边/节点比 < 10% 时用网格布局。
@@ -134,14 +155,16 @@ export function layoutEvidenceGraph(graph = {}, options = {}) {
     return layoutSparseGrid(nodes)
   }
 
-  return layoutByColumn(graph, options)
+  // 传收敛后的 { nodes, edges }，而不是原始 graph：原始值可能是 null / 半成品，
+  // 让下游再取一次属性等于把守卫白写。
+  return layoutByColumn({ nodes, edges }, options)
 }
 
 function layoutByColumn(graph, options) {
   const columnGap = options.columnGap ?? GRAPH_COLUMN_GAP
   const rowGap = options.rowGap ?? GRAPH_ROW_GAP
   const byColumn = new Map()
-  for (const node of graph.nodes || []) {
+  for (const node of evidenceGraphList(graph?.nodes)) {
     const column = GRAPH_COLUMN_OF_KIND[node.kind] ?? 3
     if (!byColumn.has(column)) byColumn.set(column, [])
     byColumn.get(column).push(node)
@@ -218,10 +241,12 @@ const graphEdgeOrder = (a, b) => {
 // 把每条边解析成带端点坐标与三次贝塞尔路径的「路线」。端口分配依赖边的稳定排序，
 // 所以同一份图重复调用必得相同路线（确定性同样是回归断言的对象）。
 export function routeEvidenceEdges(graph = {}, layout = {}) {
-  const byId = new Map((layout.nodes || []).map(node => [node.id, node]))
+  // 连线是渲染的入口：layout/graph 可能是 null 或半成品，边数组里可能有坏行。
+  const edges = evidenceGraphList(graph?.edges)
+  const byId = new Map(evidenceGraphList(layout?.nodes).map(node => [node.id, node]))
   const outgoing = new Map()
   const incoming = new Map()
-  for (const edge of graph.edges || []) {
+  for (const edge of edges) {
     if (!outgoing.has(edge.from)) outgoing.set(edge.from, [])
     outgoing.get(edge.from).push(edge)
     if (!incoming.has(edge.to)) incoming.set(edge.to, [])
@@ -230,7 +255,7 @@ export function routeEvidenceEdges(graph = {}, layout = {}) {
   for (const list of outgoing.values()) list.sort(graphEdgeOrder)
   for (const list of incoming.values()) list.sort(graphEdgeOrder)
   const routes = []
-  for (const edge of graph.edges || []) {
+  for (const edge of edges) {
     const from = byId.get(edge.from)
     const to = byId.get(edge.to)
     if (!from || !to) continue
@@ -265,7 +290,7 @@ export function evidenceNeighborhood(graph = {}, nodeId, direction = 'downstream
     if (!adjacency.has(key)) adjacency.set(key, [])
     adjacency.get(key).push(value)
   }
-  for (const edge of graph.edges || []) {
+  for (const edge of evidenceGraphList(graph?.edges)) {
     if (direction === 'upstream') push(edge.to, edge.from)
     else if (direction === 'both') { push(edge.to, edge.from); push(edge.from, edge.to) }
     else push(edge.from, edge.to)
@@ -289,7 +314,7 @@ export function findEvidencePath(graph = {}, fromId, toId) {
   if (!fromId || !toId) return []
   if (fromId === toId) return [fromId]
   const adjacency = new Map()
-  for (const edge of graph.edges || []) {
+  for (const edge of evidenceGraphList(graph?.edges)) {
     if (!adjacency.has(edge.from)) adjacency.set(edge.from, [])
     if (!adjacency.has(edge.to)) adjacency.set(edge.to, [])
     adjacency.get(edge.from).push(edge.to)

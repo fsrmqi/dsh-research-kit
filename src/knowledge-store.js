@@ -81,12 +81,19 @@ export function knowledgeClaimIdFor(identity) {
   return `${KNOWLEDGE_CLAIM_ID_PREFIX}${hashKey(identity)}`
 }
 
+// 索引库里的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：
+// 排序是每条读取路径的必经之地，因此在这里把非对象行一并剔掉——
+// 一条坏行最多少一条知识，绝不让整个知识面板在比较器里抛 TypeError。
+function knowledgeRows(value) {
+  return (Array.isArray(value) ? value : []).filter(row => row && typeof row === 'object')
+}
+
 function sortKnowledgeNodes(rows) {
-  return [...rows].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  return knowledgeRows(rows).sort((a, b) => ((a.key ?? '') < (b.key ?? '') ? -1 : (a.key ?? '') > (b.key ?? '') ? 1 : 0))
 }
 
 function sortKnowledgeClaims(rows) {
-  return [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  return knowledgeRows(rows).sort((a, b) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0))
 }
 
 // ── 备份导出 / 恢复（对齐证据库的备份语义）────────────────────────────────────

@@ -35,32 +35,48 @@ export function createEvidenceStore(sessionId) {
     return value
   }
   const save = next => {
-    state.queries = Array.isArray(next.queries) ? next.queries : []
-    state.workflows = Array.isArray(next.workflows) ? next.workflows : []
-    state.plans = Array.isArray(next.plans) ? next.plans : []
+    // next 可能来自外部（导入/回放）：非对象一律当空集合，绝不因为调用方传了 null 而整块崩。
+    const source = next && typeof next === 'object' ? next : {}
+    state.queries = Array.isArray(source.queries) ? source.queries : []
+    state.workflows = Array.isArray(source.workflows) ? source.workflows : []
+    state.plans = Array.isArray(source.plans) ? source.plans : []
     return publish()
   }
+  // 外部检索结果与工作流数据不是我们生产的：数组元素可能是 null / 原始值。
+  // 这里逐处收敛成「对象数组」，保证工作台在任何上游形状下都不会拿到 null 行去取属性。
+  const objectRows = value => (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
   return {
     get,
-    recordQuery({ databaseId, databaseName, mode = 'direct', sources = [] }) {
+    recordQuery(input) {
+      const { databaseId, databaseName, mode = 'direct', sources = [] } = input && typeof input === 'object' ? input : {}
       const current = get()
-      const row = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, databaseId, databaseName, mode, at: Date.now(), sources: sources.slice(0, 8).map(source => ({ id: source.id, title: source.title, url: source.url, meta: source.meta })) }
+      const row = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, databaseId, databaseName, mode, at: Date.now(), sources: objectRows(sources).slice(0, 8).map(source => ({ id: source.id, title: source.title, url: source.url, meta: source.meta })) }
       return save({ ...current, queries: [row, ...current.queries].slice(0, MAX_QUERIES) })
     },
-    recordWorkflow({ id, name, resourceIds = [] }) {
+    recordWorkflow(input) {
+      const { id, name, resourceIds = [] } = input && typeof input === 'object' ? input : {}
       const current = get()
-      const row = { id, name, resourceIds: [...new Set(resourceIds)], at: Date.now() }
-      return save({ ...current, workflows: [row, ...current.workflows.filter(item => item.id !== id)].slice(0, MAX_WORKFLOWS) })
+      const row = { id, name, resourceIds: [...new Set(Array.isArray(resourceIds) ? resourceIds : [])], at: Date.now() }
+      return save({ ...current, workflows: [row, ...current.workflows.filter(item => item?.id !== id)].slice(0, MAX_WORKFLOWS) })
     },
-    recordPlan({ workflowId, name, stages = [] }) {
+    recordPlan(input) {
+      const { workflowId, name, stages = [] } = input && typeof input === 'object' ? input : {}
       const current = get()
       const previous = current.plans.find(plan => plan.id === workflowId)
-      const row = { id: workflowId, name, stages: stages.map((label, index) => ({ label, done: previous?.stages[index]?.label === label ? previous.stages[index].done : false })), at: Date.now() }
-      return save({ ...current, plans: [row, ...current.plans.filter(item => item.id !== workflowId)] })
+      // 阶段标签是外部传入的字符串数组（历史上也接受 {label} 对象）：两种都收，
+      // null / 原始值包成 {label}，绝不直接取属性。
+      const rawStages = Array.isArray(stages) ? stages : []
+      const row = { id: workflowId, name, stages: rawStages.map((stage, index) => {
+        const label = stage && typeof stage === 'object' ? stage.label : stage
+        // 上一版阶段先取出来再比对：两个 undefined 相等时不能反手去解引用 undefined。
+        const before = previous?.stages?.[index]
+        return { label, done: before && before.label === label ? before.done : false }
+      }), at: Date.now() }
+      return save({ ...current, plans: [row, ...current.plans.filter(item => item?.id !== workflowId)] })
     },
     togglePlanStage(planId, index) {
       const current = get()
-      return save({ ...current, plans: current.plans.map(plan => plan.id !== planId ? plan : { ...plan, stages: plan.stages.map((stage, i) => i === index ? { ...stage, done: !stage.done } : stage) }) })
+      return save({ ...current, plans: current.plans.map(plan => plan?.id !== planId ? plan : { ...plan, stages: objectRows(plan.stages).map((stage, i) => i === index ? { ...stage, done: !stage.done } : stage) }) })
     },
     subscribe(listener) { state.listeners.add(listener); return () => state.listeners.delete(listener) },
     clear() { return save({ queries: [], workflows: [], plans: [] }) }

@@ -233,6 +233,13 @@ window.__ModuleLoader__.load({
       return readStore(key, storage).filter(id => typeof id === 'string')
     }
 
+    // 历史记录的合法行：{ id, name, summary, at }。localStorage 里的合法 JSON 也可能是
+    // 别的东西写的（旧版本、外部脚本、手工改过）——元素级的 null / 原始值必须在读的入口剔掉，
+    // 否则 research-workbench 的 `history.map(row => itemById(row.id))` 会整页崩。
+    function readHistoryRows(storage) {
+      return readStore(HISTORY_KEY, storage).filter(row => row && typeof row === 'object' && typeof row.id === 'string')
+    }
+
     function createCatalogStorage({ storage } = {}) {
       const store = storage || safeStorage()
       const listeners = new Set()
@@ -257,8 +264,8 @@ window.__ModuleLoader__.load({
         getRecents() {
           const seen = new Set()
           const ids = []
-          for (const row of readStore(HISTORY_KEY, store)) {
-            if (row?.id && !seen.has(row.id)) { seen.add(row.id); ids.push(row.id) }
+          for (const row of readHistoryRows(store)) {
+            if (row.id && !seen.has(row.id)) { seen.add(row.id); ids.push(row.id) }
           }
           return ids
         },
@@ -267,17 +274,17 @@ window.__ModuleLoader__.load({
          * 去重置顶、截断到 MAX_HISTORY，并广播 history-changed 供界面即时刷新。
          */
         recordHistory(entry) {
-          if (!entry?.id) return readStore(HISTORY_KEY, store)
+          if (!entry?.id) return readHistoryRows(store)
           const summary = String(entry.summary || '').split('\n')[0].trim().slice(0, 80)
           const row = { id: entry.id, name: String(entry.name || ''), summary, at: Date.now() }
-          const next = [row, ...readStore(HISTORY_KEY, store).filter(item => item?.id !== row.id)].slice(0, MAX_HISTORY)
+          const next = [row, ...readHistoryRows(store).filter(item => item.id !== row.id)].slice(0, MAX_HISTORY)
           writeStore(HISTORY_KEY, next, store)
           return notifyHistory(next)
         },
-        getHistory() { return readStore(HISTORY_KEY, store) },
+        getHistory() { return readHistoryRows(store) },
         clearHistory() { writeStore(HISTORY_KEY, [], store); return notifyHistory([]) },
         onHistoryChange(callback) {
-          const refresh = () => { try { callback(readStore(HISTORY_KEY, store)) } catch { /* 忽略 */ } }
+          const refresh = () => { try { callback(readHistoryRows(store)) } catch { /* 忽略 */ } }
           const onCustom = event => { if (event?.detail?.key === HISTORY_KEY) refresh() }
           const onStorage = event => { if (event?.key === HISTORY_KEY) refresh() }
           listeners.add(callback)
@@ -541,32 +548,48 @@ window.__ModuleLoader__.load({
         return value
       }
       const save = next => {
-        state.queries = Array.isArray(next.queries) ? next.queries : []
-        state.workflows = Array.isArray(next.workflows) ? next.workflows : []
-        state.plans = Array.isArray(next.plans) ? next.plans : []
+        // next 可能来自外部（导入/回放）：非对象一律当空集合，绝不因为调用方传了 null 而整块崩。
+        const source = next && typeof next === 'object' ? next : {}
+        state.queries = Array.isArray(source.queries) ? source.queries : []
+        state.workflows = Array.isArray(source.workflows) ? source.workflows : []
+        state.plans = Array.isArray(source.plans) ? source.plans : []
         return publish()
       }
+      // 外部检索结果与工作流数据不是我们生产的：数组元素可能是 null / 原始值。
+      // 这里逐处收敛成「对象数组」，保证工作台在任何上游形状下都不会拿到 null 行去取属性。
+      const objectRows = value => (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
       return {
         get,
-        recordQuery({ databaseId, databaseName, mode = 'direct', sources = [] }) {
+        recordQuery(input) {
+          const { databaseId, databaseName, mode = 'direct', sources = [] } = input && typeof input === 'object' ? input : {}
           const current = get()
-          const row = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, databaseId, databaseName, mode, at: Date.now(), sources: sources.slice(0, 8).map(source => ({ id: source.id, title: source.title, url: source.url, meta: source.meta })) }
+          const row = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, databaseId, databaseName, mode, at: Date.now(), sources: objectRows(sources).slice(0, 8).map(source => ({ id: source.id, title: source.title, url: source.url, meta: source.meta })) }
           return save({ ...current, queries: [row, ...current.queries].slice(0, MAX_QUERIES) })
         },
-        recordWorkflow({ id, name, resourceIds = [] }) {
+        recordWorkflow(input) {
+          const { id, name, resourceIds = [] } = input && typeof input === 'object' ? input : {}
           const current = get()
-          const row = { id, name, resourceIds: [...new Set(resourceIds)], at: Date.now() }
-          return save({ ...current, workflows: [row, ...current.workflows.filter(item => item.id !== id)].slice(0, MAX_WORKFLOWS) })
+          const row = { id, name, resourceIds: [...new Set(Array.isArray(resourceIds) ? resourceIds : [])], at: Date.now() }
+          return save({ ...current, workflows: [row, ...current.workflows.filter(item => item?.id !== id)].slice(0, MAX_WORKFLOWS) })
         },
-        recordPlan({ workflowId, name, stages = [] }) {
+        recordPlan(input) {
+          const { workflowId, name, stages = [] } = input && typeof input === 'object' ? input : {}
           const current = get()
           const previous = current.plans.find(plan => plan.id === workflowId)
-          const row = { id: workflowId, name, stages: stages.map((label, index) => ({ label, done: previous?.stages[index]?.label === label ? previous.stages[index].done : false })), at: Date.now() }
-          return save({ ...current, plans: [row, ...current.plans.filter(item => item.id !== workflowId)] })
+          // 阶段标签是外部传入的字符串数组（历史上也接受 {label} 对象）：两种都收，
+          // null / 原始值包成 {label}，绝不直接取属性。
+          const rawStages = Array.isArray(stages) ? stages : []
+          const row = { id: workflowId, name, stages: rawStages.map((stage, index) => {
+            const label = stage && typeof stage === 'object' ? stage.label : stage
+            // 上一版阶段先取出来再比对：两个 undefined 相等时不能反手去解引用 undefined。
+            const before = previous?.stages?.[index]
+            return { label, done: before && before.label === label ? before.done : false }
+          }), at: Date.now() }
+          return save({ ...current, plans: [row, ...current.plans.filter(item => item?.id !== workflowId)] })
         },
         togglePlanStage(planId, index) {
           const current = get()
-          return save({ ...current, plans: current.plans.map(plan => plan.id !== planId ? plan : { ...plan, stages: plan.stages.map((stage, i) => i === index ? { ...stage, done: !stage.done } : stage) }) })
+          return save({ ...current, plans: current.plans.map(plan => plan?.id !== planId ? plan : { ...plan, stages: objectRows(plan.stages).map((stage, i) => i === index ? { ...stage, done: !stage.done } : stage) }) })
         },
         subscribe(listener) { state.listeners.add(listener); return () => state.listeners.delete(listener) },
         clear() { return save({ queries: [], workflows: [], plans: [] }) }
@@ -1422,12 +1445,17 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // 外部/持久化数据里的资产列表可能混入 null 与原始值（导入、旧版本写入、手工改过的存储）；
+    // 入口先收敛为「对象数组」，筛选与计数对任何输入都保持 total。
+    function vaultAssetRows(assets) {
+      return (Array.isArray(assets) ? assets : []).filter(item => item && typeof item === 'object')
+    }
+
     // 列表筛选：关键词命中标题/正文/备注/标签/项目；filter 为预设分组。
     //   all=全部 to_verify=待验证 favorites=收藏 derived=派生版本
     function filterAssets(assets, { query = '', filter = 'all' } = {}) {
       const text = String(query || '').trim().toLowerCase()
-      const rows = Array.isArray(assets) ? assets : []
-      return rows.filter(item => {
+      return vaultAssetRows(assets).filter(item => {
         if (filter === 'to_verify' && !(item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify')) return false
         if (filter === 'favorites' && !item.favorite) return false
         if (filter === 'derived' && !item.parentId) return false
@@ -1438,8 +1466,7 @@ window.__ModuleLoader__.load({
 
     // 待验证队列：验证状态 pending 或认识状态待核实的资产优先推进。
     function pendingVerificationCount(assets) {
-      const rows = Array.isArray(assets) ? assets : []
-      return rows.filter(item => item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify').length
+      return vaultAssetRows(assets).filter(item => item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify').length
     }
 
 
@@ -2405,7 +2432,25 @@ window.__ModuleLoader__.load({
 
     // 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
     // 不保存检索词、原始文件、Prompt 正文或完整查询结果。
-    function buildEvidenceGraph({ resources = [], workflows = [], queries = [], assets = [], savedEvidence = [], plans = [], knowledge = { nodes: [], claims: [] }, assetEvidenceLinks = [], researchClaims = [] } = {}) {
+
+    // 图谱的输入全部来自外部（索引库、持久化会话、导入物）：数组可能是 null，
+    // 也可能混入 null / 原始值。先统一收敛成「对象数组」，让建图对任何输入都 total——
+    // 一条坏记录最多少一个节点，绝不让整个图谱面板抛异常。
+    function evidenceGraphList(value) {
+      return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+    }
+
+    function buildEvidenceGraph(params) {
+      const input = params && typeof params === 'object' ? params : {}
+      const resources = evidenceGraphList(input.resources)
+      const workflows = evidenceGraphList(input.workflows)
+      const queries = evidenceGraphList(input.queries)
+      const assets = evidenceGraphList(input.assets)
+      const savedEvidence = evidenceGraphList(input.savedEvidence)
+      const plans = evidenceGraphList(input.plans)
+      const assetEvidenceLinks = evidenceGraphList(input.assetEvidenceLinks)
+      const researchClaims = evidenceGraphList(input.researchClaims)
+      const knowledge = input.knowledge && typeof input.knowledge === 'object' ? input.knowledge : {}
       const nodes = new Map()
       const edges = []
       const add = node => { if (node?.id && !nodes.has(node.id)) nodes.set(node.id, node) }
@@ -2417,10 +2462,11 @@ window.__ModuleLoader__.load({
         for (const resourceId of workflow.resourceIds || []) link(`workflow:${workflow.id}`, `resource:${resourceId}`, 'uses')
       }
       for (const plan of plans) {
+        const stages = evidenceGraphList(plan.stages)
         const planId = `plan:${plan.id}`
-        add({ id: planId, kind: 'plan', label: `${plan.name || plan.id} 计划`, detail: `${(plan.stages || []).filter(stage => stage.done).length}/${(plan.stages || []).length} 阶段已确认` })
+        add({ id: planId, kind: 'plan', label: `${plan.name || plan.id} 计划`, detail: `${stages.filter(stage => stage.done).length}/${stages.length} 阶段已确认` })
         link(planId, `workflow:${plan.id}`, 'plans')
-        for (const [index, stage] of (plan.stages || []).entries()) {
+        for (const [index, stage] of stages.entries()) {
           const stageId = `${planId}:stage:${index}`
           add({ id: stageId, kind: 'stage', label: stage.label, detail: stage.done ? '用户已确认完成' : '待人工确认' })
           link(stageId, planId, stage.done ? 'confirmed-stage' : 'planned-stage')
@@ -2430,7 +2476,7 @@ window.__ModuleLoader__.load({
         const queryId = `query:${query.id}`
         add({ id: queryId, kind: query.mode === 'agent' ? 'agent-query' : 'query', label: query.databaseName || query.databaseId, detail: query.at ? new Date(query.at).toLocaleString('zh-CN') : '' })
         link(queryId, `resource:${query.databaseId}`, 'queries')
-        for (const source of query.sources || []) {
+        for (const source of evidenceGraphList(query.sources)) {
           const sourceId = `source:${source.id || source.url}`
           add({ id: sourceId, kind: 'source', label: source.title || source.url || '候选来源', detail: source.meta || source.url || '' })
           link(queryId, sourceId, 'returns')
@@ -2452,7 +2498,7 @@ window.__ModuleLoader__.load({
         })
         const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
         if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')
-        for (const query of queries) for (const source of query.sources || []) {
+        for (const query of queries) for (const source of evidenceGraphList(query.sources)) {
           const sameUrl = entry.url && source.url && entry.url === source.url
           const sameIdentifier = entry.identifier && source.id && String(entry.identifier) === String(source.id)
           if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
@@ -2468,7 +2514,7 @@ window.__ModuleLoader__.load({
           add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })
           link(questionId, claimId, 'frames')
         }
-        for (const evidence of claim.links || []) {
+        for (const evidence of evidenceGraphList(claim.links)) {
           const kind = ({ supports: 'supports', refutes: 'refutes', insufficient: 'insufficient' })[evidence.stance] || 'linked'
           link(claimId, `evidence:${evidence.evidenceId}`, kind)
         }
@@ -2476,8 +2522,8 @@ window.__ModuleLoader__.load({
       // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
       // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
       // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
-      const knowledgeNodes = Array.isArray(knowledge?.nodes) ? knowledge.nodes : []
-      const knowledgeClaims = Array.isArray(knowledge?.claims) ? knowledge.claims : []
+      const knowledgeNodes = evidenceGraphList(knowledge.nodes)
+      const knowledgeClaims = evidenceGraphList(knowledge.claims)
       for (const record of knowledgeNodes) {
         if (!record?.id || nodes.has(record.id)) continue
         const kindLabel = KNOWLEDGE_KIND_LABELS[record.kind] || record.kind || '知识'
@@ -2526,9 +2572,11 @@ window.__ModuleLoader__.load({
     // 这是本函数与「按遍历顺序填行」的关键区别：新增一个节点只让同列中排在它后面的
     // 节点顺延，不会让已有节点整体跳位（节点重排）；且同一份图重复布局必得完全相同
     // 的结果（有回归测试钉住这两个性质）。
-    function layoutEvidenceGraph(graph = {}, options = {}) {
-      const nodes = graph.nodes || []
-      const edges = graph.edges || []
+    function layoutEvidenceGraph(graph, options = {}) {
+      // 布局是建图的下游：任何输入（含 null / 半成品图）都要能算出结果，而不是把面板打空。
+      const source = graph && typeof graph === 'object' ? graph : {}
+      const nodes = evidenceGraphList(source.nodes)
+      const edges = evidenceGraphList(source.edges)
       const edgeRatio = nodes.length > 0 ? edges.length / nodes.length : 0
 
       // 稀疏图检测：节点 > 50 或边/节点比 < 10% 时用网格布局。
@@ -2537,14 +2585,16 @@ window.__ModuleLoader__.load({
         return layoutSparseGrid(nodes)
       }
 
-      return layoutByColumn(graph, options)
+      // 传收敛后的 { nodes, edges }，而不是原始 graph：原始值可能是 null / 半成品，
+      // 让下游再取一次属性等于把守卫白写。
+      return layoutByColumn({ nodes, edges }, options)
     }
 
     function layoutByColumn(graph, options) {
       const columnGap = options.columnGap ?? GRAPH_COLUMN_GAP
       const rowGap = options.rowGap ?? GRAPH_ROW_GAP
       const byColumn = new Map()
-      for (const node of graph.nodes || []) {
+      for (const node of evidenceGraphList(graph?.nodes)) {
         const column = GRAPH_COLUMN_OF_KIND[node.kind] ?? 3
         if (!byColumn.has(column)) byColumn.set(column, [])
         byColumn.get(column).push(node)
@@ -2621,10 +2671,12 @@ window.__ModuleLoader__.load({
     // 把每条边解析成带端点坐标与三次贝塞尔路径的「路线」。端口分配依赖边的稳定排序，
     // 所以同一份图重复调用必得相同路线（确定性同样是回归断言的对象）。
     function routeEvidenceEdges(graph = {}, layout = {}) {
-      const byId = new Map((layout.nodes || []).map(node => [node.id, node]))
+      // 连线是渲染的入口：layout/graph 可能是 null 或半成品，边数组里可能有坏行。
+      const edges = evidenceGraphList(graph?.edges)
+      const byId = new Map(evidenceGraphList(layout?.nodes).map(node => [node.id, node]))
       const outgoing = new Map()
       const incoming = new Map()
-      for (const edge of graph.edges || []) {
+      for (const edge of edges) {
         if (!outgoing.has(edge.from)) outgoing.set(edge.from, [])
         outgoing.get(edge.from).push(edge)
         if (!incoming.has(edge.to)) incoming.set(edge.to, [])
@@ -2633,7 +2685,7 @@ window.__ModuleLoader__.load({
       for (const list of outgoing.values()) list.sort(graphEdgeOrder)
       for (const list of incoming.values()) list.sort(graphEdgeOrder)
       const routes = []
-      for (const edge of graph.edges || []) {
+      for (const edge of edges) {
         const from = byId.get(edge.from)
         const to = byId.get(edge.to)
         if (!from || !to) continue
@@ -2668,7 +2720,7 @@ window.__ModuleLoader__.load({
         if (!adjacency.has(key)) adjacency.set(key, [])
         adjacency.get(key).push(value)
       }
-      for (const edge of graph.edges || []) {
+      for (const edge of evidenceGraphList(graph?.edges)) {
         if (direction === 'upstream') push(edge.to, edge.from)
         else if (direction === 'both') { push(edge.to, edge.from); push(edge.from, edge.to) }
         else push(edge.from, edge.to)
@@ -2692,7 +2744,7 @@ window.__ModuleLoader__.load({
       if (!fromId || !toId) return []
       if (fromId === toId) return [fromId]
       const adjacency = new Map()
-      for (const edge of graph.edges || []) {
+      for (const edge of evidenceGraphList(graph?.edges)) {
         if (!adjacency.has(edge.from)) adjacency.set(edge.from, [])
         if (!adjacency.has(edge.to)) adjacency.set(edge.to, [])
         adjacency.get(edge.from).push(edge.to)
@@ -2795,6 +2847,13 @@ window.__ModuleLoader__.load({
 
     // 文本长度上限：证据库只存元数据与用户主动写下的笔记，不收全文、不收 API 原始响应。
     const MAX_EVIDENCE_TITLE_CHARS = 300
+
+    // 证据条目列表来自索引库 / 备份文件 / 视图状态：可能整体不是数组，也可能混入
+    // null 与原始值（旧版本写入、手工改过的备份）。筛选、计数、合并都从入口剔掉它们，
+    // 保证「一条坏记录」不会把整个证据库面板或恢复流程打崩。
+    function evidenceRows(value) {
+      return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+    }
     const MAX_EVIDENCE_REASON_CHARS = 500
     const MAX_EVIDENCE_NOTE_CHARS = 2000
     const MAX_EVIDENCE_TAGS = 12
@@ -2881,7 +2940,10 @@ window.__ModuleLoader__.load({
 
     // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
     // 这类条目存下来也无法核验，只会污染证据库。
-    function normalizeEvidenceEntry(input = {}) {
+    // 入参先收敛为对象：null / 原始值走「缺标题」这条领域错误，而不是 TypeError——
+    // 调用方（如 importMany、save）拿到的是可判断的校验失败，不是崩溃。
+    function normalizeEvidenceEntry(value) {
+      const input = value && typeof value === 'object' ? value : {}
       const title = clampText(input.title, MAX_EVIDENCE_TITLE_CHARS)
       if (!title) throw new Error('证据条目缺少标题，无法保存。')
       const url = safeUrl(input.url)
@@ -2934,7 +2996,7 @@ window.__ModuleLoader__.load({
     }
 
     function statusCounts(entries) {
-      const rows = Array.isArray(entries) ? entries : []
+      const rows = evidenceRows(entries)
       const counts = { all: rows.length }
       for (const status of EVIDENCE_STATUSES) counts[status] = rows.filter(item => item.status === status).length
       return counts
@@ -2943,8 +3005,7 @@ window.__ModuleLoader__.load({
     // 列表筛选：关键词命中标题/来源/标识符/项目/标签/原因/笔记；filter 为核验状态分组。
     function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
       const text = String(query || '').trim().toLowerCase()
-      const rows = Array.isArray(entries) ? entries : []
-      return rows
+      return evidenceRows(entries)
         .filter(item => (filter && filter !== 'all' ? item.status === filter : true))
         .filter(item => {
           if (!text) return true
@@ -3031,7 +3092,7 @@ window.__ModuleLoader__.load({
     // 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。
     // 刻意不做覆盖——恢复备份应该是补齐，不是回滚，否则会静默抹掉恢复之后的新笔记。
     function mergeEntries(existing = [], incoming = []) {
-      const rows = Array.isArray(existing) ? [...existing] : []
+      const rows = evidenceRows(existing)
       const seen = new Set(rows.map(item => dedupeKey(item)).filter(Boolean))
       const ids = new Set(rows.map(item => item.id))
       let added = 0
@@ -4291,12 +4352,19 @@ window.__ModuleLoader__.load({
       try { globalThis.localStorage?.setItem(PROJECT_KEY, value) } catch { /* 不可用则仅进程内生效 */ }
     }
 
+    // 索引库的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：所有读取路径都
+    // 经过 sortBySavedAt / withWorkspaceIdentity，在这两处统一剔掉非对象行——
+    // 一条坏行最多少一条证据，绝不让整个证据库列表或项目下拉崩掉。
+    function evidenceVaultRows(value) {
+      return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+    }
+
     function sortBySavedAt(rows) {
-      return [...rows].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+      return evidenceVaultRows(rows).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
     }
 
     function withWorkspaceIdentity(rows) {
-      return rows.map(item => item.workspaceId === workspaceIdForProject(item.project)
+      return evidenceVaultRows(rows).map(item => item.workspaceId === workspaceIdForProject(item.project)
         ? item : { ...item, workspaceId: workspaceIdForProject(item.project) })
     }
 
@@ -4830,12 +4898,19 @@ window.__ModuleLoader__.load({
       return `${KNOWLEDGE_CLAIM_ID_PREFIX}${hashKey(identity)}`
     }
 
+    // 索引库里的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：
+    // 排序是每条读取路径的必经之地，因此在这里把非对象行一并剔掉——
+    // 一条坏行最多少一条知识，绝不让整个知识面板在比较器里抛 TypeError。
+    function knowledgeRows(value) {
+      return (Array.isArray(value) ? value : []).filter(row => row && typeof row === 'object')
+    }
+
     function sortKnowledgeNodes(rows) {
-      return [...rows].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+      return knowledgeRows(rows).sort((a, b) => ((a.key ?? '') < (b.key ?? '') ? -1 : (a.key ?? '') > (b.key ?? '') ? 1 : 0))
     }
 
     function sortKnowledgeClaims(rows) {
-      return [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      return knowledgeRows(rows).sort((a, b) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0))
     }
 
     // ── 备份导出 / 恢复（对齐证据库的备份语义）────────────────────────────────────

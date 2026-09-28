@@ -10,12 +10,17 @@ export function assertManageableBody(body) {
   }
 }
 
+// 外部/持久化数据里的资产列表可能混入 null 与原始值（导入、旧版本写入、手工改过的存储）；
+// 入口先收敛为「对象数组」，筛选与计数对任何输入都保持 total。
+function vaultAssetRows(assets) {
+  return (Array.isArray(assets) ? assets : []).filter(item => item && typeof item === 'object')
+}
+
 // 列表筛选：关键词命中标题/正文/备注/标签/项目；filter 为预设分组。
 //   all=全部 to_verify=待验证 favorites=收藏 derived=派生版本
 export function filterAssets(assets, { query = '', filter = 'all' } = {}) {
   const text = String(query || '').trim().toLowerCase()
-  const rows = Array.isArray(assets) ? assets : []
-  return rows.filter(item => {
+  return vaultAssetRows(assets).filter(item => {
     if (filter === 'to_verify' && !(item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify')) return false
     if (filter === 'favorites' && !item.favorite) return false
     if (filter === 'derived' && !item.parentId) return false
@@ -26,6 +31,5 @@ export function filterAssets(assets, { query = '', filter = 'all' } = {}) {
 
 // 待验证队列：验证状态 pending 或认识状态待核实的资产优先推进。
 export function pendingVerificationCount(assets) {
-  const rows = Array.isArray(assets) ? assets : []
-  return rows.filter(item => item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify').length
+  return vaultAssetRows(assets).filter(item => item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify').length
 }

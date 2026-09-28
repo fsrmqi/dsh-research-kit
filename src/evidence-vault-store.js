@@ -55,12 +55,19 @@ function writeStoredProject(value) {
   try { globalThis.localStorage?.setItem(PROJECT_KEY, value) } catch { /* 不可用则仅进程内生效 */ }
 }
 
+// 索引库的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：所有读取路径都
+// 经过 sortBySavedAt / withWorkspaceIdentity，在这两处统一剔掉非对象行——
+// 一条坏行最多少一条证据，绝不让整个证据库列表或项目下拉崩掉。
+function evidenceVaultRows(value) {
+  return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+}
+
 function sortBySavedAt(rows) {
-  return [...rows].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+  return evidenceVaultRows(rows).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
 }
 
 function withWorkspaceIdentity(rows) {
-  return rows.map(item => item.workspaceId === workspaceIdForProject(item.project)
+  return evidenceVaultRows(rows).map(item => item.workspaceId === workspaceIdForProject(item.project)
     ? item : { ...item, workspaceId: workspaceIdForProject(item.project) })
 }
 

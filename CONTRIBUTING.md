@@ -89,7 +89,25 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 打开界面才 `ReferenceError`，构建却无报错 | 新模块漏登记 `scripts/build-client.mjs` 的 `files` 白名单。产物只是少了一段代码，`node --check` 查不出来 |
 | CI 报构建产物与源码不同步 | 忘了 `npm run build`，或手改了 `ui/client.js` |
 | `npm run check` 报工件 SHA 不匹配 | `vendor/` 下的文件被改动了。工件是 SHA 锁定快照，**不得手改**；更新需同步 `vendor/vendor-manifest.json` |
+| 升级 DSH 后某个入口不见了 | 宿主改了槽位名或事件名。先跑 `npm run baselines:fetch && npm run check:dsh-app -- --require-source` 定位是哪条 seam，再改 glue 层（见 [COMPATIBILITY.md](docs/COMPATIBILITY.md)） |
 | 测试通过但界面真的坏 | 自动化测试覆盖纯逻辑与渲染级初始状态，但点击/事件交互与宿主 props 形状仍需真实验证。请按 [MANUAL-QA.md](docs/MANUAL-QA.md) 在真实 profile 复核 |
+
+## 两条硬规则
+
+### 1. 新增源码模块必须登记两处
+
+`scripts/build-client.mjs` 的 `files` 白名单 + `package.json` 的 `check` 脚本。宿主半区（`dsh/`）的新文件还要进 `check` 的 `node --check` 列表。细节与理由见 [DEVELOPMENT.md §1](docs/DEVELOPMENT.md)。
+
+### 2. 解析外部数据的函数必须是 **total** 的
+
+凡是解析**不是自己生产**的数据（公开 API 响应、备份文件、`localStorage` / IndexedDB 里的历史内容、导入物），都要做到：
+
+- **形状不对不抛异常**：非数组字段按空列表处理，数组里的 `null` / 原始值在入口剔除；
+- **坏输入升级为领域错误**：该报「缺少标题」就报「缺少标题」，不要漏出 `TypeError`；调用方拿到的是可判断、可提示用户的失败；
+- **一条坏记录最多少一条数据**，绝不让整个面板 / 整张图 / 整条查询链路崩掉；
+- **上游形状异常时给可继续的出路**：研究查询走 Agent 回退，而不是把上游的怪形状升级成 502 插件故障。
+
+配套要求：改动这类函数时，在 `test/hostile-input.test.mjs` 补一条**敌意 fixture** 用例（`null`、原始值、非数组容器、数组里夹 `null`）。该文件的存在本身就是规则的一部分——先例：`buildEvidenceGraph` 曾对 `{ results: {} }` 这类响应抛 `TypeError`，`layoutEvidenceGraph` 曾把未收敛的入参传给下游，都在真实上游改形状时才会暴露。
 
 ## 报告问题
 

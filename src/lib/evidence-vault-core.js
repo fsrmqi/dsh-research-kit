@@ -38,6 +38,13 @@ export const EVIDENCE_IDENTIFIER_LABELS = {
 
 // 文本长度上限：证据库只存元数据与用户主动写下的笔记，不收全文、不收 API 原始响应。
 export const MAX_EVIDENCE_TITLE_CHARS = 300
+
+// 证据条目列表来自索引库 / 备份文件 / 视图状态：可能整体不是数组，也可能混入
+// null 与原始值（旧版本写入、手工改过的备份）。筛选、计数、合并都从入口剔掉它们，
+// 保证「一条坏记录」不会把整个证据库面板或恢复流程打崩。
+function evidenceRows(value) {
+  return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+}
 export const MAX_EVIDENCE_REASON_CHARS = 500
 export const MAX_EVIDENCE_NOTE_CHARS = 2000
 export const MAX_EVIDENCE_TAGS = 12
@@ -124,7 +131,10 @@ function normalizeSourceCheck(value) {
 
 // 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
 // 这类条目存下来也无法核验，只会污染证据库。
-export function normalizeEvidenceEntry(input = {}) {
+// 入参先收敛为对象：null / 原始值走「缺标题」这条领域错误，而不是 TypeError——
+// 调用方（如 importMany、save）拿到的是可判断的校验失败，不是崩溃。
+export function normalizeEvidenceEntry(value) {
+  const input = value && typeof value === 'object' ? value : {}
   const title = clampText(input.title, MAX_EVIDENCE_TITLE_CHARS)
   if (!title) throw new Error('证据条目缺少标题，无法保存。')
   const url = safeUrl(input.url)
@@ -177,7 +187,7 @@ export function normalizeEvidenceEntry(input = {}) {
 }
 
 export function statusCounts(entries) {
-  const rows = Array.isArray(entries) ? entries : []
+  const rows = evidenceRows(entries)
   const counts = { all: rows.length }
   for (const status of EVIDENCE_STATUSES) counts[status] = rows.filter(item => item.status === status).length
   return counts
@@ -186,8 +196,7 @@ export function statusCounts(entries) {
 // 列表筛选：关键词命中标题/来源/标识符/项目/标签/原因/笔记；filter 为核验状态分组。
 export function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
   const text = String(query || '').trim().toLowerCase()
-  const rows = Array.isArray(entries) ? entries : []
-  return rows
+  return evidenceRows(entries)
     .filter(item => (filter && filter !== 'all' ? item.status === filter : true))
     .filter(item => {
       if (!text) return true
@@ -274,7 +283,7 @@ export function parseEvidenceBackup(text) {
 // 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。
 // 刻意不做覆盖——恢复备份应该是补齐，不是回滚，否则会静默抹掉恢复之后的新笔记。
 export function mergeEntries(existing = [], incoming = []) {
-  const rows = Array.isArray(existing) ? [...existing] : []
+  const rows = evidenceRows(existing)
   const seen = new Set(rows.map(item => dedupeKey(item)).filter(Boolean))
   const ids = new Set(rows.map(item => item.id))
   let added = 0

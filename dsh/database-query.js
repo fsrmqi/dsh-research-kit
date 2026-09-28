@@ -91,49 +91,57 @@ function jsonBody(result) {
 function clean(value, limit = 280) { return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit) }
 function source(id, title, url, meta = '', summary = '') { return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) } }
 
+// 上游把字段从数组改成对象、或返回 null 包体时，`.map` 会抛 TypeError —— 那会变成 502，
+// 用户看到的是「插件坏了」。统一先收敛成「对象数组」：形状不对就当这条来源没返回记录，
+// 由下面的空结果分支交给 Agent 回退，绝不把上游的怪形状升级成插件故障。
+// （本文件是宿主半区，不进浏览器产物，因此不占用产物的全局符号名约束。）
+function adapterRows(value) {
+  return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
+}
+
 const DIRECT_ADAPTERS = {
   crossref: {
     url: (q, n) => `https://api.crossref.org/works?query=${encodeURIComponent(q)}&rows=${n}&select=DOI,title,author,published-print,published-online,container-title,URL`,
-    parse: data => (data.message?.items || []).map(item => source(item.DOI, item.title?.[0], item.URL || `https://doi.org/${item.DOI}`, [item.author?.[0]?.family, item['container-title']?.[0], item['published-print']?.['date-parts']?.[0]?.[0] || item['published-online']?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · ')))
+    parse: data => adapterRows(data?.message?.items).map(item => source(item.DOI, item.title?.[0], item.URL || `https://doi.org/${item.DOI}`, [item.author?.[0]?.family, item['container-title']?.[0], item['published-print']?.['date-parts']?.[0]?.[0] || item['published-online']?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · ')))
   },
   openalex: {
     url: (q, n) => `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=${n}`,
-    parse: data => (data.results || []).map(item => source(item.id, item.title, item.doi || item.id, [item.publication_year, item.primary_location?.source?.display_name, item.cited_by_count ? `被引 ${item.cited_by_count}` : ''].filter(Boolean).join(' · '), item.abstract_inverted_index ? 'OpenAlex 已返回摘要索引；请打开原文或来源核验细节。' : ''))
+    parse: data => adapterRows(data?.results).map(item => source(item.id, item.title, item.doi || item.id, [item.publication_year, item.primary_location?.source?.display_name, item.cited_by_count ? `被引 ${item.cited_by_count}` : ''].filter(Boolean).join(' · '), item.abstract_inverted_index ? 'OpenAlex 已返回摘要索引；请打开原文或来源核验细节。' : ''))
   },
   'semantic-scholar': {
     url: (q, n) => `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=${n}&fields=title,year,authors,venue,abstract,url,citationCount,externalIds`,
-    parse: data => (data.data || []).map(item => source(item.paperId || item.externalIds?.DOI, item.title, item.url || (item.externalIds?.DOI ? `https://doi.org/${item.externalIds.DOI}` : ''), [item.year, item.venue, item.citationCount ? `被引 ${item.citationCount}` : ''].filter(Boolean).join(' · '), item.abstract))
+    parse: data => adapterRows(data?.data).map(item => source(item.paperId || item.externalIds?.DOI, item.title, item.url || (item.externalIds?.DOI ? `https://doi.org/${item.externalIds.DOI}` : ''), [item.year, item.venue, item.citationCount ? `被引 ${item.citationCount}` : ''].filter(Boolean).join(' · '), item.abstract))
   },
   'europe-pmc': {
     url: (q, n) => `https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&pageSize=${n}&query=${encodeURIComponent(q)}`,
-    parse: data => (data.resultList?.result || []).map(item => source(item.pmid || item.id, item.title, item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : `https://europepmc.org/article/${item.source || 'MED'}/${item.id}`, [item.authorString, item.journalTitle, item.pubYear].filter(Boolean).join(' · '), item.abstractText))
+    parse: data => adapterRows(data?.resultList?.result).map(item => source(item.pmid || item.id, item.title, item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : `https://europepmc.org/article/${item.source || 'MED'}/${item.id}`, [item.authorString, item.journalTitle, item.pubYear].filter(Boolean).join(' · '), item.abstractText))
   },
   clinicaltrials: {
     url: (q, n) => `https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(q)}&pageSize=${n}&format=json`,
-    parse: data => (data.studies || []).map(item => {
+    parse: data => adapterRows(data?.studies).map(item => {
       const p = item.protocolSection || {}, id = p.identificationModule?.nctId
       return source(id, p.identificationModule?.briefTitle, id ? `https://clinicaltrials.gov/study/${id}` : '', [p.statusModule?.overallStatus, p.designModule?.studyType].filter(Boolean).join(' · '), p.descriptionModule?.briefSummary)
     })
   },
   openfda: {
     url: (q, n) => `https://api.fda.gov/drug/event.json?search=${encodeURIComponent(q)}&limit=${n}`,
-    parse: data => (data.results || []).map((item, index) => source(`openfda-${index}`, item.patient?.drug?.[0]?.medicinalproduct || '药物不良事件记录', 'https://open.fda.gov/apis/drug/event/', [item.receiptdate, item.serious === '1' ? '严重事件' : ''].filter(Boolean).join(' · '), item.patient?.reaction?.map(row => row.reactionmeddrapt).filter(Boolean).join('；')))
+    parse: data => adapterRows(data?.results).map((item, index) => source(`openfda-${index}`, item.patient?.drug?.[0]?.medicinalproduct || '药物不良事件记录', 'https://open.fda.gov/apis/drug/event/', [item.receiptdate, item.serious === '1' ? '严重事件' : ''].filter(Boolean).join(' · '), adapterRows(item.patient?.reaction).map(row => row.reactionmeddrapt).filter(Boolean).join('；')))
   },
   uniprot: {
     url: (q, n) => `https://rest.uniprot.org/uniprotkb/search?format=json&size=${n}&query=${encodeURIComponent(q)}`,
-    parse: data => (data.results || []).map(item => source(item.primaryAccession, item.proteinDescription?.recommendedName?.fullName?.value || item.primaryAccession, `https://www.uniprot.org/uniprotkb/${item.primaryAccession}`, [item.organism?.scientificName, item.entryType].filter(Boolean).join(' · '), item.comments?.[0]?.texts?.[0]?.value))
+    parse: data => adapterRows(data?.results).map(item => source(item.primaryAccession, item.proteinDescription?.recommendedName?.fullName?.value || item.primaryAccession, `https://www.uniprot.org/uniprotkb/${item.primaryAccession}`, [item.organism?.scientificName, item.entryType].filter(Boolean).join(' · '), adapterRows(item.comments)[0]?.texts?.[0]?.value))
   },
   pubchem: {
     url: (q, n) => `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(q)}/property/IUPACName,MolecularFormula,MolecularWeight/JSON`,
-    parse: (data, n) => (data.PropertyTable?.Properties || []).slice(0, n).map(item => source(item.CID, item.IUPACName || `PubChem CID ${item.CID}`, `https://pubchem.ncbi.nlm.nih.gov/compound/${item.CID}`, [item.MolecularFormula, item.MolecularWeight ? `${item.MolecularWeight} Da` : ''].filter(Boolean).join(' · ')))
+    parse: (data, n) => adapterRows(data?.PropertyTable?.Properties).slice(0, n).map(item => source(item.CID, item.IUPACName || `PubChem CID ${item.CID}`, `https://pubchem.ncbi.nlm.nih.gov/compound/${item.CID}`, [item.MolecularFormula, item.MolecularWeight ? `${item.MolecularWeight} Da` : ''].filter(Boolean).join(' · ')))
   },
   gbif: {
     url: (q, n) => `https://api.gbif.org/v1/occurrence/search?q=${encodeURIComponent(q)}&limit=${n}`,
-    parse: data => (data.results || []).map(item => source(item.key, item.scientificName || item.species || 'GBIF occurrence', `https://www.gbif.org/occurrence/${item.key}`, [item.country, item.eventDate, item.basisOfRecord].filter(Boolean).join(' · '), item.datasetName || item.recordedBy))
+    parse: data => adapterRows(data?.results).map(item => source(item.key, item.scientificName || item.species || 'GBIF occurrence', `https://www.gbif.org/occurrence/${item.key}`, [item.country, item.eventDate, item.basisOfRecord].filter(Boolean).join(' · '), item.datasetName || item.recordedBy))
   },
   inaturalist: {
     url: (q, n) => `https://api.inaturalist.org/v1/observations?q=${encodeURIComponent(q)}&per_page=${n}`,
-    parse: data => (data.results || []).map(item => source(item.id, item.taxon?.preferred_common_name || item.taxon?.name || 'iNaturalist observation', `https://www.inaturalist.org/observations/${item.id}`, [item.observed_on, item.place_guess, item.quality_grade].filter(Boolean).join(' · '), item.description))
+    parse: data => adapterRows(data?.results).map(item => source(item.id, item.taxon?.preferred_common_name || item.taxon?.name || 'iNaturalist observation', `https://www.inaturalist.org/observations/${item.id}`, [item.observed_on, item.place_guess, item.quality_grade].filter(Boolean).join(' · '), item.description))
   }
 }
 
@@ -161,22 +169,40 @@ function agentFallback(database, query, reason) {
 
 function shouldFallbackToAgent(error) {
   const message = String(error?.message || error)
-  return /HTTP (401|403|408|429|500|502|503|504)|WEB_PROVIDER_|查询超时/.test(message)
+  return /HTTP (401|403|408|429|500|502|503|504)|WEB_PROVIDER_|查询超时|上游返回结构异常/.test(message)
 }
+
+// 直查「一条都没解析出来」不等于「这条记录不存在」：上游改了返回结构、检索词过窄，
+// 或者包体是个没预料到的形状，都会是 0 条。报 mode:'direct' + 空列表等于替上游断言，
+// 因此 0 条也交给 Agent 回退（用户显式关掉回退时除外，那时如实返回空直查结果）。
+const EMPTY_DIRECT_REASON = '插件直查没有返回可解析记录（可能是检索词过窄，或上游改了返回结构）；可交给当前 Agent 使用 Web 或 MCP 继续查询。'
 
 export async function runDatabaseQuery({ web, database, query, limit = 5, signal, allowAgentFallback = true }) {
   const normalizedQuery = normalizeQueryKey(query)
   if (!normalizedQuery) throw new Error('请输入检索词。')
   if (normalizedQuery.length > MAX_QUERY_LENGTH) throw new Error(`检索词不能超过 ${MAX_QUERY_LENGTH} 个字符。`)
   const size = normalizeLimit(limit)
+  const emptyDirect = reason => (allowAgentFallback
+    ? agentFallback(database, normalizedQuery, reason)
+    : { mode: 'direct', sources: [], query: normalizedQuery })
+  const direct = sources => {
+    const rows = adapterRows(sources).slice(0, size)
+    return rows.length ? { mode: 'direct', sources: rows, query: normalizedQuery } : emptyDirect(EMPTY_DIRECT_REASON)
+  }
   try {
     if (database.id === 'pubmed') {
-      return { mode: 'direct', sources: await queryPubMed(web, normalizedQuery, size, signal), query: normalizedQuery }
+      return direct(await queryPubMed(web, normalizedQuery, size, signal))
     }
     const adapter = DIRECT_ADAPTERS[database.id]
     if (adapter) {
       const data = jsonBody(await web.fetch({ url: adapter.url(normalizedQuery, size) }, signal))
-      return { mode: 'direct', sources: adapter.parse(data, size).slice(0, size), query: normalizedQuery }
+      let sources
+      // 适配器自己也要兜一层：万一某个 parse 仍然对怪形状抛错，那是「这次直查没成功」，
+      // 而不是插件故障——交给 shouldFallbackToAgent 平滑降级。
+      try { sources = adapter.parse(data, size) } catch (error) {
+        throw new Error(`上游返回结构异常：${String(error?.message || error)}`)
+      }
+      return direct(sources)
     }
   } catch (error) {
     if (shouldFallbackToAgent(error) && allowAgentFallback) return agentFallback(database, normalizedQuery, `插件直查暂不可用（${String(error?.message || error)}）；可交给当前 Agent 使用 Web 或 MCP 继续查询。`)
