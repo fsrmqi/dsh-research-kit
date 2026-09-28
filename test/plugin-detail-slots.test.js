@@ -9,7 +9,11 @@ globalThis.RESEARCH_KIT_BUILD_STATS = { version: '0.3.0', workflows: 349, skills
 
 const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
 const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')
-const contractCheck = readFileSync(new URL('../scripts/check-dsh-app.mjs', import.meta.url), 'utf8')
+// seam 清单与检查逻辑已从 CLI 里抽到 scripts/lib/：这里断言的是**事实源**，
+// 而不是某个入口文件的文本形态（此前断言 check-dsh-app.mjs 的字符串，
+// 一重构检查器就误报——那测的是实现细节，不是契约）。
+const seamData = readFileSync(new URL('../scripts/lib/dsh-baselines.mjs', import.meta.url), 'utf8')
+const claimApp = readFileSync(new URL('../src/research-claim-review.js', import.meta.url), 'utf8')
 const pluginPkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
 const React = (await import('react')).default
@@ -81,22 +85,22 @@ test('产物把目录规模烘焙进常量，且与目录真源、包版本一�
   assert.equal(baked.version, pluginPkg.version)
 })
 
-test('两个新槽位已接入 glue 与产物，并被 check:dsh-app 契约检查锁定', () => {
+test('两个新槽位已接入 glue 与产物，并被 seam 清单锁定', () => {
   assert.match(glue, /slots\.inject\('plugins\.detail\.badge'/)
   assert.match(glue, /slots\.inject\('plugins\.detail\.actions'/)
   assert.ok(bundle.includes("'plugins.detail.badge'"))
   assert.ok(bundle.includes("'plugins.detail.actions'"))
-  assert.match(contractCheck, /ui-plugin-manager\/src\/client\/slot-contract\.ts/)
-  assert.match(contractCheck, /'plugins\.detail\.badge'/)
-  assert.match(contractCheck, /'plugins\.detail\.actions'/)
+  assert.match(seamData, /packages\/client\/ui-plugin-manager\/src\/client\/slot-contract\.ts/)
+  assert.match(seamData, /'plugins\.detail\.badge'/)
+  assert.match(seamData, /'plugins\.detail\.actions'/)
 })
 
-test('Desktop 契约检查覆盖 Claim Agent 路由、会话传递与自定义协议转发', () => {
-  assert.match(contractCheck, /apps\/desktop\/src\/main\.ts/)
-  assert.match(contractCheck, /apps\/desktop\/src\/web-document\.ts/)
-  assert.match(contractCheck, /claimAgentReviewRoute/)
-  assert.match(contractCheck, /session_id=\$\{encodeURIComponent\(sessionId\)\}/)
-  assert.match(contractCheck, /target\.pathname = source\.pathname/)
+test('Desktop 与 Claim 契约检查覆盖路由、会话传递与自定义协议转发', () => {
+  assert.match(seamData, /apps\/desktop\/src\/main\.ts/)
+  assert.match(seamData, /apps\/desktop\/src\/web-document\.ts/)
+  assert.match(seamData, /claimAgentReviewRoute/)
+  assert.match(claimApp, /session_id=\$\{encodeURIComponent\(sessionId\)\}/)
+  assert.match(seamData, /target\.pathname = source\.pathname/)
   assert.match(bundle, /dsh-research-kit\/claim-agent-review/)
   assert.match(bundle, /发布检查并导出/)
 })
@@ -132,11 +136,17 @@ test('没有宿主视图导航时不渲染跳转按钮，有通道才渲染', ()
   assert.match(markup, /跨页视图导航/)
 })
 
-test('跨页跳转是软探测：不写进客户端 inject 列表，检查脚本按可选能力报告', () => {
+test('跨页跳转是软探测：不写进客户端 inject 列表，且已在 seam 清单里登记为可选', () => {
   // 客户端 inject 清单硬编码在构建脚本里；新增服务若写进去，旧宿主的客户端会因缺服务拒绝加载整插件。
   assert.ok(bundle.includes("inject: ['slots', 'sessions']"), '产物必须保持最小 inject 列表')
   assert.match(glue, /ctx\.get\?\.\('uiConversation'\)/)
   assert.ok(glue.includes('dsh-research-kit-open-workbench'))
-  assert.match(contractCheck, /跨页视图导航（可选）/)
-  assert.match(contractCheck, /installViewNavigator/)
+  // 可选 seam 必须标 optional：宿主不提供时按钮不该渲染，也不该让兼容性检查失败。
+  assert.match(seamData, /id: 'view-navigation'/)
+  assert.match(seamData, /optional: true/)
+  assert.match(seamData, /binding\(source: SessionBinding \| SessionId\): ConversationBinding/)
+  // 当前接线仍指向宿主不存在的 openView —— 这是已登记的缺口（KNOWN_GAPS 的绊线守着它），
+  // 修好之后绊线测试会失败，提醒同步删除缺口记录与文档。
+  assert.match(seamData, /id: 'cross-page-view-navigation'/)
+  assert.match(seamData, /conversationViews\.openView\(/)
 })
