@@ -161,7 +161,7 @@
 
 ### 13. DSH 兼容性矩阵与两条已知缺口（矩阵已落地 · 2026-09-28）
 
-**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：2 个基线 tag、11 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（离线跳过，CI 用 `--require-source` 硬失败）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
+**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：2 个基线 tag、11 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 **已知缺口 1 · 跨页视图导航**：Plugins 详情页的「打开工作台」按钮在 0.1.7 线上**永不渲染**。`dsh/standalone-glue.js` 适配的是 `uiConversation.openView(sessionId, view, focus)`，而 0.1.7-rc.1/rc.2 的实际导航面是 `uiConversation.binding(source)` + `ConversationBinding.activate(target)`（`packages/client/ui-conversation/src/client/conversation/assembly.ts`）——没有 `openView`，探测恒为 `undefined`，按钮整块不渲染（静默缺席，不是崩）。
 
