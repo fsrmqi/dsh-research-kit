@@ -66,7 +66,9 @@
 ```bash
 npm run baselines:fetch                                   # 拉基线 tag 到 .tmp/dsh-repo（浅克隆）
 npm run check:dsh-app                                     # 无参数 = 核对全部基线
-npm run check:dsh-app -- --require-source                 # 缺源码即失败（CI 用，防止静默降级）
+npm run check:dsh-app -- --require-source                 # 缺源码、或源码无法自证即失败（CI 用，防止静默降级）
+npm run check:dsh-app -- --require-source --allow-unverified-source   # 明知是已解包副本（未绑 git）仍要跑严格模式
+node scripts/check-dsh-app.mjs /path/to/fork --allow-dirty            # 明知工作树有未提交改动仍要核对
 npm run check:dsh-app -- ~/dev/deepseek-harness           # 核对本地工作树（按 package.json 版本匹配基线）
 npm test                                                  # 含 test/dsh-compat-matrix.test.mjs
 ```
@@ -77,9 +79,11 @@ npm test                                                  # 含 test/dsh-compat-
 | --- | --- |
 | `0` | 全部核对通过；**或者**未找到任何源码且没加 `--require-source`（明确跳过，输出里会打印 `○ 跳过 …`） |
 | `1` | 有必需 seam、平台模块表、版本自证或插件自身契约失败 |
-| `2` | 用法/前置条件错误：未知参数、路径不存在、工作树版本不在基线里；`--require-source` 下少任何一个基线的源码也归此类 |
+| `2` | 用法/前置条件错误：未知参数、路径不存在、工作树版本不在基线里、工作树有未提交改动（未加 `--allow-dirty`）、HEAD 不是该基线 tag 的提交；`--require-source` 下少任何一个基线的源码、或源码未自证（未加 `--allow-unverified-source`）也归此类 |
 
 `--require-source` 的语义是「**每个**声明的基线都真的核对过」，不是「至少核对了一个」——少一个就退出 2 并点名缺哪个。未知参数（例如把 `--require-source` 拼错）同样直接退出 2，不允许静默降级成跳过：CI 只看退出码，静默跳过等于门禁消失。
+
+**源码自证（哪份源码才算「那个发布」）**：git 源（第 1~3 条）的内容由 `git show <tag>:<file>` 取出，天然绑在 tag 的提交上，算**已自证**；第 4 条已解包副本与工作树副本里的 `package.json` 是**人写的**，改一个 `version` 就能冒充基线，所以只算**未自证**——默认模式会打印 `○ 源码来源未自证` 并如实说明原因，`--require-source` 则直接退出 2（除非显式传 `--allow-unverified-source`）。工作树模式是 git 仓库时还会要求：工作树干净（否则退出 2，除非 `--allow-dirty`）、HEAD 就是该基线 tag 的提交（tag 不在本地时打印警告说明绑不上）。这样「拿任意一份改过 version 的副本跑 CI 式核对」不再可能冒充发布验证。
 
 源码解析顺序（`scripts/lib/dsh-compat.mjs` 的 `resolveDshRepo` 与 `sourceForBaseline`）：
 

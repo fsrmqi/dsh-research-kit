@@ -3,7 +3,7 @@
 // CLI（scripts/check-dsh-app.mjs）与测试（test/dsh-compat-matrix.test.mjs）共用本文件，
 // 因此「本地手跑」与「CI/发布门禁」检查的是同一套断言，不存在两套口径。
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { BASELINES, HOST_SEAMS, PLUGIN_CONTRACTS, PLUGIN_SLOT_SOURCES, declaredSlots } from './dsh-baselines.mjs'
@@ -34,10 +34,18 @@ function hasTag(repo, tag) {
   }
 }
 
-/** git tag 读取器：`git show <tag>:<file>`。文件不在该 tag 上时返回 undefined。 */
+/**
+ * git tag 读取器：`git show <tag>:<file>`。文件不在该 tag 上时返回 undefined。
+ *
+ * `verified: true` 是**结构性**的：内容由 git 从该 tag 的提交里取，读的人不需要相信
+ * 任何手写字段。dir 源没有这个性质（见 dirSource）。
+ */
 export function gitSource({ repo, tag }) {
   return {
     kind: 'git',
+    verified: true,
+    repo,
+    tag,
     label: `${repo}@${tag}`,
     read(file) {
       try {
@@ -49,10 +57,18 @@ export function gitSource({ repo, tag }) {
   }
 }
 
-/** 工作树目录读取器：直接读文件。 */
+/**
+ * 工作树/已解包目录读取器：直接读文件。
+ *
+ * `verified: false` 表示这份源码**无法自证**就是基线的那个发布：目录里的 `package.json`
+ * 是人写的，改一个 version 就能让任意副本冒充基线。调用方必须区分对待
+ * （CI 的硬门禁只接受 verified 的源，见 scripts/check-dsh-app.mjs 的 --require-source）。
+ */
 export function dirSource({ dir, label }) {
   return {
     kind: 'dir',
+    verified: false,
+    dir,
     label: label || dir,
     read(file) {
       try {
@@ -77,6 +93,21 @@ export function sourceForBaseline(baseline, env = process.env) {
   return { skip: `未找到 DSH 源码：设置 DSH_REPO，或运行 npm run baselines:fetch，或把 tag 解包到 .tmp/dsh-tags/` }
 }
 
+/**
+ * 源码来源的自证情况：报告「这份源码凭什么算是那个基线」。
+ * git 源绑定在 tag 的提交上；目录源只能是「未自证」，必须如实说出来而不是默认通过。
+ */
+export function sourceProvenance(source, baseline) {
+  if (source.verified) {
+    return { verified: true, label: `git ${baseline.tag}（${source.label}）`, note: '' }
+  }
+  return {
+    verified: false,
+    label: '已解包副本（未绑 git）',
+    note: `${source.label}：只核对了 package.json 里的 version，而它是人写的——无法证明这份源码就是 ${baseline.tag}`,
+  }
+}
+
 /** 单条 seam 的检查结果。 */
 export function checkSeam(source, seam) {
   const content = source.read(seam.file)
@@ -99,10 +130,17 @@ export function checkHostSeams(source, seams = HOST_SEAMS) {
   }
 }
 
-/** 从构建产物里取出浏览器 bundle 真正 require 的模块名。 */
+/**
+ * 从构建产物里取出浏览器 bundle 真正 require 的模块名。
+ *
+ * 单引号与双引号都要认：`scripts/build-client.mjs` 生成的工厂写的是 `require('react')`，
+ * 而这里过去只匹配双引号 → 提取集合恒为空 → `checkPlatformModules` 恒判通过，
+ * 「回答不了的 require 是必然启动崩溃」这条检查**空转**（对空模块表的宿主也全绿）。
+ */
 export function clientBundleRequires(bundlePath = join(ROOT, 'ui', 'client.js')) {
   const source = readFileSync(bundlePath, 'utf8')
-  return [...new Set([...source.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]))].sort()
+  const specs = [...source.matchAll(/require\(\s*(['"])([^'"]+)\1\s*\)/g)].map(match => match[2])
+  return [...new Set(specs)].sort()
 }
 
 /** 从宿主 platform.ts 的 PLATFORM_MODULES 数组里取出它能回答的模块名。 */
@@ -111,7 +149,8 @@ export function platformModulesOf(source) {
   if (content === undefined) return undefined
   const block = /PLATFORM_MODULES\s*=\s*\[([\s\S]*?)\]/.exec(content)
   if (!block) return undefined
-  return [...new Set([...block[1].matchAll(/'([^']+)'/g)].map(match => match[1]))]
+  // 单双引号都认：宿主换引号风格不该让这条检查变成「读不到模块表」。
+  return [...new Set([...block[1].matchAll(/(['"])([^'"]+)\1/g)].map(match => match[2]))]
 }
 
 /**
@@ -120,9 +159,27 @@ export function platformModulesOf(source) {
  */
 export function checkPlatformModules(source, bundlePath) {
   const table = platformModulesOf(source)
-  if (table === undefined) return { id: 'platform-modules', ok: false, missing: ['宿主 platform.ts 缺少 PLATFORM_MODULES'] }
-  const missing = clientBundleRequires(bundlePath).filter(spec => !table.includes(spec))
-  return { id: 'platform-modules', ok: missing.length === 0, missing }
+  if (table === undefined) return { id: 'platform-modules', ok: false, missing: ['宿主 platform.ts 缺少 PLATFORM_MODULES'], requires: [] }
+  // 产物读不到（被删/路径变了）也必须 fail-closed，而不是让 readFileSync 抛 ENOENT 把 CLI 打崩：
+  // 「读不到」与「提取为空」都是这条检查失去意义的样子。
+  let requires
+  try {
+    requires = clientBundleRequires(bundlePath)
+  } catch (error) {
+    return { id: 'platform-modules', ok: false, missing: [`读不到构建产物 ${bundlePath}：${error.message}`], requires: [] }
+  }
+  // 空集必须失败，不能算通过：提取方式与产物写法一旦脱节（历史上正是如此），
+  // 这条检查就变成恒真——「没人看守」比「看守失败」危险得多。
+  if (requires.length === 0) {
+    return {
+      id: 'platform-modules',
+      ok: false,
+      missing: ['没能从产物里提取到任何 require（提取方式与产物写法脱节，这条检查会空转）'],
+      requires,
+    }
+  }
+  const missing = requires.filter(spec => !table.includes(spec))
+  return { id: 'platform-modules', ok: missing.length === 0, missing, requires }
 }
 
 /** 读取本仓库源码并断言插件自身接线契约（与宿主无关）。 */
@@ -143,26 +200,110 @@ export function checkPluginContracts(root = ROOT, contracts = PLUGIN_CONTRACTS) 
  * 从插件源码里收集实际注册的槽位名，与 HOST_SEAMS 声明比对。
  * 目的：新增一个槽位却没人把它加进矩阵时**立刻失败**，而不是等某个版本上白屏才发现。
  */
+const SLOT_SCAN_ROOTS = ['dsh', 'src', 'index.js']
+// 目录兜底扫描用的通用句式：新文件里注册槽位也必须被看见，
+// 而 PLUGIN_SLOT_SOURCES 是硬编码文件表（新文件不在表里就完全没人看守）。
+const SLOT_SCAN_PATTERNS = [
+  /slots\.inject\(\s*['"]([^'"]+)['"]/g,
+  /slot:\s*['"]([^'"]+)['"]/g,
+]
+
+function jsFilesUnder(root, entry) {
+  const target = join(root, entry)
+  let stat
+  try {
+    stat = readdirSync(target, { withFileTypes: true })
+  } catch {
+    try {
+      return [entry] // 单文件（例如 index.js）
+    } catch {
+      return []
+    }
+  }
+  const files = []
+  for (const item of stat) {
+    const rel = `${entry}/${item.name}`
+    if (item.isDirectory()) files.push(...jsFilesUnder(root, rel))
+    else if (item.name.endsWith('.js')) files.push(rel)
+  }
+  return files
+}
+
+/**
+ * 收集插件源码里注册的槽位名。
+ *
+ * 返回 `{ found, unreadable, scanned }`：
+ * - `unreadable`：本该存在却读不到的文件——过去这里 `catch { continue }`，于是
+ *   `slot-registry.js` 被改名/删掉时收集结果为空、`unprobedSlots()` 返回 `[]`，测试照样绿；
+ * - 除了 PLUGIN_SLOT_SOURCES 的显式句式，还会扫描 dsh/ 与 src/ 下**所有** .js，
+ *   避免「新增一个文件注册槽位，而它不在硬编码文件表里」这种漏检。
+ */
 export function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
   const found = new Map()
+  const unreadable = []
+  const scanned = new Set()
+  const record = (file, content) => {
+    scanned.add(file)
+    for (const pattern of patternsFor(file, sources)) {
+      for (const match of content.matchAll(pattern)) {
+        if (!found.has(match[1])) found.set(match[1], file)
+      }
+    }
+  }
   for (const entry of sources) {
     let content
     try {
       content = readFileSync(join(root, entry.file), 'utf8')
     } catch {
+      unreadable.push(entry.file)
       continue
     }
+    scanned.add(entry.file)
     for (const match of content.matchAll(entry.pattern)) {
-      if (!found.has(match[1])) found.set(match[1], `${entry.file}`)
+      if (!found.has(match[1])) found.set(match[1], entry.file)
     }
   }
-  return found
+  for (const file of SLOT_SCAN_ROOTS.flatMap(entry => jsFilesUnder(root, entry))) {
+    if (scanned.has(file)) continue
+    let content
+    try {
+      content = readFileSync(join(root, file), 'utf8')
+    } catch {
+      unreadable.push(file)
+      continue
+    }
+    scanned.add(file)
+    for (const pattern of SLOT_SCAN_PATTERNS) {
+      for (const match of content.matchAll(pattern)) {
+        if (!found.has(match[1])) found.set(match[1], file)
+      }
+    }
+  }
+  return { found, unreadable, scanned: [...scanned].sort() }
 }
 
-/** 未被矩阵看守的注册槽位。 */
-export function unprobedSlots(root = ROOT) {
+function patternsFor(file, sources) {
+  return sources.filter(entry => entry.file === file).map(entry => entry.pattern)
+}
+
+/**
+ * 槽位看守体检：未被看守的槽位、读不到的文件、以及「一个槽位都没收集到」的空转。
+ * 三者都必须能让门禁失败——空集不等于安全。
+ */
+export function slotGuardReport(root = ROOT) {
+  const { found, unreadable, scanned } = collectPluginSlots(root)
   const declared = declaredSlots()
-  return [...collectPluginSlots(root)].filter(([slot]) => !declared.has(slot))
+  return {
+    unprobed: [...found].filter(([slot]) => !declared.has(slot)),
+    unreadable,
+    scanned,
+    found: found.size,
+  }
+}
+
+/** 未被矩阵看守的注册槽位（保留旧签名：CLI 与测试都在用）。 */
+export function unprobedSlots(root = ROOT) {
+  return slotGuardReport(root).unprobed
 }
 
 /** 基线数据自洽性：tag 与 version 必须对得上，且落在 peer 范围内。 */

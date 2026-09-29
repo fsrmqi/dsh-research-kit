@@ -27,13 +27,50 @@ import {
   checkHostSeams,
   checkPlatformModules,
   checkPluginContracts,
+  clientBundleRequires,
   clientInjectAudit,
   dirSource,
+  gitSource,
+  slotGuardReport,
+  sourceProvenance,
   sourceForBaseline,
   unprobedSlots,
 } from '../scripts/lib/dsh-compat.mjs'
 
 const PACKAGE = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+
+// 冻结清单（独立于 HOST_SEAMS 的一份拷贝，故意重复以形成绊线）：
+// HOST_SEAMS 是「我依赖宿主什么」的唯一事实源，删掉/改写其中任一条都必须是有意为之。
+// 过去这里只有 `required.length >= 8`（实际有 10 条必需 seam），于是删掉
+// desktop-app-origin 与 desktop-request-forward 两条（它们没有 slot 字段、也不被
+// unprobedSlots 看守）之后，矩阵仍然 15/15 全绿。
+const REQUIRED_SEAM_IDS = [
+  'agent-events',
+  'chat-assistant-actions',
+  'conversation-input-slots',
+  'conversation-view',
+  'desktop-app-origin',
+  'desktop-plugin-api-forward',
+  'desktop-request-forward',
+  'input-contract',
+  'plugin-detail-slots',
+  'tool-call-toolview',
+]
+const OPTIONAL_SEAM_IDS = ['view-navigation']
+const DECLARED_SLOT_NAMES = [
+  'conversation.chat.assistant-actions',
+  'conversation.input.left',
+  'conversation.input.overlay',
+  'conversation.input.right',
+  'conversation.view',
+  'plugins.detail.actions',
+  'plugins.detail.badge',
+  'plugins.detail.section',
+  'tool.call.toolview',
+]
+// 产物侧（与宿主无关）：插件生成的工厂固定只 require 这两个平台模块。
+// 提取方式一旦与产物写法脱节，集合就会是空的——而那正是这条检查空转的样子。
+const BUNDLE_REQUIRES = ['react', 'react-dom']
 
 describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
   test('基线数据自洽，且每个版本都落在 peerDependencies 声明的范围内', () => {
@@ -56,11 +93,25 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
       assert.ok(Array.isArray(seam.tokens) && seam.tokens.length > 0, `${seam.id} 没有任何断言 token`)
       for (const token of seam.tokens) assert.ok(token.length > 1, `${seam.id} 的 token 过短，会误命中：${token}`)
     }
+    assert.deepEqual(
+      HOST_SEAMS.filter(seam => !seam.optional).map(seam => seam.id).sort(),
+      REQUIRED_SEAM_IDS,
+      '必需 seam 清单变了：删/改 seam 必须同步这条冻结清单与 docs/COMPATIBILITY.md 的表格',
+    )
+    assert.deepEqual(
+      HOST_SEAMS.filter(seam => seam.optional).map(seam => seam.id).sort(),
+      OPTIONAL_SEAM_IDS,
+      '可选 seam 清单变了：必须同步这条冻结清单与 docs/COMPATIBILITY.md',
+    )
   })
 
   test('插件注册的每个槽位都在矩阵里被看守（新增槽位不许无人看守）', () => {
     assert.deepEqual(unprobedSlots(), [], '上面这些槽位没有对应的 HOST_SEAMS 条目：请补 seam 或从注册处移除')
-    assert.ok(declaredSlots().size >= 7, '声明槽位数量骤降，检查 HOST_SEAMS 是否被误删')
+    const report = slotGuardReport()
+    // 空集不等于安全：源文件被改名/删掉时收集结果会变空，而「零个槽位无人看守」看起来是绿的。
+    assert.deepEqual(report.unreadable, [], '这些槽位源文件读不到：过去这里 catch 后继续，收集为空也能通过')
+    assert.ok(report.found >= DECLARED_SLOT_NAMES.length, `只收集到 ${report.found} 个槽位（应 ≥ ${DECLARED_SLOT_NAMES.length}）：槽位看守可能空转`)
+    assert.deepEqual([...declaredSlots()].sort(), DECLARED_SLOT_NAMES, '声明槽位集合变了：必须同步这条冻结清单与 docs/COMPATIBILITY.md')
   })
 
   test('插件自身接线契约成立（路由字符串、跨层 key）', () => {
@@ -91,6 +142,16 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
 
     describe(`DSH ${baseline.version}${picked.source ? '' : '（无源码）'}`, () => {
       test('源码版本自证：tag 指向的 package.json 就是基线声明的版本', t => {
+        // 「来源自证」的口径必须区分（两种模式下都跑）：git 源的内容由 `git show <tag>:<file>`
+        // 取出，天然绑在 tag 的提交上；目录/工作树副本里的 package.json 是人写的，改一个
+        // version 就能冒充基线，所以它必须报告「未自证」——CI 的 --require-source 只接受
+        // verified 的源（本机用已解包副本跑严格模式会退 2，除非传 --allow-unverified-source）。
+        assert.equal(
+          sourceProvenance(gitSource({ repo: ROOT, tag: baseline.tag }), baseline).verified,
+          true,
+          'git 源必须自证',
+        )
+        assert.equal(sourceProvenance(ghost(), baseline).verified, false, '目录源不得自称已验证')
         if (!picked.source) {
           assert.ok(picked.skip, '没有源码时必须给出跳过原因，不能静默通过')
           assert.match(picked.skip, /baselines:fetch|DSH_REPO/, '跳过原因必须给出补救办法')
@@ -99,6 +160,10 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
         }
         const actual = JSON.parse(picked.source.read('package.json') || '{}').version
         assert.equal(actual, baseline.version)
+        const provenance = sourceProvenance(picked.source, baseline)
+        if (picked.source.kind === 'git') assert.equal(provenance.verified, true, 'git 源必须自证')
+        else assert.equal(provenance.verified, false, '目录源必须如实报告未绑 git，不能默认通过')
+        t.diagnostic(`来源：${provenance.label}${provenance.verified ? '' : ` —— ${provenance.note}`}`)
       })
 
       test('全部必需 seam 成立（失败会点名是哪个宿主文件少了什么）', t => {
@@ -114,7 +179,7 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
           outcome.failures.map(f => `${f.label} → ${f.missing.join(' / ')}`),
           [],
         )
-        assert.ok(outcome.required.length >= 8, '必需 seam 数量骤降，检查 HOST_SEAMS')
+        assert.equal(outcome.required.length, REQUIRED_SEAM_IDS.length, '必需 seam 数量与冻结清单不一致')
       })
 
       test('可选 seam 的状态如实报告，且不参与失败判定', t => {
@@ -137,6 +202,12 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
       })
 
       test('浏览器模块表能回答产物的每个 require（回答不了的 require 是必然启动崩溃）', t => {
+        // 先钉住产物侧的提取结果（与有无宿主源码无关）：提取为空 = 这条检查空转。
+        // 产物模板用单引号 require('react')，而提取正则过去只认双引号，集合恒为空，
+        // 于是「回答不了的 require 是必然启动崩溃」对任何宿主都判通过。
+        const requires = clientBundleRequires()
+        assert.ok(requires.length > 0, '产物里没提取到任何 require：platform 模块表检查会空转')
+        assert.deepEqual(requires, BUNDLE_REQUIRES, '产物 require 集合变了：请同步 platform 断言与 docs/COMPATIBILITY.md')
         if (!picked.source) {
           const platform = checkPlatformModules(ghost())
           assert.equal(platform.ok, false, '源码缺失时模块表检查必须失败，而不是零检查通过')
