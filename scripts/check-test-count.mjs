@@ -13,7 +13,8 @@ import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { collectDocTestCounts } from './lib/doc-test-count.mjs'
+import { TEST_COUNT_PATTERNS, collectDocTestCounts } from './lib/doc-test-count.mjs'
+import { parseTapSummary } from './lib/tap-summary.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -24,16 +25,17 @@ const testFiles = readdirSync(resolve(ROOT, 'test')).filter(name => /\.test\.(js
 const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', 'test/*.test.js', 'test/*.test.mjs'], {
   cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
 })
-const summary = Object.fromEntries(
-  [...(run.stdout || '').matchAll(/^# (tests|pass|fail) (\d+)$/gm)].map(match => [match[1], Number(match[2])]),
-)
-if (summary.tests === undefined) {
-  process.stderr.write('没能从测试输出里解析出用例数；请检查 node --test 的输出格式。\n')
+// 汇总行解析交给共享 lib：它要求每种汇总行唯一（TAP 转义行为一变就会报结构异常），
+// 而不是像 last-wins 那样悄悄取"最后一条"。
+const { tests, pass, fail, problems: summaryProblems } = parseTapSummary(run.stdout || '')
+if (summaryProblems.length) {
+  process.stderr.write(`没能可信地解析测试汇总：${summaryProblems.join('；')}\n`
+    + '若 node --test 的输出格式确实变了，请同步 scripts/lib/tap-summary.mjs。\n')
   process.exit(1)
 }
 
 const failures = []
-if (summary.fail !== 0) failures.push(`测试未全部通过（fail ${summary.fail}），文档数字不予采信`)
+if (fail !== 0) failures.push(`测试未全部通过（fail ${fail}），文档数字不予采信`)
 
 const cache = new Map()
 const readOnce = file => {
@@ -41,6 +43,14 @@ const readOnce = file => {
   return cache.get(file)
 }
 const { hits, uncovered } = collectDocTestCounts(readOnce)
+
+// 句式清单本身也是被看守对象：删掉一条句式就会让那条数字彻底无人看守（uncovered 为空，
+// 于是「零处引用」也变成通过）。这里钉住数量下限——要减就必须显式改这个数字。
+const MIN_PATTERNS = 9
+if (TEST_COUNT_PATTERNS.length < MIN_PATTERNS) {
+  failures.push(`文档测试数字的句式只有 ${TEST_COUNT_PATTERNS.length} 条（下限 ${MIN_PATTERNS}）：`
+    + '删句式等于让那条数字无人看守；确实不需要看守时请同步改 scripts/check-test-count.mjs 的 MIN_PATTERNS 并在 PR 说明')
+}
 
 // 句式未命中不是「文档恰好换了说法」这么简单：它意味着这条数字**再也没有人看守**。
 // 本脚本存在的理由正是「门禁看住了互相不矛盾，却没看住说的是真的」，所以这里必须失败。
@@ -51,8 +61,10 @@ for (const item of uncovered) {
 }
 
 for (const hit of hits) {
-  if (hit.testCount !== summary.tests) {
-    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.testCount} 项，实测 ${summary.tests} 项（${hit.label}）`)
+  // expected 存在时代表这条句式的真值不是套件总数（例如「每个基线恒定 N 个用例」是矩阵自己的常量）。
+  const expected = hit.expected ?? tests
+  if (hit.testCount !== expected) {
+    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.testCount} 项，应为 ${expected} 项（${hit.label}）`)
   }
   if (hit.fileCount !== undefined && hit.fileCount !== testFiles.length) {
     failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.fileCount} 个测试文件，实测 ${testFiles.length} 个（${hit.label}）`)
@@ -62,9 +74,9 @@ for (const hit of hits) {
 if (failures.length) {
   for (const failure of failures) process.stderr.write(`- ${failure}\n`)
   process.stderr.write(`\n文档测试数字与实测不符（${failures.length} 处）：把上述数字改成实测值即可——`
-    + `实测 ${summary.tests} 项 / ${testFiles.length} 个测试文件。\n`)
+    + `实测 ${tests} 项 / ${testFiles.length} 个测试文件。\n`)
   process.exit(1)
 }
 
-process.stdout.write(`文档测试数字与实测一致：${hits.length} 处引用均为 ${summary.tests} 项 / ${testFiles.length} 个测试文件`
-  + `（实测 pass ${summary.pass}），脚本自身不适用退化断言。\n`)
+process.stdout.write(`文档测试数字与实测一致：${hits.length} 处引用均为 ${tests} 项 / ${testFiles.length} 个测试文件`
+  + `（实测 pass ${pass}），脚本自身不适用退化断言。\n`)

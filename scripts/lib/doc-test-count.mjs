@@ -5,7 +5,17 @@
 //   scripts/check-test-count.mjs —— 查「文档 == 实测」（真值来自跑一遍测试套件）。
 // 拆成 lib 是为了避免两份正则各自漂移：以前只有前者，于是文档从 429 一路漂到 437 也没人发现。
 
-/** 规范句式 → 该句式出现在哪个文档。捕获组 1 = 用例数，捕获组 2 = 文件数（可选）。 */
+/**
+ * 规范句式 → 该句式出现在哪个文档。捕获组 1 = 用例数，捕获组 2 = 文件数（可选）。
+ *
+ * `constant`：该句式的真值不是套件总数，而是一个**冻结常量**（见 COMPATIBILITY 的
+ * 「每个基线恒定 N 个用例」——它说的是矩阵文件自己的形状）。带 constant 的句式不参与
+ * 「各文档彼此一致」的比对（check-doc-stats），只由 check-test-count 按常量校验。
+ *
+ * 有意豁免、不进清单的文件：`CHANGELOG.md`（历史条目记录的是当时的数字，本就该留在过去）、
+ * `docs/MANUAL-QA.md`（讲人工验收步骤，没有测试计数）。新增读者文档写进测试数字时，
+ * 请同时在这里加一条句式——否则那个数字就是没人看守的。
+ */
 export const TEST_COUNT_PATTERNS = [
   { file: 'README.md', re: /(\d+) 项回归测试（(\d+) 个测试文件/, label: 'README 中文门面' },
   { file: 'README.md', re: /(\d+) 项 \/ (\d+) 个测试文件/, label: 'README 中文正文' },
@@ -15,6 +25,7 @@ export const TEST_COUNT_PATTERNS = [
   { file: 'docs/ARCHITECTURE.md', re: /(\d+) 项测试（(\d+) 个测试文件/, label: '架构文档' },
   { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项 \/ (\d+) 个测试文件/, label: '开发手册命令段' },
   { file: 'docs/DEVELOPMENT.md', re: /仓库内 (\d+) 项测试/, label: '开发手册正文' },
+  { file: 'docs/COMPATIBILITY.md', re: /每个基线恒定 (\d+) 个用例/, label: '兼容性矩阵每基线用例数', constant: 5 },
 ]
 
 /**
@@ -29,7 +40,7 @@ export const TEST_COUNT_PATTERNS = [
  *
  * @param {(file: string) => string} readOnce 读取文档内容（带缓存由调用方决定）
  * @returns {{
- *   hits: Array<{file: string, label: string, testCount: number, fileCount?: number, raw: string, line: number}>,
+ *   hits: Array<{file: string, label: string, testCount: number, fileCount?: number, raw: string, line: number, expected?: number}>,
  *   testValues: Set<number>, fileValues: Set<number>,
  *   uncovered: Array<{file: string, label: string}>,
  * }}
@@ -51,9 +62,20 @@ export function collectDocTestCounts(readOnce) {
       const testCount = Number(match[1])
       const fileCount = match[2] === undefined ? undefined : Number(match[2])
       const line = content.slice(0, match.index).split('\n').length
-      hits.push({ file: pattern.file, label: pattern.label, testCount, fileCount, raw: match[0], line })
-      testValues.add(testCount)
-      if (fileCount !== undefined) fileValues.add(fileCount)
+      hits.push({
+        file: pattern.file,
+        label: pattern.label,
+        testCount,
+        fileCount,
+        raw: match[0],
+        line,
+        expected: pattern.constant,
+      })
+      // 常量句式不参与「文档之间彼此一致」的比对：它的真值来自矩阵形状，不是套件总数。
+      if (pattern.constant === undefined) {
+        testValues.add(testCount)
+        if (fileCount !== undefined) fileValues.add(fileCount)
+      }
     }
   }
   return { hits, testValues, fileValues, uncovered }
