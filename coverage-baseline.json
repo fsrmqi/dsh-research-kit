@@ -1,5 +1,5 @@
 {
-  "note": "覆盖率地板（棘轮，按 Node 主版本分别记录）。低于当前主版本的地板即失败；提高后用 npm run coverage:update 抬高，它只抬不降。换 Node 主版本要重新记录该版本的地板。",
+  "note": "覆盖率地板（棘轮，按 Node 主版本分别记录）。低于当前主版本的地板即失败；提高后用 npm run coverage:update 抬高，它只抬不降（`span` 记录的测试文件数/用例数同理只许涨）。换 Node 主版本要重新记录该版本的地板。",
   "tolerance": 2,
   "floors": {
     "22": {
@@ -9,12 +9,16 @@
         "functions": 75
       },
       "measured": {
-        "lines": 82.33,
-        "branches": 75.42,
-        "functions": 77.81
+        "lines": 82.32,
+        "branches": 75.35,
+        "functions": 77.85
+      },
+      "span": {
+        "testFiles": 66,
+        "tests": 469
       },
       "node": "v22.19.0",
-      "at": "2026-09-28"
+      "at": "2026-09-29"
     },
     "26": {
       "enforced": {
@@ -23,12 +27,16 @@
         "functions": 67
       },
       "measured": {
-        "lines": 75.72,
-        "branches": 70.04,
-        "functions": 69.95
+        "lines": 75.7,
+        "branches": 69.98,
+        "functions": 69.99
+      },
+      "span": {
+        "testFiles": 66,
+        "tests": 469
       },
       "node": "v26.10.0",
-      "at": "2026-09-28"
+      "at": "2026-09-29"
     }
   }
 }

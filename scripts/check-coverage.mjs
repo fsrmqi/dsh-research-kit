@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseTapSummary } from './lib/tap-summary.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE_FILE = join(ROOT, 'coverage-baseline.json')
@@ -65,9 +66,9 @@ function runCoverage(thresholds) {
     { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   )
   const output = `${result.stdout || ''}${result.stderr || ''}`
-  const summary = Object.fromEntries(
-    [...output.matchAll(/^# (tests|pass|fail) (\d+)$/gm)].map(match => [match[1], Number(match[2])]),
-  )
+  // 共享解析器要求每种汇总行唯一：TAP 转义行为一旦变化（用例能注入汇总行），
+  // 这里就会报「输出结构变了」，而不是让 last-wins 选到伪造的 `# fail 0`。
+  const summary = parseTapSummary(output)
   const failing = output.split('\n')
     .filter(line => /^\s*not ok \d+ - /.test(line) && !/#\s*(SKIP|TODO)\b/.test(line))
     .map(line => line.replace(/^\s*not ok \d+ - /, '').trim())
@@ -111,6 +112,34 @@ function parseCoverage(output) {
   return { total, files, headerFound: Boolean(columns) }
 }
 
+/**
+ * 计数棘轮：测试文件数/用例数只许涨。**这是 F2 的主防线**——比值型覆盖率挡不住删测试，
+ * 而「删测试文件 + 把文档数字一起改小」曾经可以做到全绿。
+ * 记录缺失（老形状的 baseline）时不拦，但 --update 会补上。
+ */
+function spanProblems(entry, current) {
+  const span = entry?.span
+  if (!span) return []
+  const drops = []
+  if (Number.isFinite(span.testFiles) && current.testFiles < span.testFiles) {
+    drops.push(`测试文件数从 ${span.testFiles} 降到 ${current.testFiles}`)
+  }
+  if (Number.isFinite(span.tests) && current.tests < span.tests) {
+    drops.push(`用例数从 ${span.tests} 降到 ${current.tests}`)
+  }
+  return drops
+}
+
+/** 与记录值比较：地板有余量时，单看地板发现不了「已到达过的地方退回来了」。 */
+function measuredProblems(entry, total) {
+  const recorded = entry?.measured
+  if (!recorded || !total) return []
+  const tolerance = baseline.tolerance ?? TOLERANCE
+  return METRICS
+    .filter(metric => Number.isFinite(recorded[metric]) && total[metric] < recorded[metric] - tolerance)
+    .map(metric => `${metric} ${recorded[metric]} → ${total[metric]}`)
+}
+
 function readBaseline() {
   if (!existsSync(BASELINE_FILE)) return { missing: true }
   try {
@@ -137,10 +166,11 @@ function thresholdProblems(thresholds) {
 function suiteProblems(run) {
   const problems = []
   if (run.summary.fail > 0) problems.push(`有 ${run.summary.fail} 个用例失败`)
-  // 用 isFinite 而不是 === 0：解析不到汇总行时 summary.tests 是 undefined，
-  // `undefined === 0` 为假会让「没解析到」被当成没问题。
-  if (!Number.isFinite(run.summary.tests)) problems.push('没能从 TAP 输出里解析出用例数（汇总行缺失）')
-  else if (run.summary.tests === 0) problems.push('一个用例都没跑到')
+  // 汇总行的可信度交给共享解析器：缺失、以及「多条汇总行」（TAP 结构变了、可能被注入）
+  // 都在 problems 里。「没解析到」与「0 个用例」都必须 fail closed。
+  const summaryProblems = run.summary.problems || []
+  problems.push(...summaryProblems)
+  if (!summaryProblems.length && run.summary.tests === 0) problems.push('一个用例都没跑到')
   if (testFiles.length === 0) problems.push('test/ 下没有任何 *.test.js|mjs（glob 匹配不到文件时 node --test 会报 all files 100% 并退出 0）')
   return problems
 }
@@ -190,6 +220,20 @@ if (update) {
     }
     previous = entry.enforced
   }
+  // F2：与地板同理，测试规模也只许涨。否则「删测试 → 比值升高 → 跑一次 update」就把防线一起搬走了。
+  const spanShrink = spanProblems(entry, { testFiles, tests: run.summary.tests })
+  if (spanShrink.length) {
+    fail(`测试规模比记录值缩小：${spanShrink.join('，')}——--update 不会把它记成新常态。\n`
+      + '覆盖率是已加载文件上的比值，删测试会把低覆盖代码移出分母（比值可能反而升高）。\n'
+      + '请补回测试；确实是设计取舍时直接改 coverage-baseline.json 的 span 并在 PR 写明理由。', 2)
+  }
+  // 实测比记录值下降超过容差时拒绝写盘：否则「覆盖率下降那天跑一次 update」就把已到达过的地方记低了。
+  const measuredRegressed = measuredProblems(entry, total)
+  if (measuredRegressed.length) {
+    fail(`实测覆盖率比记录值下降：${measuredRegressed.join('，')}（容差 ${TOLERANCE}）。\n`
+      + '--update 只把实测的**新高**写成新常态；下降时请先补测试。\n'
+      + '（若下降确实是设计取舍：直接改 coverage-baseline.json 的 enforced/measured 并在提交信息里写明理由。）', 2)
+  }
   // 只抬不降：地板一旦写进仓库就只许往上走，否则「覆盖率下降那天跑一次 update」就把线降了。
   const enforced = previous
     ? Object.fromEntries(METRICS.map(metric => [metric, Math.max(previous[metric], candidate[metric])]))
@@ -214,13 +258,16 @@ if (update) {
 
   const next = {
     note: '覆盖率地板（棘轮，按 Node 主版本分别记录）。低于当前主版本的地板即失败；'
-      + '提高后用 npm run coverage:update 抬高，它只抬不降。换 Node 主版本要重新记录该版本的地板。',
+      + '提高后用 npm run coverage:update 抬高，它只抬不降（`span` 记录的测试文件数/用例数同理只许涨）。'
+      + '换 Node 主版本要重新记录该版本的地板。',
     tolerance: TOLERANCE,
     floors: {
       ...floors,
       [nodeMajor]: {
         enforced,
         measured,
+        // 计数棘轮：删测试会把低覆盖代码移出分母，比值型覆盖率抓不到，只有用例数/文件数能抓。
+        span: { testFiles: testFiles.length, tests: run.summary.tests },
         node: process.version,
         at: new Date().toISOString().slice(0, 10),
       },
@@ -269,6 +316,17 @@ if (suite.length) {
   reportSuiteFailure(run, suite)
   process.exit(1)
 }
+// F2：棘轮过去看不见「删测试」。覆盖率是「已加载文件」上的比值——删掉整个测试文件会把低覆盖
+// 模块移出分母，比值甚至**上升**（实测删掉 dsh-compat-matrix.test.mjs 后 branches 从 69.92 升到
+// 70.01，门禁照样绿）。于是「删测试 + 顺手改文档数字」可以全绿。两道防线：计数棘轮 + 记录值比较。
+const spanDrops = spanProblems(entry, { testFiles, tests: run.summary.tests })
+if (spanDrops.length) {
+  process.stderr.write(`\n覆盖率棘轮不接受「靠删测试提高比值」：${spanDrops.join('，')}。\n`
+    + `coverage-baseline.json 记录的是 ${JSON.stringify(entry.span)}；覆盖率是已加载文件上的比值，`
+    + '删掉测试会把低覆盖代码移出分母，比值反而上升。\n'
+    + '请把测试补回来；确实要减少测试时必须显式更新 coverage-baseline.json 的 span 并在 PR 里说明理由。\n')
+  process.exit(1)
+}
 const { total, headerFound } = parseCoverage(run.output)
 if (!headerFound && run.status !== 0) {
   fail('既没解析出覆盖率表头、进程又非零退出——无法判断是覆盖率不足还是输出格式变了。请先看上面的输出。')
@@ -278,6 +336,13 @@ if (run.status !== 0) {
   process.stderr.write(`\n覆盖率低于地板 ${JSON.stringify(entry.enforced)}（Node ${nodeMajor}，记录于 ${BASELINE_FILE}）：本次实测 ${measured}。\n`
     + '要么补测试把覆盖率拉回来；只有当下降确实是设计取舍时才运行 npm run coverage:update'
     + '（它只抬不降，真下降时会失败并要求你说明理由）。\n')
+  process.exit(1)
+}
+const measuredDrops = total ? measuredProblems(entry, total) : []
+if (measuredDrops.length) {
+  process.stderr.write(`\n覆盖率比记录值下降（容差 ${baseline.tolerance ?? TOLERANCE}）：${measuredDrops.join('，')}。\n`
+    + '地板还有余量，所以单看地板是绿的——但棘轮的意义是「不低于已到达过的地方」。\n'
+    + '请补测试；确实是设计取舍时请显式更新 coverage-baseline.json 的 measured 并在 PR 说明理由。\n')
   process.exit(1)
 }
 const measured = total ? METRICS.map(metric => `${metric} ${total[metric]}`).join(' / ') : '解析失败'
