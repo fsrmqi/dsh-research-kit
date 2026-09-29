@@ -1,0 +1,8 @@
+# Standard research: retain the packaged limits and allow an Agent fallback when a direct adapter is unavailable.
+- id: dsh-research-kit
+  config:
+    memoryServer: memory-center
+    memoryTimeoutMs: 15000
+    databaseTimeoutMs: 15000
+    databaseRequestsPerMinute: 12
+    allowAgentFallback: true

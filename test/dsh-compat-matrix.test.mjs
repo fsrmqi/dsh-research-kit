@@ -66,6 +66,7 @@ const DECLARED_SLOT_NAMES = [
   'plugins.detail.actions',
   'plugins.detail.badge',
   'plugins.detail.section',
+  'plugins.row.config',
   'tool.call.toolview',
 ]
 // 产物侧（与宿主无关）：插件生成的工厂固定只 require 这两个平台模块。
@@ -76,11 +77,11 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
   test('基线数据自洽，且每个版本都落在 peerDependencies 声明的范围内', () => {
     assert.deepEqual(baselineDataProblems(), [])
     assert.equal(PACKAGE.peerDependencies['@deepseek-ai/dsh'], PEER_RANGE)
-    // peer 范围的边界书写与基线表必须一致：写 0.1.8-0 却把 0.1.8 的 tag 列进基线，
+    // peer 范围的边界书写与基线表必须一致：写 0.2.1-0 却把 0.2.1 的 tag 列进基线，
     // 等于「声明不支持、实际在验」，反向则是「声明支持、没人验过」。
-    assert.match(PEER_RANGE, /^>=0\.1\.7-0 <0\.1\.8-0$/)
+    assert.match(PEER_RANGE, /^>=0\.1\.7-0 <0\.1\.8-0 \|\| >=0\.2\.0-0 <0\.2\.1-0$/)
     for (const baseline of BASELINES) {
-      assert.match(baseline.version, /^0\.1\.7-/, `${baseline.id} 必须在 peer 范围内`)
+      assert.match(baseline.version, /^0\.(1\.7|2\.0)-/, `${baseline.id} 必须在 peer 范围内`)
     }
   })
 

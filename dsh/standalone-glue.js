@@ -3,7 +3,7 @@ import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
-import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction } from '../src/plugin-status.js'
+import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction, ResearchKitPresetConfig } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
 
@@ -47,6 +47,9 @@ export function researchKitApply(ctx) {
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-open-workbench',
   }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, openView: openWorkbenchView }))))
+  disposers.push(ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+    name: 'plugins.row.config', key: 'dsh-research-kit#dsh-research-kit',
+  }, ResearchKitPresetConfig)))
   disposers.push(ctx.slots.inject('tool.call.toolview', () => {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())

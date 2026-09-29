@@ -11,11 +11,11 @@
 // 新增一个受支持版本 = 往 BASELINES 加一条 + 跑 `npm run baselines:fetch` + `npm test`，
 // 失败信息会点名是哪条 seam 变了，而不是「某处坏了」。
 //
-// 基线为什么是这两个：peer 范围是 >=0.1.7-0 <0.1.8-0，因此 0.1.7 线的两个 rc 都是
-// 运行时承诺要支持的对象；更早的 0.1.5/0.1.6 线不在范围内（宿主自身的 peer 准入会拒绝装载）。
+// 基线覆盖 0.1.7 与 0.2 线已验证的 rc。更早的 0.1.5/0.1.6 线不在范围内（宿主自身的
+// peer 准入会拒绝装载）。
 
 /** package.json 里声明的宿主版本范围；BASELINES 的每个版本都必须落在其中。 */
-export const PEER_RANGE = '>=0.1.7-0 <0.1.8-0'
+export const PEER_RANGE = '>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.1-0'
 
 /** 参与 compat 矩阵的宿主基线。version 必须与 tag 指向的 package.json 一致。 */
 export const BASELINES = [
@@ -29,7 +29,13 @@ export const BASELINES = [
     id: 'dsh-v0.1.7-rc.2',
     tag: 'dsh-v0.1.7-rc.2',
     version: '0.1.7-rc.2',
-    notes: '0.1.7 线当前最新 rc；插件 peer 准入与 Desktop 转发按此行核对。',
+    notes: '0.1.7 线最新 rc；插件 peer 准入与 Desktop 转发按此行核对。',
+  },
+  {
+    id: 'dsh-v0.2.0-rc.1',
+    tag: 'dsh-v0.2.0-rc.1',
+    version: '0.2.0-rc.1',
+    notes: '0.2 线首个 rc；确认既有槽位、工具卡阶段与 Desktop 转发仍可用。',
   },
 ]
 
@@ -72,13 +78,15 @@ export const HOST_SEAMS = [
   },
   {
     id: 'plugin-detail-slots',
-    label: 'Plugins 详情页三个槽与 subject 形状（状态区/徽章/诊断动作）',
+    label: 'Plugins 详情与行配置槽（状态区/徽章/诊断动作/预设）',
     file: 'packages/client/ui-plugin-manager/src/client/slot-contract.ts',
-    slots: ['plugins.detail.section', 'plugins.detail.badge', 'plugins.detail.actions'],
+    slots: ['plugins.detail.section', 'plugins.detail.badge', 'plugins.detail.actions', 'plugins.row.config'],
     tokens: [
       "'plugins.detail.section'",
       "'plugins.detail.badge'",
       "'plugins.detail.actions'",
+      "'plugins.row.config'",
+      'readonly mutate: ConfigForm<Record<string, unknown>>',
       'owner: PluginDetailProps',
       "kind: 'bundle'",
       'readonly name: string',
@@ -123,7 +131,7 @@ export const HOST_SEAMS = [
     id: 'view-navigation',
     label: '跨页视图导航（Plugins 详情页「打开工作台」；宿主未提供时按钮整块不渲染）',
     file: 'packages/client/ui-conversation/src/client/conversation/assembly.ts',
-    tokens: ['super(ctx, \'uiConversation\')', 'binding(source: SessionBinding | SessionId): ConversationBinding', 'activate(target: string): void'],
+    tokens: ['super(ctx, \'uiConversation\')', 'openView(sessionId: SessionId | undefined, view: string, focus?: string): boolean'],
     optional: true,
   },
 ]

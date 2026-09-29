@@ -1,0 +1,8 @@
+# Direct public-source research: do not delegate an unavailable database query to the Agent.
+- id: dsh-research-kit
+  config:
+    memoryServer: memory-center
+    memoryTimeoutMs: 5000
+    databaseTimeoutMs: 10000
+    databaseRequestsPerMinute: 6
+    allowAgentFallback: false

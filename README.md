@@ -153,6 +153,10 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 安装后刷新浏览器，在会话中打开「科研工作台」，或使用输入框旁的「资源 / 工作流程」入口。卸载或关闭视图不会残留重复注册。
 
+## 可组合运行预设
+
+`presets/` 提供只覆盖 Research Kit 配置行的启动 overlay：[`research-direct.patch.yml`](presets/research-direct.patch.yml) 禁用 Agent 回退并收紧公开数据库直查的超时与速率；[`research-assisted.patch.yml`](presets/research-assisted.patch.yml) 保留默认的 Agent 回退。它们可与 Memory Center 的隐私 overlay 一同按顺序传给 `dsh --profile web --patch …`；每份文件都重述本插件的完整 `config`，不会意外继承已被其他 patch 替换的字段。已加载插件时，也可在 Plugins 页的 Research Kit 配置区点击「应用直连预设」或「应用辅助预设」：一次有修订号保护的配置写入应用同一组字段，不会修改 profile 之外的设置。
+
 **常见坑**：`dsh plugin` 会调用 PATH 上的 `pnpm`，其 store 布局主版本必须与目标 profile 记录一致，否则会以 `ERR_PNPM_UNEXPECTED_STORE` 失败。对照方式见[手工验收清单 §1](docs/MANUAL-QA.md)。
 
 ## 使用
@@ -244,7 +248,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、469 项回归测试（66 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 2 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（587 项、587 唯一 ID，分片与聚合入口逐条一致）、474 项回归测试（66 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 3 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -253,7 +257,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（469 项 / 66 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（474 项 / 66 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

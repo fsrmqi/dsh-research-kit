@@ -8,7 +8,7 @@
 
 `peerDependencies` 只能声明**范围**，不能证明任何事：范围写对了，插件照样可能依赖一个宿主从未提供的接口。而「宿主提供什么」是**外部事实**，会随宿主版本变化：
 
-- 本仓库当前支持的宿主是 DSH `0.1.7` 线的两个 rc（见下表）。宿主换掉一个槽位名、改掉一个事件名，插件不会报错——它只是**静默不显示**。这类故障在真实 profile 里表现为「功能不见了」，排查成本极高。
+- 本仓库当前支持的宿主是 DSH `0.1.7` 与 `0.2` 线的已列 rc（见下表）。宿主换掉一个槽位名、改掉一个事件名，插件不会报错——它只是**静默不显示**。这类故障在真实 profile 里表现为「功能不见了」，排查成本极高。
 - 因此本仓库把「依赖了宿主什么」写成可核对的清单（seam），并让 CI 拿**真实宿主源码**逐条核对。矩阵能证明的是「宿主源码里确实有这些字符串与签名」；它不能证明「运行时 props 形状一致」——那一步仍然只能由真实 profile 验收（[MANUAL-QA.md](MANUAL-QA.md)）。
 
 ## 2. 支持的基线
@@ -16,9 +16,10 @@
 | 基线 tag | 宿主版本 | 为什么在清单里 |
 | --- | --- | --- |
 | `dsh-v0.1.7-rc.1` | `0.1.7-rc.1` | 兼容下限：`peerDependencies` 范围的下沿 |
-| `dsh-v0.1.7-rc.2` | `0.1.7-rc.2` | 当前最新 rc：peer 准入与 Desktop 转发按此行核对 |
+| `dsh-v0.1.7-rc.2` | `0.1.7-rc.2` | 0.1.7 线最新 rc：peer 准入与 Desktop 转发按此行核对 |
+| `dsh-v0.2.0-rc.1` | `0.2.0-rc.1` | 0.2 线首个 rc；确认既有集成仍可加载 |
 
-`package.json` 声明的范围是 `>=0.1.7-0 <0.1.8-0`（宿主 `engines`：`^22.19.0 || >=24.0.0`）。矩阵里每个基线版本都必须落在该范围内——这条由测试自己断言，防止「清单越写越宽、peer 范围却没收」。
+`package.json` 声明的范围是 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.1-0`（宿主 `engines`：`^22.19.0 || >=24.0.0`）。矩阵里每个基线版本都必须落在该范围内——这条由测试自己断言，防止「清单越写越宽、peer 范围却没收」。
 
 新增一个受支持版本 = 在 `BASELINES` 加一条 + 拉 tag + 跑测试。失败信息会点名**哪条 seam 在哪个宿主文件里少了什么**。
 
@@ -32,13 +33,13 @@
 | `conversation-input-slots` | `.../ui-conversation/src/client/contract/slots.ts` | `conversation.input.left/right/overlay` |
 | `chat-assistant-actions` | `packages/client/ui-chat/src/client/contract/slots.ts` | `conversation.chat.assistant-actions` |
 | `tool-call-toolview` | `packages/client/ui-tool/src/client/contract/slots.ts` | `tool.call.toolview`（含 `preparing/start/result` 三阶段） |
-| `plugin-detail-slots` | `packages/client/ui-plugin-manager/src/client/slot-contract.ts` | `plugins.detail.section/badge/actions` + `subject` 形状 |
+| `plugin-detail-slots` | `packages/client/ui-plugin-manager/src/client/slot-contract.ts` | `plugins.detail.section/badge/actions`、`plugins.row.config` 与配置表写入 |
 | `input-contract` | `.../ui-conversation/src/client/contract/input.ts` | `captureInsertion()` / `insertText()` / `setDraft()` |
 | `agent-events` | `packages/core/agent/src/runtime-types.ts` | `agent/created`、`agent/disposed` |
 | `desktop-app-origin` | `apps/desktop/README.md` | `dsh-app://app/` 源与 Desktop profile 目录 |
 | `desktop-plugin-api-forward` | `apps/desktop/src/main.ts` | Desktop 主进程的插件 API 转发 |
 | `desktop-request-forward` | `apps/desktop/src/web-document.ts` | 文档层请求转发（插件路由在 App 内可达） |
-| `view-navigation`（**可选**） | `.../ui-conversation/src/client/conversation/assembly.ts` | `uiConversation.binding()` + `ConversationBinding.activate()` |
+| `view-navigation`（**可选**） | `.../ui-conversation/src/client/conversation/assembly.ts` | `uiConversation.openView(sessionId, view, focus?)` |
 
 三条规则：
 
@@ -56,7 +57,7 @@
 
 | 缺口 | 影响 | 绊线 |
 | --- | --- | --- |
-| `cross-page-view-navigation` | Plugins 详情页的「打开工作台」按钮在 0.1.7 线上**永不渲染**：glue 适配的是 `uiConversation.openView(...)`，而 0.1.7-rc.1/rc.2 的实际导航面是 `uiConversation.binding(...)` + `ConversationBinding.activate(target)`，没有 `openView`。探测恒为 `undefined` → 按钮整块不渲染（静默缺席，不是崩） | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
+| `cross-page-view-navigation` | 已发布的 0.1.7 与 `0.2.0-rc.1` 均没有 `uiConversation.openView(...)`，因此 Plugins 详情页的「打开工作台」按钮不渲染；当前源码提供后，矩阵会以该公开签名报告可用；其他插件能力不受影响 | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
 | `phantom-client-inject` | `dsh.client.inject` 里的 `@deepseek-ai/dsh-client-runtime` 在 0.1.7-rc.1/rc.2 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到；另两个注入项两处都能查到。产物实际只 require `react`/`react-dom`，故不影响装载，只是「我依赖谁」失真 | `package.json` 里仍有该字符串 |
 
 `npm run check:dsh-app` 与 `npm test` 都会把未命中的 inject 名字打出来（警告，不失败）。
@@ -96,7 +97,7 @@ npm test                                                  # 含 test/dsh-compat-
 
 ## 6. 升级 DSH 的操作步骤
 
-1. 读宿主 changelog，判断是否落在 `0.1.7` 线内；
+1. 读宿主 changelog，判断是否落在已声明的 peer 范围内；
 2. 若是新版本：在 `scripts/lib/dsh-baselines.mjs` 的 `BASELINES` 加一条（tag + version + notes），必要时同步 `package.json` 的 `peerDependencies`；
 3. `npm run baselines:fetch`，`npm run check:dsh-app -- --require-source`；
 4. 失败项逐条处理：宿主改了名字就改 glue 层（`dsh/standalone-glue.js` 是唯一知道宿主 props 形状的文件），不要为了让检查通过而放宽 token；

@@ -181,6 +181,44 @@ export function researchKitOpenWorkbench(openView) {
   return openView(undefined, RESEARCH_KIT_CONSOLE_VIEW) !== false
 }
 
+const RESEARCH_CONFIG_PRESETS = [
+  {
+    id: 'direct', label: '直连研究',
+    description: '仅使用直查适配器；查询不可用时不委托给 Agent。',
+    values: { memoryServer: 'memory-center', memoryTimeoutMs: 5000, databaseTimeoutMs: 10000, databaseRequestsPerMinute: 6, allowAgentFallback: false },
+  },
+  {
+    id: 'assisted', label: 'Agent 辅助',
+    description: '保留默认超时、速率和 Agent 回退。',
+    values: { memoryServer: 'memory-center', memoryTimeoutMs: 15000, databaseTimeoutMs: 15000, databaseRequestsPerMinute: 12, allowAgentFallback: true },
+  },
+]
+
+/** Plugins 配置页的 Research Kit 预设；写入走宿主的 revision-fenced ConfigForm。 */
+export function ResearchKitPresetConfig({ view, form }) {
+  const [state, setState] = React.useState('idle')
+  if (view === 'summary') return '选择直连研究或 Agent 辅助配置。'
+  if (!form || form.state.status !== 'ready') return null
+  const apply = async preset => {
+    if (!form.state.writable || state === 'busy') return
+    setState('busy')
+    try {
+      const accepted = await form.mutate(Object.entries(preset.values).map(([field, value]) => ({ op: 'set', path: [field], value })), form.state.revision)
+      setState(accepted ? preset.id : 'failed')
+    } catch {
+      setState('failed')
+    }
+  }
+  return h('section', { style: { display: 'grid', gap: 10, marginTop: 12 } }, [
+    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, '预设会原子覆盖全部 Research Kit 运行字段；手动字段仍可在下方调整。'),
+    ...RESEARCH_CONFIG_PRESETS.map(preset => h('div', { key: preset.id, style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: `1px solid ${C.line}`, borderRadius: 10 } }, [
+      h('div', { key: 'text' }, [h('strong', { key: 'label', style: { fontSize: 13 } }, preset.label), h('div', { key: 'description', style: { color: C.muted, fontSize: 12, marginTop: 3 } }, preset.description)]),
+      h(Button, { key: 'apply', size: 'sm', variant: 'ghost', disabled: !form.state.writable || state === 'busy', onClick: () => { void apply(preset) } }, state === preset.id ? '已应用' : '应用'),
+    ])),
+    state === 'failed' ? h('p', { key: 'failed', style: { margin: 0, color: C.amber, fontSize: 12 } }, '预设未保存；请检查配置页的错误提示后重试。') : null,
+  ])
+}
+
 /**
  * Plugins 页头部动作：跳到对话区里的科研工作台。
  * 宿主需同时提供 `uiConversation.openView`（跨页选中视图）与主区可见的会话；
