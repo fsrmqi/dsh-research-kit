@@ -28,7 +28,9 @@ npm run test:browser            # 加载生成产物，执行真实浏览器交�
 
 ```bash
 npm run baselines:fetch          # 拉取基线 DSH tag 到 .tmp/dsh-repo（CI 用；离线时矩阵改核对降级路径）
-npm run check:dsh-app            # 对照基线源码逐条核查宿主契约；-- --require-source 让"缺源码"变成失败
+npm run check:dsh-app            # 对照基线源码逐条核查宿主契约；-- --require-source 让"缺源码/源码未自证"变成失败
+                                 #   已解包副本（.tmp/dsh-tags）与工作树副本未绑 git → 默认只警告，
+                                 #   --require-source 下需加 --allow-unverified-source 才放行；工作树脏需 --allow-dirty
 npm run check:test-count         # 文档里的测试数字必须与实测一致（跑一遍套件比对）
 npm run coverage                 # 覆盖率棘轮：低于当前 Node 主版本的地板即失败
 npm run coverage:update          # 重新测量当前主版本的地板（只抬不降，先自检后落盘）
@@ -89,10 +91,10 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
 | 宿主动作缺失降级的**交互级**断言（点击后不写入、不发送） | 未完成——渲染级已覆盖初始状态（react-dom/server），「点击」路径还需一个能构造缺失 `inputActions` 的真实 DOM 事件运行时（jsdom 或等价 harness） | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
-| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；无源码时改核对降级路径，用例数不随环境变；CI 用 --require-source 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
+| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；无源码时改核对降级路径，用例数不随环境变；seam 清单与产物 require 提取都有冻结清单/空转守卫，来源自证绑 git tag/HEAD；CI 用 --require-source 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
 | 可选能力软探测（缺服务只降级、不进 inject） | 已实现 | `dsh/optional-service.js` + `test/optional-service.test.mjs` |
-| 覆盖率棘轮（地板只许涨不许跌，按 Node 主版本分别记录） | 已实现（Node 26 → 73 / 68 / 67，Node 22.19 → 80 / 73 / 75；缺当前主版本的地板即失败） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
-| 文档测试数字真值校验（文档 == 实测） | 已实现 | `scripts/check-test-count.mjs` + `scripts/lib/doc-test-count.mjs` |
+| 覆盖率棘轮（地板与测试规模都只许涨，按 Node 主版本分别记录） | 已实现（Node 26 → 73 / 68 / 67，Node 22.19 → 80 / 73 / 75；缺当前主版本的地板即失败；`span` 记的测试文件数/用例数低于记录值即失败——比值型覆盖率挡不住"删测试"） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
+| 文档测试数字真值校验（文档 == 实测） | 已实现（同一句式全局匹配、句式未命中即失败、句式数量有下限；矩阵每基线用例数按冻结常量校验） | `scripts/check-test-count.mjs` + `scripts/lib/doc-test-count.mjs` |
 | 敌意输入加固（外部数据形状异常不升级为崩溃 / 502） | 已实现（TOP5 路径 + 同族路径） | `test/hostile-input.test.mjs`；规则见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md) |
 
 ## 3. 实现里程碑
@@ -264,7 +266,7 @@ const actions = {
 ### DSH 适配变更
 
 - [ ] 新旧目标 DSH 版本的 props 契约已记录；
-- [ ] `npm run baselines:fetch && npm run check:dsh-app -- --require-source` 通过（宿主 seam 逐条核对，见 [COMPATIBILITY.md](COMPATIBILITY.md)）；
+- [ ] `npm run baselines:fetch && npm run check:dsh-app -- --require-source` 通过（宿主 seam 逐条核对，且每个基线都用**可自证**的 git 源核对过；见 [COMPATIBILITY.md](COMPATIBILITY.md)）；
 - [ ] 真实 profile 已验证写入与发送；
 - [ ] 不会重复注册 view；
 - [ ] 会话切换时操作仍指向正确会话；

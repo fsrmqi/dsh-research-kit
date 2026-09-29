@@ -196,21 +196,22 @@ dsh-research-kit/
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
 │   ├── validate-diagrams.mjs        # diagram IR 诊断（规则码 + supportedFixes），--repo 已入 npm run check
 │   ├── add-agent-fields.mjs         # 一次性迁移脚本：为工作流条目批量补 tool_mode / input_schema 字段
-│   ├── check-dsh-app.mjs            # DSH 兼容性矩阵 CLI：对照基线 tag 核查宿主 seam（0 通过 / 1 失败 / 2 用法或缺源码）
-│   ├── check-coverage.mjs           # 覆盖率棘轮：低于当前 Node 主版本的地板即失败（--update 只抬不降、先自检后落盘）
-│   ├── check-test-count.mjs         # 文档里的测试数字必须等于实测（跑套件 + 数测试文件）
+│   ├── check-dsh-app.mjs            # DSH 兼容性矩阵 CLI：对照基线 tag 核查宿主 seam（0 通过 / 1 失败 / 2 用法或缺源码；--require-source 还要求源码自证绑 git）
+│   ├── check-coverage.mjs           # 覆盖率棘轮：低于当前 Node 主版本的地板即失败，测试规模（文件数/用例数）与记录值只许涨（--update 只抬不降、先自检后落盘）
+│   ├── check-test-count.mjs         # 文档里的测试数字必须等于实测（跑套件 + 数测试文件）；句式未命中/数量骤降即失败
 │   ├── fetch-baselines.sh           # 拉取基线 DSH tag 到 .tmp/dsh-repo（浅克隆）
 │   ├── register.sh / watch.sh / web.sh # 本地开发回路：登记 profile / 变更重建 / 受管启动本机 dsh web（各自只管理自己记录的 pid）
 │   ├── browser-regression.cjs       # 真实 Chromium 交互回归（npm run test:browser）
 │   └── lib/
 │       ├── catalog-entries.mjs      # 分片与聚合入口的两路读取（目录校验与文档统计校验共用）
 │       ├── dsh-baselines.mjs        # 受支持 DSH 基线 + 宿主 seam + 已知缺口绊线（唯一事实源）
-│       ├── dsh-compat.mjs           # seam 核对的纯逻辑：源码解析、契约检查、平台模块表、inject 审计
-│       └── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
+│       ├── dsh-compat.mjs           # seam 核对的纯逻辑：源码解析、契约检查、平台模块表、inject 审计、源码来源自证
+│       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
+│       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
 ├── test/                            # 469 项测试（66 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
-├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；npm run coverage:update 只抬不降）
+├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）
 ├── package.json
 └── cordis.patch.yml                 # DSH bundle 注册补丁
 ```
