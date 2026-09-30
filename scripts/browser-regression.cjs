@@ -12,10 +12,13 @@ const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(id=>id==='react-dom'?ReactDOM:React)}};</script>
 <script src="/bundle"></script><script>
-const registered={}; window.toolViews={};
+const registered={}; window.toolViews={}; window.rowConfigs={};
 window.testEvents=[{type:'assistant/message',seq:14,time:123,data:{turn:2,message:{id:'review-one',content:[{type:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}];
 window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){return ()=>{}}},binding(){return {eventSource:{getSnapshot(){return {entries:window.testEvents}},subscribe(){return ()=>{}}}}}};
-plugin.apply({sessions:window.testSessions,slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
+// 假 slots 服务必须认三种注册形态：按 key（tool.call.toolview、plugins.row.config）、
+// 按 id（徽章 / 动作 / 输入框）。过去只按 o.id 登记，键控注册一律落到 registered[undefined]——
+// 于是 Plugins 行配置里的预设 UI 在浏览器回归里完全隐形（点不到，也就没人发现点击路径没被覆盖）。
+plugin.apply({sessions:window.testSessions,slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
 ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions}),React.createElement(registered['dsh-research-kit-draft-enhancer'],{sessionId:'qa',inputActions:actions})));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
@@ -210,6 +213,55 @@ const server = http.createServer((req,res)=>{
   await page.waitForTimeout(100);
   assert.equal(hostCapabilitiesRequests,capabilitiesBeforeStatusMount+1,'插件状态区每次挂载只能新增一次宿主能力探测');
   console.log('插件状态区单次探测宿主能力：通过');
+  // Plugins 行配置（plugins.row.config，按 key 注册）里的预设在**真实 DOM** 上的点击路径：
+  // 写入的 ops 与 revision、宿主拒绝时的「预设未保存」、只读禁用、未就绪不渲染。
+  // 每次挂载都换一个全新容器：同一个 root 复用会保留组件状态（上一轮的「已应用」会污染下一轮）。
+  await page.evaluate(()=>{
+    window.presetCalls=[];
+    window.mountPresets=form=>{
+      if(window.rowConfigRoot){window.rowConfigRoot.unmount();window.rowConfigHost.remove();}
+      const host=document.createElement('div');host.id='row-config-smoke';document.body.append(host);
+      window.rowConfigHost=host;
+      window.rowConfigRoot=ReactDOM.createRoot(host);
+      window.rowConfigRoot.render(React.createElement(window.rowConfigs['dsh-research-kit#dsh-research-kit'],{view:'page',form}));
+    };
+    const Preset=window.rowConfigs['dsh-research-kit#dsh-research-kit'];
+    if(typeof Preset!=='function') throw new Error('plugins.row.config 没有按 key 注册：'+JSON.stringify(Object.keys(window.rowConfigs)));
+    window.mountPresets({state:{status:'ready',writable:true,revision:7},mutate:(ops,revision)=>{window.presetCalls.push({ops,revision});return Promise.resolve(true)}});
+  });
+  const presetSection=page.locator('#row-config-smoke');
+  await presetSection.getByRole('button',{name:'应用',exact:true}).first().click();
+  await presetSection.getByRole('button',{name:'已应用',exact:true}).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.presetCalls),[{ops:[
+    {op:'set',path:['memoryServer'],value:'memory-center'},
+    {op:'set',path:['memoryTimeoutMs'],value:5000},
+    {op:'set',path:['databaseTimeoutMs'],value:10000},
+    {op:'set',path:['databaseRequestsPerMinute'],value:6},
+    {op:'set',path:['allowAgentFallback'],value:false},
+  ],revision:7}],'「直连研究」必须一次写入全部 5 个运行字段，并带上表单当前 revision');
+  await presetSection.getByRole('button',{name:'应用',exact:true}).click();
+  await page.waitForFunction(()=>window.presetCalls.length===2);
+  const assistedCall=await page.evaluate(()=>window.presetCalls[1]);
+  assert.deepEqual(assistedCall.ops,[
+    {op:'set',path:['memoryServer'],value:'memory-center'},
+    {op:'set',path:['memoryTimeoutMs'],value:15000},
+    {op:'set',path:['databaseTimeoutMs'],value:15000},
+    {op:'set',path:['databaseRequestsPerMinute'],value:12},
+    {op:'set',path:['allowAgentFallback'],value:true},
+  ]);
+  assert.equal(assistedCall.revision,7);
+  // 宿主拒绝写入（revision 冲突 / 校验失败）：必须显示「未保存」，不能悄悄显示「已应用」。
+  await page.evaluate(()=>window.mountPresets({state:{status:'ready',writable:true,revision:8},mutate:(ops,revision)=>{window.presetCalls.push({ops,revision});return Promise.resolve(false)}}));
+  await presetSection.getByRole('button',{name:'应用',exact:true}).first().click();
+  await presetSection.getByText('预设未保存；请检查配置页的错误提示后重试。').waitFor();
+  assert.equal((await page.evaluate(()=>window.presetCalls[2])).revision,8,'冲突写入也要沿用表单当前的 revision');
+  // 只读（memory 模式等）与未就绪：禁用 / 整块不渲染，而不是留一个点了没反应的按钮。
+  await page.evaluate(()=>window.mountPresets({state:{status:'ready',writable:false,revision:9},mutate:()=>Promise.resolve(true)}));
+  assert.equal(await presetSection.getByRole('button',{name:'应用',exact:true}).first().isDisabled(),true);
+  await page.evaluate(()=>window.mountPresets({state:{status:'loading'},mutate:()=>Promise.resolve(true)}));
+  assert.equal(await presetSection.locator('section').count(),0,'表单未就绪时预设区必须整块不渲染');
+  await page.evaluate(()=>{window.rowConfigRoot.unmount();window.rowConfigHost.remove()});
+  console.log('Plugins 行配置预设：ops + revision 写入、拒绝提示与只读/未就绪降级通过');
   await page.getByRole('tab',{name:'方法工坊',exact:true}).click();
   await page.getByRole('heading',{name:'方法工坊',exact:true}).waitFor();
   await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();

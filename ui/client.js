@@ -11375,7 +11375,14 @@ window.__ModuleLoader__.load({
       return openView(undefined, RESEARCH_KIT_CONSOLE_VIEW) !== false
     }
 
-    const RESEARCH_CONFIG_PRESETS = [
+    /**
+     * 两组预设的唯一事实源：字段名必须与 dsh/config.js 的 volatile Config 字段一一对应
+     * （volatile 正是宿主允许「免重挂载」就地写入的那类字段）。
+     *
+     * 同一组值还有第二份载体 presets/*.patch.yml（启动 overlay）。两条路径必须逐字段一致，
+     * 由 test/plugin-detail-slots.test.js 直接比对，防止改了一处忘了另一处。
+     */
+    const RESEARCH_KIT_CONFIG_PRESETS = [
       {
         id: 'direct', label: '直连研究',
         description: '仅使用直查适配器；查询不可用时不委托给 Agent。',
@@ -11388,6 +11395,13 @@ window.__ModuleLoader__.load({
       },
     ]
 
+    /** 预设 → 宿主的原子写入操作数组；未知 id 返回 null（不给「静默写默认值」留口子）。 */
+    function researchKitPresetOps(presetId, presets = RESEARCH_KIT_CONFIG_PRESETS) {
+      const preset = presets.find(candidate => candidate.id === presetId)
+      if (!preset) return null
+      return Object.entries(preset.values).map(([field, value]) => ({ op: 'set', path: [field], value }))
+    }
+
     /** Plugins 配置页的 Research Kit 预设；写入走宿主的 revision-fenced ConfigForm。 */
     function ResearchKitPresetConfig({ view, form }) {
       const [state, setState] = React.useState('idle')
@@ -11397,7 +11411,7 @@ window.__ModuleLoader__.load({
         if (!form.state.writable || state === 'busy') return
         setState('busy')
         try {
-          const accepted = await form.mutate(Object.entries(preset.values).map(([field, value]) => ({ op: 'set', path: [field], value })), form.state.revision)
+          const accepted = await form.mutate(researchKitPresetOps(preset.id), form.state.revision)
           setState(accepted ? preset.id : 'failed')
         } catch {
           setState('failed')
@@ -11405,7 +11419,7 @@ window.__ModuleLoader__.load({
       }
       return h('section', { style: { display: 'grid', gap: 10, marginTop: 12 } }, [
         h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, '预设会原子覆盖全部 Research Kit 运行字段；手动字段仍可在下方调整。'),
-        ...RESEARCH_CONFIG_PRESETS.map(preset => h('div', { key: preset.id, style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: `1px solid ${C.line}`, borderRadius: 10 } }, [
+        ...RESEARCH_KIT_CONFIG_PRESETS.map(preset => h('div', { key: preset.id, style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: `1px solid ${C.line}`, borderRadius: 10 } }, [
           h('div', { key: 'text' }, [h('strong', { key: 'label', style: { fontSize: 13 } }, preset.label), h('div', { key: 'description', style: { color: C.muted, fontSize: 12, marginTop: 3 } }, preset.description)]),
           h(Button, { key: 'apply', size: 'sm', variant: 'ghost', disabled: !form.state.writable || state === 'busy', onClick: () => { void apply(preset) } }, state === preset.id ? '已应用' : '应用'),
         ])),

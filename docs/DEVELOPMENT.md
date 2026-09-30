@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（474 项 / 66 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（489 项 / 67 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -33,7 +33,9 @@ npm run check:dsh-app            # 对照基线源码逐条核查宿主契约；
                                  #   --require-source 下需加 --allow-unverified-source 才放行；工作树脏需 --allow-dirty
 npm run check:test-count         # 文档里的测试数字必须与实测一致（跑一遍套件比对）
 npm run coverage                 # 覆盖率棘轮：低于当前 Node 主版本的地板即失败
+npm run coverage:ci              # 同上 + 顺带核对文档测试数字（复用这一遍套件，CI 用它）
 npm run coverage:update          # 重新测量当前主版本的地板（只抬不降，先自检后落盘）
+npm run verify                   # CI 的本地等价物：check + test + 宿主契约 + coverage:ci（不含需联网的 baselines:fetch 与需 profile 的 test:browser）
 ```
 
 本地开发回路（各自只管理自己记录的 pid，**绝不**按进程名杀 `dsh web`——那可能是你正在用的界面）：
@@ -44,7 +46,7 @@ npm run dev:watch      # 源码一变就重建 ui/ 产物
 npm run dev:web        # 启动一个受管的本机 dsh web（端口冲突时报错而不是抢占）
 ```
 
-浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React、`ui/client.js` 及其延迟工件，通过插件槽位挂载工作台、方法工坊、输入框弹层与增强器。覆盖延迟资源单次请求、三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果，以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
+浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React、`ui/client.js` 及其延迟工件，通过插件槽位挂载工作台、方法工坊、输入框弹层与增强器。覆盖延迟资源单次请求、三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果、Plugins 行配置预设的点击写入（写入的 ops 与 revision、宿主拒绝时的「预设未保存」、只读禁用与未就绪不渲染），以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
 
 默认使用 Playwright Chromium；本机已有 Chrome 时可运行 `PLAYWRIGHT_CHANNEL=chrome npm run test:browser`。截图输出到已忽略的 `browser-results/`，失败时额外保存 `failure.png`；CI 在 push 和 pull request 时执行并上传截图。启动或断言失败会以非零状态退出，服务器与浏览器会在退出前关闭。此回归不替代真实 DSH profile 的集成验收。
 
@@ -91,7 +93,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 真实 DSH profile 启动烟测 | **已完成（两轮，2026-09-10）**；证据库写入 Prompt（W1–W3）与证据图谱（G1–G4）的现场验收于 2026-09-11 通过 | 清单见 [MANUAL-QA.md](MANUAL-QA.md) |
 | 宿主动作缺失降级的**交互级**断言（点击后不写入、不发送） | 未完成——渲染级已覆盖初始状态（react-dom/server），「点击」路径还需一个能构造缺失 `inputActions` 的真实 DOM 事件运行时（jsdom 或等价 harness） | 见 [ROADMAP §1](../ROADMAP.md) |
 | 深色主题 / 窄屏核验 | **已完成** | 烟测观测项 O1 / O2 |
-| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（2 个基线；无源码时改核对降级路径，用例数不随环境变；seam 清单与产物 require 提取都有冻结清单/空转守卫，来源自证绑 git tag/HEAD；CI 用 --require-source 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
+| DSH 兼容性矩阵（多基线 tag × 宿主 seam，含可选 seam 与已知缺口绊线） | 已实现（4 个基线；无源码时改核对降级路径，用例数不随环境变；seam 清单、基线清单与产物 require 提取都有冻结清单/空转守卫，可选 seam 的恒缺失状态被冻结，来源自证绑 git tag/HEAD；CI 用 --require-source 硬失败） | `scripts/lib/dsh-baselines.mjs` + `scripts/check-dsh-app.mjs` + `test/dsh-compat-matrix.test.mjs`；读者文档 [COMPATIBILITY.md](COMPATIBILITY.md) |
 | 可选能力软探测（缺服务只降级、不进 inject） | 已实现 | `dsh/optional-service.js` + `test/optional-service.test.mjs` |
 | 覆盖率棘轮（地板与测试规模都只许涨，按 Node 主版本分别记录） | 已实现（Node 26 → 73 / 68 / 67，Node 22.19 → 80 / 73 / 75；缺当前主版本的地板即失败；`span` 记的测试文件数/用例数低于记录值即失败——比值型覆盖率挡不住"删测试"） | `scripts/check-coverage.mjs` + `coverage-baseline.json` |
 | 文档测试数字真值校验（文档 == 实测） | 已实现（同一句式全局匹配、句式未命中即失败、句式数量有下限；矩阵每基线用例数按冻结常量校验） | `scripts/check-test-count.mjs` + `scripts/lib/doc-test-count.mjs` |
@@ -129,7 +131,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 474 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
+**本项无法由单元测试替代。** 仓库内 489 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

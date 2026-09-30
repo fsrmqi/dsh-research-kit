@@ -8,10 +8,11 @@
 //
 // 用法：
 //   npm run coverage            # 跑测试 + 覆盖率，低于地板即非零退出（CI 用它）
+//   npm run coverage:ci         # 同上，并顺带核对文档里的测试数字（复用这一遍套件，少跑一遍）
 //   npm run coverage:update     # 重新测量，按「只抬不降」更新当前 Node 主版本的地板
 //   node scripts/check-coverage.mjs --report   # 只跑一次并列出覆盖率最低的若干文件
 //
-// 退出码：0 通过；1 套件没跑绿 / 覆盖率低于地板 / 解析不出报告；2 用法或配置错误
+// 退出码：0 通过；1 套件没跑绿 / 覆盖率低于地板 / 解析不出报告 / 文档数字不符；2 用法或配置错误
 // （未知参数、当前 Node 主版本没有地板、地板字段非法）。
 //
 // 五条刻意的设计，每条都对应一类「看起来在守、其实没守」：
@@ -30,13 +31,14 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseTapSummary } from './lib/tap-summary.mjs'
+import { docTestCountProblems } from './lib/doc-test-count.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE_FILE = join(ROOT, 'coverage-baseline.json')
 const TOLERANCE = 2
 const TEST_GLOBS = ['test/*.test.js', 'test/*.test.mjs']
 const METRICS = ['lines', 'branches', 'functions']
-const KNOWN_FLAGS = new Set(['--update', '--report'])
+const KNOWN_FLAGS = new Set(['--update', '--report', '--with-docs'])
 
 // 与 npm test / check:test-count 同一口径的测试文件清点：用来抓「glob 没匹配到任何文件」。
 const testFiles = readdirSync(join(ROOT, 'test')).filter(name => /\.test\.(js|mjs)$/.test(name))
@@ -54,6 +56,10 @@ for (const arg of args) {
 }
 const update = args.includes('--update')
 const report = args.includes('--report')
+// 复用本次套件汇总去核对文档里的测试数字（= check:test-count 的判定，见 lib/doc-test-count.mjs）。
+const withDocs = args.includes('--with-docs')
+// --report 只做实测播报，不承担门禁；与 --with-docs 混用会让人以为文档也被核对了。
+if (report && withDocs) fail('--report 与 --with-docs 不能同时使用：前者只是播报，后者是门禁', 2)
 
 function runCoverage(thresholds) {
   const flags = []
@@ -290,7 +296,8 @@ if (report) {
   process.stdout.write(`本次实测：${measured} @ ${process.version}　`
     + `当前主版本地板：${entry ? JSON.stringify(entry.enforced) : '（未记录）'}\n`)
   if (run.summary.fail > 0) process.stdout.write(`注意：套件有 ${run.summary.fail} 个失败用例，上述数字不予采信。\n`)
-  const lowest = files.filter(file => file.lines > 0).sort((a, b) => a.lines - b.lines).slice(0, 8)
+  // 不按 `lines > 0` 过滤：0% 的文件恰恰是最该被看到的（此前被这条过滤悄悄排除在报表外）。
+  const lowest = [...files].sort((a, b) => a.lines - b.lines).slice(0, 8)
   process.stdout.write('覆盖率最低的 8 个文件（提醒，不是门禁）：\n')
   for (const file of lowest) process.stdout.write(`  ${String(file.lines).padStart(6)}%  ${file.file}\n`)
   process.exit(0)
@@ -328,8 +335,16 @@ if (spanDrops.length) {
   process.exit(1)
 }
 const { total, headerFound } = parseCoverage(run.output)
-if (!headerFound && run.status !== 0) {
-  fail('既没解析出覆盖率表头、进程又非零退出——无法判断是覆盖率不足还是输出格式变了。请先看上面的输出。')
+// 「解析不到」本身就失败，且与退出码无关：表头一旦改名（Node 换了覆盖率表格式），
+// 下面的「实测 vs 记录值」防线会静默消失，脚本却还能打印「通过 … 本次实测 解析失败」。
+// 覆盖率表只有在套件真跑起来时才会打印，所以这里没有「合法地没有表」这种情形。
+if (!headerFound) {
+  fail(`没能从覆盖率报告里解析出覆盖率表头（进程退出码 ${run.status}）：无法判定本次覆盖率。\n`
+    + '覆盖率表由 node --test --experimental-test-coverage 输出；表头缺失通常意味着 Node 换了表格式，'
+    + '请同步 parseCoverage() 的表头解析，而不是把「解析失败」当作通过。请先看上面的原始输出。')
+}
+if (!total) {
+  fail('覆盖率表里没有 `all files` 汇总行：同样无法与记录值比对，不能当作通过（见 parseCoverage 的解析口径）。')
 }
 if (run.status !== 0) {
   const measured = total ? METRICS.map(metric => `${metric} ${total[metric]}`).join(' / ') : '解析失败'
@@ -338,13 +353,29 @@ if (run.status !== 0) {
     + '（它只抬不降，真下降时会失败并要求你说明理由）。\n')
   process.exit(1)
 }
-const measuredDrops = total ? measuredProblems(entry, total) : []
+const measuredDrops = measuredProblems(entry, total)
 if (measuredDrops.length) {
   process.stderr.write(`\n覆盖率比记录值下降（容差 ${baseline.tolerance ?? TOLERANCE}）：${measuredDrops.join('，')}。\n`
     + '地板还有余量，所以单看地板是绿的——但棘轮的意义是「不低于已到达过的地方」。\n'
     + '请补测试；确实是设计取舍时请显式更新 coverage-baseline.json 的 measured 并在 PR 说明理由。\n')
   process.exit(1)
 }
-const measured = total ? METRICS.map(metric => `${metric} ${total[metric]}`).join(' / ') : '解析失败'
+const measured = METRICS.map(metric => `${metric} ${total[metric]}`).join(' / ')
+if (withDocs) {
+  // 与 `npm run check:test-count` 走**同一个** docTestCountProblems()：这里只是复用刚跑完的套件
+  // 汇总，省掉一遍完整套件（文档数字与实测不符时同样失败并点名文件）。
+  const cache = new Map()
+  const readOnce = file => {
+    if (!cache.has(file)) cache.set(file, readFileSync(resolve(ROOT, file), 'utf8'))
+    return cache.get(file)
+  }
+  const { problems } = docTestCountProblems({ tests: run.summary.tests, testFiles: testFiles.length, readOnce })
+  if (problems.length) {
+    for (const problem of problems) process.stderr.write(`- ${problem}\n`)
+    fail(`\n文档测试数字与本次覆盖率运行不符（${problems.length} 处）：`
+      + `实测 ${run.summary.tests} 项 / ${testFiles.length} 个测试文件。`)
+  }
+  process.stdout.write(`文档测试数字与本次运行一致（${run.summary.tests} 项 / ${testFiles.length} 个测试文件）。\n`)
+}
 process.stdout.write(`覆盖率棘轮通过：>= ${JSON.stringify(entry.enforced)}`
   + `（Node ${nodeMajor}　本次实测 ${measured} @ ${process.version}　套件 ${run.summary.pass ?? '?'}/${run.summary.tests ?? '?'} 通过）。\n`)

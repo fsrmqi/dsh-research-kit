@@ -148,7 +148,7 @@ After installing, refresh the browser and open the "Research Workbench" view, or
 
 ## Composable runtime presets
 
-`presets/` contains startup overlays that replace only the Research Kit configuration row: [`research-direct.patch.yml`](presets/research-direct.patch.yml) disables Agent fallback and uses tighter limits for direct public-database queries; [`research-assisted.patch.yml`](presets/research-assisted.patch.yml) retains the default Agent fallback. Pass either alongside a Memory Center privacy overlay with `dsh --profile web --patch …`; each file restates this plugin's complete `config`, so no field is accidentally inherited from another replacement patch. When the plugin is loaded, its Plugins-page configuration also offers Apply Direct and Apply Assisted: one revision-guarded write applies the same field group without changing settings outside the profile.
+`presets/` contains startup overlays that replace only the Research Kit configuration row: [`research-direct.patch.yml`](presets/research-direct.patch.yml) disables Agent fallback and uses tighter limits for direct public-database queries; [`research-assisted.patch.yml`](presets/research-assisted.patch.yml) retains the default Agent fallback. Pass either alongside a Memory Center privacy overlay with `dsh --profile web --patch …`; each file restates this plugin's complete `config`, so no field is accidentally inherited from another replacement patch. When the plugin is loaded, its Plugins-page configuration section also lists the Direct and Assisted presets, each with its own Apply button: one revision-guarded write applies the same field group without changing settings outside the profile.
 
 **Common pitfall**: `dsh plugin` calls the `pnpm` on your PATH, and its store-layout major version must match the target profile's record — otherwise the command fails with `ERR_PNPM_UNEXPECTED_STORE`. See [manual QA §1](docs/MANUAL-QA.md) for how to compare.
 
@@ -235,7 +235,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 474 regression tests in 66 files, including a host-contract matrix across three DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 489 regression tests in 67 files, including a host-contract matrix across 4 DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -244,7 +244,7 @@ Verified so far: catalog contract validation (589 entries, 589 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (474 / 66 files)
+npm test        # pure-logic, contract and render-level regression tests (489 / 67 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

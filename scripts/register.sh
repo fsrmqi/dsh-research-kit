@@ -25,7 +25,9 @@ EOF
   exit 2
 fi
 
-echo "注册 $PLUGIN_NAME（profile: $PROFILE，来源: 当前目录）"
+# 变量名写成 ${VAR}：bash 3.2（macOS 自带）会把紧跟变量名的多字节字符（全角括号、冒号等）
+# 当作变量名的一部分，`set -u` 下报 unbound variable 并中断整个注册流程。
+echo "注册 ${PLUGIN_NAME}（profile: ${PROFILE}，来源: 当前目录）"
 # 未安装时 remove 会失败——这正是我们要的幂等：忽略它的退出码。
 dsh plugin --profile "$PROFILE" remove "$PLUGIN_NAME" || true
 dsh plugin --profile "$PROFILE" add .

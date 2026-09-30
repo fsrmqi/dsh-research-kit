@@ -134,6 +134,11 @@ export const HOST_SEAMS = [
     ],
   },
   {
+    // 唯一一条可选 seam，且**在全部已声明基线上都不存在**（见 KNOWN_GAPS 的
+    // cross-page-view-navigation）：它的作用不是证明宿主可用，而是「宿主哪天补上
+    // uiConversation.openView 就立刻变绿」的探测。这条恒缺失状态由
+    // test/dsh-compat-matrix.test.mjs 的 ABSENT_OPTIONAL_SEAMS 冻结——没有它，
+    // 一条永远打 ○ 的 seam 会安静地给人「12 条 seam 都在守」的错觉。
     id: 'view-navigation',
     label: '跨页视图导航（Plugins 详情页「打开工作台」；宿主未提供时按钮整块不渲染）',
     file: 'packages/client/ui-conversation/src/client/conversation/assembly.ts',
@@ -176,12 +181,14 @@ export const PLUGIN_CONTRACTS = [
 
 /**
  * 插件注册槽位的源码位置：用于「注册的槽位必须都在 HOST_SEAMS 里被看守」这条断言。
- * 正则捕获组 1 即槽位名。
+ * 正则捕获组 1 即槽位名；**单双引号都认**——显式句式（本表）与目录兜底句式
+ * （dsh-compat.mjs 的 SLOT_SCAN_PATTERNS）口径必须一致，否则显式表里的文件一改引号风格，
+ * 槽位收集就会静默减少（兜底句式不会跑这些文件）。
  */
 export const PLUGIN_SLOT_SOURCES = [
-  { file: 'dsh/slot-registry.js', pattern: /slot:\s*'([^']+)'/g, label: '四个视图/输入框槽位' },
-  { file: 'dsh/standalone-glue.js', pattern: /ctx\.slots\.inject\('([^']+)'/g, label: 'Plugins 页与工具卡槽位' },
-  { file: 'dsh/standalone-glue.js', pattern: /name:\s*'(tool\.call\.toolview|conversation\.chat\.assistant-actions|plugins\.detail\.[a-z]+)'/g, label: '键控槽位注册' },
+  { file: 'dsh/slot-registry.js', pattern: /slot:\s*['"]([^'"]+)['"]/g, label: '四个视图/输入框槽位' },
+  { file: 'dsh/standalone-glue.js', pattern: /ctx\.slots\.inject\(\s*['"]([^'"]+)['"]/g, label: 'Plugins 页与工具卡槽位' },
+  { file: 'dsh/standalone-glue.js', pattern: /name:\s*['"](tool\.call\.toolview|conversation\.chat\.assistant-actions|plugins\.detail\.[a-z]+)['"]/g, label: '键控槽位注册' },
 ]
 
 /** HOST_SEAMS 声明的全部槽位名。 */
@@ -205,12 +212,17 @@ export function declaredSlots() {
 export const KNOWN_GAPS = [
   {
     id: 'cross-page-view-navigation',
-    label: 'Plugins 详情页「打开工作台」按钮在 0.1.7 线上永不渲染',
+    seam: 'view-navigation',
+    label: 'Plugins 详情页「打开工作台」按钮在全部已声明基线上永不渲染',
     evidence:
-      'dsh/standalone-glue.js 适配的是 uiConversation.openView(sessionId, view, focus)，'
-      + '而 0.1.7-rc.1/rc.2 两行的实际导航面是 uiConversation.binding(source: SessionBinding | SessionId) '
-      + '+ ConversationBinding.activate(target: string)（packages/client/ui-conversation/src/client/conversation/assembly.ts），'
-      + '没有 openView。探测恒为 undefined，按钮整块不渲染——不是崩，是静默缺席。',
+      'dsh/standalone-glue.js 调用的是 uiConversation.openView(sessionId, view, focus)，'
+      + '而已声明的四条基线（0.1.7-rc.1/rc.2 与 0.2.0-rc.1/rc.2）的实际导航面都是 '
+      + 'uiConversation.binding(source: SessionBinding | SessionId) + ConversationBinding.activate(target: string)'
+      + '（packages/client/ui-conversation/src/client/conversation/assembly.ts），四条基线上都没有 openView'
+      + '（0.2 的两份 rc 已实测：`git grep "openView(sessionId"` 零命中）。探测恒为 undefined，'
+      + '按钮整块不渲染——不是崩，是静默缺席。因此 view-navigation 这条可选 seam 在四条基线上恒为缺失，'
+      + '它是「宿主何时补上该 API」的探测（见 test/dsh-compat-matrix.test.mjs 的 ABSENT_OPTIONAL_SEAMS）：'
+      + '哪天它变绿，就该修好 glue 层并回来删掉这条缺口。',
     tripwire: { file: 'dsh/standalone-glue.js', token: 'conversationViews.openView(' },
     trackedIn: 'ROADMAP.md',
   },

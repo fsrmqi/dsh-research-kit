@@ -25,6 +25,10 @@
 - 引用核验不再根据关键词重合推断声明被支持或反驳；`claim_supported` 保持 `null`，命中词仅作人工核验线索。声明审计相应归入需全文核验。
 - 证据自动分级仅检查来源线索：有标识符或链接返回 `ungraded`，均缺失返回 `missing`。DOI、PMID、PMCID、NCT、URL、核验状态和措辞不再被当作实证或推论等级的依据。
 - 分级预览与应用跳过 `ungraded` 建议，保留已有分级；历史记录不自动迁移。补充真实模块回归，覆盖否定、中文、缺摘要、来源缺失及人工分级保护。
+- 🧰 **开发回路脚本在 macOS 直接失败**：`fetch-baselines.sh` / `register.sh` / `watch.sh` / `web.sh` 里的 `$DSH_REPO：`、`$old_pid）` 这类「变量名紧跟全角字符」的写法，在 macOS 自带 bash 3.2 下会被解析成变量名的一部分，`set -u` 当场报 unbound variable——`npm run baselines:fetch` 在拉取任何基线 tag 之前就退出 1，`dev:watch` / `dev:web` 则在启动时即死；CI 的 bash 5 一直全绿，所以没人发现。现已一律改写为 `${VAR}`，并由 `test/shell-scripts.test.js` 守住（含对着本地 git 远端真跑一遍 fetch 的回归）。
+- 🚦 **门禁的四处「看起来在守、其实没守」**：① 覆盖率表头解析失败（Node 换了表格式）过去只在进程同时非零退出时才失败——表头一旦改名，「实测 vs 记录值」这道防线会静默消失而脚本仍打印「通过」，现改为无条件 fail-closed，并补齐 `all files` 汇总行缺失的同类判断；② `--report` 的「覆盖率最低 8 个文件」把 0% 文件过滤掉了，最该被看到的正是它们；③ 兼容矩阵唯一一条可选 seam（`view-navigation`）在四条基线上恒为缺失，却没有任何断言——一条永远打 ○ 的 seam 会让人以为它还在看守什么，现由 `ABSENT_OPTIONAL_SEAMS` 冻结，宿主真补上 `openView` 时测试当场点名要改的清单与文档，同时把已知缺口 `cross-page-view-navigation` 的措辞从「0.1.7 线」修正为覆盖全部四条基线；④ `check-dsh-app` 在宿主 `platform.ts` 读不到时报「缺少 PLATFORM_MODULES」，把「源码来源错」误导向「宿主改了表」，现按两种情况分别点明。
+- 📊 **文档里的规模数字再次与实测对齐**：测试数 474 → **489 项 / 67 个测试文件**（新增 shell 脚本守卫、预设与 overlay 同步、可选 seam 冻结、注册 key 契约），基线数 3 → **4**（README 与开发手册此前分别停在 3 / 2）；并为「N 个基线 tag」补了 `check-doc-stats` 门禁（真值取 `BASELINES.length`——此前这三处措辞各不相同，跨文档一致性检查看不见它们）。README 里预设按钮的名称同时修正为界面真实渲染的文案。
+- 🧪 **预设配置补齐契约测试**：预设常量改为导出，插件行配置的注册 key（`<包名>#<patch row id>`）与 `presets/*.patch.yml` 的字段值都加了断言——两条路径此前可以各自漂移而无人察觉；CI 侧 `npm run coverage:ci` 一次跑完覆盖率与文档数字（复用同一遍套件，判定与 `check:test-count` 是同一个函数），本地新增 `npm run verify` 对齐 CI 序列。浏览器回归的假 slots 服务此前只按 `o.id` 登记，键控注册（`plugins.row.config` / `tool.call.toolview`）一律落到 `registered[undefined]`，预设 UI 在真实 DOM 里完全隐形；现已支持键控注册，并补上真实 Chromium 里的点击用例（写入的 ops 与 revision、宿主拒绝时的「预设未保存」、只读禁用、未就绪不渲染）。
 
 ## [0.2.0] - 2026-09-21
 

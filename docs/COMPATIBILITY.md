@@ -40,12 +40,12 @@
 | `desktop-app-origin` | `apps/desktop/README.md` | `dsh-app://app/` 源与 Desktop profile 目录 |
 | `desktop-plugin-api-forward` | `apps/desktop/src/main.ts` | Desktop 主进程的插件 API 转发 |
 | `desktop-request-forward` | `apps/desktop/src/web-document.ts` | 文档层请求转发（插件路由在 App 内可达） |
-| `view-navigation`（**可选**） | `.../ui-conversation/src/client/conversation/assembly.ts` | `uiConversation.openView(sessionId, view, focus?)` |
+| `view-navigation`（**可选**） | `.../ui-conversation/src/client/conversation/assembly.ts` | `uiConversation.openView(sessionId, view, focus?)`（**四条基线上都不存在**，是未来 API 探测，见 §4） |
 
 三条规则：
 
 1. **必需 seam 失败 = 红灯**。它表示宿主移除了插件硬依赖的东西。
-2. **可选 seam（`optional: true`）缺失只报告，不失败**。宿主没提供时插件必须自己降级：`view-navigation` 缺失时「打开工作台」按钮整块不渲染（留一个点了没反应的死按钮比没有更糟）。
+2. **可选 seam（`optional: true`）缺失只报告，不失败**。宿主没提供时插件必须自己降级：`view-navigation` 缺失时「打开工作台」按钮整块不渲染（留一个点了没反应的死按钮比没有更糟）。注意 `view-navigation` 目前在**四条基线上全都缺失**（见 §4）——它是「宿主哪天补上该 API 就立刻变绿」的探测，不是当前可用的能力；它的恒缺失状态由 `test/dsh-compat-matrix.test.mjs` 的 `ABSENT_OPTIONAL_SEAMS` 冻结，宿主真补上时那条断言会失败，逼你修接线并删掉探测与缺口记录。一条永远打 ○ 的 seam 若不被冻结，会让人误以为它还在看守什么。
 3. **可选能力绝不写进 `dsh.client.inject`**。inject 里的名字缺失会让宿主拒绝装载**整个插件**，用户看到的是「插件不见了」；可选能力缺失只该让一个入口消失。宿主半区取用可选服务一律走 [`dsh/optional-service.js`](../dsh/optional-service.js)（`ctx.get` 不存在或抛错都退化为「不可用」）。
 
 ### 3.1 客户端 `inject` 的口径
@@ -58,7 +58,7 @@
 
 | 缺口 | 影响 | 绊线 |
 | --- | --- | --- |
-| `cross-page-view-navigation` | 已发布的 0.1.7 与 `0.2.0-rc.1`/`rc.2` 均没有 `uiConversation.openView(...)`，因此 Plugins 详情页的「打开工作台」按钮不渲染；当前源码提供后，矩阵会以该公开签名报告可用；其他插件能力不受影响 | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
+| `cross-page-view-navigation` | 已发布的四个基线（0.1.7-rc.1/rc.2 与 `0.2.0-rc.1`/`rc.2`）都没有 `uiConversation.openView(...)`，因此 Plugins 详情页的「打开工作台」按钮不渲染；宿主哪天提供该签名，可选 seam 会由 `ABSENT_OPTIONAL_SEAMS` 的断言点名，届时修接线并删掉本条；其他插件能力不受影响 | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
 | `phantom-client-inject` | `dsh.client.inject` 里的 `@deepseek-ai/dsh-client-runtime` 在 0.1.7-rc.1/rc.2 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到；另两个注入项两处都能查到。产物实际只 require `react`/`react-dom`，故不影响装载，只是「我依赖谁」失真 | `package.json` 里仍有该字符串 |
 
 `npm run check:dsh-app` 与 `npm test` 都会把未命中的 inject 名字打出来（警告，不失败）。
@@ -94,7 +94,7 @@ npm test                                                  # 含 test/dsh-compat-
 3. `~/dev/deepseek-harness`（本机常见克隆位置）；
 4. `.tmp/dsh-tags/<基线 id>`（离线时把基线 tag 解包成工作树；也可用 `DSH_TAGS_DIR` 改目录）——本机没网、没克隆时靠这一条，前三处都找不到它才生效。
 
-**离线时矩阵不跳过、也不静默通过**：`test/dsh-compat-matrix.test.mjs` 每个基线恒定 5 个用例——有源码就核对宿主，没源码就核对**降级路径本身**（跳过原因是否可读可操作、`checkHostSeams` / `checkPlatformModules` 对缺失源码是否 fail-closed、CLI 是否把误用与「没源码」都拒绝成退出码 2）。用例数因此不随环境变化（`# tests` 计不计被 skip 的 suite 会让文档数字忽 459 忽 469，`check:test-count` 在干净 clone 上必红）。CI 用 `--require-source` 把「没源码」变成硬失败。除宿主源码外，同文件里还有一组**永远可跑**的断言：基线数据自洽、seam 形状合法、插件注册的每个槽位都在矩阵里被看守、插件自身接线契约、以及上面两条缺口绊线。
+**离线时矩阵不跳过、也不静默通过**：`test/dsh-compat-matrix.test.mjs` 每个基线恒定 5 个用例——有源码就核对宿主，没源码就核对**降级路径本身**（跳过原因是否可读可操作、`checkHostSeams` / `checkPlatformModules` 对缺失源码是否 fail-closed、CLI 是否把误用与「没源码」都拒绝成退出码 2）。用例数因此不随环境变化（`# tests` 计不计被 skip 的 suite 会让文档数字忽 459 忽 469，`check:test-count` 在干净 clone 上必红）。CI 用 `--require-source` 把「没源码」变成硬失败。除宿主源码外，同文件里还有一组**永远可跑**的断言：基线数据自洽、**基线清单冻结**（新增/删除基线必须同步本条清单与文档里的「N 个基线」）、seam 形状合法、插件注册的每个槽位都在矩阵里被看守、插件自身接线契约、**Plugins 行配置注册 key 必须等于 `<包名>#<patch row id>`**、以及上面两条缺口绊线。
 
 ## 6. 升级 DSH 的操作步骤
 

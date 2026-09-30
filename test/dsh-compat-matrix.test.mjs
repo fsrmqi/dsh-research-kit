@@ -57,6 +57,19 @@ const REQUIRED_SEAM_IDS = [
   'tool-call-toolview',
 ]
 const OPTIONAL_SEAM_IDS = ['view-navigation']
+// 可选 seam 的**预期状态**：清单里的这些 seam 在全部已声明基线上都不存在，所以它们是
+// 「宿主哪天补上就变绿」的探测，不是当前可用的能力。有源码时第 2 层逐基线断言 ok === false；
+// 一旦宿主真的提供了该 API，断言会失败并点名要删掉的清单与文档——不让它从「恒 ○」悄悄变绿。
+const ABSENT_OPTIONAL_SEAMS = ['view-navigation']
+// 受支持基线的冻结清单：与上面的 seam / 槽位清单同一手法——把事实源（BASELINES）的清单
+// 在这里再抄一份当绊线。删掉一条基线、或悄悄多加一条，都必须同时改这里与文档里的「N 个基线」
+// （后者由 check-doc-stats 的规则看守）。
+const DECLARED_BASELINE_IDS = [
+  'dsh-v0.1.7-rc.1',
+  'dsh-v0.1.7-rc.2',
+  'dsh-v0.2.0-rc.1',
+  'dsh-v0.2.0-rc.2',
+]
 const DECLARED_SLOT_NAMES = [
   'conversation.chat.assistant-actions',
   'conversation.input.left',
@@ -106,6 +119,29 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
     )
   })
 
+  test('基线清单被冻结，且可选 seam 的「恒缺失」状态挂在已知缺口上', () => {
+    assert.deepEqual(
+      BASELINES.map(baseline => baseline.id).sort(),
+      [...DECLARED_BASELINE_IDS].sort(),
+      '受支持基线变了：必须同步这条冻结清单、KNOWN_GAPS、docs/COMPATIBILITY.md 与文档里的「N 个基线」',
+    )
+    const optional = HOST_SEAMS.filter(seam => seam.optional).map(seam => seam.id)
+    for (const id of ABSENT_OPTIONAL_SEAMS) {
+      assert.ok(optional.includes(id), `${id} 已不是可选 seam：请同步 ABSENT_OPTIONAL_SEAMS 与 KNOWN_GAPS`)
+      assert.ok(
+        KNOWN_GAPS.some(gap => gap.seam === id),
+        `可选 seam ${id} 在全部基线上都缺失，必须在 KNOWN_GAPS 里有 seam: '${id}' 的记录——`
+          + '否则一条永远打 ○ 的 seam 会让人以为它还在看守什么',
+      )
+    }
+    for (const id of optional.filter(seam => !ABSENT_OPTIONAL_SEAMS.includes(seam))) {
+      assert.ok(
+        !KNOWN_GAPS.some(gap => gap.seam === id),
+        `可选 seam ${id} 不在恒缺失清单里，却挂着已知缺口：请二者取一`,
+      )
+    }
+  })
+
   test('插件注册的每个槽位都在矩阵里被看守（新增槽位不许无人看守）', () => {
     assert.deepEqual(unprobedSlots(), [], '上面这些槽位没有对应的 HOST_SEAMS 条目：请补 seam 或从注册处移除')
     const report = slotGuardReport()
@@ -118,6 +154,18 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
   test('插件自身接线契约成立（路由字符串、跨层 key）', () => {
     const failures = checkPluginContracts().filter(result => !result.ok)
     assert.deepEqual(failures.map(f => `${f.id}: ${f.missing.join(' / ')}`), [])
+  })
+
+  test('Plugins 行配置的注册 key 与包名 + patch row id 一致（改名即静默消失）', () => {
+    // 宿主按 `<包名>#<row id>` 定位行配置（ui-plugin-manager 的 rowConfigKey）；key 写错不报错，
+    // 只是 Plugins 页永远没有配置入口——正是「全绿但功能是死的」那一类。
+    const glue = readFileSync(join(ROOT, 'dsh/standalone-glue.js'), 'utf8')
+    const patch = readFileSync(join(ROOT, 'cordis.patch.yml'), 'utf8')
+    const rowId = /^\s*-\s*id:\s*(\S+)/m.exec(patch)?.[1]
+    assert.ok(rowId, 'cordis.patch.yml 里没解析到 row id：宿主按 <包名>#<row id> 定位 plugins.row.config')
+    const key = `${PACKAGE.name}#${rowId}`
+    assert.ok(glue.includes(`key: '${key}'`), `plugins.row.config 的注册 key 必须是 '${key}'，否则配置入口不会出现`)
+    assert.match(glue, /ctx\.slots\.inject\('plugins\.row\.config'/, '必须走 inject 软探测：宿主不声明该槽位时不得让插件装载失败')
   })
 
   test('已知缺口绊线仍在：修好之后必须回来删掉缺口记录与文档', () => {
@@ -195,6 +243,15 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
           const real = checkHostSeams(picked.source)
           if (real.unavailableOptional.length) {
             assert.equal(real.failures.length, 0, '可选 seam 缺失不得计入失败判定')
+          }
+          // 「恒 ○」必须是被断言的状态，而不是被默认接受的结果：宿主一旦补上这个 API，
+          // 这里立刻失败，逼着回去修接线并删掉缺口记录与文档。
+          for (const result of real.results.filter(seam => seam.optional)) {
+            const expected = !ABSENT_OPTIONAL_SEAMS.includes(result.id)
+            assert.equal(result.ok, expected, expected
+              ? `${baseline.id} 上可选 seam ${result.id} 应当存在：宿主提供时对应入口必须能渲染`
+              : `${baseline.id} 上可选 seam ${result.id} 已被宿主提供：请改用真实导航面修好 dsh/standalone-glue.js，`
+                + '并同步删掉 ABSENT_OPTIONAL_SEAMS、KNOWN_GAPS 的 cross-page-view-navigation、docs/COMPATIBILITY.md 与 ROADMAP.md')
           }
           t.diagnostic(`真实基线：可选缺失 ${real.unavailableOptional.length} 条 / 失败 ${real.failures.length} 条`)
         } else {

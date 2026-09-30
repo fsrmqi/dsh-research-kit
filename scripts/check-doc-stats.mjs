@@ -16,6 +16,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadCatalogEntries } from './lib/catalog-entries.mjs'
 import { collectDocTestCounts } from './lib/doc-test-count.mjs'
+import { BASELINES } from './lib/dsh-baselines.mjs'
 import { TOOL_REGISTRY, toolCount } from '../mcp/tool-registry.js'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -92,6 +93,13 @@ const rules = [
   { file: 'docs/PAPER-WORKFLOW.md', re: /其中 (\d+) 条声明了材料依赖/, expect: [paperFileWorkflows], label: '论文类需文件工作流数' },
   { file: 'docs/PAPER-WORKFLOW.md', re: /文献研究类目另有 (\d+) 条工作流、(\d+) 个数据源条目/, expect: [literatureWorkflows, literatureResources], label: '文献研究工作流数 / 数据源数' },
   { file: 'docs/PAPER-WORKFLOW.md', re: /(\d+) 个 `research_\*` 工具/, expect: [toolCount], label: 'MCP 工具数' },
+
+  // 基线数量：真值就是 scripts/lib/dsh-baselines.mjs 的 BASELINES.length（唯一事实源）。
+  // 这条以前没人看守：新增到 4 个基线后，README 还写着「3 个基线 tag」、开发手册写着「2 个基线」，
+  // 而 check 全绿——因为 check-doc-stats 只查跨文档一致、不管真值，而这几处措辞各不相同。
+  { file: 'README.md', re: /(\d+) 个基线 tag/, expect: [BASELINES.length], label: '基线 tag 数' },
+  { file: 'README.en.md', re: /(\d+) DSH baseline tags/, expect: [BASELINES.length], label: 'baseline tag count' },
+  { file: 'docs/DEVELOPMENT.md', re: /已实现（(\d+) 个基线/, expect: [BASELINES.length], label: '基线数' },
 ]
 
 const descChecks = [

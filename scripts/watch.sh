@@ -17,7 +17,7 @@ mkdir -p "$ROOT/.tmp"
 if [[ -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
-    echo "停掉上一次的 watcher（pid $old_pid）"
+    echo "停掉上一次的 watcher（pid ${old_pid}）"
     kill "$old_pid" 2>/dev/null || true
     for _ in {1..50}; do
       kill -0 "$old_pid" 2>/dev/null || break
@@ -39,7 +39,8 @@ node --watch \
   "$ROOT/scripts/build-client.mjs" &
 child=$!
 echo "$child" > "$PID_FILE"
-echo "监听中（pid $child）——改动 src/ dsh/ catalog/ vendor/ 会自动重建 ui/ 产物"
+# ${VAR} 是必需的写法，不是风格：bash 3.2 会把紧跟变量名的多字节字符并入变量名（见 test/shell-scripts.test.js）。
+echo "监听中（pid ${child}）——改动 src/ dsh/ catalog/ vendor/ 会自动重建 ui/ 产物"
 
 cleanup() {
   kill "$child" 2>/dev/null || true

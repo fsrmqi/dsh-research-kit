@@ -20,7 +20,7 @@ ARGS="${DSH_WEB_ARGS:---no-open}"
 if [[ -f "$PID_FILE" ]]; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [[ "$old_pid" =~ ^[0-9]+$ ]] && kill -0 "$old_pid" 2>/dev/null; then
-    echo "停掉上一次由本脚本启动的 dsh web（pid $old_pid）"
+    echo "停掉上一次由本脚本启动的 dsh web（pid ${old_pid}）"
     kill "$old_pid" 2>/dev/null || true
     for _ in {1..50}; do
       kill -0 "$old_pid" 2>/dev/null || break

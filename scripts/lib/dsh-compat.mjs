@@ -143,14 +143,19 @@ export function clientBundleRequires(bundlePath = join(ROOT, 'ui', 'client.js'))
   return [...new Set(specs)].sort()
 }
 
-/** 从宿主 platform.ts 的 PLATFORM_MODULES 数组里取出它能回答的模块名。 */
+/**
+ * 从宿主 platform.ts 里取模块表。
+ * 返回 `{ file, modules }`，或 `{ file, missing }`——「文件读不到」与「文件在但没有 PLATFORM_MODULES」
+ * 是两回事，混成一条文案会让排查方向完全错掉（前者是源码来源/路径问题，后者才是宿主改了表）。
+ */
 export function platformModulesOf(source) {
-  const content = source.read('packages/client/web/src/platform.ts')
-  if (content === undefined) return undefined
+  const file = 'packages/client/web/src/platform.ts'
+  const content = source.read(file)
+  if (content === undefined) return { file, missing: `文件缺失 ${file}`, modules: [] }
   const block = /PLATFORM_MODULES\s*=\s*\[([\s\S]*?)\]/.exec(content)
-  if (!block) return undefined
+  if (!block) return { file, missing: `${file} 里没有 PLATFORM_MODULES 数组（宿主换了模块表写法？）`, modules: [] }
   // 单双引号都认：宿主换引号风格不该让这条检查变成「读不到模块表」。
-  return [...new Set([...block[1].matchAll(/(['"])([^'"]+)\1/g)].map(match => match[2]))]
+  return { file, modules: [...new Set([...block[1].matchAll(/(['"])([^'"]+)\1/g)].map(match => match[2]))] }
 }
 
 /**
@@ -158,8 +163,8 @@ export function platformModulesOf(source) {
  * 回答不了的 require 是**必然的启动崩溃**，不是「某个功能不可用」。
  */
 export function checkPlatformModules(source, bundlePath) {
-  const table = platformModulesOf(source)
-  if (table === undefined) return { id: 'platform-modules', ok: false, missing: ['宿主 platform.ts 缺少 PLATFORM_MODULES'], requires: [] }
+  const { missing: tableProblem, modules: table } = platformModulesOf(source)
+  if (tableProblem) return { id: 'platform-modules', ok: false, missing: [tableProblem], requires: [] }
   // 产物读不到（被删/路径变了）也必须 fail-closed，而不是让 readFileSync 抛 ENOENT 把 CLI 打崩：
   // 「读不到」与「提取为空」都是这条检查失去意义的样子。
   let requires
@@ -209,19 +214,16 @@ const SLOT_SCAN_PATTERNS = [
 ]
 
 function jsFilesUnder(root, entry) {
-  const target = join(root, entry)
-  let stat
+  let entries
   try {
-    stat = readdirSync(target, { withFileTypes: true })
+    entries = readdirSync(join(root, entry), { withFileTypes: true })
   } catch {
-    try {
-      return [entry] // 单文件（例如 index.js）
-    } catch {
-      return []
-    }
+    // 不是目录：按单文件处理（index.js）。文件**不存在**时也会走到这里——读它的时候会如实体现在
+    // unreadable 里，所以这里不需要再判断一次存在性（旧版的内层 try/catch 是永远不会命中的死代码）。
+    return [entry]
   }
   const files = []
-  for (const item of stat) {
+  for (const item of entries) {
     const rel = `${entry}/${item.name}`
     if (item.isDirectory()) files.push(...jsFilesUnder(root, rel))
     else if (item.name.endsWith('.js')) files.push(rel)
@@ -242,13 +244,12 @@ export function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
   const found = new Map()
   const unreadable = []
   const scanned = new Set()
-  const record = (file, content) => {
-    scanned.add(file)
-    for (const pattern of patternsFor(file, sources)) {
-      for (const match of content.matchAll(pattern)) {
-        if (!found.has(match[1])) found.set(match[1], file)
-      }
-    }
+  // 一个文件可能有多条显式句式（standalone-glue.js 就有两条），先按文件归并；原先的
+  // patternsFor() 是对 sources 的线性扫描，逐行调用一次是纯浪费。
+  const explicitPatterns = new Map()
+  for (const entry of sources) {
+    if (!explicitPatterns.has(entry.file)) explicitPatterns.set(entry.file, [])
+    explicitPatterns.get(entry.file).push(entry.pattern)
   }
   for (const entry of sources) {
     let content
@@ -259,8 +260,10 @@ export function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
       continue
     }
     scanned.add(entry.file)
-    for (const match of content.matchAll(entry.pattern)) {
-      if (!found.has(match[1])) found.set(match[1], entry.file)
+    for (const pattern of explicitPatterns.get(entry.file)) {
+      for (const match of content.matchAll(pattern)) {
+        if (!found.has(match[1])) found.set(match[1], entry.file)
+      }
     }
   }
   for (const file of SLOT_SCAN_ROOTS.flatMap(entry => jsFilesUnder(root, entry))) {
@@ -280,10 +283,6 @@ export function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
     }
   }
   return { found, unreadable, scanned: [...scanned].sort() }
-}
-
-function patternsFor(file, sources) {
-  return sources.filter(entry => entry.file === file).map(entry => entry.pattern)
 }
 
 /**

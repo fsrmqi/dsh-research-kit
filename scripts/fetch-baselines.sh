@@ -43,10 +43,12 @@ for tag in $TAGS; do
 done
 
 if [[ ${#refspecs[@]} -eq 0 ]]; then
-  echo "基线 tag 齐全（$DSH_REPO）：$TAGS"
+  echo "基线 tag 齐全（${DSH_REPO}）：${TAGS}"
   exit 0
 fi
 
-echo "拉取基线 tag 到 $DSH_REPO：${refspecs[*]}"
+# 变量名一律写成 ${VAR}：bash 3.2（macOS 自带）会把紧跟其后的多字节字符（例如全角「：」）
+# 当作变量名的一部分，`set -u` 下直接报 unbound variable——本脚本曾在拉取前就死在这里。
+echo "拉取基线 tag 到 ${DSH_REPO}：${refspecs[*]}"
 git -C "$DSH_REPO" -c http.version=HTTP/1.1 fetch --depth "$DEPTH" origin "${refspecs[@]}"
 echo "完成。导出 DSH_REPO=\"$DSH_REPO\" 后运行 npm run check:dsh-app 或 npm test。"

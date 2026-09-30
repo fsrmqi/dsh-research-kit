@@ -39,11 +39,11 @@ jobs:
         env:
           DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
 
-      # 文档里的测试数字必须与实测一致（check-doc-stats 只管跨文档一致，管不了真值）。
-      - run: npm run check:test-count
-
-      # 覆盖率棘轮：低于 coverage-baseline.json 记录的门槛即失败。
-      - run: npm run coverage
+      # 文档里的测试数字必须与实测一致（check-doc-stats 只管跨文档一致，管不了真值）；
+      # 覆盖率棘轮低于 coverage-baseline.json 记录的门槛即失败。
+      # 两件事一并用 --with-docs 做完：它复用这一遍套件的汇总核对文档数字（同一个判定函数），
+      # 不必再为 check:test-count 单独跑一遍套件。单独跑仍然可用：npm run check:test-count。
+      - run: npm run coverage:ci
 
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser

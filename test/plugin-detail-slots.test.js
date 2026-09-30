@@ -21,7 +21,21 @@ const { renderToStaticMarkup } = await import('react-dom/server')
 const {
   ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction,
   researchKitScaleLabel, researchKitDiagnosticsPayload, researchKitOpenWorkbench, RESEARCH_KIT_CONSOLE_VIEW,
+  ResearchKitPresetConfig, RESEARCH_KIT_CONFIG_PRESETS, researchKitPresetOps,
 } = await import('../src/plugin-status.js')
+
+// 预设的字段名必须与宿主 Config 的字段集合完全相同：多一个（宿主忽略）、少一个（「原子覆盖」
+// 变成部分覆盖，旧值残留）都算错。真值直接取自 dsh/config.js 的 schema，不在这里手抄；
+// 同时抽出 schema 默认值——「辅助预设 = 保留默认」与「直连预设 = 收紧」都是可断言的语义。
+const CONFIG_SOURCE = readFileSync(new URL('../dsh/config.js', import.meta.url), 'utf8')
+const CONFIG_FIELDS = [...CONFIG_SOURCE.matchAll(/^\s{2}([A-Za-z0-9_]+):\s*Schema\./gm)].map(match => match[1]).sort()
+const parseSchemaScalar = raw => (raw === 'true' ? true
+  : raw === 'false' ? false
+    : /^['"]/.test(raw) ? raw.slice(1, -1)
+      : Number(raw.replace(/_/g, '')))
+const CONFIG_DEFAULTS = Object.fromEntries([...CONFIG_SOURCE.matchAll(
+  /^\s{2}([A-Za-z0-9_]+):\s*Schema\.\w+\(\)\.default\(([^)]+)\)/gm,
+)].map(match => [match[1], parseSchemaScalar(match[2])]))
 const { loadCatalogEntries } = await import('../scripts/lib/catalog-entries.mjs')
 
 const researchSubject = { kind: 'bundle', pkg: { name: 'dsh-research-kit', version: '0.3.0', installed: true, enabled: true, rows: [] } }
@@ -150,3 +164,92 @@ test('跨页跳转是软探测：不写进客户端 inject 列表，且已在 se
   assert.match(seamData, /id: 'cross-page-view-navigation'/)
   assert.match(seamData, /conversationViews\.openView\(/)
 })
+
+test('预设是原子写入的 ops，字段集合与 dsh/config.js 逐个对齐', () => {
+  assert.deepEqual(researchKitPresetOps('direct'), [
+    { op: 'set', path: ['memoryServer'], value: 'memory-center' },
+    { op: 'set', path: ['memoryTimeoutMs'], value: 5000 },
+    { op: 'set', path: ['databaseTimeoutMs'], value: 10000 },
+    { op: 'set', path: ['databaseRequestsPerMinute'], value: 6 },
+    { op: 'set', path: ['allowAgentFallback'], value: false },
+  ])
+  // 未知 id 必须返回 null：返回空 ops 会让「点了没反应」，而调用方无从察觉。
+  assert.equal(researchKitPresetOps('nope'), null)
+  assert.equal(researchKitPresetOps('direct', []), null)
+  assert.ok(CONFIG_FIELDS.length >= 5, `没能从 dsh/config.js 抽出 Config 字段：${CONFIG_FIELDS.join(' / ')}`)
+  const [direct, assisted] = RESEARCH_KIT_CONFIG_PRESETS
+  for (const preset of RESEARCH_KIT_CONFIG_PRESETS) {
+    assert.deepEqual(
+      Object.keys(preset.values).sort(),
+      CONFIG_FIELDS,
+      `${preset.id} 预设必须重述**完整**的 Research Kit config（少写字段会留下旧值）`,
+    )
+    assert.ok(researchKitPresetOps(preset.id).length === CONFIG_FIELDS.length)
+  }
+  // 两句描述都是可核对的事实，不该只活在文案里：「保留默认」= 逐字段等于宿主 schema 的默认值。
+  assert.deepEqual(assisted.values, CONFIG_DEFAULTS, '「Agent 辅助」的语义是保留宿主默认，必须与 dsh/config.js 的 default 完全一致')
+  // 「收紧」= 超时与速率都低于默认，并关闭 Agent 回退（若哪天调松了，这里会拦住并提醒同步 README 的措辞）。
+  assert.ok(
+    direct.values.memoryTimeoutMs < CONFIG_DEFAULTS.memoryTimeoutMs
+      && direct.values.databaseTimeoutMs < CONFIG_DEFAULTS.databaseTimeoutMs
+      && direct.values.databaseRequestsPerMinute < CONFIG_DEFAULTS.databaseRequestsPerMinute
+      && direct.values.allowAgentFallback === false,
+    `「直连研究」的语义是收紧：超时/速率应低于默认（${JSON.stringify(CONFIG_DEFAULTS)}），且关闭 Agent 回退`,
+  )
+})
+
+test('presets/*.patch.yml 与代码里的预设逐字段一致（同一组值的两条路径不许分叉）', () => {
+  const files = { direct: 'research-direct.patch.yml', assisted: 'research-assisted.patch.yml' }
+  for (const preset of RESEARCH_KIT_CONFIG_PRESETS) {
+    const source = readFileSync(new URL(`../presets/${files[preset.id]}`, import.meta.url), 'utf8')
+    // 按 row id 定位：宿主的一条 patch 会**替换**该行的整个 config（见 DSH docs/architecture.md），
+    // 所以 overlay 里的字段集必须与代码里的预设完全相同，否则两条路径给出的运行配置不一样。
+    assert.match(source, new RegExp(`-\\s*id:\\s*${pluginPkg.name}\\b`), `presets/${files[preset.id]} 必须按 row id 定位本插件`)
+    assert.deepEqual(
+      parseOverlayConfig(source),
+      preset.values,
+      `presets/${files[preset.id]} 与代码里的 ${preset.id} 预设不一致：改一处必须同时改另一处`,
+    )
+  }
+})
+
+test('预设配置区只在表单就绪时渲染；只读或写入被拒时按实情降级', () => {
+  // summary 仅作为「行描述缺失」的兜底文案。
+  assert.equal(
+    renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, { view: 'summary' })),
+    '选择直连研究或 Agent 辅助配置。',
+  )
+  // 表单未就绪（loading / unavailable / 根本没传）：整块不渲染，避免点了写不进去还显示「已应用」。
+  for (const form of [undefined, { state: { status: 'loading' } }, { state: { status: 'unavailable', writable: false } }]) {
+    assert.equal(renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, { view: 'page', form })), '')
+  }
+  const ready = { state: { status: 'ready', writable: true, revision: 7 }, mutate: async () => true }
+  const markup = renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, { view: 'page', form: ready }))
+  assert.match(markup, /直连研究/)
+  assert.match(markup, /Agent 辅助/)
+  assert.match(markup, /预设会原子覆盖全部 Research Kit 运行字段/)
+  assert.doesNotMatch(markup, /disabled/, '可写时按钮不应禁用')
+  // 只读（memory 模式 / 宿主文档不接受写入）时必须禁用，而不是让用户点一个注定失败的按钮。
+  const readonly = renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, {
+    view: 'page',
+    form: { state: { status: 'ready', writable: false, revision: 7 }, mutate: async () => true },
+  }))
+  assert.match(readonly, /disabled/)
+})
+
+/** 从 overlay 的 config 段抽出标量（够用即可：这里只有字符串、数字与布尔）。 */
+function parseOverlayConfig(source) {
+  const block = /config:\s*\n([\s\S]*)$/.exec(source)?.[1]
+  assert.ok(block, 'overlay 缺少 config 段：启动时不会覆盖任何字段')
+  const values = {}
+  for (const line of block.split('\n')) {
+    const match = /^\s+([A-Za-z0-9_]+):\s*(.+?)\s*$/.exec(line)
+    if (!match) continue
+    const raw = match[2]
+    values[match[1]] = raw === 'true' ? true
+      : raw === 'false' ? false
+        : /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw)
+          : raw.replace(/^['"]|['"]$/g, '')
+  }
+  return values
+}

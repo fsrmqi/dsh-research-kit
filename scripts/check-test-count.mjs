@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
-import { TEST_COUNT_PATTERNS, collectDocTestCounts } from './lib/doc-test-count.mjs'
+import { docTestCountProblems } from './lib/doc-test-count.mjs'
 import { parseTapSummary } from './lib/tap-summary.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -42,34 +42,9 @@ const readOnce = file => {
   if (!cache.has(file)) cache.set(file, readFileSync(resolve(ROOT, file), 'utf8'))
   return cache.get(file)
 }
-const { hits, uncovered } = collectDocTestCounts(readOnce)
-
-// 句式清单本身也是被看守对象：删掉一条句式就会让那条数字彻底无人看守（uncovered 为空，
-// 于是「零处引用」也变成通过）。这里钉住数量下限——要减就必须显式改这个数字。
-const MIN_PATTERNS = 9
-if (TEST_COUNT_PATTERNS.length < MIN_PATTERNS) {
-  failures.push(`文档测试数字的句式只有 ${TEST_COUNT_PATTERNS.length} 条（下限 ${MIN_PATTERNS}）：`
-    + '删句式等于让那条数字无人看守；确实不需要看守时请同步改 scripts/check-test-count.mjs 的 MIN_PATTERNS 并在 PR 说明')
-}
-
-// 句式未命中不是「文档恰好换了说法」这么简单：它意味着这条数字**再也没有人看守**。
-// 本脚本存在的理由正是「门禁看住了互相不矛盾，却没看住说的是真的」，所以这里必须失败。
-for (const item of uncovered) {
-  failures.push(`${item.file} 的「${item.label}」句式已失效：正则不再命中任何内容——`
-    + `文档换了措辞就同步 scripts/lib/doc-test-count.mjs 的 TEST_COUNT_PATTERNS，`
-    + `确实是这条数字不需要看守了就把该句式删掉（否则它会一直静默失效）`)
-}
-
-for (const hit of hits) {
-  // expected 存在时代表这条句式的真值不是套件总数（例如「每个基线恒定 N 个用例」是矩阵自己的常量）。
-  const expected = hit.expected ?? tests
-  if (hit.testCount !== expected) {
-    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.testCount} 项，应为 ${expected} 项（${hit.label}）`)
-  }
-  if (hit.fileCount !== undefined && hit.fileCount !== testFiles.length) {
-    failures.push(`${hit.file}:${hit.line} 的「${hit.raw}」写作 ${hit.fileCount} 个测试文件，实测 ${testFiles.length} 个（${hit.label}）`)
-  }
-}
+// 判定逻辑在 lib 里只有一份：`npm run coverage:ci` 复用覆盖率那一遍套件时走的是同一个函数。
+const { problems, hits } = docTestCountProblems({ tests, testFiles: testFiles.length, readOnce })
+failures.push(...problems)
 
 if (failures.length) {
   for (const failure of failures) process.stderr.write(`- ${failure}\n`)

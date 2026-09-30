@@ -47,8 +47,8 @@ jobs:
         env:
           DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
 
-      - run: npm run check:test-count
-      - run: npm run coverage
+      # 文档测试数字 + 覆盖率棘轮一并核对：--with-docs 复用这一遍套件（见 lib/doc-test-count.mjs）。
+      - run: npm run coverage:ci
 
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser
