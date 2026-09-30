@@ -1,9 +1,10 @@
 import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
 import { currentExecutionSignal } from './execution-context.js'
+import { createTtlCache } from './ttl-cache.js'
 
-const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
+const CACHE = createTtlCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX })
 const RATE_LIMIT_WINDOW_MS = 60_000
 const inFlightQueries = new Map()
 const rateBuckets = new Map()
@@ -83,6 +84,11 @@ function makeSource(id, title, url, meta = '', summary = '') {
   return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) }
 }
 
+// 按数据源计的滑动窗口（阈值由调用方按源传入）。桶数上限 100，超出直接整体清空。
+//
+// 注意：`dsh/database-query.js` 里也有一个 `rateLimitExceeded`，那是**另一套策略**
+// （按客户端 IP 计数、有 pruneRateBuckets/evictOldestRateBucket 辅助、桶数上限 1000、
+// 固定阈值 12/min），不是这份的重复实现。限流主体不同，不要为了「去重」把它们合成一个。
 function rateLimitExceeded(sourceId, rateLimit) {
   const now = Date.now()
   const bucket = (rateBuckets.get(sourceId) || []).filter(at => now - at < RATE_LIMIT_WINDOW_MS)
@@ -193,7 +199,7 @@ async function querySource(sourceId, query, limit = 5) {
   if (!normalizedQuery) throw new Error('查询词不能为空。')
   const normalizedLimit = Math.max(1, Math.min(Number(limit) || 5, 10))
   const key = cacheKey(sourceId, normalizedQuery, normalizedLimit)
-  const cached = cacheGet(key)
+  const cached = CACHE.get(key)
   if (cached) return { ...cached, cached: true }
 
   const callerSignal = currentExecutionSignal()
@@ -222,7 +228,7 @@ async function querySource(sourceId, query, limit = 5) {
       source_name: sourceId,
       availability: AVAILABILITY_MAP[sourceId] || 'unknown',
     }
-    cacheSet(key, result)
+    CACHE.set(key, result)
     return result
   })()
 

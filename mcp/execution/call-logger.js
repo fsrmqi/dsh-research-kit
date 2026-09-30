@@ -2,12 +2,11 @@
 import { appendFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises'
 import { setImmediate as waitForBatch } from 'node:timers/promises'
 import { existsSync } from 'node:fs'
-import path from 'node:path'
-import { dataPath } from '../paths.js'
+import { CALL_LOG_FILE, dataPath } from '../paths.js'
 import { artifactKindOf } from '../tool-registry.js'
 
 const LOG_DIR = dataPath('logs')
-const LOG_FILE = path.join(LOG_DIR, 'calls.jsonl')
+const LOG_FILE = CALL_LOG_FILE
 const ROTATED_FILE = `${LOG_FILE}.1`
 const MAX_LOG_SIZE = 5 * 1024 * 1024
 

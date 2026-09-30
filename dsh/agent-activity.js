@@ -2,14 +2,14 @@
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
-import { dataPath } from '../mcp/paths.js'
+import { CALL_LOG_FILE, dataPath } from '../mcp/paths.js'
 import { recordApproval } from '../mcp/state/checkpoint-manager.js'
 import { buildRunOverview } from '../mcp/state/run-overview.js'
 import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
 
-const LOG_FILE = dataPath('logs', 'calls.jsonl')
+const LOG_FILE = CALL_LOG_FILE
 const CHECKPOINT_DIR = dataPath('checkpoints')
 const MAX_TAIL_BYTES = 512 * 1024
 const MAX_CHECKPOINT_FILES = 20
@@ -18,6 +18,9 @@ const checkpointSnapshots = new Map()
 
 const readBody = req => readJsonBody(req, { maxChars: 32 * 1024, destroyOnTooLarge: true })
 
+// 刻意不复用写入方（mcp/execution/call-logger.js）的 readCallLogs：那条要覆盖轮转文件
+// 并按 tool 过滤，这条只读当前文件尾部（有界内存）、按 size/mtime 缓存快照、since 用
+// 闭区间以避免同毫秒漏项。两边共享的是「文件在哪」（mcp/paths.js 的 CALL_LOG_FILE）。
 async function readCallLogs({ limit = 50, since, runId } = {}) {
   if (!existsSync(LOG_FILE)) return []
   let handle

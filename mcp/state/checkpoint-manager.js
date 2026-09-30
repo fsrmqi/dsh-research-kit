@@ -1,8 +1,9 @@
 
-import { mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
+import { acquireFileLock } from '../execution/file-lock.js'
 
 const CHECKPOINT_DIR = dataPath('checkpoints')
 // 与 Material Passport 的 run_id 契约一致：允许点号，拒绝路径分隔符。
@@ -24,34 +25,13 @@ function lockFile(runId) {
   return path.join(CHECKPOINT_DIR, `${runId}.lock`)
 }
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
-
 async function acquireLock(runId) {
-  const file = lockFile(runId)
-  await mkdir(CHECKPOINT_DIR, { recursive: true })
-  const startedAt = Date.now()
-  for (let attempt = 0; Date.now() - startedAt < LOCK_TIMEOUT_MS; attempt++) {
-    try {
-      return await open(file, 'wx')
-    } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
-      try {
-        const info = await stat(file)
-        // 空锁文件（进程在 open 和 writeFile 之间崩溃）用较短的宽限期，
-    // 有内容的锁用完整的 stale timeout。
-        const isStale = info.size === 0
-          ? Date.now() - info.mtimeMs > 2_000
-          : Date.now() - info.mtimeMs > LOCK_STALE_MS
-        // 用 rename 接管陈旧锁：只有 rename 成功的进程成为接管者，
-        // 避免 stat→unlink→open 之间另一个等待者插入并拿到新锁。
-        if (isStale) {
-          await rename(file, `${file}.stale-${process.pid}-${Date.now().toString(36)}`)
-        }
-      } catch {}
-      await sleep(Math.min(20 + attempt * 10, 80))
-    }
-  }
-  throw new Error('检查点状态正被其他进程写入，请稍后重试。')
+  return acquireFileLock(lockFile(runId), {
+    timeoutMs: LOCK_TIMEOUT_MS,
+    staleMs: LOCK_STALE_MS,
+    emptyGraceMs: 2_000,
+    busyMessage: '检查点状态正被其他进程写入，请稍后重试。',
+  })
 }
 
 async function withRunLock(runId, run) {

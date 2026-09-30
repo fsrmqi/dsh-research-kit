@@ -36,6 +36,8 @@
 
 - 🧱 **路由层 HTTP 样板收敛（10 份 `reply` + 6 份读体）**：`dsh/` 下 10 个路由模块各抄一份 JSON 应答，其中只有 3 份带「响应已销毁/已结束就不再写」守卫、4 份设 `cache-control: no-store`；6 份读体的上限口径各写一遍（16 384 字符 / 32 KB 字符 / 4 000 字符 / 24 000 字符 / 64 KB **字节** / 1 MiB 字符），报错文案、空体语义（坏体按 `{}` 降级还是报 `invalid_json`）、超限是否断连也各不相同。现抽出 `dsh/lib/http-json.js`：`jsonReply`（统一守卫 + charset + no-store，CORS 来源走参数，默认头可被 `headers` 覆盖）与 `readJsonBody`（上限必填、字节/字符口径显式选择、文案与空体语义由调用方传入）。各路由改成一行绑定，**调用点零改动**。行为变化只有明面两类：7 个此前无守卫的路由补上守卫、4 个此前无 `no-store`/charset 的 JSON 路由补上（两者都是「别对已结束的响应再写、别把动态结果交给缓存」）。`memory-search.js` 的读体刻意保留本地实现并注明原因——它按字节累计、超限抛 `request_too_large` 让 handler 回 413、解析失败按空对象降级，是与共享契约不同的另一份契约。受控树同时补登 5 个此前漏登的 `dsh/` 模块（`config.js`、`static-artifact-route.js`、`claim-review.js`、`claim-agent-review.js`、`evidence-source-check.js`）。
 
+- ♻️ **同概念的多份实现收敛（调用轨迹路径 / 进程内缓存 / 文件锁）**：① `calls.jsonl` 的路径此前在写入方（`mcp/execution/call-logger.js`）与读取方（`dsh/agent-activity.js`）各写一遍字面量，现下沉到 `mcp/paths.js` 的 `CALL_LOG_FILE`；两侧的**读取策略**仍然不同（写入方要覆盖轮转文件并按工具过滤，读取方按文件尾部有界读取 + 快照缓存 + 闭区间 `since`），共享的是「轨迹文件在哪」。② `database-query` / `citation-verifier` / `source-querier` 三份同形状 TTL 缓存收进 `mcp/execution/ttl-cache.js`：只有 `database-query` 命中提升（真 LRU），差异由 `lruOnHit` 显式表达，另两处保持插入顺序淘汰。③ `checkpoint-manager` / `claim-ledger` / `evidence-store` 三份文件锁收进 `mcp/execution/file-lock.js`，统一到 `checkpoint-manager` 那套 **rename 接管**——另两处原本是 `unlink`，`stat→unlink→open` 之间的窗口足够让另一个等待者插进来拿到新锁；并在接管后立刻删除改名产物，此前 `.stale-*` 会一直堆在数据目录里。`claim-ledger` 由「50 次退避尝试（≈3.8s）」改为等价的 4s 时间预算；超时、陈旧阈值、空锁宽限期与报错文案仍按调用方原值传入（`evidence-store` 2s/5s、`checkpoint-manager` 5s/10s、空锁 2s 宽限）。三处限流的 `rateLimitExceeded` **刻意不合并**（按客户端 IP vs 按数据源，属于两套策略）并加了交叉注释。新增 `test/file-lock.test.js` 与 `test/ttl-cache.test.js` 直接钉住锁的崩溃恢复语义与淘汰顺序（套件 491 → 501 项）。
+
 ## [0.2.0] - 2026-09-21
 
 ### 行为变化

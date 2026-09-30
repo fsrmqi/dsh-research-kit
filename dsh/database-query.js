@@ -1,6 +1,7 @@
 export const DATABASE_QUERY_PATH = '/dsh-research-kit/query'
 import { readConfigValue } from './config.js'
 import { jsonReply as reply } from './lib/http-json.js'
+import { createTtlCache } from '../mcp/execution/ttl-cache.js'
 
 const MAX_QUERY_LENGTH = 300
 const MAX_LIMIT = 10
@@ -15,31 +16,14 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 12
 const MAX_RATE_BUCKETS = 1000
 
-const queryCache = new Map()
+// 命中提升到末尾（真 LRU）：查询分布长尾明显，FIFO 淘汰会把刚用过的结果挤出去。
+const queryCache = createTtlCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX_ENTRIES, lruOnHit: true })
 const inFlightQueries = new Map()
 const rateBuckets = new Map()
 
 function normalizeQueryKey(query) { return String(query || '').trim() }
 function normalizeLimit(limit) { return Math.max(1, Math.min(Number(limit) || 5, MAX_LIMIT)) }
 function cacheKey(databaseId, query, limit) { return `${databaseId}::${normalizeQueryKey(query)}::${normalizeLimit(limit)}` }
-
-function cacheGet(key) {
-  const hit = queryCache.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > CACHE_TTL_MS) { queryCache.delete(key); return null }
-  // 命中提升到末尾，淘汰策略才是真正的 LRU 而非插入顺序 FIFO。
-  queryCache.delete(key)
-  queryCache.set(key, hit)
-  return hit.result
-}
-
-function cacheSet(key, result) {
-  queryCache.set(key, { at: Date.now(), result })
-  while (queryCache.size > CACHE_MAX_ENTRIES) {
-    const oldest = queryCache.keys().next().value
-    queryCache.delete(oldest)
-  }
-}
 
 function pruneRateBuckets(now) {
   for (const [key, times] of rateBuckets) {
@@ -61,6 +45,10 @@ function evictOldestRateBucket() {
 
 // 每 IP 滑动计数：窗口内达到上限时拒绝本次查询。桶数也有硬上限，
 // 防止短时间的大量新客户端标识把进程内 Map 撑大。
+//
+// 注意：`mcp/execution/source-querier.js` 里也有一个 `rateLimitExceeded`，那是**另一套策略**
+// （按数据源而不是按客户端 IP 计数、窗口过滤内联、桶数上限 100、没有 prune/淘汰辅助函数），
+// 不是这份的重复实现。限流主体不同，不要为了「去重」把它们合成一个。
 function rateLimitExceeded(clientKey, maxRequests = RATE_LIMIT_MAX_REQUESTS) {
   const now = Date.now()
   pruneRateBuckets(now)
@@ -231,7 +219,7 @@ export function databaseQueryRoute({ web, databases, logger, config }) {
       // 先查缓存：命中则不计入速率窗口（缓存读取不冲击公开 API）。关闭回退后，
       // 不能继续返回旧配置下缓存的 Agent 回退结果；直查结果则与该策略无关，可复用。
       const key = cacheKey(database.id, query, limit)
-      const cached = cacheGet(key)
+      const cached = queryCache.get(key)
       if (cached && (allowAgentFallback || cached.mode !== 'agent-fallback')) {
         return reply(res, 200, { ...cached, cached: true })
       }
@@ -250,7 +238,7 @@ export function databaseQueryRoute({ web, databases, logger, config }) {
             try {
               const result = await runDatabaseQuery({ web, database, query, limit, signal: controller.signal, allowAgentFallback })
               const payload = { database: { id: database.id, name: database.name }, ...result }
-              cacheSet(key, payload)
+              queryCache.set(key, payload)
               return payload
             } catch (error) {
               if (controller.signal.aborted) throw new Error('查询超时，请缩短检索词或稍后重试。')

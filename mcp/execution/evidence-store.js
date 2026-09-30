@@ -1,8 +1,9 @@
 
-import { appendFile, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
+import { acquireFileLock } from './file-lock.js'
 import { workspaceIdForProject } from '../../src/lib/research-workspaces.js'
 
 const BASE_DIR = dataPath('evidence')
@@ -36,25 +37,12 @@ function projectDir(project) {
 function entriesFile(project) { return path.join(projectDir(project), 'entries.jsonl') }
 function lockFile(project) { return path.join(projectDir(project), '.lock') }
 
-function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)) }
-
 async function acquireLock(project) {
-  const file = lockFile(project)
-  await mkdir(path.dirname(file), { recursive: true })
-  const startedAt = Date.now()
-  for (let attempt = 0; Date.now() - startedAt < LOCK_TIMEOUT_MS; attempt++) {
-    try {
-      return await open(file, 'wx')
-    } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
-      try {
-        const info = await stat(file)
-        if (Date.now() - info.mtimeMs > LOCK_STALE_MS) await unlink(file)
-      } catch {}
-      await sleep(Math.min(20 + attempt * 10, 80))
-    }
-  }
-  throw new Error('证据存储正被其他进程写入，请稍后重试。')
+  return acquireFileLock(lockFile(project), {
+    timeoutMs: LOCK_TIMEOUT_MS,
+    staleMs: LOCK_STALE_MS,
+    busyMessage: '证据存储正被其他进程写入，请稍后重试。',
+  })
 }
 
 async function withProjectLock(project, run) {

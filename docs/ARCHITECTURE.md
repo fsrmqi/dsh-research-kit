@@ -216,7 +216,7 @@ dsh-research-kit/
 │       ├── dsh-compat.mjs           # seam 核对的纯逻辑：源码解析、契约检查、平台模块表、inject 审计、源码来源自证
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 491 项测试（67 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 501 项测试（69 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）

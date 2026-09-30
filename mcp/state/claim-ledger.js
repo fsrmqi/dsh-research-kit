@@ -1,10 +1,11 @@
 // 科研 Claim 台账：保存研究者显式登记的短声明、认识论状态、证据 ID 与短引用锚点。
 // Agent 的审阅建议独立保存，不覆盖人工状态；不保存论文全文或模型原始回答。
-import { mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
 import { readProjectEntries, safeProjectName } from '../execution/evidence-store.js'
+import { acquireFileLock } from '../execution/file-lock.js'
 
 const CLAIMS_DIR = dataPath('claims')
 const CLAIM_STATES = new Set(['extracted', 'inferred', 'ambiguous', 'verified', 'rejected'])
@@ -53,20 +54,13 @@ function normalizeClaim(input, existing = {}) {
     source_ref: cleanSourceRef(input.source_ref ?? existing.source_ref) }
 }
 
+// 统一到共享实现：原先是最多 50 次退避尝试（约 3.8s），这里用同一时间预算表达。
 async function acquireLock(project) {
-  const file = lockFor(project)
-  await mkdir(path.dirname(file), { recursive: true })
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try { return await open(file, 'wx') } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
-      try {
-        const info = await stat(file)
-        if (Date.now() - info.mtimeMs > 5_000) await unlink(file)
-      } catch {}
-      await new Promise(resolve => setTimeout(resolve, Math.min(20 + attempt * 10, 80)))
-    }
-  }
-  throw new Error('Claim 台账正被其他进程写入，请稍后重试。')
+  return acquireFileLock(lockFor(project), {
+    timeoutMs: 4_000,
+    staleMs: 5_000,
+    busyMessage: 'Claim 台账正被其他进程写入，请稍后重试。',
+  })
 }
 
 async function withLock(project, run) {

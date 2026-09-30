@@ -1,20 +1,11 @@
 import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
+import { createTtlCache } from './ttl-cache.js'
 
-const CACHE = new Map()
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
+const CACHE = createTtlCache({ ttlMs: CACHE_TTL_MS, maxEntries: CACHE_MAX })
 
 function cacheKey(type, id) { return `${type}:${id.toLowerCase().trim()}` }
-function cacheGet(key) {
-  const hit = CACHE.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > CACHE_TTL_MS) { CACHE.delete(key); return null }
-  return hit.data
-}
-function cacheSet(key, data) {
-  CACHE.set(key, { at: Date.now(), data })
-  while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value)
-}
 
 function detectIdentifierType(raw) {
   const value = String(raw || '').trim()
@@ -119,14 +110,14 @@ async function verifyCitation(identifier, claim) {
   if (!type) return { exists: false, reason: `无法识别标识符类型："${identifier}"。支持 DOI、PMID、PMCID、arXiv ID、NCT。` }
 
   const key = cacheKey(type, identifier)
-  let metadata = cacheGet(key)
+  let metadata = CACHE.get(key)
   if (!metadata) {
     if (type === 'doi') metadata = await fetchCrossref(identifier)
     else if (type === 'pmid') metadata = await fetchPubmed(identifier)
     else if (type === 'arxiv') metadata = await fetchArxiv(identifier)
     else if (type === 'pmcid') throw new Error('PMCID 查询暂未实现，请使用 PMID 或 DOI。')
     else if (type === 'nct') throw new Error('NCT 查询暂未实现。')
-    cacheSet(key, metadata)
+    CACHE.set(key, metadata)
   }
 
   const result = { exists: true, metadata }
