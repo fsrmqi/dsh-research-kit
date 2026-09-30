@@ -11,7 +11,7 @@ import { BASELINES, HOST_SEAMS, PLUGIN_CONTRACTS, PLUGIN_SLOT_SOURCES, declaredS
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 /** 本地已解包基线目录（`.tmp/dsh-tags/<baseline id>`），无网络时的退路。 */
-export function stagedDirOf(baseline, env = process.env) {
+function stagedDirOf(baseline, env = process.env) {
   const dir = join(env.DSH_TAGS_DIR || join(ROOT, '.tmp', 'dsh-tags'), baseline.id)
   return existsSync(dir) ? dir : undefined
 }
@@ -109,7 +109,7 @@ export function sourceProvenance(source, baseline) {
 }
 
 /** 单条 seam 的检查结果。 */
-export function checkSeam(source, seam) {
+function checkSeam(source, seam) {
   const content = source.read(seam.file)
   if (content === undefined) {
     return { id: seam.id, label: seam.label, ok: false, optional: Boolean(seam.optional), missing: [`文件缺失 ${seam.file}`] }
@@ -148,7 +148,7 @@ export function clientBundleRequires(bundlePath = join(ROOT, 'ui', 'client.js'))
  * 返回 `{ file, modules }`，或 `{ file, missing }`——「文件读不到」与「文件在但没有 PLATFORM_MODULES」
  * 是两回事，混成一条文案会让排查方向完全错掉（前者是源码来源/路径问题，后者才是宿主改了表）。
  */
-export function platformModulesOf(source) {
+function platformModulesOf(source) {
   const file = 'packages/client/web/src/platform.ts'
   const content = source.read(file)
   if (content === undefined) return { file, missing: `文件缺失 ${file}`, modules: [] }
@@ -240,7 +240,7 @@ function jsFilesUnder(root, entry) {
  * - 除了 PLUGIN_SLOT_SOURCES 的显式句式，还会扫描 dsh/ 与 src/ 下**所有** .js，
  *   避免「新增一个文件注册槽位，而它不在硬编码文件表里」这种漏检。
  */
-export function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
+function collectPluginSlots(root = ROOT, sources = PLUGIN_SLOT_SOURCES) {
   const found = new Map()
   const unreadable = []
   const scanned = new Set()
@@ -325,7 +325,7 @@ export function baselineDataProblems(baselines = BASELINES) {
  * 因此核对口径就是宿主仓库自带的 `docs/dependency-catalog.json`（dsh 自身安装出来的
  * 依赖清单）。名字对不上的注入项不会让插件崩，但会让「我依赖谁」这句话失真。
  */
-export function hostDependencyNames(source) {
+function hostDependencyNames(source) {
   const content = source.read('docs/dependency-catalog.json')
   if (content === undefined) return undefined
   try {

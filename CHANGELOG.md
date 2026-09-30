@@ -38,6 +38,8 @@
 
 - ♻️ **同概念的多份实现收敛（调用轨迹路径 / 进程内缓存 / 文件锁）**：① `calls.jsonl` 的路径此前在写入方（`mcp/execution/call-logger.js`）与读取方（`dsh/agent-activity.js`）各写一遍字面量，现下沉到 `mcp/paths.js` 的 `CALL_LOG_FILE`；两侧的**读取策略**仍然不同（写入方要覆盖轮转文件并按工具过滤，读取方按文件尾部有界读取 + 快照缓存 + 闭区间 `since`），共享的是「轨迹文件在哪」。② `database-query` / `citation-verifier` / `source-querier` 三份同形状 TTL 缓存收进 `mcp/execution/ttl-cache.js`：只有 `database-query` 命中提升（真 LRU），差异由 `lruOnHit` 显式表达，另两处保持插入顺序淘汰。③ `checkpoint-manager` / `claim-ledger` / `evidence-store` 三份文件锁收进 `mcp/execution/file-lock.js`，统一到 `checkpoint-manager` 那套 **rename 接管**——另两处原本是 `unlink`，`stat→unlink→open` 之间的窗口足够让另一个等待者插进来拿到新锁；并在接管后立刻删除改名产物，此前 `.stale-*` 会一直堆在数据目录里。`claim-ledger` 由「50 次退避尝试（≈3.8s）」改为等价的 4s 时间预算；超时、陈旧阈值、空锁宽限期与报错文案仍按调用方原值传入（`evidence-store` 2s/5s、`checkpoint-manager` 5s/10s、空锁 2s 宽限）。三处限流的 `rateLimitExceeded` **刻意不合并**（按客户端 IP vs 按数据源，属于两套策略）并加了交叉注释。新增 `test/file-lock.test.js` 与 `test/ttl-cache.test.js` 直接钉住锁的崩溃恢复语义与淘汰顺序（套件 491 → 501 项）。
 
+- 🔒 **摘掉 9 个「只在本文件里用」的 `export`**：Node 半侧有 9 个符号带 `export` 关键字却全仓无人导入——`dsh/semantic-enhance.js` 的 `streamEnhanceWithCurrentSessionModel`（非流式路由在同文件内直接调用）、`mcp/paths.js` 的 `DATA_HOME`（同文件内供 `dataPath`/`CALL_LOG_FILE` 使用）、`scripts/lib/doc-test-count.mjs` 的 `TEST_COUNT_PATTERNS` / `MIN_PATTERNS`、`scripts/lib/dsh-compat.mjs` 的 `stagedDirOf` / `checkSeam` / `platformModulesOf` / `collectPluginSlots` / `hostDependencyNames`（都只被同文件的导出函数调用）。多余的 `export` 是假对外契约：它让「这个符号能不能改」看起来需要先查外部用法，而实际没有任何消费者。**有意保留**三个真契约：`index.js` 的 `inject`（DSH 宿主按名调用）、`dsh/standalone-glue.js` 的 `researchKitApply`（构建产物入口）、`mcp/tool-registry.js` 的 `ARTIFACT_KIND_LABELS`（在客户端构建白名单内，会进 `ui/client.js`）。判定方式：脚本解析全仓 `import` / `export … from` / 动态 `import()`，并先确认全仓没有 `import * as` 命名空间用法与桶式 `export *`（否则会漏判）。
+
 ## [0.2.0] - 2026-09-21
 
 ### 行为变化

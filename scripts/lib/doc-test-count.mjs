@@ -18,7 +18,7 @@
  * `docs/MANUAL-QA.md`（讲人工验收步骤，没有测试计数）。新增读者文档写进测试数字时，
  * 请同时在这里加一条句式——否则那个数字就是没人看守的。
  */
-export const TEST_COUNT_PATTERNS = [
+const TEST_COUNT_PATTERNS = [
   { file: 'README.md', re: /(\d+) 项回归测试（(\d+) 个测试文件/, label: 'README 中文门面' },
   { file: 'README.md', re: /(\d+) 项 \/ (\d+) 个测试文件/, label: 'README 中文正文' },
   { file: 'README.en.md', re: /(\d+) regression tests in (\d+) files/, label: 'README 英文门面' },
@@ -86,7 +86,7 @@ export function collectDocTestCounts(readOnce) {
 /**
  * 句式清单数量下限：删句式 = 让那条数字无人看守（新增句式时同步抬高）。
  */
-export const MIN_PATTERNS = 9
+const MIN_PATTERNS = 9
 
 /**
  * 「文档测试数字是否说了真话」的完整判定：句式完整性 + 逐处与实测比对。

@@ -167,7 +167,7 @@ function requestText({ draft, extra, method, lang, researchContext }) {
 // 统一的流式调用：逐段回调 onDelta（诊断行 + 提示词正文都会经过这里），
 // 最终 resolve { diagnosis, prompt, model }。enhanceWithCurrentSessionModel 退化为它的非流式包装。
 // onEvent 回调（可选）汇报过程节点：start / first-token / diagnosis / prompt / finish。
-export async function streamEnhanceWithCurrentSessionModel({ llm, route, sessionId, draft, extra, lang, method, strength, hasContext = false, diagnose = false, researchContext = '', signal, onDelta, onEvent }) {
+async function streamEnhanceWithCurrentSessionModel({ llm, route, sessionId, draft, extra, lang, method, strength, hasContext = false, diagnose = false, researchContext = '', signal, onDelta, onEvent }) {
   if (!route?.provider || !route?.model) throw new Error('当前会话尚未建立模型路由，请先正常发送一次消息。')
   const source = String(draft || '').trim()
   if (!source) throw new Error('消息框为空，无法进行语义增强。')
