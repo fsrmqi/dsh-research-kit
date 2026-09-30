@@ -2,6 +2,8 @@
 
 DSH Desktop 复用 Web 客户端，但页面位于 `dsh-app://app/`；原浏览器页面的 `localStorage` 和 IndexedDB 不会自动出现在 App。Desktop 插件安装、启用状态也属于独立的 `$DSH_HOME/profiles/desktop`。不要把 Web 中显示的证据或插件状态视为 App 已具备。
 
+**为什么插件在 App 里能跑**（对照 `apps/desktop` 源码核过，`check:dsh-app` 会看守这三条）：App 是 Electron 外壳，加载的是**同一份** `ui/client.js`；`dsh-app` 被注册成 standard + secure + supportFetchAPI 的自定义协议，Electron 再把应用请求转发给本机 Web Host（`apps/desktop/src/web-document.ts`），所以插件用相对路由注册的那些接口在 App 内同样可达，剪贴板与 `crypto.subtle` 也可用。代价是：客户端不得假定页面源是 http(s)（`test/build-client.test.js` 看守这条），插件产物的响应在 App 里被标 `no-store`，改完产物必须刷新 App 的插件页/页面而不是重启 `dsh web`（默认端口也不同：Web 3080、App 19387）。
+
 ## 操作
 
 1. 在仍能访问旧数据的 DSH Web 会话中安装本版 Research Kit，打开「科研工作台」→「迁移到 App」→「导出本端完整迁移包」。迁移包包含全部课题的证据、论断、关联、账本、课题设置、知识节点／关系、灵感资产和最近研究运行，不受当前筛选条件限制。导出前会强制拉取文件侧证据；文件侧不可读取时拒绝生成可能不完整的迁移包。备份不会为了导出而反向回写文件侧，避免既有同源判定阻断备份。

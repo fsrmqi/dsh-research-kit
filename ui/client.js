@@ -6820,7 +6820,9 @@ window.__ModuleLoader__.load({
         setRecordedQuery(false)
         setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
         try {
-          const url = new URL(QUERY_PATH, window.location.origin)
+          // 以 location.href 而非 location.origin 作为基准：同一份客户端在 Web（http://…:3080）与
+          // Desktop App（dsh-app://app/）下都要能解析出本插件的相对路由，origin 是「宿主形态」相关的。
+          const url = new URL(QUERY_PATH, window.location.href)
           url.searchParams.set('database_id', database.id)
           url.searchParams.set('q', text)
           url.searchParams.set('limit', '5')

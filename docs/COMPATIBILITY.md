@@ -48,6 +48,8 @@
 2. **可选 seam（`optional: true`）缺失只报告，不失败**。宿主没提供时插件必须自己降级：`view-navigation` 缺失时「打开工作台」按钮整块不渲染（留一个点了没反应的死按钮比没有更糟）。注意 `view-navigation` 目前在**四条基线上全都缺失**（见 §4）——它是「宿主哪天补上该 API 就立刻变绿」的探测，不是当前可用的能力；它的恒缺失状态由 `test/dsh-compat-matrix.test.mjs` 的 `ABSENT_OPTIONAL_SEAMS` 冻结，宿主真补上时那条断言会失败，逼你修接线并删掉探测与缺口记录。一条永远打 ○ 的 seam 若不被冻结，会让人误以为它还在看守什么。
 3. **可选能力绝不写进 `dsh.client.inject`**。inject 里的名字缺失会让宿主拒绝装载**整个插件**，用户看到的是「插件不见了」；可选能力缺失只该让一个入口消失。宿主半区取用可选服务一律走 [`dsh/optional-service.js`](../dsh/optional-service.js)（`ctx.get` 不存在或抛错都退化为「不可用」）。
 
+**客户端半只有一份：Web 与 Desktop App 共用同一个 `ui/client.js`。** App 是 Electron 外壳，加载打包后的同一份客户端（`dsh-app://app/`，默认 19387），把应用请求转发给本机 Web Host（`dsh-app` 被注册成 standard + secure + supportFetchAPI 的自定义协议，所以相对路由的 `fetch`、剪贴板与 `crypto.subtle` 在 App 内都可用）。因此上表里的客户端槽位 seam 对两种形态同样有效，App 专有的只有 `desktop-app-origin` / `desktop-plugin-api-forward` / `desktop-request-forward` 三条；也正因为源形态不同，客户端**不得**假定页面源是 http(s)：相对路由与 `location.href` 基准是唯一与宿主形态无关的写法，`test/build-client.test.js` 会拦下写死的绝对请求地址、按 `location.protocol/host/port` 分支、以及用页面 origin 当 URL 基准的写法。
+
 ### 3.1 客户端 `inject` 的口径
 
 `package.json` 的 `dsh.client.inject` 列的是**其它客户端插件行的包名**，宿主按依赖闭合解析；产物里硬编码的 `inject: ['slots', 'sessions']` 则是客户端 cordis 服务。两者口径不同，都不能塞可选服务。

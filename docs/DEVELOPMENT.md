@@ -19,7 +19,7 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（489 项 / 67 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（491 项 / 67 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -42,9 +42,12 @@ npm run verify                   # CI 的本地等价物：check + test + 宿主
 
 ```bash
 npm run dev:register   # 把当前仓库登记进本机 DSH profile
-npm run dev:watch      # 源码一变就重建 ui/ 产物
+DSH_PROFILE=desktop npm run dev:register   # 同上，但登记进 Desktop App 用的 desktop profile
+npm run dev:watch      # 源码一变就重建 ui/ 产物（Web 与 App 共用这一份）
 npm run dev:web        # 启动一个受管的本机 dsh web（端口冲突时报错而不是抢占）
 ```
+
+Web 与 Desktop App 跑的是同一份 `ui/client.js`：Web 由 `dev:web` 起在被管端口（默认 3080）；Desktop App 是 Electron 外壳，直接加载打包后的 Web 入口（`dsh-app://app/`，默认 19387），再把应用请求转发给本机 Web Host。因此**改完产物后必须刷新 App 里的插件页/页面**——`dsh web` 起的那个实例不会替 App 加载代码，App 也用独立的 `desktop` profile（插件安装、`localStorage`、IndexedDB 都与 Web 分开，见 [APP-MIGRATION.md](APP-MIGRATION.md)）。客户端半只允许使用相对路由与 `location.href` 基准：宿主源是 http(s) 还是 `dsh-app` 由宿主承担，`test/build-client.test.js` 会拦下写死的绝对地址、按 `location.protocol/host/port` 分支、以及用页面 origin 当 URL 基准的写法。
 
 浏览器回归由 `scripts/browser-regression.cjs` 启动仅监听本机随机端口的测试宿主，加载真实 React、`ui/client.js` 及其延迟工件，通过插件槽位挂载工作台、方法工坊、输入框弹层与增强器。覆盖延迟资源单次请求、三类资源分类及恢复全部、弹层分类、收藏与详情、科研模式保留手动编辑、英文查询传递、数据库切换清空结果、Plugins 行配置预设的点击写入（写入的 ops 与 revision、宿主拒绝时的「预设未保存」、只读禁用与未就绪不渲染），以及 390px 窄屏横向溢出检查。数据库返回固定测试数据，宿主写入/发送动作使用测试替身；不调用外部数据库或真实会话。
 
@@ -131,7 +134,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 489 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
+**本项无法由单元测试替代。** 仓库内 491 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 

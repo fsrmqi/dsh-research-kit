@@ -251,7 +251,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、489 项回归测试（67 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 4 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、491 项回归测试（67 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 4 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -260,7 +260,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（489 项 / 67 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（491 项 / 67 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 
