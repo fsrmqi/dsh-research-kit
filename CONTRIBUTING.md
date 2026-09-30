@@ -30,6 +30,8 @@ npm test        # 纯逻辑、渲染级与契约回归测试（需先 npm instal
 npm run build && npm run check && npm test && node --check ui/client.js
 ```
 
+提交前建议直接跑 `npm run verify`：它是 CI 门禁序列的本地等价物（check + test + 宿主契约 + 覆盖率棘轮），比上面这条多覆盖「宿主 seam 是否还在」与「覆盖率/测试规模是否退化」两件事。
+
 **CI 会校验「重新构建后产物无 diff」**——提交前忘了 `npm run build` 会直接挂 CI。
 
 改动界面（`src/` 下的 React 组件、槽位或浮层）时，另建议运行 `npm run test:browser`——真实 Chromium 加载构建产物做交互回归，首次需 `npx playwright install chromium`。
@@ -58,7 +60,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 4. Prompt 必须包含防编造 / 待核验边界（校验器和测试会强制检查）；
 5. 需要用户材料时设置 `requiresFiles: true`，并提示使用 DSH 原生 `@文件`；
 6. `suggestedSkillIds` 只引用已存在的技能 ID；引用需宿主能力条目（`requires-host-capability`）时，相关资源列表会展示其前提说明，但不会并入 Prompt 片段；
-7. 运行 `npm run check && npm test`，全部通过后再提交。
+7. 运行 `npm run verify`（或至少 `npm run check && npm test`），全部通过后再提交。
 
 每条工作流至少做一次人工走查：确认模型不会被 Prompt 引导为虚构事实、过度承诺或遗漏不确定性。
 

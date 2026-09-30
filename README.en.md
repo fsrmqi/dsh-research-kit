@@ -235,7 +235,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 491 regression tests in 67 files, including a host-contract matrix across 4 DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 491 regression tests in 67 files, including a host-contract matrix across 4 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -248,7 +248,7 @@ npm test        # pure-logic, contract and render-level regression tests (491 / 
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 
-After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build).
+After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check && npm test`; CI verifies the committed bundle matches the sources (any diff fails the build). To run the CI gate set locally, use `npm run verify` (check + test + host contract + coverage ratchet).
 
 ## Documentation
 

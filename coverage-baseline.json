@@ -14,8 +14,8 @@
         "functions": 77.85
       },
       "span": {
-        "testFiles": 66,
-        "tests": 469
+        "testFiles": 67,
+        "tests": 491
       },
       "node": "v22.19.0",
       "at": "2026-09-29"
@@ -32,8 +32,8 @@
         "functions": 69.99
       },
       "span": {
-        "testFiles": 66,
-        "tests": 469
+        "testFiles": 67,
+        "tests": 491
       },
       "node": "v26.10.0",
       "at": "2026-09-29"

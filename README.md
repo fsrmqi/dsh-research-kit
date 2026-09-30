@@ -251,7 +251,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、491 项回归测试（67 个测试文件，含 6 项宿主动作缺失的渲染级降级断言与 4 个基线 tag 的宿主契约矩阵）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、491 项回归测试（67 个测试文件，含 6 项宿主动作缺失的渲染级降级断言、4 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -264,7 +264,7 @@ npm test        # 纯逻辑、契约与渲染级回归测试（491 项 / 67 个�
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 
-改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。
+改动 `catalog/`、`src/` 或 `dsh/` 后统一执行 `npm run build && npm run check && npm test`；CI 会校验构建产物与源码同步（构建后有 diff 即失败）。本地要一次跑完 CI 的门禁序列（含宿主契约矩阵与覆盖率棘轮）用 `npm run verify`。
 
 ## 文档
 
