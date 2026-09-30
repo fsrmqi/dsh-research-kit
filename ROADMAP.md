@@ -161,10 +161,10 @@
 
 ### 13. DSH 兼容性矩阵与两条已知缺口（矩阵已落地 · 2026-09-28）
 
-**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：3 个基线 tag、11 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
+**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：4 个基线 tag、11 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
 同批补上「门禁可信度」：seam 清单与产物 require 提取各有冻结清单与空转守卫（此前平台模块检查因只认双引号而恒真、删两条无 slot 的 seam 仍全绿）、源码来源自证绑 git tag/HEAD（已解包副本只算未自证）、覆盖率棘轮加上测试规模只许涨（比值型覆盖率挡不住"删测试"）、TAP 汇总行解析要求唯一（锁住"Node 会转义用例输出"这层隐形依赖）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
-**已知缺口 1 · 跨页视图导航**：Plugins 详情页的「打开工作台」按钮在已发布的 0.1.7 与 `0.2.0-rc.1` 上不渲染。`dsh/standalone-glue.js` 适配的是 `uiConversation.openView(sessionId, view, focus)`，而这些发布没有该方法，探测结果为 `undefined`；按钮整体缺席而非报错。
+**已知缺口 1 · 跨页视图导航**：Plugins 详情页的「打开工作台」按钮在已发布的 0.1.7 与 `0.2.0-rc.1`/`rc.2` 上不渲染。`dsh/standalone-glue.js` 适配的是 `uiConversation.openView(sessionId, view, focus)`，而这些发布没有该方法，探测结果为 `undefined`；按钮整体缺席而非报错。
 
 - **修法**：改 glue 层用 `binding(...)` + `activate(...)`，然后在真实 profile 上验证按钮真的能把主区切到科研工作台视图；不要为了让 seam 变绿而放宽 token。
 - **验收**：真实 profile 点击一次（[MANUAL-QA.md](docs/MANUAL-QA.md)）+ 修好后 `KNOWN_GAPS` 的绊线测试**必须失败**，届时同步删除本段、[COMPATIBILITY.md](docs/COMPATIBILITY.md) 的缺口表与 `scripts/lib/dsh-baselines.mjs` 里的记录。

@@ -2,7 +2,7 @@
 
 本文面向需要改动 `dsh-research-kit` 的开发者：环境准备、模块登记规则、测试策略与交付检查单。
 
-当前仓库处于**可用状态**——587 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器、MCP Server（36 个 research_* 工具）与 Agent 活动面板均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
+当前仓库处于**可用状态**——589 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器、MCP Server（36 个 research_* 工具）与 Agent 活动面板均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
 
 ## 1. 开始前
 
@@ -66,7 +66,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 | 项目 | 状态 | 位置 |
 | --- | --- | --- |
-| 目录数据（349 工作流 + 109 技能 + 129 数据源，共 587 项） | 已完成并过契约校验 | `catalog/{workflows,skills,resources}/`（分片 + 各自 `index.js` 聚合入口） |
+| 目录数据（351 工作流 + 109 技能 + 129 数据源，共 589 项） | 已完成并过契约校验 | `catalog/{workflows,skills,resources}/`（分片 + 各自 `index.js` 聚合入口） |
 | 本地搜索与占位符替换 | 已实现（搜索覆盖正文） | `src/catalog.js` |
 | 必填字段阻止发送 | 已实现（工作台与弹窗双处） | `composeWorkflow()` |
 | 附加技能/数据库模块 | 已实现（`extraSkillIds`/`extraDatabaseIds`） | `src/catalog.js` |
@@ -137,7 +137,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 ### Milestone D：扩充第一批内容 ✅
 
-已完成。当前 349 条工作流（28 个类目，按流程族分片维护于 `catalog/workflows/`，类目明细见 [README「目录内容」](../README.md#目录内容)）、109 项技能（`catalog/skills/`）与 129 个数据源（`catalog/resources/`），全部通过契约校验与「分片 ↔ 入口 ↔ 产物」三向断言。
+已完成。当前 351 条工作流（28 个类目，按流程族分片维护于 `catalog/workflows/`，类目明细见 [README「目录内容」](../README.md#目录内容)）、109 项技能（`catalog/skills/`）与 129 个数据源（`catalog/resources/`），全部通过契约校验与「分片 ↔ 入口 ↔ 产物」三向断言。
 
 后续扩充方向见 [ROADMAP.md](../ROADMAP.md)。
 

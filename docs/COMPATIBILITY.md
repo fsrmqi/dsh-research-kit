@@ -18,6 +18,7 @@
 | `dsh-v0.1.7-rc.1` | `0.1.7-rc.1` | 兼容下限：`peerDependencies` 范围的下沿 |
 | `dsh-v0.1.7-rc.2` | `0.1.7-rc.2` | 0.1.7 线最新 rc：peer 准入与 Desktop 转发按此行核对 |
 | `dsh-v0.2.0-rc.1` | `0.2.0-rc.1` | 0.2 线首个 rc；确认既有集成仍可加载 |
+| `dsh-v0.2.0-rc.2` | `0.2.0-rc.2` | 0.2 线最新 rc；确认既有 UI 槽位、会话事件与 Desktop 转发仍可用 |
 
 `package.json` 声明的范围是 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.1-0`（宿主 `engines`：`^22.19.0 || >=24.0.0`）。矩阵里每个基线版本都必须落在该范围内——这条由测试自己断言，防止「清单越写越宽、peer 范围却没收」。
 
@@ -57,7 +58,7 @@
 
 | 缺口 | 影响 | 绊线 |
 | --- | --- | --- |
-| `cross-page-view-navigation` | 已发布的 0.1.7 与 `0.2.0-rc.1` 均没有 `uiConversation.openView(...)`，因此 Plugins 详情页的「打开工作台」按钮不渲染；当前源码提供后，矩阵会以该公开签名报告可用；其他插件能力不受影响 | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
+| `cross-page-view-navigation` | 已发布的 0.1.7 与 `0.2.0-rc.1`/`rc.2` 均没有 `uiConversation.openView(...)`，因此 Plugins 详情页的「打开工作台」按钮不渲染；当前源码提供后，矩阵会以该公开签名报告可用；其他插件能力不受影响 | `dsh/standalone-glue.js` 里仍有 `conversationViews.openView(` |
 | `phantom-client-inject` | `dsh.client.inject` 里的 `@deepseek-ai/dsh-client-runtime` 在 0.1.7-rc.1/rc.2 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到；另两个注入项两处都能查到。产物实际只 require `react`/`react-dom`，故不影响装载，只是「我依赖谁」失真 | `package.json` 里仍有该字符串 |
 
 `npm run check:dsh-app` 与 `npm test` 都会把未命中的 inject 名字打出来（警告，不失败）。

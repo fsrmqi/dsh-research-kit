@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 // 产物把构建期常量定义在模块作用域最前面；本文件直接 import 源码，没有该常量。
 // 按产物契约把它挂到 globalThis，覆盖「徽章/诊断载荷读烘焙值」的正路径；
 // 缺省（不设置）时组件必须退化为不渲染，见「缺数据」用例。
-globalThis.RESEARCH_KIT_BUILD_STATS = { version: '0.3.0', workflows: 349, skills: 109, resources: 129, direct: 11 }
+globalThis.RESEARCH_KIT_BUILD_STATS = { version: '0.3.0', workflows: 351, skills: 109, resources: 129, direct: 11 }
 
 const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
 const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')
@@ -28,15 +28,15 @@ const researchSubject = { kind: 'bundle', pkg: { name: 'dsh-research-kit', versi
 const foreignBundle = { kind: 'bundle', pkg: { name: 'dsh-promptkit', version: '1.0.0', installed: true, enabled: true, rows: [] } }
 
 test('规模标签只接受完整烘焙数据，缺字段返回 null 而不是 0', () => {
-  assert.equal(researchKitScaleLabel({ workflows: 349, skills: 109, resources: 129 }), '349 工作流 · 109 技能 · 129 数据源')
+  assert.equal(researchKitScaleLabel({ workflows: 351, skills: 109, resources: 129 }), '351 工作流 · 109 技能 · 129 数据源')
   assert.equal(researchKitScaleLabel(null), null)
-  assert.equal(researchKitScaleLabel({ workflows: 349, skills: 109 }), null)
-  assert.equal(researchKitScaleLabel({ workflows: '349', skills: 109, resources: 129 }), null)
+  assert.equal(researchKitScaleLabel({ workflows: 351, skills: 109 }), null)
+  assert.equal(researchKitScaleLabel({ workflows: '351', skills: 109, resources: 129 }), null)
 })
 
 test('Plugins 页徽章渲染烘焙的目录规模，并自带全局样式', () => {
   const markup = renderToStaticMarkup(React.createElement(ResearchKitBadge, { subject: researchSubject }))
-  assert.match(markup, /349 工作流 · 109 技能 · 129 数据源/)
+  assert.match(markup, /351 工作流 · 109 技能 · 129 数据源/)
   // 徽章可能先于会话 UI 挂载；缺少 --rk-* 变量时颜色会失效，故自带 GlobalStyle。
   assert.ok(markup.includes('--rk-teal'), '徽章产物应包含 rk 全局样式')
   assert.ok(markup.includes('数字随构建烘焙'), 'title 必须说明数字来源，避免被读成实时可用性')
@@ -65,7 +65,7 @@ test('诊断载荷只含版本、规模与部署事实，不含凭据类字段',
   assert.deepEqual(Object.keys(payload).sort(), ['capabilities', 'generatedAt', 'plugin', 'scale', 'userAgent', 'version'])
   assert.equal(payload.plugin, 'dsh-research-kit')
   assert.equal(payload.version, pluginPkg.version)
-  assert.deepEqual(payload.scale, { workflows: 349, skills: 109, resources: 129, direct: 11 })
+  assert.deepEqual(payload.scale, { workflows: 351, skills: 109, resources: 129, direct: 11 })
   assert.equal(payload.capabilities.mcpServers[0].server, 'memory-center')
   assert.equal(researchKitDiagnosticsPayload({ userAgent: '' }).userAgent, undefined)
   const serialized = JSON.stringify(payload).toLowerCase()
@@ -144,7 +144,7 @@ test('跨页跳转是软探测：不写进客户端 inject 列表，且已在 se
   // 可选 seam 必须标 optional：宿主不提供时按钮不该渲染，也不该让兼容性检查失败。
   assert.match(seamData, /id: 'view-navigation'/)
   assert.match(seamData, /optional: true/)
-  assert.match(seamData, /binding\(source: SessionBinding \| SessionId\): ConversationBinding/)
+  assert.match(seamData, /binding\(source: SessionBinding \| SessionId\)/)
   // 当前接线仍指向宿主不存在的 openView —— 这是已登记的缺口（KNOWN_GAPS 的绊线守着它），
   // 修好之后绊线测试会失败，提醒同步删除缺口记录与文档。
   assert.match(seamData, /id: 'cross-page-view-navigation'/)

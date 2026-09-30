@@ -178,6 +178,17 @@ test('搜索命中新增工作流的模板正文关键词', () => {
   assert.ok(searchCatalog({ query: '样本量' }).some(item => item.id === 'power-analysis'))
 })
 
+test('限时决策与复查提醒如实声明可选宿主能力和安全降级', () => {
+  const timedDecision = itemById('timed-research-decision')
+  const reviewReminder = itemById('evidence-review-reminder')
+  assert.match(timedDecision.prompt, /ask_user_question/)
+  assert.match(timedDecision.prompt, /timed mode/)
+  assert.match(timedDecision.prompt, /不得把 pending 当作批准/)
+  assert.match(reviewReminder.prompt, /schedule_create/)
+  assert.match(reviewReminder.prompt, /明确确认/)
+  assert.match(reviewReminder.prompt, /不得声称已创建任务/)
+})
+
 test('prompt-guidance 技能带 promptFragment 与 checklist 模块', () => {
   for (const skill of catalog.filter(item => item.type === 'skill' && item.availability === 'prompt-guidance')) {
     assert.ok(skill.promptFragment && skill.promptFragment.length >= 10, `${skill.id} 缺少 promptFragment`)

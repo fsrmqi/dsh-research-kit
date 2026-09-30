@@ -8,7 +8,7 @@
 
 [English](README.en.md) · [简体中文](README.md)
 
-> A catalog and launcher for research workflows in DeepSeek Harness: 349 human-reviewed workflows, 109 skill entries, 129 scientific data sources.
+> A catalog and launcher for research workflows in DeepSeek Harness: 351 human-reviewed workflows, 109 skill entries, 129 scientific data sources.
 
 It turns recurring research tasks — peer review, writing an introduction, literature synthesis, planning a statistical analysis — into **parameterized, editable prompts that you review before sending**. The plugin only assembles the task and hands it back to your session; execution stays with your own DSH agent.
 
@@ -42,7 +42,7 @@ Research Kit turns those four into reusable assets.
 ## How it works
 
 ```text
-Research capability catalog (587 entries)
+Research capability catalog (589 entries)
   → pick a workflow
   → fill parameters, reference materials via @file
   → review and edit the final prompt
@@ -60,8 +60,11 @@ Deliberate trade-offs:
 
 ## Capabilities
 
-**🧪 349 human-reviewed research workflows**
+**🧪 351 human-reviewed research workflows**
 Across 28 workflow families — paper & manuscript, literature research, data analysis, genomics, clinical research, neuroscience, ecology, astronomy & space and more — maintained as per-family shards under `catalog/workflows/`. Each is a parameterized, editable prompt template with built-in anti-fabrication boundaries (never invent citations, data, page numbers or authorial intent) and explicit "draft pending human verification" framing.
+
+**⏲ Timed decisions and evidence review**
+The new Timed research decision and Pending-evidence review reminder workflows use a timed question only when the current DSH Agent Preset enables `ask_user_question` in timed mode. They create a review reminder only after explicit confirmation and when the host offers `schedule_create`; neither treats a timeout as approval or automatically publishes, deletes, or promotes research assets.
 
 **🧩 109 skill entries: 46 guidance modules + 63 capability entries**
 Guidance modules work as prompt guidance — scientific writing, statistics review, citation hygiene, evidence synthesis, reproducibility, review ethics & confidentiality, data integrity, uncertainty communication, plus method modules for experimental design, hypothesis generation, scientific brainstorming, critical thinking, statistical power, systematic literature review, scientific visualization, uncertainty & units, clinical report drafts, venue compliance, peer-review comments, and grant writing, and three domain modules: agricultural experiment design, crop genomics & breeding evidence, and bioinformatics workflow governance — toggled at launch to fold into the workflow prompt. Capability entries are catalogued under an honest "requires host capability" status — bulk RNA-seq, Nextflow, Benchling/DNAnexus integrations, literature API search, docx/pdf production and other execution-side skills — stating the required toolchain, credentials and data-egress boundaries with a pre-use checklist; they inject no prompt fragment and execute nothing themselves.
@@ -155,7 +158,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 587 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 589 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live; expand the **assembly replay** in the detail pane to verify segment by segment how the prompt was assembled;
@@ -201,7 +204,7 @@ Workflows are maintained as per-family shards under `catalog/workflows/` (one JS
 | Machine learning (machine-learning) | 15 |
 | Engineering (engineering) | 12 |
 | Advanced workflows (advanced) | 9 |
-| Deep research (deep-research) | 7 |
+| Deep research (deep-research) | 9 |
 | Paper writing (paper-writing) | 11 |
 | Submission & venue compliance (submission) | 5 |
 
@@ -232,7 +235,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (587 entries, 587 unique IDs, shards identical to the aggregated entries) and 474 regression tests in 66 files, including a host-contract matrix across three DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 474 regression tests in 66 files, including a host-contract matrix across three DSH baseline tags. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 

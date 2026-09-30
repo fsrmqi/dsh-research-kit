@@ -25,7 +25,7 @@ test('延迟资源路由：目录、PromptKit 与 Archify 模板可独立读取'
     captureRoute(archifyTemplateRoute()),
   ])
   assert.equal(catalogResponse.status, 200)
-  assert.equal(JSON.parse(catalogResponse.body).data.workflows.length, 349)
+  assert.equal(JSON.parse(catalogResponse.body).data.workflows.length, 351)
   assert.equal(promptKitResponse.status, 200)
   assert.match(promptKitResponse.headers['content-type'], /text\/javascript/)
   assert.match(promptKitResponse.body, /__DSH_RESEARCH_PROMPTKIT__/)

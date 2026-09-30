@@ -9,7 +9,7 @@ window.__ModuleLoader__.load({
     const skills = []
     const resources = []
     const databaseMetadataConfig = { groups: [], accessOverrides: {} }
-    const RESEARCH_KIT_BUILD_STATS = {"version":"0.3.0","workflows":349,"skills":109,"resources":129,"direct":11}
+    const RESEARCH_KIT_BUILD_STATS = {"version":"0.3.0","workflows":351,"skills":109,"resources":129,"direct":11}
 
     // 目录数据只经三个聚合入口进入（分片见 catalog/*/index.js）；对外 API 与文件拆分解耦。
 

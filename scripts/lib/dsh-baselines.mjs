@@ -37,6 +37,12 @@ export const BASELINES = [
     version: '0.2.0-rc.1',
     notes: '0.2 线首个 rc；确认既有槽位、工具卡阶段与 Desktop 转发仍可用。',
   },
+  {
+    id: 'dsh-v0.2.0-rc.2',
+    tag: 'dsh-v0.2.0-rc.2',
+    version: '0.2.0-rc.2',
+    notes: '0.2 线最新 rc；确认既有 UI 槽位、会话事件与 Desktop 转发仍可用。',
+  },
 ]
 
 /**

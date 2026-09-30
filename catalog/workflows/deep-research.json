@@ -476,5 +476,123 @@
         "required": true
       }
     ]
+  },
+  {
+    "id": "timed-research-decision",
+    "type": "workflow",
+    "name": "限时研究决策",
+    "description": "在不阻塞可独立推进工作的前提下，向研究者提出有截止时间的关键决策问题，并在延迟答复到达后恢复该决策。",
+    "category": "研究设计",
+    "tags": [
+      "限时提问",
+      "研究决策",
+      "人工确认"
+    ],
+    "placeholders": [
+      {
+        "key": "decision",
+        "label": "需要确认的研究决策",
+        "required": true
+      },
+      {
+        "key": "options",
+        "label": "候选方案与取舍",
+        "required": false
+      },
+      {
+        "key": "independent_work",
+        "label": "等待期间可独立完成的工作",
+        "required": false
+      }
+    ],
+    "prompt": "针对研究决策「{decision}」准备一次限时确认。候选方案：{options}。等待期间可独立完成的工作：{independent_work}。\n\n仅当当前 Agent Preset 已启用 `ask_user_question` 的 timed mode 时，作为根 Agent 调用一次 `ask_user_question`，设置 120 秒截止时间，清楚列出候选方案、关键取舍与默认不执行的后果。截止时间返回 pending 时，只继续与该决策无关且可逆的工作；不得把 pending 当作批准，不得提交、发布、删除数据或锁定不可逆方案。延迟答复以用户消息到达后，先复述答复与其影响，再恢复这项决策。\n\n若 timed mode 或提问工具不可用，在聊天中提出同一问题并停止依赖该决定的工作；不要模拟轮询或声称已经安排提醒。所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "需要确认的研究决策"
+        },
+        "options": {
+          "type": "string",
+          "description": "候选方案与取舍"
+        },
+        "independent_work": {
+          "type": "string",
+          "description": "等待期间可独立完成的工作"
+        }
+      },
+      "required": [
+        "decision"
+      ]
+    },
+    "agent_guidance": "只在 timed mode 实际可用时调用 ask_user_question，且只能由根 Agent 调用。等待延迟答复期间仅做可逆、与决策无关的工作；答复不是对其他行动的概括授权。",
+    "checkpoints": [
+      {
+        "after_stage": "decision_reply",
+        "action": "confirm_research_decision",
+        "required": true
+      }
+    ]
+  },
+  {
+    "id": "evidence-review-reminder",
+    "type": "workflow",
+    "name": "待核验证据复查提醒",
+    "description": "为研究项目建立只复查待核验证据和未决问题的可选定时提醒，不自动发布、晋升或修改研究资产。",
+    "category": "研究设计",
+    "tags": [
+      "定时复查",
+      "证据核验",
+      "研究维护"
+    ],
+    "placeholders": [
+      {
+        "key": "project",
+        "label": "研究项目",
+        "required": true
+      },
+      {
+        "key": "cadence",
+        "label": "复查频率（如每周、每两周）",
+        "required": false
+      },
+      {
+        "key": "review_scope",
+        "label": "复查范围（待核验引用、未决问题等）",
+        "required": false
+      }
+    ],
+    "prompt": "为研究项目「{project}」设计待核验证据复查提醒。频率：{cadence}。范围：{review_scope}。\n\n先说明拟创建提醒的标题、频率和提醒正文，并取得用户对创建计划的明确确认。仅在用户明确要求创建定时任务且 `schedule_create` 可用时调用该工具；将频率映射为一个有效的调度选择器。提醒正文只能要求复查待核验证据、未决问题和下一步，不得发布、晋升、删除、覆盖研究资产，也不得把未验证的结论写成事实。若调度能力不可用，输出可复制的提醒正文与建议频率，不得声称已创建任务。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "tool_mode": "guided",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "研究项目"
+        },
+        "cadence": {
+          "type": "string",
+          "description": "复查频率"
+        },
+        "review_scope": {
+          "type": "string",
+          "description": "复查范围"
+        }
+      },
+      "required": [
+        "project"
+      ]
+    },
+    "agent_guidance": "schedule_create 是可选宿主能力。只有用户明确确认后才创建任务；调度提示只用于复查，不能绕过研究者对证据、发布或删除的人工决定。",
+    "checkpoints": [
+      {
+        "after_stage": "schedule_plan",
+        "action": "confirm_review_reminder",
+        "required": true
+      }
+    ]
   }
 ]
