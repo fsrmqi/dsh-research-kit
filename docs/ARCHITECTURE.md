@@ -196,9 +196,10 @@ dsh-research-kit/
 ├── scripts/
 │   ├── build-client.mjs             # 生成主包与两份延迟工件（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
-│   ├── check-syntax.mjs             # 语法门：遍历源码树（当前 208 个 .js/.mjs）单进程 vm 解析，取代手工维护的 node --check 清单与只盖 mcp/tools 的 precheck
+│   ├── check-syntax.mjs             # 语法门：遍历源码树全部 .js/.mjs（catalog/ dsh/ mcp/ scripts/ src/ test/ ui/ + index.js）单进程 vm 解析，文件数低于下限即失败；取代手工维护的 node --check 清单与只盖 mcp/tools 的 precheck
 │   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
 │   ├── check-doc-assets.mjs         # 校验 docs/assets/ 的图与文档引用双向一致（死资产 / 断链，--verbose 列引用处）
+│   ├── check-manual-qa.mjs          # 手工验收清单的「N 项」自洽门：逐章比对标题声明 vs 章节内实际条目数（判定在 lib/manual-qa-count.mjs）
 │   ├── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
 │   ├── sync-tool-docs.mjs           # 从工具注册表生成 MCP-SETUP 的工具表与最短路径（--check 入 npm run check）
 │   ├── render-diagrams.mjs          # diagram IR → 单文件交互 HTML（--html）；结果文件 → IR 脚手架（--from-files）
@@ -215,8 +216,9 @@ dsh-research-kit/
 │       ├── dsh-baselines.mjs        # 受支持 DSH 基线 + 宿主 seam + 已知缺口绊线（唯一事实源）
 │       ├── dsh-compat.mjs           # seam 核对的纯逻辑：源码解析、契约检查、平台模块表、inject 审计、源码来源自证
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
+│       ├── manual-qa-count.mjs      # MANUAL-QA 章节「N 项」的自洽判定（条目可写为表格行或小节标题；含章节数/条目总数下限）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 501 项测试（69 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 508 项测试（70 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）

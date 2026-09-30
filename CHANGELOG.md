@@ -40,6 +40,8 @@
 
 - 🔒 **摘掉 9 个「只在本文件里用」的 `export`**：Node 半侧有 9 个符号带 `export` 关键字却全仓无人导入——`dsh/semantic-enhance.js` 的 `streamEnhanceWithCurrentSessionModel`（非流式路由在同文件内直接调用）、`mcp/paths.js` 的 `DATA_HOME`（同文件内供 `dataPath`/`CALL_LOG_FILE` 使用）、`scripts/lib/doc-test-count.mjs` 的 `TEST_COUNT_PATTERNS` / `MIN_PATTERNS`、`scripts/lib/dsh-compat.mjs` 的 `stagedDirOf` / `checkSeam` / `platformModulesOf` / `collectPluginSlots` / `hostDependencyNames`（都只被同文件的导出函数调用）。多余的 `export` 是假对外契约：它让「这个符号能不能改」看起来需要先查外部用法，而实际没有任何消费者。**有意保留**三个真契约：`index.js` 的 `inject`（DSH 宿主按名调用）、`dsh/standalone-glue.js` 的 `researchKitApply`（构建产物入口）、`mcp/tool-registry.js` 的 `ARTIFACT_KIND_LABELS`（在客户端构建白名单内，会进 `ui/client.js`）。判定方式：脚本解析全仓 `import` / `export … from` / 动态 `import()`，并先确认全仓没有 `import * as` 命名空间用法与桶式 `export *`（否则会漏判）。
 
+- 🧭 **手工验收清单的「N 项」终于有门禁了（加门当轮就抓到一处真实漂移）**：`docs/MANUAL-QA.md` 每个章节都在标题里声明「本章有 N 项」，但这个数字此前完全没有看守——`TEST_COUNT_PATTERNS` 的句式清单有意不收它（它讲人工验收步骤，不是测试计数）。新增 `scripts/check-manual-qa.mjs`（判定在 `scripts/lib/manual-qa-count.mjs`，CLI 与测试共用同一函数），按章节比对「标题声明的条目数 vs 章节内实际条目数」；条目有两种写法——表格行 `| F1 | …` 与小节标题 `### F1 …`——两种都算，否则 §2 快线（F1–F4 是小节标题）会被误判成 0 项。门是 **fail-closed** 的：声明了 N 项却一条条目都识别不出来即失败（句式一漂移，门就会变成空转，正是本仓库最反复出现的那类问题）；另设「受看守章节数 ≥ 11」与「受看守条目总数 ≥ 43」两条下限，防止删章节/改标题让门悄悄失去看守对象；同章节内重复条目 ID 也会被点名。**加门的同一轮就抓到**：「自动与逐条沉淀链路」声明 9 项、实际 A1–A10 共 **10** 项，已改正。门已接进 `npm run check`；负向验证——把标题改回 9 项后 `npm run check` 退出 1 并点名「242 行的「自动与逐条沉淀链路（9 项，尚未现场执行）」声明 9 项，实际 10 项（A1 / … / A10）」。顺带修掉 `docs/ARCHITECTURE.md` 里 `check-syntax.mjs` 的「当前 208 个 .js/.mjs」：那个数字每加一个文件就腐烂一次（本轮已到 213），真正的地板在门禁自己手里（文件数下限 150），受控树改为不带数字的准确表述，并登记两条新脚本。套件 501 → 508 项 / 69 → 70 个文件。
+
 ## [0.2.0] - 2026-09-21
 
 ### 行为变化
