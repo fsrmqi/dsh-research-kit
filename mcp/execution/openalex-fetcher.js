@@ -2,6 +2,7 @@
 import { saveEvidenceBatch } from './evidence-store.js'
 import { wrap, err } from './wrapper.js'
 import { fetchJsonWithRetry } from './http-client.js'
+import { mapWithConcurrency } from './concurrency.js'
 
 const SELECT_FIELDS = 'id,doi,title,display_name,publication_year,authorships,abstract_inverted_index,type,primary_location,cited_by_count,referenced_works'
 
@@ -42,19 +43,6 @@ async function fetchOpenAlexWork(doi, { includeReferences = false } = {}) {
 async function searchOpenAlex(query, limit = 10, { includeReferences = false } = {}) {
   const data = await fetchJsonWithRetry(`https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}&select=${SELECT_FIELDS}`)
   return (data.results || []).map(work => normalizeWork(work, { includeReferences }))
-}
-
-async function mapWithConcurrency(items, limit, run) {
-  const results = new Array(items.length)
-  let cursor = 0
-  async function worker() {
-    while (cursor < items.length) {
-      const index = cursor++
-      results[index] = await run(items[index], index)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results
 }
 
 async function fetchMetadata({ dois, query, limit, project, save_to_evidence, include_references }) {

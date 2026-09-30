@@ -96,9 +96,9 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 ## 两条硬规则
 
-### 1. 新增源码模块必须登记两处
+### 1. 新增源码模块必须登记构建白名单
 
-`scripts/build-client.mjs` 的 `files` 白名单 + `package.json` 的 `check` 脚本。宿主半区（`dsh/`）的新文件还要进 `check` 的 `node --check` 列表。细节与理由见 [DEVELOPMENT.md §1](docs/DEVELOPMENT.md)。
+`scripts/build-client.mjs` 的 `files` 白名单。宿主半区（`dsh/`）的新文件**不需要**另外登记语法清单：`npm run check` 的语法门（`scripts/check-syntax.mjs`）遍历全树解析。细节与理由见 [DEVELOPMENT.md §1](docs/DEVELOPMENT.md)。
 
 ### 2. 解析外部数据的函数必须是 **total** 的
 

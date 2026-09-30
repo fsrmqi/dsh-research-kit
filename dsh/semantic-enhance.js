@@ -237,12 +237,6 @@ export async function streamEnhanceWithCurrentSessionModel({ llm, route, session
   return { ...parsed, model: route.model }
 }
 
-// 非流式入口：返回形状与 PromptKit 保持兼容（prompt/model/diagnosis）。
-export async function enhanceWithCurrentSessionModel(options) {
-  const result = await streamEnhanceWithCurrentSessionModel(options)
-  return { prompt: result.prompt, model: result.model, ...(result.diagnosis ? { diagnosis: result.diagnosis } : {}) }
-}
-
 async function readJson(req) {
   let raw = ''
   for await (const chunk of req) {

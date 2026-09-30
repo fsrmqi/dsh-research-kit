@@ -92,12 +92,13 @@ catalog / state / theme
 → standalone glue
 ```
 
-### 新增源码模块必须登记两处
+### 新增源码模块只要登记构建白名单
 
-1. `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）；
-2. `package.json` 的 `check` 脚本（逐文件 `node --check`）。
+1. `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）。
 
 **漏登记 `files` 不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条顺序断言，把「顺序错位」提前成构建期错误。
+
+> 语法不需要登记：`npm run check` 里的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 208 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析。此前「第 2 步：`package.json` 的逐文件 `node --check` 清单」已删除——那条清单只有 59 个文件、漏了 149 个，却看起来还在守语法。
 
 ### 任何改动后必须运行
 

@@ -189,6 +189,7 @@ dsh-research-kit/
 ├── scripts/
 │   ├── build-client.mjs             # 生成主包与两份延迟工件（含符号顺序与顶层重名断言）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
+│   ├── check-syntax.mjs             # 语法门：遍历源码树（当前 208 个 .js/.mjs）单进程 vm 解析，取代手工维护的 node --check 清单与只盖 mcp/tools 的 precheck
 │   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
 │   ├── check-doc-assets.mjs         # 校验 docs/assets/ 的图与文档引用双向一致（死资产 / 断链，--verbose 列引用处）
 │   ├── validate-catalog*.mjs        # 目录契约校验（CLI 与测试共用纯逻辑库）
@@ -216,7 +217,7 @@ dsh-research-kit/
 └── cordis.patch.yml                 # DSH bundle 注册补丁
 ```
 
-> 本树是**受控清单**：新增模块、脚本或 vendored 工件必须同步登记本节。它与「新增源码模块登记两处」是同一条纪律的三个落点——本树（人读）/ `scripts/build-client.mjs` 的 `files`（产物）/ `package.json` 的 `check`（单文件语法）。目录分片只按目录粒度登记，不逐条列出资源。
+> 本树是**受控清单**：新增模块、脚本或 vendored 工件必须同步登记本节。它与「新增源码模块登记构建白名单」是同一条纪律的两个落点——本树（人读）/ `scripts/build-client.mjs` 的 `files`（产物）。语法不需要登记：`scripts/check-syntax.mjs` 遍历全树解析（见 `scripts/` 一节）。目录分片只按目录粒度登记，不逐条列出资源。
 
 ### 2.1 分层规则
 
