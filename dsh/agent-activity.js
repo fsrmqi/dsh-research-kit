@@ -5,6 +5,7 @@ import path from 'node:path'
 import { dataPath } from '../mcp/paths.js'
 import { recordApproval } from '../mcp/state/checkpoint-manager.js'
 import { buildRunOverview } from '../mcp/state/run-overview.js'
+import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
 
@@ -15,27 +16,7 @@ const MAX_CHECKPOINT_FILES = 20
 let logSnapshot = { size: -1, mtimeMs: -1, records: [] }
 const checkpointSnapshots = new Map()
 
-function reply(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(body))
-}
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', chunk => {
-      data += chunk
-      if (data.length > 32 * 1024) {
-        reject(new Error('body_too_large'))
-        req.destroy()
-      }
-    })
-    req.on('end', () => {
-      try { resolve(JSON.parse(data)) } catch { reject(new Error('invalid_json')) }
-    })
-    req.on('error', reject)
-  })
-}
+const readBody = req => readJsonBody(req, { maxChars: 32 * 1024, destroyOnTooLarge: true })
 
 async function readCallLogs({ limit = 50, since, runId } = {}) {
   if (!existsSync(LOG_FILE)) return []

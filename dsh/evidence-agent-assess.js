@@ -1,19 +1,12 @@
 import { normalizeAgentEvidenceResult, AGENT_ASSESSMENT_BATCH_SIZE } from '../src/lib/agent-evidence-batch.js'
+import { jsonReply, readJsonBody } from './lib/http-json.js'
 
 export const EVIDENCE_AGENT_ASSESS_PATH = '/dsh-research-kit/evidence-agent-assess'
 const MAX_BODY_CHARS = 24_000
 const MAX_OUTPUT_CHARS = 18_000
 
-function reply(res, status, body) {
-  if (res.destroyed || res.writableEnded) return
-  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
-  if (res.__agentCorsOrigin) {
-    headers['access-control-allow-origin'] = res.__agentCorsOrigin
-    headers.vary = 'Origin'
-  }
-  res.writeHead(status, headers)
-  res.end(JSON.stringify(body))
-}
+// 本路由的 CORS 来源挂在 res.__agentCorsOrigin（allowPreflight 里从 Origin 头取）。
+const reply = (res, status, body) => jsonReply(res, status, body, { corsOrigin: res.__agentCorsOrigin })
 
 function allowPreflight(req, res) {
   const origin = String(req.headers?.origin || '').trim()
@@ -30,14 +23,12 @@ function allowPreflight(req, res) {
   return true
 }
 
-async function readBody(req) {
-  let raw = ''
-  for await (const chunk of req) {
-    raw += chunk
-    if (raw.length > MAX_BODY_CHARS) throw new Error('批次内容过大。')
-  }
-  try { return JSON.parse(raw || '{}') } catch { throw new Error('请求格式无效。') }
-}
+const readBody = req => readJsonBody(req, {
+  maxChars: MAX_BODY_CHARS,
+  tooLargeMessage: '批次内容过大。',
+  invalidJsonMessage: '请求格式无效。',
+  emptyBodyAsObject: true,
+})
 
 function compactEntry(row) {
   const id = String(row?.id || '').trim().slice(0, 120)

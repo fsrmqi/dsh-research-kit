@@ -171,9 +171,16 @@ dsh-research-kit/
 │   ├── catalog-data.js              # 目录 JSON 同源延迟路由
 │   ├── promptkit-client.js          # PromptKit 同源延迟脚本路由
 │   ├── archify-template.js          # Archify viewer 同源延迟模板路由
+│   ├── static-artifact-route.js     # 生成物静态路由：强 ETag + no-cache（304 复用，避免新旧产物混搭）
+│   ├── config.js                    # 插件配置 schema 与 readConfigValue（volatile 即时读取）
 │   ├── agent-activity.js           # Agent 活动面板：调用轨迹聚合、运行 ID 自动捕获与检查点确认桥接（HTTP handler）
 │   ├── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
-│   └── evidence-agent-assess.js   # 当前会话模型的证据元数据批量初判（不读取全文、不改人工状态）
+│   ├── evidence-agent-assess.js   # 当前会话模型的证据元数据批量初判（不读取全文、不改人工状态）
+│   ├── claim-review.js              # Claim 台账审阅：候选提取、草稿保存、登记与导出（HTTP handler）
+│   ├── claim-agent-review.js        # 当前会话模型对 Claim 候选的初审建议（不改人工状态）
+│   ├── evidence-source-check.js     # DOI/PMID 官方元数据核对：标题比对，不推断其他编号
+│   └── lib/
+│       └── http-json.js             # 路由层共享：JSON 应答（守卫 + no-store + 条件 CORS）与请求体解析（上限必填）
 ├── ui/
 │   ├── package.json                 # 浏览器子包元数据
 │   ├── client.js                    # 构建生成的 DSH ModuleLoader 主包（勿手改）

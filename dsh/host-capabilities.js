@@ -1,5 +1,7 @@
 export const HOST_CAPABILITIES_PATH = '/dsh-research-kit/host-capabilities'
 
+import { jsonReply as reply } from './lib/http-json.js'
+
 // 宿主能力探测（ROADMAP §6）：回答「这个 DSH 部署实际装配了什么、连了哪些 MCP」，只报事实。
 //
 // 两条事实来源，口径严格分开：
@@ -70,11 +72,6 @@ export function probeHostCapabilities({ tools, web, shell, fs, llm, now = Date.n
     .map(([server, toolNames]) => ({ server, tools: toolNames, truncated: totals.get(server) > toolNames.length }))
     .sort((a, b) => a.server.localeCompare(b.server))
   return capabilities
-}
-
-function reply(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
 }
 
 export function hostCapabilitiesRoute({ tools, web, shell, fs, llm, logger } = {}) {

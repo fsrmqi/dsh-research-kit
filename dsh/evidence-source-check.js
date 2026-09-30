@@ -1,20 +1,11 @@
 export const EVIDENCE_SOURCE_CHECK_PATH = '/dsh-research-kit/evidence-source-check'
 
-function reply(res, status, body) {
-  const headers = { 'Content-Type': 'application/json' }
-  if (res.__sourceCheckOrigin) { headers['access-control-allow-origin'] = res.__sourceCheckOrigin; headers.vary = 'Origin' }
-  res.writeHead(status, headers)
-  res.end(JSON.stringify(body))
-}
+import { jsonReply, readJsonBody } from './lib/http-json.js'
 
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', chunk => { data += chunk; if (data.length > 16_384) { reject(new Error('body_too_large')); req.destroy() } })
-    req.on('end', () => { try { resolve(JSON.parse(data)) } catch { reject(new Error('invalid_json')) } })
-    req.on('error', reject)
-  })
-}
+// 本路由的 CORS 来源挂在 res.__sourceCheckOrigin（handler 里从 Origin 头取）。
+const reply = (res, status, body) => jsonReply(res, status, body, { corsOrigin: res.__sourceCheckOrigin })
+
+const readBody = req => readJsonBody(req, { maxChars: 16_384, destroyOnTooLarge: true })
 
 const titleKey = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 

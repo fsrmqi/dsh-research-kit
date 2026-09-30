@@ -1,6 +1,7 @@
 export const MEMORY_SEARCH_PATH = '/dsh-research-kit/memory-search'
 export const DEFAULT_MEMORY_SERVER = 'memory-center'
 import { readConfigValue } from './config.js'
+import { jsonReply as reply } from './lib/http-json.js'
 // 返回文本上限：只取有界摘要供增强上下文与来源预览，不搬运全库。
 const MAX_TEXT_CHARS = 4000
 const EXEC_TIMEOUT_MS = 15_000
@@ -90,11 +91,8 @@ export function applyArgsTemplate(template, { query, limit = 8 } = {}) {
   return walk(template)
 }
 
-function reply(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
-}
-
+// 本路由的读体刻意不走共享 readJsonBody：它按字节累计（先判断再收块）、超限抛
+// request_too_large 让 handler 回 413、解析失败按空对象降级而非报错——是另一份契约。
 async function readRequestBody(req) {
   const chunks = []
   let size = 0

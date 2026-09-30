@@ -2,6 +2,7 @@ export const SEMANTIC_ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
 export const SEMANTIC_ENHANCE_STREAM_PATH = '/dsh-research-kit/semantic-enhance/stream'
 
 import { parseEnhanceOutput } from '../src/lib/enhance-output.js'
+import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export { DIAGNOSIS_LABELS } from '../src/lib/enhance-output.js'
 
@@ -237,20 +238,12 @@ export async function streamEnhanceWithCurrentSessionModel({ llm, route, session
   return { ...parsed, model: route.model }
 }
 
-async function readJson(req) {
-  let raw = ''
-  for await (const chunk of req) {
-    raw += chunk
-    if (raw.length > 32_768) throw new Error('请求内容过大。')
-  }
-  try { return JSON.parse(raw || '{}') } catch { throw new Error('请求格式无效。') }
-}
-
-function reply(res, status, body) {
-  if (res.destroyed || res.writableEnded) return
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
-}
+const readJson = req => readJsonBody(req, {
+  maxChars: 32_768,
+  tooLargeMessage: '请求内容过大。',
+  invalidJsonMessage: '请求格式无效。',
+  emptyBodyAsObject: true,
+})
 
 // SSE 帧序列：event: delta（正文增量）→ event: done（最终 JSON）或 event: error。
 // 客户端逐段上屏；诊断行原样流过，由客户端 parseEnhanceOutput 拆分展示。

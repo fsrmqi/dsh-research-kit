@@ -2,23 +2,12 @@ import { readProjectEntries, safeProjectName } from '../mcp/execution/evidence-s
 import { listResearchClaims, recordClaimDrafts, recordResearchClaim } from '../mcp/state/claim-ledger.js'
 import { extractClaimDrafts } from '../mcp/execution/claim-drafts.js'
 import { buildResearchEvidenceExport } from '../mcp/state/research-evidence-export.js'
+import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const CLAIM_REVIEW_PATH = '/dsh-research-kit/claim-review'
 const MAX_BODY_BYTES = 64 * 1024
 
-function reply(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' })
-  res.end(JSON.stringify(body))
-}
-
-async function readBody(req) {
-  let body = ''
-  for await (const chunk of req) {
-    body += chunk
-    if (Buffer.byteLength(body) > MAX_BODY_BYTES) throw new Error('body_too_large')
-  }
-  try { return JSON.parse(body) } catch { throw new Error('invalid_json') }
-}
+const readBody = req => readJsonBody(req, { maxBytes: MAX_BODY_BYTES })
 
 function requestClaim(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('invalid_claim')

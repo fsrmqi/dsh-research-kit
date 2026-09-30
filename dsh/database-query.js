@@ -1,5 +1,6 @@
 export const DATABASE_QUERY_PATH = '/dsh-research-kit/query'
 import { readConfigValue } from './config.js'
+import { jsonReply as reply } from './lib/http-json.js'
 
 const MAX_QUERY_LENGTH = 300
 const MAX_LIMIT = 10
@@ -210,11 +211,6 @@ export async function runDatabaseQuery({ web, database, query, limit = 5, signal
   }
   if (!allowAgentFallback) throw new Error('Agent 回退已关闭。')
   return agentFallback(database, normalizedQuery, database.accessNote || '该来源需要当前会话的 MCP、授权或专用适配器。')
-}
-
-function reply(res, status, body) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  res.end(JSON.stringify(body))
 }
 
 export function databaseQueryRoute({ web, databases, logger, config }) {

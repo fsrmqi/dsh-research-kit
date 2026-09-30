@@ -13,30 +13,11 @@ import {
   readProjectEntries,
   safeProjectName,
 } from '../mcp/execution/evidence-store.js'
+import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
 
-function reply(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json' })
-  res.end(JSON.stringify(body))
-}
-
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = ''
-    req.on('data', chunk => {
-      data += chunk
-      if (data.length > 1_048_576) {
-        reject(new Error('body_too_large'))
-        req.destroy()
-      }
-    })
-    req.on('end', () => {
-      try { resolve(JSON.parse(data)) } catch { reject(new Error('invalid_json')) }
-    })
-    req.on('error', reject)
-  })
-}
+const readBody = req => readJsonBody(req, { maxChars: 1_048_576, destroyOnTooLarge: true })
 
 function requestProject(value) {
   return safeProjectName(value || 'default')
