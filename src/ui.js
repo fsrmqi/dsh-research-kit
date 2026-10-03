@@ -55,7 +55,7 @@ export function Button({ variant = 'soft', size = 'md', icon, disabled = false, 
   }, [icon ? h(Icon, { key: 'i', name: icon, size: 13 }) : null, children])
 }
 
-export function IconButton({ name, size = 15, onClick, label, active = false, disabled = false, style }) {
+export function IconButton({ name, size = 15, onClick, label, active = false, disabled = false, style, ...rest }) {
   return h('button', {
     type: 'button',
     onClick,
@@ -64,6 +64,7 @@ export function IconButton({ name, size = 15, onClick, label, active = false, di
     'aria-label': label,
     'aria-pressed': active,
     className: 'rk-btn',
+    ...rest,
     style: {
       width: 26, height: 26, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       border: `1px solid ${active ? C.tealLineStrong : C.line}`, borderRadius: '50%',

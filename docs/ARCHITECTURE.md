@@ -103,7 +103,7 @@ dsh-research-kit/
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
-│   ├── composer-deposit-button.js   # 手动沉淀伴生钮：贴靠增强器浮动按钮、位置解算（纯函数）与临时状态条
+│   ├── composer-deposit-button.js   # 悬浮沉淀伴生钮：内联入口后不再挂载，保留位置解算纯函数与单测
 │   ├── host-capabilities-client.js  # 宿主能力摘要：事实汇总（纯函数）+ 进程级 5 分钟缓存取数
 │   └── lib/
 │       ├── icons.js                 # 图标 path
@@ -162,7 +162,7 @@ dsh-research-kit/
 │   ├── standalone-glue.js           # DSH 槽位注册唯一入口（view + input.left + input.overlay + input.right）
 │   ├── slot-registry.js             # 四个槽位的 id/order/label 单一事实源（纯数据）
 │   ├── prompt-studio-glue.js        # 分区②「方法工坊」宿主与 provider 实例化
-│   ├── prompt-enhancer-glue.js      # 草稿增强器宿主：研究上下文桥接 + SSE 客户端
+│   ├── prompt-enhancer-glue.js      # 草稿增强器宿主：内联图标钮 + 受控面板装配 + 研究上下文桥接 + SSE 客户端
 │   ├── database-query.js            # 公开数据源直查适配器、缓存与限流（Node half）
 │   ├── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
 │   ├── host-capabilities.js         # 宿主能力探测：装配事实 + MCP 连接清单（Node half，只读）
