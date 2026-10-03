@@ -44,7 +44,8 @@ test('checkpoint：完成阶段命中 required 检查点才暂停', () => {
 test('项目名拒绝路径逃逸片段', () => {
   assert.throws(() => safeProjectName('..'))
   assert.throws(() => safeProjectName('.'))
-  assert.equal(safeProjectName('my/project'), 'my-project')
+  assert.throws(() => safeProjectName('my/project'), { code: 'INVALID_PROJECT' })
+  assert.equal(safeProjectName('my-project'), 'my-project')
 })
 
 test('图表脚本：Python 字符串转义处理换行、反斜杠和引号', () => {

@@ -5,6 +5,7 @@ import { catalogReady, loadBrowserCatalog, subscribeCatalog } from './catalog.js
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { ensureResearchProviders } from '../dsh/prompt-studio-glue.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
+import { ResearchProjectHome } from './research-project-home.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { AgentActivityPanel } from './agent-activity.js'
 import { ResearchTransferPanel } from './research-transfer-panel.js'
@@ -22,11 +23,12 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, embedded: true }),
+  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, embedded: true }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
 }
 
@@ -54,8 +56,11 @@ export function ResearchConsole(props) {
   const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
   const [catalogError, setCatalogError] = React.useState('')
   const [promptKitError, setPromptKitError] = React.useState('')
+  const [vaultTab, setVaultTab] = React.useState('assets')
+  const [initialWorkflowId, setInitialWorkflowId] = React.useState('')
   const [transferOpen, setTransferOpen] = React.useState(false)
   const current = findConsoleSection(section)
+  const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -91,27 +96,29 @@ export function ResearchConsole(props) {
     return () => { active = false; dispose() }
   }, [])
   React.useEffect(() => {
-    if (current.id === 'catalog' || promptKitLoaded) return undefined
+    if (!needsPromptKit || promptKitLoaded) return undefined
     let active = true
     loadPromptKit().then(PromptKit => {
       ensureResearchProviders(PromptKit)
       if (active) { setPromptKitLoaded(true); setPromptKitError('') }
     }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
     return () => { active = false }
-  }, [current.id, promptKitLoaded])
+  }, [needsPromptKit, promptKitLoaded])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
   const activeRun = activeResearchRun()
   const commitProject = () => {
     const normalized = String(projectDraft || '').trim().slice(0, 100)
     if (normalized !== researchContext.project) setResearchProject(normalized)
   }
-  const select = id => {
+  const select = (id, options = {}) => {
+    if (options.workflowId) setInitialWorkflowId(options.workflowId)
+    if (options.tab) setVaultTab(options.tab)
     setSection(normalizeConsoleSection(id))
     persistSection(id)
   }
   const navOptions = RESEARCH_CONSOLE_SECTIONS.map(item => ({ value: item.id, label: item.label }))
   const view = SECTION_VIEWS[current.id]
-  const resourceError = catalogError || (current.id === 'catalog' ? '' : promptKitError)
+  const resourceError = catalogError || (needsPromptKit ? promptKitError : '')
   return h(Page, { style: { padding: 0 } }, [
     h(GlobalStyle, { key: 'global-style' }),
     h('div', {
@@ -126,9 +133,11 @@ export function ResearchConsole(props) {
     }, [
       h(Segmented, { key: 'tabs', value: current.id, options: navOptions, onChange: select, ariaLabel: '科研工作台分区' }),
       h('div', { key: 'meta', style: { display: 'grid', gap: 2, marginTop: 10 } }, [
-        h('p', { key: 'position', style: { ...META_LINE, color: C.slate, fontWeight: 650 } }, `定位：${current.position}`),
-        h('p', { key: 'purpose', style: { ...META_LINE, color: C.muted } }, `核心用途：${current.purpose}`),
-        h('p', { key: 'boundary', style: { ...META_LINE, color: C.muted } }, `职责边界：${current.boundary}`),
+        h('details', { key: 'description', style: { fontSize: 12, color: C.muted } }, [
+          h('summary', { key: 'summary', style: { cursor: 'pointer' } }, current.position),
+          h('p', { key: 'purpose', style: META_LINE }, current.purpose),
+          h('p', { key: 'boundary', style: META_LINE }, current.boundary),
+        ]),
         h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
           h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
           h('input', {
@@ -144,9 +153,9 @@ export function ResearchConsole(props) {
         ]),
       ]),
     ]),
-    transferOpen ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
-    h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
-      ? (view ? view(props) : null)
+    transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
+    h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
+      ? (view ? view({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }) : null)
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),

@@ -21,7 +21,7 @@ export async function buildResearchContextPack({ project = 'default', run_id = '
   const [claims, entries, checkpoint] = await Promise.all([
     listResearchClaims({ project, run_id, limit: claim_limit }),
     readProjectEntries(project),
-    run_id ? getCheckpointState(run_id).catch(() => ({ checkpoints: {}, pending: [], approved: [] })) : Promise.resolve({ checkpoints: {}, pending: [], approved: [] }),
+    run_id ? getCheckpointState(run_id) : Promise.resolve({ checkpoints: {}, pending: [], approved: [] }),
   ])
   const selectedClaims = claims.filter(claim => claim.state !== 'rejected')
   const referenced = new Set(selectedClaims.flatMap(claim => claim.evidence_ids || []))
@@ -48,8 +48,19 @@ export async function buildResearchContextPack({ project = 'default', run_id = '
       ...(!selectedClaims.length ? ['尚无显式 Claim；先用 research_claim_record 登记需要追踪的研究结论。'] : []),
     ],
   }
-  let truncated = false
-  while (JSON.stringify(pack).length > budget && pack.evidence.length) { pack.evidence.pop(); truncated = true }
-  while (JSON.stringify(pack).length > budget && pack.claims.length) { pack.claims.pop(); truncated = true }
-  return { ...pack, budget_chars: budget, truncated, injection_policy: 'user_select_required' }
+  const result = { ...pack, budget_chars: budget, truncated: false, injection_policy: 'user_select_required' }
+  // 对最终返回值计预算，包含回执、警告和协议字段；保留 Claim 所依赖的证据优先。
+  while (JSON.stringify(result).length > budget) {
+    result.truncated = true
+    if (result.validation_receipts.length) result.validation_receipts.pop()
+    else if (result.claims.length) {
+      result.claims.pop()
+      const retained = new Set(result.claims.flatMap(claim => claim.evidence_ids || []))
+      result.evidence = result.evidence.filter(entry => retained.has(entry.id))
+    } else if (result.evidence.length) result.evidence.pop()
+    else if (result.next_actions.length) result.next_actions.pop()
+    else if (result.warnings.length) result.warnings.pop()
+    else throw new Error('Context Pack 固定字段超过字符预算，请缩短项目名或运行 ID。')
+  }
+  return result
 }

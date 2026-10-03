@@ -1,9 +1,10 @@
 
-import { appendFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
-import { acquireFileLock } from './file-lock.js'
+import { acquireFileLock, releaseFileLock } from './file-lock.js'
+import { withClaimProjectLocks, readClaimProjectSnapshot, writeClaimProjectSnapshot } from '../state/claim-ledger.js'
 import { workspaceIdForProject } from '../../src/lib/research-workspaces.js'
 
 const BASE_DIR = dataPath('evidence')
@@ -22,9 +23,10 @@ export function safeProjectName(project) {
   const raw = String(project || 'default').trim()
   if (!raw || raw === '.' || raw === '..') throw invalidProject('项目名不能为空、"." 或 ".."。')
   if (raw.length > 100) throw invalidProject('项目名不能超过 100 个字符。')
-  const normalized = raw.replace(/[\/\\:*?"<>|\u0000]/g, '-').replace(/\.lock$/i, '-lock')
-  if (normalized === '.' || normalized === '..') throw invalidProject('项目名不合法。')
-  return normalized
+  if (/[\/\\:*?"<>|\u0000-\u001f]/.test(raw) || /\.lock$/i.test(raw)) {
+    throw invalidProject('项目名含路径保留字符或 .lock 后缀；请使用独立且合法的课题名，禁止自动替换后合并存储。')
+  }
+  return raw
 }
 
 function projectDir(project) {
@@ -50,8 +52,7 @@ async function withProjectLock(project, run) {
   try {
     return await run()
   } finally {
-    await handle.close()
-    try { await unlink(lockFile(project)) } catch {}
+    await releaseFileLock(lockFile(project), handle)
   }
 }
 
@@ -84,13 +85,21 @@ async function readEntriesUnlocked(project) {
   return entries
 }
 
-async function readEntriesStrict(project) {
+async function readEntriesStrict(project, { includeRaw = false } = {}) {
   const file = entriesFile(project)
-  if (!existsSync(file)) return []
-  const raw = await readFile(file, 'utf8')
-  return raw.split('\n').filter(line => line.trim()).map(line => {
-    try { return JSON.parse(line) } catch { throw new Error(`项目「${project}」的证据文件含无效 JSON；请先修复，整理已取消。`) }
+  const raw = existsSync(file) ? await readFile(file, 'utf8') : ''
+  const entries = raw.split('\n').filter(line => line.trim()).map(line => {
+    try { return JSON.parse(line) }
+    catch { throw new Error(`项目「${project}」的证据文件含无效 JSON；请先修复，写入已取消。`) }
   })
+  return includeRaw ? { raw, entries } : entries
+}
+
+async function appendEntriesUnlocked(project, entries) {
+  const { raw } = await readEntriesStrict(project, { includeRaw: true })
+  const separator = raw && !raw.endsWith('\n') ? '\n' : ''
+  await appendFile(entriesFile(project), separator + entries.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
+  invalidateEntryCache(project)
 }
 
 function invalidateEntryCache(project) {
@@ -99,6 +108,8 @@ function invalidateEntryCache(project) {
 }
 
 async function writeEntriesUnlocked(project, entries) {
+  // 读列表可以跳过损坏行，但任何写入都不得把可恢复的原文静默抹掉。
+  await readEntriesStrict(project)
   const dir = projectDir(project)
   await mkdir(dir, { recursive: true })
   const target = path.join(dir, 'entries.jsonl')
@@ -146,8 +157,7 @@ export async function mergeProjectEntries(project, incoming = []) {
       added.push(entry)
     }
     if (added.length) {
-      await appendFile(entriesFile(project), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
-      invalidateEntryCache(project)
+      await appendEntriesUnlocked(project, added)
     }
     return { entries: [...existing, ...added], added: added.length, skipped }
   })
@@ -182,6 +192,16 @@ export async function replaceProjectEntry(project, incoming) {
 }
 
 const ORGANIZER_JOURNAL = dataPath('evidence-organizer-last.json')
+async function withEvidenceOrganizerLock(run) {
+  const file = `${ORGANIZER_JOURNAL}.lock`
+  const handle = await acquireFileLock(file, { timeoutMs: 5000, busyMessage: '项目整理正在进行，请稍后重试。' })
+  try { return await run() } finally { await releaseFileLock(file, handle) }
+}
+async function writeEvidenceOrganizerJournal(value) {
+  await mkdir(path.dirname(ORGANIZER_JOURNAL), { recursive: true })
+  const temp = `${ORGANIZER_JOURNAL}.${process.pid}.tmp`
+  await writeFile(temp, JSON.stringify(value), 'utf8'); await rename(temp, ORGANIZER_JOURNAL)
+}
 
 async function withProjectLocks(projects, run) {
   const names = [...new Set(projects.map(safeProjectName))].sort()
@@ -215,7 +235,7 @@ export async function evidenceProjectOrganizationState() {
 export async function organizeEvidenceProjects(moves) {
   const mappings = validateProjectMoves(moves)
   const names = [...new Set(mappings.flatMap(item => [item.from, item.to]))]
-  return withProjectLocks(names, async () => {
+  return withEvidenceOrganizerLock(() => withClaimProjectLocks(names, () => withProjectLocks(names, async () => {
     const previous = await readOrganizerJournal()
     if (previous?.status === 'applying') throw new Error('上次项目整理未完成，请先撤销恢复；未执行新的整理。')
     if (previous?.status === 'applied') throw new Error('已有可撤销的项目整理；请先撤销或保留当前结果。')
@@ -230,49 +250,72 @@ export async function organizeEvidenceProjects(moves) {
       }
       after[from] = []
     }
+    const claimsBefore = Object.fromEntries(await Promise.all(names.map(async name => [name, await readClaimProjectSnapshot(name)])))
+    const claimsAfter = Object.fromEntries(names.map(name => [name, [...claimsBefore[name]]]))
+    for (const { from, to } of mappings) {
+      for (const claim of claimsBefore[from]) {
+        if (claimsAfter[to].some(item => item.id === claim.id)) throw new Error('目标课题存在同 ID 论断；项目整理已停止。')
+        claimsAfter[to].push({ ...claim, project: to, workspace_id: workspaceIdForProject(to), revision: (claim.revision || 0) + 1, updated_at: new Date().toISOString() })
+      }
+      claimsAfter[from] = []
+    }
     const id = `organize-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-    const journal = { id, status: 'applying', mappings, before, after, createdAt: Date.now() }
-    await mkdir(path.dirname(ORGANIZER_JOURNAL), { recursive: true })
-    await writeFile(ORGANIZER_JOURNAL, JSON.stringify(journal), 'utf8')
+    const journal = { id, status: 'applying', mappings, before, after, claimsBefore, claimsAfter, createdAt: Date.now() }
+    await writeEvidenceOrganizerJournal(journal)
     try {
       for (const name of names) await writeEntriesUnlocked(name, after[name])
+      for (const name of names) await writeClaimProjectSnapshot(name, claimsAfter[name])
       for (const name of names) {
         const checked = await readEntriesStrict(name)
         if (JSON.stringify(checked) !== JSON.stringify(after[name])) throw new Error(`项目「${name}」迁移校验失败。`)
       }
-      await writeFile(ORGANIZER_JOURNAL, JSON.stringify({ ...journal, status: 'applied' }), 'utf8')
-      return { id, moved: mappings.reduce((sum, item) => sum + before[item.from].length, 0), mappings }
+      await writeEvidenceOrganizerJournal({ ...journal, status: 'applied' })
+      return { id, moved: mappings.reduce((sum, item) => sum + before[item.from].length, 0), mappings,
+        moved_claims: mappings.flatMap(({ from, to }) => claimsAfter[to].filter(claim => claimsBefore[from].some(before => before.id === claim.id))) }
     } catch (error) {
       for (const name of names) await writeEntriesUnlocked(name, before[name])
-      await writeFile(ORGANIZER_JOURNAL, JSON.stringify({ ...journal, status: 'rolled_back' }), 'utf8')
+      for (const name of names) await writeClaimProjectSnapshot(name, claimsBefore[name])
+      await writeEvidenceOrganizerJournal({ ...journal, status: 'rolled_back' })
       throw error
     }
-  })
+  })))
 }
 
 export async function undoEvidenceProjectOrganization(id) {
-  const journal = await readOrganizerJournal()
-  if (!journal || journal.id !== id || !['applied', 'applying'].includes(journal.status)) throw new Error('找不到可撤销的项目整理记录。')
-  const names = Object.keys(journal.before)
-  return withProjectLocks(names, async () => {
-    for (const name of names) {
-      const current = await readEntriesStrict(name)
-      if (JSON.stringify(current) !== JSON.stringify(journal.after[name])
-        && !(journal.status === 'applying' && JSON.stringify(current) === JSON.stringify(journal.before[name]))) {
-        throw new Error(`项目「${name}」在整理后发生变化；为避免覆盖新数据，自动撤销已停止。`)
+  return withEvidenceOrganizerLock(async () => {
+    const journal = await readOrganizerJournal()
+    if (!journal || journal.id !== id || !['applied', 'applying'].includes(journal.status)) throw new Error('找不到可撤销的项目整理记录。')
+    const names = Object.keys(journal.before)
+    return withClaimProjectLocks(names, () => withProjectLocks(names, async () => {
+      for (const name of names) {
+        const current = await readEntriesStrict(name)
+        if (JSON.stringify(current) !== JSON.stringify(journal.after[name])
+          && !(journal.status === 'applying' && JSON.stringify(current) === JSON.stringify(journal.before[name]))) {
+          throw new Error(`项目「${name}」在整理后发生变化；为避免覆盖新数据，自动撤销已停止。`)
+        }
+        if (journal.claimsBefore) {
+          const claims = await readClaimProjectSnapshot(name)
+          if (JSON.stringify(claims) !== JSON.stringify(journal.claimsAfter[name])
+            && !(journal.status === 'applying' && JSON.stringify(claims) === JSON.stringify(journal.claimsBefore[name]))) {
+            throw new Error(`项目「${name}」论断在整理后发生变化；自动撤销已停止。`)
+          }
+        }
       }
-    }
-    for (const name of names) await writeEntriesUnlocked(name, journal.before[name])
-    await writeFile(ORGANIZER_JOURNAL, JSON.stringify({ ...journal, status: 'undone' }), 'utf8')
-    return { id, restored: names.length }
+      for (const name of names) await writeEntriesUnlocked(name, journal.before[name])
+      if (journal.claimsBefore) for (const name of names) await writeClaimProjectSnapshot(name, journal.claimsBefore[name])
+      await writeEvidenceOrganizerJournal({ ...journal, status: 'undone' })
+      return { id, restored: names.length }
+    }))
   })
 }
 
 export async function finalizeEvidenceProjectOrganization(id) {
-  const journal = await readOrganizerJournal()
-  if (!journal || journal.id !== id || journal.status !== 'applied') throw new Error('找不到待确认保留的项目整理记录。')
-  await writeFile(ORGANIZER_JOURNAL, JSON.stringify({ ...journal, status: 'finalized' }), 'utf8')
-  return { id, finalized: true }
+  return withEvidenceOrganizerLock(async () => {
+    const journal = await readOrganizerJournal()
+    if (!journal || journal.id !== id || journal.status !== 'applied') throw new Error('找不到待确认保留的项目整理记录。')
+    await writeEvidenceOrganizerJournal({ ...journal, status: 'finalized' })
+    return { id, finalized: true }
+  })
 }
 
 export async function deleteProjectEntry(project, entryId) {
@@ -370,8 +413,7 @@ async function saveEvidenceBatch(items = [], { project, run_id } = {}) {
       added.push(entry)
     }
     if (added.length) {
-      await appendFile(entriesFile(projectName), added.map(entry => JSON.stringify(entry)).join('\n') + '\n', 'utf8')
-      invalidateEntryCache(projectName)
+      await appendEntriesUnlocked(projectName, added)
     }
     return {
       project: projectName,

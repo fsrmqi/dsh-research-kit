@@ -1,5 +1,5 @@
 import React from 'react'
-import { catalog, itemById, searchCatalog, selectedCatalogItem, composeWorkflow, databaseMetadata } from './catalog.js'
+import { catalog, itemById, catalogMatch, searchCatalog, selectedCatalogItem, composeWorkflow, databaseMetadata } from './catalog.js'
 import { RouteReplay } from './route-replay.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
@@ -116,7 +116,19 @@ export function filterCatalogCategory(items, type, category = 'all') {
   return category === 'all' ? items : items.filter(item => catalogCategory(item, type) === category)
 }
 
-export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded = false }) {
+function highlightCatalogText(value, term) {
+  const text = String(value || '')
+  if (!term) return text
+  const parts = []; let offset = 0
+  const lower = text.toLowerCase()
+  for (let at = lower.indexOf(term, offset); at >= 0; at = lower.indexOf(term, offset)) {
+    parts.push(text.slice(offset, at), h('mark', { key: at, style: { background: C.amberTint, color: C.ink } }, text.slice(at, at + term.length)))
+    offset = at + term.length
+  }
+  return [...parts, text.slice(offset)]
+}
+
+export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
@@ -126,7 +138,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
-  const [selectedId, setSelectedId] = React.useState('review-paper')
+  const [selectedId, setSelectedId] = React.useState(initialWorkflowId || 'review-paper')
   const [values, setValues] = React.useState({})
   const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
@@ -266,7 +278,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     () => isSpecialView ? specialRows : items.map(item => ({ item })),
     [isSpecialView, specialRows, items],
   )
-  const listGroups = React.useMemo(() => groupEntriesByCategory(listEntries), [listEntries])
+  const listGroups = React.useMemo(() => deferredQuery.trim() && !isSpecialView ? [{ category: '按相关性排序', rows: listEntries }] : groupEntriesByCategory(listEntries), [listEntries, deferredQuery, isSpecialView])
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
   const recordUse = (status = 'draft') => {
     if (!workflow) return
@@ -334,10 +346,10 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
     return counts
   }, {}), [])
   const typeTabs = [
-    { value: 'all', label: `全部 ${catalog.length}` },
-    { value: 'workflow', label: `工作流程 ${catalogCounts.workflow || 0}` },
-    { value: 'skill', label: `技能 ${catalogCounts.skill || 0}` },
-    { value: 'database', label: `数据库 ${catalogCounts.database || 0}` },
+    { value: 'all', label: `全部 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery }).length : catalog.length}` },
+    { value: 'workflow', label: `工作流程 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'workflow' }).length : catalogCounts.workflow || 0}` },
+    { value: 'skill', label: `技能 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'skill' }).length : catalogCounts.skill || 0}` },
+    { value: 'database', label: `数据库 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'database' }).length : catalogCounts.database || 0}` },
     { value: 'favorites', label: `★ 收藏 ${favorites.length}` },
     { value: 'history', label: `历史 ${history.length}` },
   ]
@@ -425,10 +437,11 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, emb
                 }),
               }, [
                 h('div', { key: 'name', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, item.name),
+                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, highlightCatalogText(item.name, catalogMatch(item, deferredQuery).term)),
                   h(Badge, { key: 't', color: C.teal }, TYPE_LABELS[item.type]),
                 ]),
-                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : item.description),
+                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : highlightCatalogText(item.description, catalogMatch(item, deferredQuery).term)),
+                deferredQuery.trim() ? h('small', { key: 'match', style: { color: C.teal } }, catalogMatch(item, deferredQuery).reason) : null,
               ])
             })
           ])))

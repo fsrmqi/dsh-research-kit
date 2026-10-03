@@ -10,7 +10,7 @@ process.env.HOME = await mkdtemp(path.join(os.tmpdir(), 'dsh-ev-'))
 const BASE_DIR = path.join(process.env.HOME, '.dsh-research-kit', 'evidence')
 
 // 动态 import 以读取刚改的 BASE_DIR（测试目录隔离）
-const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry, assessEvidence, replaceProjectEntry, organizeEvidenceProjects, undoEvidenceProjectOrganization } = await import('../mcp/execution/evidence-store.js')
+const { saveEvidence, listEvidence, mergeProjectEntries, readProjectEntries, deleteProjectEntry, assessEvidence, replaceProjectEntry, organizeEvidenceProjects, undoEvidenceProjectOrganization, safeProjectName, saveEvidenceBatch } = await import('../mcp/execution/evidence-store.js')
 
 test.after(async () => {
   await rm(process.env.HOME, { recursive: true, force: true })
@@ -148,4 +148,54 @@ test('并发写入：锁内全量原子写不得丢条目', async () => {
   assert.equal(ok, 25, '25 个并发写入必须全部落盘')
   const listed = await listEvidence({ project })
   assert.equal(listed.total, 25)
+})
+
+
+test('损坏证据文件：评估、更新、删除与追加均拒绝写入并保留原文', async () => {
+  const fs = await import('node:fs/promises')
+  const project = 'corrupt-write-guard'
+  const saved = await saveEvidence({ project, title: '正常来源', identifier_type: 'doi', identifier: '10.9999/corrupt-guard' })
+  const file = path.join(BASE_DIR, project, 'entries.jsonl')
+  await fs.appendFile(file, '{"id":"recoverable","title":"未写完"')
+  const original = await fs.readFile(file, 'utf8')
+  const operations = [
+    () => assessEvidence(saved.id, project, { assessed_by: '研究者' }),
+    () => replaceProjectEntry(project, { id: saved.id, title: '改动' }),
+    () => deleteProjectEntry(project, saved.id),
+    () => saveEvidence({ project, title: '另一个来源', identifier_type: 'doi', identifier: '10.9999/another' }),
+    () => saveEvidenceBatch([{ title: '批量来源' }], { project }),
+  ]
+  for (const operation of operations) {
+    await assert.rejects(operation, /无效 JSON/)
+    assert.equal(await fs.readFile(file, 'utf8'), original)
+  }
+})
+
+test('课题隔离：拒绝会被旧规则替换到同一目录的名字，合法目录保持不变', async () => {
+  const project = '试验-A'
+  await saveEvidence({ project, title: '独立课题来源', identifier_type: 'doi', identifier: '10.9999/project-isolation' })
+  assert.equal(safeProjectName(project), project)
+  for (const alias of ['试验/A', '试验:A', '试验\\A', 'trial.lock', 'trial\u0001']) {
+    assert.throws(() => safeProjectName(alias), { code: 'INVALID_PROJECT' })
+    await assert.rejects(() => listEvidence({ project: alias }), { code: 'INVALID_PROJECT' })
+  }
+  assert.equal((await listEvidence({ project })).total, 1)
+})
+
+
+test('JSONL 追加：合法末行没有换行时，单条和批量保存均补齐分隔符', async () => {
+  const fs = await import('node:fs/promises')
+  for (const batch of [false, true]) {
+    const project = `no-final-newline-${batch}`
+    await saveEvidence({ project, title: '原始来源', identifier_type: 'doi', identifier: '10.9999/original' })
+    const file = path.join(BASE_DIR, project, 'entries.jsonl')
+    await fs.writeFile(file, (await fs.readFile(file, 'utf8')).trimEnd())
+    const input = { title: '新增来源', identifier_type: 'doi', identifier: '10.9999/new' }
+    if (batch) await saveEvidenceBatch([input], { project })
+    else await saveEvidence({ project, ...input })
+    const lines = (await fs.readFile(file, 'utf8')).trimEnd().split('\n')
+    assert.equal(lines.length, 2)
+    assert.equal(JSON.parse(lines[0]).title, '原始来源')
+    assert.equal(JSON.parse(lines[1]).title, '新增来源')
+  }
 })

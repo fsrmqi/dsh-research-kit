@@ -1,3 +1,4 @@
+import { filterEvidence, statusCounts } from './lib/evidence-vault-core.js'
 import { normalizeEvidenceEntry, findDuplicate } from './lib/evidence-vault-core.js'
 import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
 import { normalizeResearchClaim } from './lib/research-claims.js'
@@ -18,7 +19,7 @@ const DB_NAME = 'dsh-research-kit-evidence'
 // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
 // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
 // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
-const DB_VERSION = 6
+const DB_VERSION = 7
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
 const ORGANIZER_STORE = 'projectOrganizer'
@@ -82,6 +83,9 @@ export function createEvidenceVaultStore() {
           store.createIndex('project', 'project')
           store.createIndex('status', 'status')
         }
+        const evidenceStore = request.transaction?.objectStore(STORE)
+        if (evidenceStore && !evidenceStore.indexNames.contains('projectSavedAtId')) evidenceStore.createIndex('projectSavedAtId', ['project', 'savedAt', 'id'])
+        if (evidenceStore && !evidenceStore.indexNames.contains('savedAtId')) evidenceStore.createIndex('savedAtId', ['savedAt', 'id'])
         if (!db.objectStoreNames.contains(LINKS_STORE)) {
           const links = db.createObjectStore(LINKS_STORE, { keyPath: 'id' })
           links.createIndex('assetId', 'assetId')
@@ -129,6 +133,31 @@ export function createEvidenceVaultStore() {
     return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project)))
   }
 
+  const scanEvidence = async (project, cursor, visit) => {
+    const db = await connect()
+    if (db && typeof globalThis.IDBKeyRange !== 'undefined') {
+      return withStore('readonly', store => new Promise((resolve, reject) => {
+        const scoped = typeof project === 'string'
+        const index = store.index(scoped ? 'projectSavedAtId' : 'savedAtId')
+        const lower = scoped ? [project, 0, ''] : [0, '']
+        const upper = cursor || (scoped ? [project, Number.MAX_SAFE_INTEGER, '\uffff'] : [Number.MAX_SAFE_INTEGER, '\uffff'])
+        const request = index.openCursor(IDBKeyRange.bound(lower, upper, false, Boolean(cursor)), 'prev')
+        request.onerror = () => reject(request.error || new Error('证据分页读取失败。'))
+        request.onsuccess = () => {
+          const row = request.result
+          if (!row || visit(row.value, row.key) === false) { resolve(); return }
+          row.continue()
+        }
+      }))
+    }
+    const rows = (await readProject(project)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0) || (String(a.id) < String(b.id) ? 1 : String(a.id) > String(b.id) ? -1 : 0))
+    for (const row of rows) {
+      const key = typeof project === 'string' ? [project, row.savedAt || 0, row.id] : [row.savedAt || 0, row.id]
+      if (cursor && (key.at(-2) > cursor.at(-2) || (key.at(-2) === cursor.at(-2) && key.at(-1) >= cursor.at(-1)))) continue
+      if (visit(row, key) === false) break
+    }
+  }
+
   // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
   const inProject = (rows, project) =>
     (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
@@ -147,6 +176,14 @@ export function createEvidenceVaultStore() {
       return row
     },
 
+    // 台账投影只用于离线展示与迁移备份；写入最终审核始终经文件台账 API。
+    async cacheResearchClaims(rows) {
+      const result = await withStore('readwrite', store => Promise.all(rows.map(row => requestToPromise(store.put(row)))), CLAIMS_STORE)
+      if (result === undefined) {
+        const ids = new Set(rows.map(row => row.id))
+        memoryResearchClaims = [...rows, ...memoryResearchClaims.filter(row => !ids.has(row.id))]
+      }
+    },
     async listResearchClaims({ project } = {}) {
       const rows = await withStore('readonly', store => requestToPromise(
         typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
@@ -263,12 +300,46 @@ export function createEvidenceVaultStore() {
       return activeProject
     },
 
+    async getMany(ids = []) {
+      const values = await withStore('readonly', store => Promise.all(ids.map(id => requestToPromise(store.get(id)))))
+      return withWorkspaceIdentity(Array.isArray(values) ? values : memory.filter(row => ids.includes(row.id)))
+    },
+    async listPage({ project, query = '', filter = 'all', limit = 50, cursor = null, screenedIds = null } = {}) {
+      const size = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)))
+      const scope = JSON.stringify([project ?? null, String(query), filter, screenedIds || null])
+      if (cursor && (cursor.scope !== scope || !Array.isArray(cursor.key))) throw new Error('分页条件已变化，请返回第一页。')
+      const rows = []; let lastKey = null; let hasMore = false
+      const screened = screenedIds ? new Set(screenedIds) : null
+      await scanEvidence(project, cursor?.key, (row, key) => {
+        if (!row || typeof row !== 'object' || (screened && screened.has(row.id)) || !filterEvidence([row], { query, filter }).length) return
+        if (rows.length === size) { hasMore = true; return false }
+        rows.push(row); lastKey = key
+      })
+      return { rows: withWorkspaceIdentity(rows), nextCursor: hasMore ? { scope, key: lastKey } : null }
+    },
+    async evidenceSummary({ project } = {}) {
+      const counts = statusCounts([])
+      await scanEvidence(project, null, row => {
+        if (!row || typeof row !== 'object') return
+        counts.all++; counts[row.status || 'unverified'] = (counts[row.status || 'unverified'] || 0) + 1
+      })
+      return counts
+    },
     async list({ project } = {}) {
       return readProject(project)
     },
 
     // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
     async listProjects() {
+      const db = await connect()
+      if (db && typeof globalThis.IDBKeyRange !== 'undefined') {
+        const projects = await withStore('readonly', store => new Promise((resolve, reject) => {
+          const rows = []; const request = store.index('project').openKeyCursor(null, 'nextunique')
+          request.onerror = () => reject(request.error || new Error('课题列表读取失败。'))
+          request.onsuccess = () => { const cursor = request.result; if (!cursor) { resolve(rows); return }; if (cursor.key) rows.push(cursor.key); cursor.continue() }
+        }))
+        return projects.sort((a, b) => a.localeCompare(b, 'zh-CN'))
+      }
       const rows = await readAll()
       return [...new Set(rows.map(item => item.project).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     },
@@ -399,7 +470,7 @@ export function createEvidenceVaultStore() {
 
     // 项目整理只改归属，不改证据 ID、人工结论、Agent 历史或关联端点。
     // 证据与关联共用一个 IndexedDB 事务，防止刷新时只搬了一半。
-    async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null } = {}) {
+    async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null, claimProjections = [] } = {}) {
       const map = new Map(mappings.map(item => [item.from, item.to]))
       const evidenceBefore = (await readAll()).filter(item => map.has(item.project))
       const linksBefore = (await this.listAssetEvidenceLinks()).filter(item => map.has(item.project))
@@ -410,7 +481,8 @@ export function createEvidenceVaultStore() {
         legacyProject: item.legacyProject || item.project, updatedAt: now,
       }))
       const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
+      const movedClaims = new Map(claimProjections.map(item => [item.id, item]))
+      const claimsAfter = claimsBefore.map(item => movedClaims.get(item.id) || ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
       const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
       const all = await readAll()
       const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]

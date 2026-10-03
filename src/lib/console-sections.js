@@ -12,6 +12,12 @@
 //   ownership   该分区独占的数据归属，用于约束「互不写对方存储」
 export const RESEARCH_CONSOLE_SECTIONS = [
   {
+    id: 'home', label: '项目首页', position: '任务入口 · 查看当前项目进度与待办',
+    purpose: '从综述、论文和结论核验开始；查看当前运行、材料提醒、待审阅记录和最近产出。',
+    boundary: '只读取各模块已有事实，不自动确认研究结论或执行完成状态。',
+    ownership: '首页导航偏好；项目数据只读投影',
+  },
+  {
     id: 'catalog',
     label: '资源与工作流',
     position: '发现层 · 找到可用资源并组装成可执行提示词',
@@ -46,7 +52,7 @@ export const RESEARCH_CONSOLE_SECTIONS = [
 ]
 
 // 默认分区：合并前用户最常用的入口，保证合并后落点不陌生。
-export const DEFAULT_CONSOLE_SECTION = 'catalog'
+export const DEFAULT_CONSOLE_SECTION = 'home'
 
 // 深链/持久化读回的取值容错：未知值一律回落到默认分区，不抛错。
 export function normalizeConsoleSection(value, sections = RESEARCH_CONSOLE_SECTIONS) {

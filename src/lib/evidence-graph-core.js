@@ -42,12 +42,25 @@ export function buildEvidenceGraph(params) {
       link(stageId, planId, stage.done ? 'confirmed-stage' : 'planned-stage')
     }
   }
+  const sourceUrls = new Map()
+  const sourceIdentifiers = new Map()
+  const sourceOrdinal = new Map()
+  const databaseNames = new Map()
+  for (const resource of resources) if (resource.type === 'database' && !databaseNames.has(resource.name)) databaseNames.set(resource.name, resource)
+  const indexSource = (index, key, id) => {
+    if (!key) return
+    if (!index.has(String(key))) index.set(String(key), new Set())
+    index.get(String(key)).add(id)
+  }
   for (const query of queries) {
     const queryId = `query:${query.id}`
     add({ id: queryId, kind: query.mode === 'agent' ? 'agent-query' : 'query', label: query.databaseName || query.databaseId, detail: query.at ? new Date(query.at).toLocaleString('zh-CN') : '' })
     link(queryId, `resource:${query.databaseId}`, 'queries')
     for (const source of evidenceGraphList(query.sources)) {
       const sourceId = `source:${source.id || source.url}`
+      if (!sourceOrdinal.has(sourceId)) sourceOrdinal.set(sourceId, sourceOrdinal.size)
+      indexSource(sourceUrls, source.url, sourceId)
+      indexSource(sourceIdentifiers, source.id, sourceId)
       add({ id: sourceId, kind: 'source', label: source.title || source.url || '候选来源', detail: source.meta || source.url || '' })
       link(queryId, sourceId, 'returns')
     }
@@ -66,19 +79,19 @@ export function buildEvidenceGraph(params) {
       grade: entry.grade || 'ungraded',
       agentProduced: entry.agentProduced === true || entry.source === 'mcp-agent',
     })
-    const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
+    const database = databaseNames.get(entry.sourceDatabase)
     if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')
-    for (const query of queries) for (const source of evidenceGraphList(query.sources)) {
-      const sameUrl = entry.url && source.url && entry.url === source.url
-      const sameIdentifier = entry.identifier && source.id && String(entry.identifier) === String(source.id)
-      if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
-    }
+    const matched = new Set([
+      ...(sourceUrls.get(String(entry.url || '')) || []),
+      ...(sourceIdentifiers.get(String(entry.identifier || '')) || []),
+    ])
+    for (const sourceId of [...matched].sort((a, b) => sourceOrdinal.get(a) - sourceOrdinal.get(b))) link(evidenceId, sourceId, 'saved-copy')
   }
   // 研究问题／论断与每条证据的方向由研究者显式给出；普通关联绝不冒充支持。
   for (const claim of researchClaims) {
     if (!claim?.id || !claim.statement) continue
     const claimId = `research-claim:${claim.id}`
-    add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: '研究论断 · 逐来源评估' })
+    add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: `研究论断 · ${({ extracted: '待核验', inferred: '推断待核验', ambiguous: '存疑', verified: '已人工确认', rejected: '已驳回' })[claim.state] || '逐来源评估'}`, state: claim.state || 'extracted' })
     if (claim.question) {
       const questionId = `research-question:${claim.id}`
       add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })

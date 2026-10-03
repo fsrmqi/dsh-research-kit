@@ -24,6 +24,7 @@ let databaseConfig = databaseMetadataConfig
 let DATABASE_GROUPS = databaseConfig.groups
 let RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides))
 let catalogIndex = new Map()
+let catalogSearchIndex = new Map()
 let catalogLoadPromise = null
 const catalogListeners = new Set()
 
@@ -81,6 +82,11 @@ function rebuildCatalog() {
   RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides || {}))
   catalog = Object.freeze([...workflowEntries, ...skillEntries, ...resourceEntries].map(enrichItem))
   catalogIndex = new Map(catalog.map(item => [item.id, item]))
+  catalogSearchIndex = new Map(catalog.map(item => [item.id, [
+    item.name, (item.tags || []).join(' '), item.description,
+    [item.category, item.databaseMeta?.group, item.databaseMeta?.dataKind].filter(Boolean).join(' '),
+    [item.prompt, item.guidance, item.promptFragment, item.databaseMeta?.queryExample].filter(Boolean).join(' '),
+  ].map(value => String(value || '').toLowerCase())]))
 }
 
 let catalog = []
@@ -124,18 +130,35 @@ function loadBrowserCatalog(fetcher = globalThis.fetch) {
   return catalogLoadPromise
 }
 
+const CATALOG_SYNONYMS = [
+  ['rnaseq', 'rna-seq', 'rna seq', '转录组'],
+  ['gwas', '全基因组关联'],
+  ['literature review', '文献综述'],
+  ['systematic review', '系统综述', '系统文献综述'],
+]
+
+function catalogMatch(item, query = '') {
+  const normalized = String(query).trim().toLowerCase()
+  if (!normalized) return { score: 0, reason: '', term: '' }
+  const terms = CATALOG_SYNONYMS.find(group => group.includes(normalized)) || [normalized]
+  const fields = catalogSearchIndex.get(item.id) || []
+  let best = { score: 0, reason: '', term: '' }
+  for (const term of terms) for (let index = 0; index < fields.length; index++) {
+    if (!fields[index].includes(term)) continue
+    const score = [80, 60, 40, 30, 10][index] + (index === 0 && fields[index] === term ? 20 : index === 0 && fields[index].startsWith(term) ? 10 : 0)
+    if (score > best.score) best = { score, reason: ['名称', '标签', '描述', '分类', '正文'][index] + '匹配', term }
+  }
+  return best
+}
+
 function searchCatalog({ query = '', type = 'all' } = {}) {
   const normalized = String(query).trim().toLowerCase()
-  return catalog.filter(item => {
-    if (type !== 'all' && item.type !== type) return false
-    if (!normalized) return true
-    // 搜索覆盖名称、描述、分类、标签与正文（prompt/guidance/promptFragment），与 README 3.1 的范围一致。
-    return [item.name, item.description, item.category, ...(item.tags || []), item.prompt, item.guidance, item.promptFragment, item.databaseMeta?.group, item.databaseMeta?.dataKind, item.databaseMeta?.queryExample]
-      .filter(part => typeof part === 'string')
-      .join(' ')
-      .toLowerCase()
-      .includes(normalized)
-  })
+  const rows = catalog.filter(item => type === 'all' || item.type === type)
+  if (!normalized) return rows
+  return rows.map((item, order) => ({ item, order, match: catalogMatch(item, normalized) }))
+    .filter(row => row.match.score > 0)
+    .sort((a, b) => b.match.score - a.match.score || a.order - b.order)
+    .map(row => row.item)
 }
 
 function itemById(id) {
@@ -2635,12 +2658,25 @@ function buildEvidenceGraph(params) {
       link(stageId, planId, stage.done ? 'confirmed-stage' : 'planned-stage')
     }
   }
+  const sourceUrls = new Map()
+  const sourceIdentifiers = new Map()
+  const sourceOrdinal = new Map()
+  const databaseNames = new Map()
+  for (const resource of resources) if (resource.type === 'database' && !databaseNames.has(resource.name)) databaseNames.set(resource.name, resource)
+  const indexSource = (index, key, id) => {
+    if (!key) return
+    if (!index.has(String(key))) index.set(String(key), new Set())
+    index.get(String(key)).add(id)
+  }
   for (const query of queries) {
     const queryId = `query:${query.id}`
     add({ id: queryId, kind: query.mode === 'agent' ? 'agent-query' : 'query', label: query.databaseName || query.databaseId, detail: query.at ? new Date(query.at).toLocaleString('zh-CN') : '' })
     link(queryId, `resource:${query.databaseId}`, 'queries')
     for (const source of evidenceGraphList(query.sources)) {
       const sourceId = `source:${source.id || source.url}`
+      if (!sourceOrdinal.has(sourceId)) sourceOrdinal.set(sourceId, sourceOrdinal.size)
+      indexSource(sourceUrls, source.url, sourceId)
+      indexSource(sourceIdentifiers, source.id, sourceId)
       add({ id: sourceId, kind: 'source', label: source.title || source.url || '候选来源', detail: source.meta || source.url || '' })
       link(queryId, sourceId, 'returns')
     }
@@ -2659,19 +2695,19 @@ function buildEvidenceGraph(params) {
       grade: entry.grade || 'ungraded',
       agentProduced: entry.agentProduced === true || entry.source === 'mcp-agent',
     })
-    const database = resources.find(resource => resource.type === 'database' && resource.name === entry.sourceDatabase)
+    const database = databaseNames.get(entry.sourceDatabase)
     if (database) link(evidenceId, `resource:${database.id}`, 'saved-from')
-    for (const query of queries) for (const source of evidenceGraphList(query.sources)) {
-      const sameUrl = entry.url && source.url && entry.url === source.url
-      const sameIdentifier = entry.identifier && source.id && String(entry.identifier) === String(source.id)
-      if (sameUrl || sameIdentifier) link(evidenceId, `source:${source.id || source.url}`, 'saved-copy')
-    }
+    const matched = new Set([
+      ...(sourceUrls.get(String(entry.url || '')) || []),
+      ...(sourceIdentifiers.get(String(entry.identifier || '')) || []),
+    ])
+    for (const sourceId of [...matched].sort((a, b) => sourceOrdinal.get(a) - sourceOrdinal.get(b))) link(evidenceId, sourceId, 'saved-copy')
   }
   // 研究问题／论断与每条证据的方向由研究者显式给出；普通关联绝不冒充支持。
   for (const claim of researchClaims) {
     if (!claim?.id || !claim.statement) continue
     const claimId = `research-claim:${claim.id}`
-    add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: '研究论断 · 逐来源评估' })
+    add({ id: claimId, kind: 'research-claim', label: claim.statement, detail: `研究论断 · ${({ extracted: '待核验', inferred: '推断待核验', ambiguous: '存疑', verified: '已人工确认', rejected: '已驳回' })[claim.state] || '逐来源评估'}`, state: claim.state || 'extracted' })
     if (claim.question) {
       const questionId = `research-question:${claim.id}`
       add({ id: questionId, kind: 'research-question', label: claim.question, detail: '研究问题' })
@@ -2973,6 +3009,144 @@ function decodeGraphView(hash = '') {
 }
 
 
+// 文献互操作只处理引用元数据；不导入摘要、附件或全文。
+function normalizeBibliography(input = {}) {
+  const trim = (value, max = 200) => String(value || '').trim().slice(0, max)
+  return { authors: (Array.isArray(input.authors) ? input.authors : []).map(value => trim(value, 120)).filter(Boolean).slice(0, 100),
+    year: trim(input.year, 12), journal: trim(input.journal), volume: trim(input.volume, 40), issue: trim(input.issue, 40), pages: trim(input.pages, 60) }
+}
+
+function bibliographyFieldsToEntry(fields, authors = []) {
+  const doi = String(fields.doi || '').replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '').trim()
+  const url = String(fields.url || '').trim()
+  const identifier = doi || fields.pmid || fields.arxiv || ''
+  const title = String(fields.title || '').trim()
+  if (!title || (!identifier && !/^https?:\/\//i.test(url))) throw new Error('文献缺少标题或可追溯的 DOI／链接。')
+  return { title, url: url || (doi ? `https://doi.org/${doi}` : ''), identifier,
+    identifierKind: doi ? 'doi' : fields.pmid ? 'pmid' : fields.arxiv ? 'arxiv' : 'none',
+    sourceDatabase: '文献导入', status: 'unverified',
+    bibliography: normalizeBibliography({ authors, year: fields.year, journal: fields.journal, volume: fields.volume, issue: fields.number, pages: fields.pages }) }
+}
+
+function parseBibtexRecords(text) {
+  const records = []; const warnings = []
+  let at = 0
+  const space = () => { while (at < text.length && /[\s,]/.test(text[at])) at++ }
+  while (at < text.length) {
+    at = text.indexOf('@', at)
+    if (at < 0) break
+    const start = at
+    const head = /^@([a-z]+)\s*([{(])\s*/i.exec(text.slice(at))
+    if (!head) { at++; continue }
+    const type = head[1].toLowerCase(); const endChar = head[2] === '{' ? '}' : ')'
+    at += head[0].length
+    if (['comment', 'preamble', 'string'].includes(type)) {
+      let depth = 1; let quoted = false
+      while (at < text.length && depth) {
+        const char = text[at++]
+        if (char === '\\') { at++; continue }
+        if (char === '"') quoted = !quoted
+        if (!quoted && char === head[2]) depth++
+        if (!quoted && char === endChar) depth--
+      }
+      if (depth) warnings.push('未闭合的 BibTeX 注释或宏定义已跳过。')
+      continue
+    }
+    const keyEnd = text.indexOf(',', at)
+    if (keyEnd < 0) { warnings.push('不完整的 BibTeX 条目已跳过。'); break }
+    const key = text.slice(at, keyEnd).trim(); at = keyEnd + 1
+    const fields = {}; let invalid = false
+    while (at < text.length) {
+      space()
+      if (text[at] === endChar) { at++; break }
+      const field = /^([a-z][\w-]*)\s*=\s*/i.exec(text.slice(at))
+      if (!field) { invalid = true; at++; break }
+      at += field[0].length
+      let value = ''
+      if (text[at] === '{' || text[at] === '"') {
+        const open = text[at++]; let depth = open === '{' ? 1 : 0; let closed = false
+        while (at < text.length) {
+          const char = text[at++]
+          if (char === '\\' && at < text.length) { value += char + text[at++]; continue }
+          if (open === '{' && char === '{') depth++
+          if (open === '{' && char === '}') { depth--; if (depth === 0) { closed = true; break } }
+          // 非闭括号不得减少深度。
+          if (open === '"' && char === '"') { closed = true; break }
+          value += char
+        }
+        if (!closed) invalid = true
+      } else {
+        const match = /^[^,}\n)]+/.exec(text.slice(at))
+        value = match?.[0]?.trim() || ''; at += match?.[0]?.length || 0
+        if (!/^\d+$/.test(value)) invalid = true // 宏与 # 拼接不猜测、不伪造。
+      }
+      fields[field[1].toLowerCase()] = value.replace(/\\([{}"\\])/g, '$1').trim()
+      space()
+      if (text[at] === '#') { invalid = true; break }
+    }
+    if (!['comment', 'preamble', 'string'].includes(type)) {
+      if (invalid) warnings.push(`BibTeX ${key || start} 含不完整字段或不支持的宏，已跳过。`)
+      else records.push({ fields, authors: (fields.author || '').split(/\s+and\s+/i) })
+    }
+    if (records.length > 1000) throw new Error('一次最多导入 1000 条引用，请拆分文件。')
+  }
+  return { records, warnings }
+}
+
+function parseBibliography(text, format = 'auto') {
+  const source = String(text || '')
+  if (new TextEncoder().encode(source).byteLength > 2_000_000) throw new Error('引用文件超过 2 MB，请拆分导入。')
+  const resolved = format === 'auto' ? (/^\s*(?:%[^\n]*(?:\n|$)\s*)*@/.test(source) ? 'bibtex' : 'ris') : format
+  let records = []; let warnings = []
+  if (resolved === 'bibtex') ({ records, warnings } = parseBibtexRecords(source))
+  else if (resolved === 'ris') {
+    let fields = null; let authors = []
+    for (const line of source.split(/\r?\n/)) {
+      const match = /^([A-Z0-9]{2})\s+-\s?(.*)$/.exec(line)
+      if (!match) continue
+      const [, tag, value] = match
+      if (tag === 'TY') { if (fields) warnings.push('未闭合 RIS 条目已跳过。'); fields = {}; authors = [] }
+      else if (tag === 'ER' && fields) { records.push({ fields, authors }); fields = null }
+      else if (fields) {
+        if (['AU', 'A1'].includes(tag)) authors.push(value)
+        const key = ({ TI: 'title', T1: 'title', DO: 'doi', UR: 'url', PY: 'year', Y1: 'year', JO: 'journal', JF: 'journal', T2: 'journal', VL: 'volume', IS: 'number', SP: 'pages', EP: 'endPage' })[tag]
+        if (key && !fields[key]) fields[key] = value
+      }
+      if (records.length > 1000) throw new Error('一次最多导入 1000 条引用，请拆分文件。')
+    }
+    if (fields) warnings.push('未闭合 RIS 条目已跳过。')
+  } else throw new Error('请选择 BibTeX 或 RIS 格式。')
+  const entries = []; const seen = new Set()
+  for (const [index, record] of records.entries()) {
+    try {
+      if (record.fields.endPage) record.fields.pages = `${record.fields.pages || ''}-${record.fields.endPage}`
+      record.fields.year = (record.fields.year || '').split('/')[0]
+      const entry = bibliographyFieldsToEntry(record.fields, record.authors)
+      const key = `${entry.identifierKind}:${entry.identifier || entry.url}`.toLowerCase()
+      if (seen.has(key)) { warnings.push(`第 ${index + 1} 条引用重复，已跳过。`); continue }
+      seen.add(key); entries.push(entry)
+    } catch (error) { warnings.push(`第 ${index + 1} 条：${error.message}`) }
+  }
+  if (!records.length) warnings.push('未识别到完整引用；支持常规 BibTeX 字段或 TY–ER 结构的 RIS。')
+  return { entries, warnings, format: resolved }
+}
+
+function serializeBibliography(entries = [], format = 'bibtex') {
+  const line = value => String(value || '').replace(/[\r\n]+/g, ' ').trim()
+  const bib = value => line(value).replace(/\\/g, '\\\\').replace(/[{}]/g, char => `\\${char}`)
+  return entries.map((entry, index) => {
+    const meta = normalizeBibliography(entry.bibliography)
+    const fields = { title: entry.title, author: meta.authors.join(' and '), year: meta.year, journal: meta.journal,
+      volume: meta.volume, number: meta.issue, pages: meta.pages, url: entry.url,
+      doi: entry.identifierKind === 'doi' ? entry.identifier : '' }
+    if (format === 'ris') return ['TY  - JOUR', `TI  - ${line(entry.title)}`, ...meta.authors.map(author => `AU  - ${line(author)}`),
+      ...Object.entries({ PY: meta.year, JO: meta.journal, VL: meta.volume, IS: meta.issue, SP: meta.pages, DO: fields.doi, UR: fields.url }).filter(([, value]) => value).map(([tag, value]) => `${tag}  - ${line(value)}`), 'ER  -', ''].join('\n')
+    if (format !== 'bibtex') throw new Error('未知引用导出格式。')
+    return `@article{research${index + 1},\n${Object.entries(fields).filter(([, value]) => value).map(([key, value]) => `  ${key} = {${bib(value)}}`).join(',\n')}\n}\n`
+  }).join('\n')
+}
+
+
 // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
 //
 // 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
@@ -3125,6 +3299,7 @@ function normalizeEvidenceEntry(value) {
     id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title,
     sourceDatabase: clampText(input.sourceDatabase, 120),
+    bibliography: normalizeBibliography(input.bibliography),
     identifier,
     identifierKind: EVIDENCE_IDENTIFIER_LABELS[identifierKind] ? identifierKind : 'none',
     url,
@@ -3433,6 +3608,12 @@ function normalizeAgentEvidenceResult(input, expectedIds, { model = '', at = Dat
 //   ownership   该分区独占的数据归属，用于约束「互不写对方存储」
 const RESEARCH_CONSOLE_SECTIONS = [
   {
+    id: 'home', label: '项目首页', position: '任务入口 · 查看当前项目进度与待办',
+    purpose: '从综述、论文和结论核验开始；查看当前运行、材料提醒、待审阅记录和最近产出。',
+    boundary: '只读取各模块已有事实，不自动确认研究结论或执行完成状态。',
+    ownership: '首页导航偏好；项目数据只读投影',
+  },
+  {
     id: 'catalog',
     label: '资源与工作流',
     position: '发现层 · 找到可用资源并组装成可执行提示词',
@@ -3467,7 +3648,7 @@ const RESEARCH_CONSOLE_SECTIONS = [
 ]
 
 // 默认分区：合并前用户最常用的入口，保证合并后落点不陌生。
-const DEFAULT_CONSOLE_SECTION = 'catalog'
+const DEFAULT_CONSOLE_SECTION = 'home'
 
 // 深链/持久化读回的取值容错：未知值一律回落到默认分区，不抛错。
 function normalizeConsoleSection(value, sections = RESEARCH_CONSOLE_SECTIONS) {
@@ -4561,7 +4742,7 @@ const DB_NAME = 'dsh-research-kit-evidence'
 // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
 // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
 // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
-const DB_VERSION = 6
+const DB_VERSION = 7
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
 const ORGANIZER_STORE = 'projectOrganizer'
@@ -4625,6 +4806,9 @@ function createEvidenceVaultStore() {
           store.createIndex('project', 'project')
           store.createIndex('status', 'status')
         }
+        const evidenceStore = request.transaction?.objectStore(STORE)
+        if (evidenceStore && !evidenceStore.indexNames.contains('projectSavedAtId')) evidenceStore.createIndex('projectSavedAtId', ['project', 'savedAt', 'id'])
+        if (evidenceStore && !evidenceStore.indexNames.contains('savedAtId')) evidenceStore.createIndex('savedAtId', ['savedAt', 'id'])
         if (!db.objectStoreNames.contains(LINKS_STORE)) {
           const links = db.createObjectStore(LINKS_STORE, { keyPath: 'id' })
           links.createIndex('assetId', 'assetId')
@@ -4672,6 +4856,31 @@ function createEvidenceVaultStore() {
     return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory.filter(item => (item.project || '') === project)))
   }
 
+  const scanEvidence = async (project, cursor, visit) => {
+    const db = await connect()
+    if (db && typeof globalThis.IDBKeyRange !== 'undefined') {
+      return withStore('readonly', store => new Promise((resolve, reject) => {
+        const scoped = typeof project === 'string'
+        const index = store.index(scoped ? 'projectSavedAtId' : 'savedAtId')
+        const lower = scoped ? [project, 0, ''] : [0, '']
+        const upper = cursor || (scoped ? [project, Number.MAX_SAFE_INTEGER, '\uffff'] : [Number.MAX_SAFE_INTEGER, '\uffff'])
+        const request = index.openCursor(IDBKeyRange.bound(lower, upper, false, Boolean(cursor)), 'prev')
+        request.onerror = () => reject(request.error || new Error('证据分页读取失败。'))
+        request.onsuccess = () => {
+          const row = request.result
+          if (!row || visit(row.value, row.key) === false) { resolve(); return }
+          row.continue()
+        }
+      }))
+    }
+    const rows = (await readProject(project)).sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0) || (String(a.id) < String(b.id) ? 1 : String(a.id) > String(b.id) ? -1 : 0))
+    for (const row of rows) {
+      const key = typeof project === 'string' ? [project, row.savedAt || 0, row.id] : [row.savedAt || 0, row.id]
+      if (cursor && (key.at(-2) > cursor.at(-2) || (key.at(-2) === cursor.at(-2) && key.at(-1) >= cursor.at(-1)))) continue
+      if (visit(row, key) === false) break
+    }
+  }
+
   // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
   const inProject = (rows, project) =>
     (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
@@ -4690,6 +4899,14 @@ function createEvidenceVaultStore() {
       return row
     },
 
+    // 台账投影只用于离线展示与迁移备份；写入最终审核始终经文件台账 API。
+    async cacheResearchClaims(rows) {
+      const result = await withStore('readwrite', store => Promise.all(rows.map(row => requestToPromise(store.put(row)))), CLAIMS_STORE)
+      if (result === undefined) {
+        const ids = new Set(rows.map(row => row.id))
+        memoryResearchClaims = [...rows, ...memoryResearchClaims.filter(row => !ids.has(row.id))]
+      }
+    },
     async listResearchClaims({ project } = {}) {
       const rows = await withStore('readonly', store => requestToPromise(
         typeof project === 'string' ? store.index('project').getAll(project) : store.getAll()), CLAIMS_STORE)
@@ -4806,12 +5023,46 @@ function createEvidenceVaultStore() {
       return activeProject
     },
 
+    async getMany(ids = []) {
+      const values = await withStore('readonly', store => Promise.all(ids.map(id => requestToPromise(store.get(id)))))
+      return withWorkspaceIdentity(Array.isArray(values) ? values : memory.filter(row => ids.includes(row.id)))
+    },
+    async listPage({ project, query = '', filter = 'all', limit = 50, cursor = null, screenedIds = null } = {}) {
+      const size = Math.max(1, Math.min(100, Math.floor(Number(limit) || 50)))
+      const scope = JSON.stringify([project ?? null, String(query), filter, screenedIds || null])
+      if (cursor && (cursor.scope !== scope || !Array.isArray(cursor.key))) throw new Error('分页条件已变化，请返回第一页。')
+      const rows = []; let lastKey = null; let hasMore = false
+      const screened = screenedIds ? new Set(screenedIds) : null
+      await scanEvidence(project, cursor?.key, (row, key) => {
+        if (!row || typeof row !== 'object' || (screened && screened.has(row.id)) || !filterEvidence([row], { query, filter }).length) return
+        if (rows.length === size) { hasMore = true; return false }
+        rows.push(row); lastKey = key
+      })
+      return { rows: withWorkspaceIdentity(rows), nextCursor: hasMore ? { scope, key: lastKey } : null }
+    },
+    async evidenceSummary({ project } = {}) {
+      const counts = statusCounts([])
+      await scanEvidence(project, null, row => {
+        if (!row || typeof row !== 'object') return
+        counts.all++; counts[row.status || 'unverified'] = (counts[row.status || 'unverified'] || 0) + 1
+      })
+      return counts
+    },
     async list({ project } = {}) {
       return readProject(project)
     },
 
     // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
     async listProjects() {
+      const db = await connect()
+      if (db && typeof globalThis.IDBKeyRange !== 'undefined') {
+        const projects = await withStore('readonly', store => new Promise((resolve, reject) => {
+          const rows = []; const request = store.index('project').openKeyCursor(null, 'nextunique')
+          request.onerror = () => reject(request.error || new Error('课题列表读取失败。'))
+          request.onsuccess = () => { const cursor = request.result; if (!cursor) { resolve(rows); return }; if (cursor.key) rows.push(cursor.key); cursor.continue() }
+        }))
+        return projects.sort((a, b) => a.localeCompare(b, 'zh-CN'))
+      }
       const rows = await readAll()
       return [...new Set(rows.map(item => item.project).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     },
@@ -4942,7 +5193,7 @@ function createEvidenceVaultStore() {
 
     // 项目整理只改归属，不改证据 ID、人工结论、Agent 历史或关联端点。
     // 证据与关联共用一个 IndexedDB 事务，防止刷新时只搬了一半。
-    async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null } = {}) {
+    async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null, claimProjections = [] } = {}) {
       const map = new Map(mappings.map(item => [item.from, item.to]))
       const evidenceBefore = (await readAll()).filter(item => map.has(item.project))
       const linksBefore = (await this.listAssetEvidenceLinks()).filter(item => map.has(item.project))
@@ -4953,7 +5204,8 @@ function createEvidenceVaultStore() {
         legacyProject: item.legacyProject || item.project, updatedAt: now,
       }))
       const linksAfter = linksBefore.map(item => ({ ...item, project: map.get(item.project), legacyProject: item.legacyProject || item.project }))
-      const claimsAfter = claimsBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
+      const movedClaims = new Map(claimProjections.map(item => [item.id, item]))
+      const claimsAfter = claimsBefore.map(item => movedClaims.get(item.id) || ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
       const ledgerAfter = ledgerBefore.map(item => ({ ...item, project: map.get(item.project), workspaceId: workspaceIdForProject(map.get(item.project)), legacyProject: item.legacyProject || item.project }))
       const all = await readAll()
       const proposed = [...all.filter(item => !map.has(item.project)), ...evidenceAfter]
@@ -5037,6 +5289,75 @@ function createEvidenceVaultStore() {
       return true
     },
   }
+}
+
+
+// 文件 Claim 台账是审核状态的唯一来源；IndexedDB 只保留可离线读取的投影。
+const UNIFIED_CLAIM_API = '/dsh-research-kit/claim-review'
+const unifiedClaimInFlight = new Map()
+
+async function requestResearchClaims(project, body, signal) {
+  const response = await fetch(body ? UNIFIED_CLAIM_API : `${UNIFIED_CLAIM_API}?project=${encodeURIComponent(project)}`, {
+    method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify({ ...body, project }) : undefined,
+    signal: signal || AbortSignal.timeout(10000),
+  })
+  const result = await response.json()
+  if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
+  return result
+}
+
+function projectClaimProjection(claim, project) {
+  const ids = claim.evidence_ids || []
+  const links = (claim.links || []).filter(link => ids.includes(link.evidenceId))
+  const resolvedProject = claim.workspace_id === 'workspace:unassigned' ? '' : claim.project || project
+  return { ...claim, project: resolvedProject, workspaceId: workspaceIdForProject(resolvedProject),
+    links: [...links, ...ids.filter(id => !links.some(link => link.evidenceId === id)).map(evidenceId => ({ evidenceId, stance: 'unassessed' }))],
+    createdAt: Date.parse(claim.created_at) || 0, updatedAt: Date.parse(claim.updated_at) || 0,
+    reviewSource: 'file-ledger' }
+}
+
+function synchronizeResearchClaims(store, project = '') {
+  const key = String(project || 'default')
+  if (unifiedClaimInFlight.has(key)) return unifiedClaimInFlight.get(key)
+  const task = (async () => {
+    const local = (await store.listResearchClaims()).filter(row => (row.project || 'default') === key)
+    const pending = local.filter(claim => claim.reviewSource !== 'file-ledger')
+    for (let at = 0; at < pending.length; at += 10) {
+      await requestResearchClaims(key || 'default', { action: 'import_local', claims: pending.slice(at, at + 10) })
+    }
+    let offset = 0; const rows = []; let first
+    do {
+      const response = await fetch(`${UNIFIED_CLAIM_API}?project=${encodeURIComponent(key || 'default')}&offset=${offset}`, { signal: AbortSignal.timeout(10000) })
+      const result = await response.json()
+      if (!response.ok || !result.ok || !Array.isArray(result.claims)) throw new Error(result.error || '读取 Claim 台账失败。')
+      first ||= result
+      rows.push(...result.claims.map(claim => projectClaimProjection(claim, key)))
+      if (result.next_offset == null) break
+      if (!Number.isInteger(result.next_offset) || result.next_offset <= offset) throw new Error('Claim 分页响应无效。')
+      offset = result.next_offset
+    } while (true)
+    await store.cacheResearchClaims(rows)
+    return { claims: rows, evidence: first.evidence || [], evidence_limit_reached: first.evidence_limit_reached }
+  })().finally(() => unifiedClaimInFlight.delete(key))
+  unifiedClaimInFlight.set(key, task)
+  return task
+}
+
+async function synchronizeClaimScopes(store, project) {
+  const projects = typeof project === 'string' ? [project || 'default'] : [...new Set(['default',
+    ...(await store.listProjects()),
+    ...(await store.listResearchClaims()).map(row => row.project || 'default'),
+  ])]
+  if (typeof project !== 'string') {
+    const response = await fetch(`${UNIFIED_CLAIM_API}?projects=1`, { signal: AbortSignal.timeout(10000) })
+    const result = await response.json()
+    if (!response.ok || !result.ok) throw new Error(result.error || '无法读取 Claim 课题列表。')
+    for (const name of result.projects || []) if (!projects.includes(name)) projects.push(name)
+  }
+  const results = []
+  for (const scope of projects) results.push(...(await synchronizeResearchClaims(store, scope)).claims)
+  return results
 }
 
 
@@ -5721,9 +6042,10 @@ async function applyProjectOrganization({ store, assetProvider, mappings, onProg
     const file = await projectOrganizerRequest({ action: 'organize', moves })
     journal = await store.writeOrganizerJournal({ ...journal, status: 'file', fileId: file.id })
     onProgress('正在迁移浏览器证据与关联')
-    const evidenceSnapshot = await store.remapProjects(moves, { dryRun: true, now: journal.createdAt })
+    const claimProjections = (file.moved_claims || []).map(claim => projectClaimProjection(claim, claim.project))
+    const evidenceSnapshot = await store.remapProjects(moves, { dryRun: true, now: journal.createdAt, claimProjections })
     journal = await store.writeOrganizerJournal({ ...journal, evidenceSnapshot })
-    await store.remapProjects(moves, { now: journal.createdAt, expectedSnapshot: evidenceSnapshot })
+    await store.remapProjects(moves, { now: journal.createdAt, expectedSnapshot: evidenceSnapshot, claimProjections })
     journal = await store.writeOrganizerJournal({ ...journal, status: 'evidence' })
     onProgress('正在迁移知识节点')
     const knowledgeSnapshot = await knowledgeStore().remapProjects(moves, { dryRun: true })
@@ -5832,6 +6154,7 @@ function fileEvidenceInput(entry) {
   return {
     id: entry.id,
     title: entry.title,
+    bibliography: entry.bibliography || {},
     sourceDatabase: entry.source_database || entry.sourceDatabase || 'MCP Agent',
     identifier: entry.identifier,
     identifierKind: entry.identifier_type || entry.identifierKind || 'accession',
@@ -5870,6 +6193,7 @@ function vaultEvidenceFileEntry(entry) {
     identifier_type: entry.identifierKind || 'accession',
     identifier: entry.identifier || '',
     title: entry.title,
+    bibliography: entry.bibliography || {},
     source_database: entry.sourceDatabase || '',
     url: entry.url || '',
     tags: entry.tags || [],
@@ -5926,7 +6250,17 @@ async function postFileEvidenceEntries(entries, { allowExistingSources = false }
     byProject.get(project).push(entry)
   }
   let existingSources = 0
+  const chunks = []
   for (const [project, rows] of byProject) {
+    let chunk = [], bytes = 0
+    for (const row of rows) {
+      const size = new TextEncoder().encode(JSON.stringify(row)).length
+      if (chunk.length && (bytes + size > 500000 || chunk.length >= 100)) { chunks.push([project, chunk]); chunk = []; bytes = 0 }
+      chunk.push(row); bytes += size
+    }
+    if (chunk.length) chunks.push([project, chunk])
+  }
+  for (const [project, rows] of chunks) {
     const response = await fetch(EVIDENCE_SYNC_PATH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -5967,7 +6301,7 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
   const localEntries = await store.list(project ? { project } : {})
   const localKeys = new Set(localEntries.map(evidenceSyncKey))
   const localById = new Map(localEntries.map(entry => [entry.id, entry]))
-  let imported = 0
+  let imported = 0, ignored = 0
   for (const fileEntry of fileEntries) {
     const local = localById.get(fileEntry.id)
     if (local && Date.parse(fileEntry.updated_at || '') > (local.updatedAt || local.savedAt || 0)) {
@@ -5980,14 +6314,23 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
       await store.save(fileEvidenceInput(fileEntry), { onDuplicate: 'new' })
       imported++
     } catch {
+      ignored++
       // 非法或无法追溯的文件条目不入库；文件侧保留原样，UI 不伪造条目。
     }
   }
 
   // 迁移备份只需收齐文件侧证据，不应因反向回写时的不同去重规则而拒绝导出。
-  if (pullOnly) return { skipped: false, imported, exported: 0 }
+  if (pullOnly) return { skipped: false, imported, exported: 0, ignored }
 
   const nextLocalEntries = await store.list(project ? { project } : {})
+  const fileById = new Map(fileEntries.map(entry => [entry.id, entry]))
+  let updated = 0
+  for (const local of nextLocalEntries) {
+    const remote = fileById.get(local.id)
+    if (remote && (local.updatedAt || local.savedAt || 0) > (Date.parse(remote.updated_at || remote.saved_at || '') || 0)) {
+      await updateFileEvidenceEntry(local); updated++
+    }
+  }
   const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
   const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
   let existingSources = 0
@@ -5995,7 +6338,7 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
     existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
     publishEvidenceVault()
   }
-  return { skipped: false, imported, exported: missing.length - existingSources, existingSources }
+  return { skipped: false, imported, exported: missing.length - existingSources, updated, ignored, existingSources }
 }
 
 function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {
@@ -6200,6 +6543,20 @@ function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved })
 function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
+  const [counts, setCounts] = React.useState({ all: 0 })
+  const [pageCursor, setPageCursor] = React.useState(null)
+  const [nextCursor, setNextCursor] = React.useState(null)
+  const [pageHistory, setPageHistory] = React.useState([])
+  const [selectedRows, setSelectedRows] = React.useState([])
+  const [pendingOnly, setPendingOnly] = React.useState(false)
+  const [syncStatus, setSyncStatus] = React.useState('读取本地数据')
+  const [citationOpen, setCitationOpen] = React.useState(false)
+  const [citationText, setCitationText] = React.useState('')
+  const [citationPreviewRows, setCitationPreviewRows] = React.useState([])
+  const [citationPicked, setCitationPicked] = React.useState([])
+  const [citationWarnings, setCitationWarnings] = React.useState([])
+  const [citationBusy, setCitationBusy] = React.useState(false)
+  const [retryIds, setRetryIds] = React.useState([])
   const [workspaces, setWorkspaces] = React.useState([])
   const [showArchivedWorkspaces, setShowArchivedWorkspaces] = React.useState(false)
   const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState('')
@@ -6260,36 +6617,54 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const refreshVersion = React.useRef(0)
+  React.useEffect(() => {
+    let current = true
+    store.getMany(selectedIds).then(rows => { if (current) setSelectedRows(rows) })
+      .catch(error => { if (current) setNotice(`⚠️ 无法读取所选证据：${error.message}`) })
+    return () => { current = false }
+  }, [store, selectedIds, entries])
+  const resetPages = () => { setPageCursor(null); setPageHistory([]) }
+  const readScope = () => store.list({ project: project || undefined })
 
-  const refresh = React.useCallback(() => {
+  const refresh = React.useCallback(async () => {
     const version = ++refreshVersion.current
-    Promise.resolve()
-      .then(() => syncEvidenceVaultWithFiles(project || undefined))
-      .catch(() => {})
-      .then(() => Promise.all([store.list({ project: project || undefined }), store.listWorkspaces({ includeArchived: true }), store.listAssetEvidenceLinks(), store.listResearchClaims({ project: project || undefined }), store.listResearchLedger({ project: project || undefined })]))
-      .then(([rows, names, links, claims, ledger]) => {
-        if (version !== refreshVersion.current) return
-        setEntries(rows || [])
-        setWorkspaces(names || [])
-        setLinks(Array.isArray(links) ? links : [])
-        setClaims(Array.isArray(claims) ? claims : [])
-        setLedger(Array.isArray(ledger) ? ledger : [])
-        setLoading(false)
-      })
-      .catch(error => {
-        if (version !== refreshVersion.current) return
-        setNotice(`⚠️ 读取证据库失败：${error?.message || error}`)
-        setLoading(false)
-      })
-  }, [store, project])
+    setLoading(true)
+    const readLocal = async () => {
+      const ledger = await store.listResearchLedger({ project: project || undefined })
+      const screenedIds = pendingOnly ? [...latestResearchScreening(ledger).values()].filter(row => row.decision !== 'pending').map(row => row.evidenceId).sort() : null
+      const [page, counts, names, links, claims] = await Promise.all([
+        store.listPage({ project: project || undefined, query, filter, cursor: pageCursor, screenedIds }),
+        store.evidenceSummary({ project: project || undefined }),
+        store.listWorkspaces({ includeArchived: true }), store.listAssetEvidenceLinks(),
+        store.listResearchClaims({ project: project || undefined }),
+      ])
+      if (version !== refreshVersion.current) return
+      setEntries(page.rows); setNextCursor(page.nextCursor); setCounts(counts)
+      setWorkspaces(names || []); setLinks(links || []); setClaims(claims || []); setLedger(ledger)
+      setLoading(false)
+    }
+    try {
+      await readLocal()
+      if (version !== refreshVersion.current) return
+      setSyncStatus('正在同步文件与 Claim 台账')
+      const synced = await syncEvidenceVaultWithFiles(project || undefined)
+      await synchronizeClaimScopes(store, project || undefined)
+      if (version !== refreshVersion.current) return
+      await readLocal(); setSyncStatus(synced.ignored ? `已同步；${synced.ignored} 条文件记录无法导入，请检查元数据` : '已同步文件与 Claim 台账')
+    } catch (error) {
+      if (version !== refreshVersion.current) return
+      if (error.message.includes('分页条件')) { setPageCursor(null); setPageHistory([]); return }
+      setSyncStatus(`本地数据可用，同步／读取待重试：${error.message}`)
+      setLoading(false)
+    }
+  }, [store, project, query, filter, pageCursor, pendingOnly])
   React.useEffect(() => { refresh() }, [refresh])
   React.useEffect(() => subscribeEvidenceVault(refresh), [refresh])
   React.useEffect(() => { recoverProjectOrganizationJournal(store).then(setOrganizerJournal).catch(error => setNotice(`⚠️ 项目整理恢复检查失败：${error.message}`)) }, [store])
 
-  const counts = React.useMemo(() => statusCounts(entries), [entries])
   const quality = React.useMemo(() => auditResearchDataQuality({
     evidence: entries,
-    links: project ? links.filter(item => item.project === project) : links,
+    links: links.filter(item => entries.some(row => row.id === item.evidenceId)),
     assetIds: assetTitlesById ? Object.keys(assetTitlesById) : null,
   }), [entries, links, project, assetTitlesById])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
@@ -6309,7 +6684,12 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   }, [links, assetTitlesById])
   // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
   // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
-  const selectedEntries = React.useMemo(() => entries.filter(item => selectedIdSet.has(item.id)), [entries, selectedIdSet])
+  const selectedEntries = React.useMemo(() => [...new Map([...selectedRows, ...entries].filter(item => selectedIdSet.has(item.id)).map(item => [item.id, item])).values()], [entries, selectedRows, selectedIdSet])
+  React.useEffect(() => {
+    let alive = true
+    store.getMany(selectedIds).then(rows => { if (alive) setSelectedRows(rows) }).catch(error => setNotice(`⚠️ 读取已选证据失败：${error.message}`))
+    return () => { alive = false }
+  }, [store, selectedIds])
   const canWrite = canWriteDraft(inputActions)
   // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
   // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
@@ -6318,6 +6698,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   const degraded = store.isDegraded()
 
   const switchProject = value => {
+    resetPages(); setEntries([]); setSelectedRows([])
     setProject(value)
     setActiveProject(value)
     setConfirmClear(false)
@@ -6332,9 +6713,12 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     setNotice(written.ok ? writePlan.notice : '草稿已变化，未自动写入引用；请选择后重新写入。')
   }
 
+  const synchronizeResearchClaimsForVault = value => synchronizeClaimScopes(store, value || 'default')
   const saveClaim = async () => {
     if (!selectedEntries.length) return setNotice('请先勾选至少一条证据。')
     try {
+      if (selectedEntries.length > 30) throw new Error('一次最多关联 30 条证据，请减少所选条目。')
+      if (new Set(selectedEntries.map(item => item.project || '')).size > 1) throw new Error('论断只能关联同一项目的证据，请先切换到具体项目。')
       await store.saveResearchClaim({
         project: project || selectedEntries[0].project || '',
         question: claimQuestion, statement: claimStatement,
@@ -6345,6 +6729,8 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
           assessedAt: claimStance === 'unassessed' ? 0 : Date.now(),
         })),
       })
+      await syncEvidenceVaultWithFiles(project || selectedEntries[0].project || undefined, { force: true })
+      await synchronizeResearchClaimsForVault(selectedEntries[0].project || project)
       setClaimFormOpen(false); setClaimStatement(''); setClaimQuestion(''); setClaimLocator('')
       setClaimStudyDesign(''); setClaimSample(''); setClaimResult(''); setClaimLimitations(''); setClaimStance('unassessed')
       publishEvidenceVault()
@@ -6424,6 +6810,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
             ? [...(current.sourceCheckHistory || []), current.sourceCheck].slice(-5) : current.sourceCheckHistory || []
           const saved = await saveEvidenceEntry({ ...current, sourceCheck: result.check, sourceCheckHistory }, { onDuplicate: 'update' })
           if (!saved.fileSynced) throw new Error(`「${original.title}」的核对记录未同步到文件侧。`)
+          remainingIds.delete(result.id)
           completed++
         }
       }
@@ -6522,8 +6909,9 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     finally { setOrganizerBusy(false) }
   }
 
-  const exportJson = () => {
+  const exportJson = async () => {
     try {
+      const entries = await readScope()
       const entryIds = new Set(entries.map(item => item.id))
       const scopedClaims = claims.filter(item => item.links.every(link => entryIds.has(link.evidenceId)))
       const scopedLinks = links.filter(item => entryIds.has(item.evidenceId))
@@ -6537,8 +6925,10 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   }
 
   // 解释图素材包：按当前筛选范围导出（通常先筛「已核验」），供 render-diagrams --evidence 并入「证据库来源」卡片。
-  const exportExplainPack = () => {
+  const exportExplainPack = async () => {
     try {
+      const entries = await readScope()
+      const filtered = filterEvidence(entries, { query, filter })
       if (!filtered.length) return setNotice('当前筛选范围内没有可导出的证据条目。')
       const text = JSON.stringify(buildEvidenceExplainPack(filtered, project), null, 2) + '\n'
       const suffix = project || '全部项目'
@@ -6546,8 +6936,9 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       setNotice(`已导出 ${filtered.length} 条证据作为解释图素材（按当前筛选范围；渲染时用 --evidence <路径> 并入）。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
-  const exportResearchRecord = () => {
+  const exportResearchRecord = async () => {
     try {
+      const entries = await readScope()
       const includedIds = new Set([...latestResearchScreening(ledger).values()]
         .filter(item => item.decision === 'include').map(item => item.evidenceId))
       const cited = entries.filter(item => includedIds.has(item.id)).map(item => ({
@@ -6558,6 +6949,49 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         ledger, claims, citations: cited }, null, 2) + '\n', `dsh-research-record-${project || 'all'}-${stamp()}.json`)
       setNotice(`已导出 ${ledger.length} 条账本事件、${claims.length} 条论断及 ${cited.length} 条纳入来源。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
+  }
+
+  const previewCitations = () => {
+    try {
+      const result = parseBibliography(citationText)
+      setCitationPreviewRows(result.entries); setCitationWarnings(result.warnings); setCitationPicked([])
+    } catch (error) { setNotice(`⚠️ ${error.message}`) }
+  }
+  const importCitations = async () => {
+    if (citationBusy) return
+    setCitationBusy(true)
+    let added = 0, skipped = 0
+    try {
+      for (const index of citationPicked) {
+        try { await store.save({ ...citationPreviewRows[index], project, status: 'unverified' }); added++ }
+        catch (error) { if (error.code === 'DUPLICATE') skipped++; else throw error }
+      }
+      setNotice(`已保存 ${added} 条待核验引用，跳过 ${skipped} 条重复来源。`)
+      setCitationPreviewRows([]); setCitationPicked([]); setCitationText(''); setCitationOpen(false)
+      publishEvidenceVault()
+    } catch (error) { setNotice(`⚠️ 已保存 ${added} 条；导入未完成：${error.message}`); publishEvidenceVault() }
+    finally { setCitationBusy(false) }
+  }
+  const exportCitations = async format => {
+    try {
+      const rows = selectedEntries.length ? selectedEntries : filterEvidence(await readScope(), { query, filter })
+      downloadText(serializeBibliography(rows, format), 'text/plain;charset=utf-8', `research-citations.${format === 'ris' ? 'ris' : 'bib'}`)
+      setNotice(`已导出 ${rows.length} 条引用（${selectedEntries.length ? '已选条目' : '完整筛选范围'}）。`)
+    } catch (error) { setNotice(`⚠️ ${error.message}`) }
+  }
+  const exportScreeningReport = async () => {
+    try {
+      const rows = await readScope()
+      const decisions = latestResearchScreening(ledger)
+      const current = rows.map(row => ({ evidenceId: row.id, title: row.title, ...(decisions.get(row.id) || { decision: 'pending', reason: '尚未筛选' }) }))
+      const excludedReasons = {}
+      for (const row of current) if (row.decision === 'exclude') excludedReasons[row.reason] = (excludedReasons[row.reason] || 0) + 1
+      const summary = { candidates: rows.length, included: current.filter(row => row.decision === 'include').length,
+        excluded: current.filter(row => row.decision === 'exclude').length, pending: current.filter(row => row.decision === 'pending').length }
+      downloadJsonFile(JSON.stringify({ kind: 'research-screening-report', version: 1, project, exportedAt: Date.now(),
+        scope: '仅本地已保存候选，非数据库完整检索或完整 PRISMA 流程', summary, excludedReasons, records: current }, null, 2), `research-screening-${stamp()}.json`)
+      setNotice(`已导出有限候选集的 PRISMA 计数：候选 ${summary.candidates}、纳入 ${summary.included}、排除 ${summary.excluded}、待定 ${summary.pending}。`)
+    } catch (error) { setNotice(`⚠️ ${error.message}`) }
   }
 
   const importJson = async () => {
@@ -6612,22 +7046,26 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   const changeStatus = async (item, status) => {
     if (status === item.status) return
     try {
-      await saveEvidenceEntry({ ...item, status, sourceVerification: status }, { onDuplicate: 'update' })
-      setNotice(`「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
+      const result = await saveEvidenceEntry({ ...item, status, sourceVerification: status }, { onDuplicate: 'update' })
+      setNotice(`${result.fileSynced ? '' : '⚠️ 已保存在本地，文件同步待重试。'}「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
   const changeAssessment = async (item, key, value, reason = item.assessmentReason || '') => {
     try {
       const next = { ...item, [key]: value, assessmentReason: reason, assessedAt: Date.now(), assessedBy: 'researcher' }
       if (key === 'strength') next.grade = value
-      await saveEvidenceEntry(next, { onDuplicate: 'update' })
-      setNotice(`「${item.title}」的人工评估已更新。`)
+      const result = await saveEvidenceEntry(next, { onDuplicate: 'update' })
+      setNotice(`${result.fileSynced ? '' : '⚠️ 已保存在本地，文件同步待重试。'}「${item.title}」的人工评估已更新。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
   const saveAssessmentReason = item => changeAssessment(item, 'assessmentReason', assessmentNotes[item.id] ?? item.assessmentReason ?? '', assessmentNotes[item.id] ?? item.assessmentReason ?? '')
 
-  const runAgentAssessment = async (requestedEntries = entries) => {
+  const runAgentAssessment = async (requestedEntries) => {
     if (agentBusy) return
+    if (!requestedEntries) {
+      try { requestedEntries = await readScope() } catch (error) { return setNotice(`⚠️ ${error.message}`) }
+    }
+    const remainingIds = new Set(requestedEntries.map(row => row.id))
     const plan = planAgentEvidenceBatch(requestedEntries, { includeHuman })
     if (!plan.eligible.length) return setNotice('当前范围没有待 Agent 判断的证据；可勾选「包含人工处理过的」重新判断。')
     if (!sessionId) return setNotice('⚠️ 当前会话不可用，无法调用 Agent 模型。')
@@ -6660,8 +7098,9 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         for (const result of results) {
           if (controller.signal.aborted) break
           const original = batch.find(row => row.id === result.id)
-          const current = (await store.list({ project: original.project || undefined })).find(row => row.id === result.id)
+          const current = (await store.getMany([result.id]))[0]
           if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) {
+            remainingIds.delete(result.id)
             skippedChanged++
             setAgentStats(current => ({ ...current, skipped: current.skipped + 1, last: `${original.title}：跳过（条目已变化或删除）` }))
             continue
@@ -6671,6 +7110,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
             : current.agentAssessmentHistory || []
           const saved = await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history, updatedAt: Date.now() }, { onDuplicate: 'update' })
           if (!await persistEvidenceEntryToFile(saved.entry)) throw new Error(`「${original.title}」的 Agent 结果仅保存在当前浏览器，文件同步失败；请重试以避免丢失。`)
+          remainingIds.delete(result.id)
           completed++
           setAgentStats(current => ({ ...current, completed: current.completed + 1, last: `${original.title}：已完成` }))
           publishEvidenceVault()
@@ -6682,6 +7122,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       setAgentStats(current => ({ ...current, failed, phase: controller.signal.aborted ? '已取消' : '请求失败', last: error?.message || String(error) }))
       setNotice(`⚠️ ${controller.signal.aborted ? '已取消' : error?.message || error}；已完成 ${completed} 条，未处理 ${failed} 条。`)
     } finally {
+      setRetryIds([...remainingIds])
       agentAbort.current = null
       setAgentBusy(false)
       setAgentProgress('')
@@ -6718,6 +7159,8 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   const activeWorkspace = workspaces.find(item => item.projectKey === project)
 
   return h('div', { key: 'evidence-vault', style: { display: 'grid', gap: 12 } }, [
+    h('div', { key: 'sync-status', role: 'status', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 8, alignItems: 'center' } }, [syncStatus, h(Button, { key: 'retry', size: 'sm', variant: 'ghost', onClick: () => { invalidateEvidenceSync(project); refresh() } }, '重试同步')]),
+    retryIds.length ? h(Button, { key: 'retry-agent', size: 'sm', disabled: agentBusy, onClick: async () => { try { await runAgentAssessment(await store.getMany(retryIds)) } catch (error) { setNotice(`⚠️ ${error.message}`) } } }, `继续未完成判断（${retryIds.length}）`) : null,
     degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
       '当前环境未提供可用的 IndexedDB，证据暂存在内存中，刷新页面后会丢失。') : null,
     notice ? h(Notice, { key: 'notice', tone: notice.startsWith('⚠️') ? 'warn' : 'info', icon: notice.startsWith('⚠️') ? 'shield' : 'check' },
@@ -6736,6 +7179,9 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
         h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length && !workspaces.some(item => (!project || item.projectKey === project) && (item.origin === 'user' || item.updatedAt > 0)) }, '导出备份'),
         h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
+        h(Button, { key: 'citations', size: 'sm', onClick: () => setCitationOpen(value => !value) }, '导入文献引用'),
+        h(Button, { key: 'bibtex', size: 'sm', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
+        h(Button, { key: 'ris', size: 'sm', disabled: !counts.all, onClick: () => exportCitations('ris') }, '导出 RIS'),
         h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
         confirmClear
           ? h(Button, { key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash', onClick: clearScope },
@@ -6784,6 +7230,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
 
     h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
       h('strong', { key: 'title', style: { fontSize: 13 } }, '数据质量提示 · 只读，不自动修改'),
+      h('small', { key: 'page-scope', style: { color: C.muted } }, '质量提示仅针对当前页；完整范围可导出检查。'),
       h('span', { key: 'counts', style: { fontSize: 12, color: C.muted } }, `缺稳定标识符 ${quality.missingIdentifier} · 未核验 ${quality.unverified} · 标为失效／官方记录未找到 ${quality.staleOrMissing} · 疑似同源组 ${quality.duplicateGroups.length} · 关联断链 ${quality.orphanLinks.length}`),
       quality.duplicateGroups.length ? h('span', { key: 'duplicates', style: { fontSize: 12, color: C.muted } }, `待人工复核的同源候选：${quality.duplicateGroups.slice(0, 3).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 3 ? '…' : ''}。跨课题重复可能是有意引用，不会自动合并。`) : null,
       !quality.assetSideChecked ? h('span', { key: 'asset-limit', style: { fontSize: 11, color: C.muted } }, '当前未载入完整资产列表；断链数仅核对证据端。') : null,
@@ -6795,7 +7242,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       ]),
       h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
         h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: () => runAgentAssessment() },
-          agentBusy ? agentProgress || '判断中…' : `一键用 Agent 判断（${planAgentEvidenceBatch(entries, { includeHuman }).eligible.length}）`),
+          agentBusy ? agentProgress || '判断中…' : `用 Agent 判断完整范围（${counts.all}）`),
         agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
         h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
           h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
@@ -6814,12 +7261,29 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '可按全部数据或仅按已勾选数据判断；每次点击重新调用当前会话模型。项目用于科研工作区隔离，主题标签用于内容分类，二者职责不同。仅发送标题、链接、标识符、保存原因和笔记；结果与人工评估分开保存，不会自动标记为已核验。'),
     ]),
 
+    citationOpen ? h(Card, { key: 'citation-import', style: { display: 'grid', gap: 8 } }, [
+      h('strong', { key: 'title' }, '导入 BibTeX／RIS · 预览并选择后保存'),
+      h('input', { key: 'file', type: 'file', accept: '.bib,.ris,.txt', 'aria-label': '选择引用文件', disabled: citationBusy,
+        onChange: async event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2000000) return setNotice('⚠️ 文件超过 2 MB，请拆分。'); try { setCitationText(await file.text()); setCitationPreviewRows([]); setCitationPicked([]) } catch (error) { setNotice(`⚠️ 文件读取失败：${error.message}`) } } }),
+      h(Textarea, { key: 'text', value: citationText, onChange: value => { setCitationText(value); setCitationPreviewRows([]); setCitationPicked([]) }, rows: 4, ariaLabel: 'BibTeX 或 RIS 引用内容', disabled: citationBusy }),
+      h(Button, { key: 'preview', size: 'sm', disabled: !citationText.trim() || citationBusy, onClick: previewCitations }, '预览引用'),
+      ...citationWarnings.slice(0, 10).map((warning, index) => h('small', { key: `warn:${index}`, style: { color: C.muted } }, warning)),
+      citationPreviewRows.length ? h('div', { key: 'rows', style: { maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 5 } }, [
+        h(Button, { key: 'all', size: 'sm', disabled: citationBusy, onClick: () => setCitationPicked(citationPicked.length === citationPreviewRows.length ? [] : citationPreviewRows.map((_, index) => index)) }, citationPicked.length === citationPreviewRows.length ? '取消全选' : '选择全部预览引用'),
+        ...citationPreviewRows.map((row, index) => h('label', { key: index, style: { fontSize: 12 } }, [
+          h('input', { key: 'pick', type: 'checkbox', disabled: citationBusy, checked: citationPicked.includes(index), onChange: () => setCitationPicked(values => values.includes(index) ? values.filter(value => value !== index) : [...values, index]) }),
+          `${row.title} · ${row.identifier || row.url}`,
+        ])),
+      ]) : null,
+      h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !citationPicked.length || citationBusy, onClick: importCitations }, `确认保存所选 ${citationPicked.length} 条（待核验）`),
+    ]) : null,
     // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
     h(Toolbar, { key: 'filters', sticky: true }, [
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
-        h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
+        h(Input, { key: 'i', value: query, onChange: value => { resetPages(); setQuery(value) }, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
       ]),
-      h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: setFilter, ariaLabel: '证据核验状态筛选' }),
+      h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: value => { resetPages(); setFilter(value) }, ariaLabel: '证据核验状态筛选' }),
+      h(Button, { key: 'pending', size: 'sm', variant: pendingOnly ? 'soft' : 'ghost', 'aria-pressed': pendingOnly, onClick: () => { resetPages(); setPendingOnly(value => !value) } }, '待筛选队列'),
       h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
       h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
         `Agent 判断选中（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
@@ -6870,6 +7334,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         h('strong', { key: 'title', style: { fontSize: 13 } }, '科研账本与复现链'),
         h('span', { key: 'summary', style: { fontSize: 12, color: C.muted } }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+        h(Button, { key: 'screen-report', size: 'sm', disabled: !counts.all, onClick: exportScreeningReport }, '导出 PRISMA 计数与排除理由'),
         h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
         h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
       ]),
@@ -6900,6 +7365,11 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
       hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
     }) : null,
+    h('nav', { key: 'pagination', 'aria-label': '证据分页', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
+      h(Button, { key: 'previous', size: 'sm', disabled: !pageHistory.length || loading, onClick: () => { setPageCursor(pageHistory.at(-1)); setPageHistory(rows => rows.slice(0, -1)) } }, '上一页'),
+      h('span', { key: 'page', role: 'status', style: { fontSize: 12 } }, `第 ${pageHistory.length + 1} 页 · 本页 ${entries.length} 条 · 完整范围 ${counts.all} 条`),
+      h(Button, { key: 'next', size: 'sm', disabled: !nextCursor || loading, onClick: () => { setPageHistory(rows => [...rows, pageCursor]); setPageCursor(nextCursor) } }, '下一页'),
+    ]),
     h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.__displayKey || item.id,
       interactive: true,
@@ -7592,14 +8062,8 @@ const CLAIM_REVIEW_LABELS = {
 }
 
 async function claimReviewRequest(project, body, signal) {
-  const response = await fetch(body ? CLAIM_REVIEW_API : `${CLAIM_REVIEW_API}?project=${encodeURIComponent(project)}`, {
-    method: body ? 'POST' : 'GET',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    signal,
-  })
-  const result = await response.json()
-  if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
+  const result = await requestResearchClaims(project, body, signal)
+  if (body && !['extract', 'export'].includes(body.action)) publishEvidenceVault()
   return result
 }
 
@@ -7607,6 +8071,7 @@ function ResearchClaimReview({ sessionId = '' }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const project = context.project || 'default'
   const [claims, setClaims] = React.useState([])
+  const [claimPage, setClaimPage] = React.useState(0)
   const [evidence, setEvidence] = React.useState([])
   const [limits, setLimits] = React.useState({})
   const [loading, setLoading] = React.useState(true)
@@ -7622,14 +8087,16 @@ function ResearchClaimReview({ sessionId = '' }) {
   const requestVersion = React.useRef(0)
 
   React.useEffect(() => subscribeResearchContext(setContext), [])
-  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId('') }, [project])
+  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setClaimPage(0) }, [project])
   const refresh = React.useCallback(async () => {
     const version = ++requestVersion.current
     setLoading(true)
     try {
-      const result = await claimReviewRequest(project)
+      await syncEvidenceVaultWithFiles(context.project || undefined)
+      const result = await synchronizeResearchClaims(evidenceVaultStore(), context.project || '')
       if (version !== requestVersion.current) return
       setClaims(result.claims)
+      setClaimPage(page => Math.min(page, Math.max(0, Math.ceil(result.claims.length / 50) - 1)))
       setEvidence(result.evidence)
       setLimits({ claims: result.claim_limit_reached, evidence: result.evidence_limit_reached })
     } catch (error) {
@@ -7736,7 +8203,7 @@ function ResearchClaimReview({ sessionId = '' }) {
     setBusy(true)
     try {
       await claimReviewRequest(project, {
-        project, claim_id: claim.id, statement: claim.statement, state: draft.state,
+        project, claim_id: claim.id, statement: claim.statement, state: draft.state, expected_revision: claim.revision,
         evidence_ids: draft.evidenceIds, assessed_by: reviewer.trim(), assessment_reason: draft.reason.trim(),
       })
       setEditingId('')
@@ -7749,7 +8216,7 @@ function ResearchClaimReview({ sessionId = '' }) {
   const evidenceById = new Map(evidence.map(item => [item.id, item]))
   const toggleEvidence = id => setDraft(current => ({ ...current,
     evidenceIds: current.evidenceIds.includes(id)
-      ? current.evidenceIds.filter(item => item !== id) : current.evidenceIds.length < 30 ? [...current.evidenceIds, id] : current.evidenceIds,
+      ? current.evidenceIds.filter(item => item !== id) : current.evidenceIds.length < 50 ? [...current.evidenceIds, id] : current.evidenceIds,
   }))
   const pendingForAgent = claims.filter(claim => !['verified', 'rejected'].includes(claim.state) && !claim.agent_review).slice(0, 6)
 
@@ -7757,9 +8224,9 @@ function ResearchClaimReview({ sessionId = '' }) {
     h(Card, { key: 'intro', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'text' }, [
-          h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '科研 Claim 审阅'),
+          h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '登记与人工审核'),
           h('p', { key: 'hint', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.6 } },
-            `当前课题：${project}。确认结论须由研究者填写理由，并关联本课题已保存的证据。`),
+            `当前课题：${context.project || '未命名项目'}。确认结论须由研究者填写理由，并关联本课题已保存的证据。`),
         ]),
         h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', disabled: loading || busy, onClick: refresh }, '刷新台账'),
       ]),
@@ -7770,6 +8237,12 @@ function ResearchClaimReview({ sessionId = '' }) {
     h(Card, { key: 'extract', style: { display: 'grid', gap: 10 } }, [
       h('h3', { key: 'title', style: { margin: 0, fontSize: 14 } }, '从研究段落提取候选'),
       h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '粘贴带 DOI、PMID 或 arXiv 引用的段落；先预览并勾选，再登记为待核验 Claim。原文不会整篇保存。'),
+      h(Button, { key: 'latest-answer', size: 'sm', disabled: busy, onClick: () => {
+        const found = readLatestResearchAnswer(sessionId)
+        if (!found) return setNotice('当前会话没有可读取的助手回答；可手动粘贴研究段落。')
+        setSourceText(found.text.slice(0, 12000)); setCandidates([]); setPickedCandidates([])
+        setNotice(`${found.interrupted ? '回答曾被中断；' : ''}${found.text.length > 12000 ? '仅载入前 12000 字；' : ''}已载入最近回答，请先核对内容，再提取并勾选候选。`)
+      }, style: { justifySelf: 'start' } }, '从最近回答开始'),
       h(Textarea, { key: 'input', value: sourceText, onChange: value => { setSourceText(value); setCandidates([]); setPickedCandidates([]) }, rows: 4,
         maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '例如：在某研究条件下，干预 A 改善结局 B [1](https://doi.org/10.1000/example)。' }),
       h(Button, { key: 'extract-button', size: 'sm', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
@@ -7796,10 +8269,15 @@ function ResearchClaimReview({ sessionId = '' }) {
         onClick: () => exportClaims('publication') }, '发布检查并导出'),
     ]),
     notice ? h(Notice, { key: 'notice', tone: /失败|请填写|至少/.test(notice) ? 'error' : 'info' }, notice) : null,
-    limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '当前只展示最近 200 条 Claim 或证据；更早记录请使用 MCP 工具查询。') : null,
+    limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
     loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
-    !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '可先登记一条草稿，再逐条审阅。' }) : null,
-    ...claims.map(claim => h(Card, { key: claim.id, style: { display: 'grid', gap: 10 } }, [
+    !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '从已有研究段落提取候选，或去证据库选择来源并建立论断，再返回这里审核。' }) : null,
+    claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
+      h(Button, { key: 'prev', size: 'sm', disabled: !claimPage || busy, onClick: () => setClaimPage(page => page - 1) }, '上一页论断'),
+      h('span', { key: 'count' }, `第 ${claimPage + 1} 页 · 共 ${claims.length} 条`),
+      h(Button, { key: 'next', size: 'sm', disabled: (claimPage + 1) * 50 >= claims.length || busy, onClick: () => setClaimPage(page => page + 1) }, '下一页论断'),
+    ]) : null,
+    ...claims.slice(claimPage * 50, (claimPage + 1) * 50).map(claim => h(Card, { key: claim.id, style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'summary', style: { display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'claim', style: { minWidth: 0, flex: '1 1 280px' } }, [
           h('div', { key: 'labels', style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } }, [
@@ -7890,7 +8368,7 @@ const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderI
   && previous.dependencies.length === next.dependencies.length
   && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-function ResearchVault({ assetProvider, inputActions, sessionId, embedded = false }) {
+function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, embedded = false }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -7903,7 +8381,7 @@ function ResearchVault({ assetProvider, inputActions, sessionId, embedded = fals
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [notice, setNotice] = React.useState('')
-  const [tab, setTab] = React.useState('assets')
+  const [tab, setTab] = React.useState(initialTab)
   // 删除是不可逆的：与「清空项目」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const setError = message => setNotice(`⚠️ ${message}`)
@@ -7919,6 +8397,7 @@ function ResearchVault({ assetProvider, inputActions, sessionId, embedded = fals
   const assetRefreshVersion = React.useRef(0)
 
   const refreshLinks = React.useCallback(() => {
+    if (tab !== 'assets') return
     const version = ++linkRefreshVersion.current
     Promise.all([
       evidenceVaultStore().list(),
@@ -7933,7 +8412,7 @@ function ResearchVault({ assetProvider, inputActions, sessionId, embedded = fals
       if (version !== linkRefreshVersion.current) return
       setEvidenceEntries([]); setAssetLinks([]); setKnowledgeNodes([])
     })
-  }, [])
+  }, [tab])
   React.useEffect(() => { refreshLinks() }, [refreshLinks])
   React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
 
@@ -8121,7 +8600,7 @@ function ResearchVault({ assetProvider, inputActions, sessionId, embedded = fals
       ],
     }),
     h('div', { key: 'subnav', style: { marginTop: 14 } }, [
-      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: setTab, ariaLabel: '沉淀层子模块' }),
+      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: value => { setTab(value); onTabChange?.(value) }, ariaLabel: '沉淀层子模块' }),
     ]),
     tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的 JSON 备份（增量合并，不覆盖现有资产）'),
@@ -8312,8 +8791,8 @@ function ResearchVault({ assetProvider, inputActions, sessionId, embedded = fals
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-function ResearchVaultHost({ embedded = false, inputActions, sessionId }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId })
+function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange })
 }
 
 
@@ -8479,12 +8958,15 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
     const selectedProject = projectFilter || undefined
     Promise.resolve()
       .then(() => syncEvidenceVaultWithFiles(selectedProject))
-      .catch(() => {})
+      .catch(error => { if (version === evidenceRefreshVersion.current) setNotice(`文件同步失败，显示本地数据：${error.message}`) })
       .then(() => Promise.all([
         vault.list({ project: selectedProject }),
         vault.listProjects(),
         listAssetEvidenceLinks({ project: selectedProject }),
-        vault.listResearchClaims({ project: selectedProject }),
+        synchronizeClaimScopes(vault, selectedProject).catch(error => {
+          if (version === evidenceRefreshVersion.current) setNotice(`Claim 台账暂不可达，显示离线投影：${error.message}`)
+          return vault.listResearchClaims({ project: selectedProject })
+        }),
       ]))
       .then(([rows, projects, links, claims]) => {
         if (version !== evidenceRefreshVersion.current) return
@@ -8493,12 +8975,9 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
         setAssetEvidenceLinks(Array.isArray(links) ? links : [])
         setResearchClaims(Array.isArray(claims) ? claims : [])
       })
-      .catch(() => {
+      .catch(error => {
         if (version !== evidenceRefreshVersion.current) return
-        setSavedEvidence([])
-        setEvidenceProjects([])
-        setAssetEvidenceLinks([])
-        setResearchClaims([])
+        setNotice(`读取失败，已保留上次数据：${error.message}`)
       })
   }, [vault, projectFilter])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
@@ -8514,7 +8993,7 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
       })
       .catch(() => {
         if (version !== knowledgeRefreshVersion.current) return
-        setKnowledgeNodes([]); setKnowledgeClaims([])
+        setNotice('知识库读取失败，已保留上次数据；可重新刷新。')
       })
   }, [])
   React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
@@ -9550,6 +10029,16 @@ async function depositLatestAssistantMessage({
   return { summary, seq: found.seq, interrupted: found.interrupted }
 }
 
+// 只在用户主动操作时读取当前事件窗口；不持久化回答正文。
+function readLatestResearchAnswer(sessionId = '') {
+  try {
+    const sid = String(sessionId || depositionSessions?.list?.getSnapshot()?.current || '')
+    if (!sid || !depositionSessions) return null
+    const snapshot = depositionSessions.binding(sid)?.eventSource?.getSnapshot?.()
+    return latestDepositableMessage(snapshot?.entries)
+  } catch { return null }
+}
+
 
 
 function reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes) {
@@ -10137,7 +10626,19 @@ function filterCatalogCategory(items, type, category = 'all') {
   return category === 'all' ? items : items.filter(item => catalogCategory(item, type) === category)
 }
 
-function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded = false }) {
+function highlightCatalogText(value, term) {
+  const text = String(value || '')
+  if (!term) return text
+  const parts = []; let offset = 0
+  const lower = text.toLowerCase()
+  for (let at = lower.indexOf(term, offset); at >= 0; at = lower.indexOf(term, offset)) {
+    parts.push(text.slice(offset, at), h('mark', { key: at, style: { background: C.amberTint, color: C.ink } }, text.slice(at, at + term.length)))
+    offset = at + term.length
+  }
+  return [...parts, text.slice(offset)]
+}
+
+function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
@@ -10147,7 +10648,7 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded =
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
-  const [selectedId, setSelectedId] = React.useState('review-paper')
+  const [selectedId, setSelectedId] = React.useState(initialWorkflowId || 'review-paper')
   const [values, setValues] = React.useState({})
   const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
@@ -10287,7 +10788,7 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded =
     () => isSpecialView ? specialRows : items.map(item => ({ item })),
     [isSpecialView, specialRows, items],
   )
-  const listGroups = React.useMemo(() => groupEntriesByCategory(listEntries), [listEntries])
+  const listGroups = React.useMemo(() => deferredQuery.trim() && !isSpecialView ? [{ category: '按相关性排序', rows: listEntries }] : groupEntriesByCategory(listEntries), [listEntries, deferredQuery, isSpecialView])
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
   const recordUse = (status = 'draft') => {
     if (!workflow) return
@@ -10355,10 +10856,10 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded =
     return counts
   }, {}), [])
   const typeTabs = [
-    { value: 'all', label: `全部 ${catalog.length}` },
-    { value: 'workflow', label: `工作流程 ${catalogCounts.workflow || 0}` },
-    { value: 'skill', label: `技能 ${catalogCounts.skill || 0}` },
-    { value: 'database', label: `数据库 ${catalogCounts.database || 0}` },
+    { value: 'all', label: `全部 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery }).length : catalog.length}` },
+    { value: 'workflow', label: `工作流程 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'workflow' }).length : catalogCounts.workflow || 0}` },
+    { value: 'skill', label: `技能 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'skill' }).length : catalogCounts.skill || 0}` },
+    { value: 'database', label: `数据库 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'database' }).length : catalogCounts.database || 0}` },
     { value: 'favorites', label: `★ 收藏 ${favorites.length}` },
     { value: 'history', label: `历史 ${history.length}` },
   ]
@@ -10446,10 +10947,11 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, embedded =
                 }),
               }, [
                 h('div', { key: 'name', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, item.name),
+                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, highlightCatalogText(item.name, catalogMatch(item, deferredQuery).term)),
                   h(Badge, { key: 't', color: C.teal }, TYPE_LABELS[item.type]),
                 ]),
-                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : item.description),
+                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : highlightCatalogText(item.description, catalogMatch(item, deferredQuery).term)),
+                deferredQuery.trim() ? h('small', { key: 'match', style: { color: C.teal } }, catalogMatch(item, deferredQuery).reason) : null,
               ])
             })
           ])))
@@ -11086,10 +11588,10 @@ function LoadedResearchDraftEnhancerHost(props) {
   //   inline（默认）：launcher: 'inline' + renderLauncher: null —— 触发钮由
   //     ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在），anchorRef / open /
   //     onOpenChange 让面板锚定该按钮并由插件受控开合（⌘K 也走同一状态）；
-  //   floating（设置里可选）：不传这些属性，交回工件自己的可拖拽悬浮钮与位置记忆，
+  //   floating（设置里可选）：保留受控 open / onOpenChange 以承接首次按需加载；使用工件自己的可拖拽悬浮钮与位置记忆，
   //     旁边并排渲染「沉淀最近回答」伴生圆钮。
   const launcherProps = floating
-    ? {}
+    ? { open, onOpenChange }
     : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
   return React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
@@ -11111,7 +11613,7 @@ function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
   const failed = state === 'error'
   const label = failed
     ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
-    : '草稿增强加载中…'
+    : state === 'idle' ? '打开对话增强器（⌘K）' : '草稿增强加载中…'
   let stored = null
   try { stored = JSON.parse(window.localStorage.getItem(QUICK_ENHANCER_POSITION_KEY) || 'null') } catch { stored = null }
   const viewportWidth = Number(window.innerWidth) || 0
@@ -11196,7 +11698,7 @@ function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, anchorR
 }
 
 function ResearchDraftEnhancerHost(props) {
-  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'idle')
   const [errorText, setErrorText] = React.useState(null)
   const [open, setOpen] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
@@ -11208,6 +11710,7 @@ function ResearchDraftEnhancerHost(props) {
   const pendingOpen = React.useRef(false)
   React.useEffect(() => {
     if (promptKitReady()) { setState('ready'); return undefined }
+    if (!attempt) return undefined
     let active = true
     setState('loading')
     setErrorText(null)
@@ -11230,17 +11733,23 @@ function ResearchDraftEnhancerHost(props) {
     setOpen(true)
   }, [state])
   const onClick = React.useCallback(() => {
-    if (state === 'error') { pendingOpen.current = true; setAttempt(value => value + 1); return }
+    if (state === 'error' || state === 'idle') { pendingOpen.current = true; setState('loading'); setAttempt(value => value + 1); return }
     if (state !== 'ready') { pendingOpen.current = true; return }
     setOpen(value => !value)
   }, [state])
+  React.useEffect(() => {
+    if (state === 'ready') return undefined
+    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); onClick() } }
+    window.addEventListener('keydown', shortcut)
+    return () => window.removeEventListener('keydown', shortcut)
+  }, [state, onClick])
   if (floating) {
     // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
     return React.createElement(React.Fragment, null, [
       React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
       state === 'ready'
         ? React.createElement(LoadedResearchDraftEnhancerHost, {
-          key: 'draft-enhancer-panel', ...props, floating: true,
+          key: 'draft-enhancer-panel', ...props, floating: true, open, onOpenChange: setOpen,
         })
         : React.createElement(ResearchDraftEnhancerFallbackFab, {
           key: 'draft-enhancer-fallback', state, errorText, onClick,
@@ -11639,7 +12148,7 @@ function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
         setArtifacts(data.artifacts || [])
         setRunOverview(data.run_overview || null)
       }
-    } catch { /* fetch error: keep last state */ }
+    } catch (error) { setError(`读取失败，保留上次数据：${error.message}`) }
   }, [runId])
 
   React.useEffect(() => {
@@ -11670,7 +12179,7 @@ function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await fetchActivity()
-    } catch { /* approve failure: retry next poll */ }
+    } catch (error) { setError(`审批未成功：${error.message}；请重新点击确认。`) }
     setBusy(false)
   }, [fetchActivity])
 
@@ -11696,12 +12205,12 @@ function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       overflow: 'hidden',
     },
   }, [
-    h('div', {
-      key: 'header',
+    h('button', {
+      key: 'header', type: 'button', 'aria-expanded': expanded, 'aria-label': '展开或收起 Agent 活动',
       onClick: () => setExpanded(e => !e),
       style: {
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 14px', cursor: 'pointer', userSelect: 'none',
+        padding: '8px 14px', cursor: 'pointer', userSelect: 'none', width: '100%', background: 'transparent', border: 0, textAlign: 'left', color: C.ink, fontFamily: C.font,
       },
     }, [
       h('span', { key: 'chevron', style: { fontSize: 11, color: C.muted, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▸'),
@@ -11761,6 +12270,7 @@ async function captureResearchTransfer(assetProvider) {
   if (!assetProvider?.list || !assetProvider?.save) throw new Error('灵感资产服务尚未就绪。')
   const synced = await syncEvidenceVaultWithFiles('', { force: true, pullOnly: true })
   const evidence = evidenceVaultStore()
+  await synchronizeClaimScopes(evidence)
   const knowledge = knowledgeStore()
   const [entries, claims, links, ledger, workspaces, nodes, knowledgeClaims, assets] = await Promise.all([
     evidence.list(), evidence.listResearchClaims(), evidence.listAssetEvidenceLinks(),
@@ -11830,6 +12340,7 @@ async function applyResearchTransfer(incoming, current, assetProvider, progress)
   progress('正在同步文件侧证据…')
   invalidateEvidenceSync()
   const synced = await syncEvidenceVaultWithFiles('', { force: true, allowExistingSources: true })
+  await synchronizeClaimScopes(store)
   publishEvidenceVault()
   publishKnowledge()
   return { addedEvidence: addedEntries.length, skippedEvidence: merged.skipped, invalidEvidence: merged.invalid,
@@ -11922,6 +12433,85 @@ function ResearchTransferPanel({ assetProvider, onClose }) {
 
 
 
+const HOME_RUN_LABELS = { draft: '提示词草稿', active: '已发送到会话', waiting_review: '待人工审核', completed: '已完成', failed: '失败' }
+
+function ResearchProjectHome({ onNavigate, sessionId = '' }) {
+  const [context, setContext] = React.useState(currentResearchContext)
+  const [data, setData] = React.useState(null)
+  const [error, setError] = React.useState('')
+  const version = React.useRef(0)
+  React.useEffect(() => subscribeResearchContext(setContext), [])
+  const refresh = React.useCallback(async () => {
+    const request = ++version.current
+    const store = evidenceVaultStore()
+    let syncError = ''
+    try {
+      await syncEvidenceVaultWithFiles(context.project || undefined).catch(failure => { syncError = `文件同步失败：${failure.message}` })
+      const [counts, ledger, claims] = await Promise.all([
+        store.evidenceSummary({ project: context.project || undefined }),
+        store.listResearchLedger({ project: context.project || undefined }),
+        synchronizeResearchClaims(store, context.project).then(result => result.claims)
+          .catch(failure => { syncError += ` Claim 台账暂不可达：${failure.message}`; return store.listResearchClaims({ project: context.project }) }),
+      ])
+      let activity = null
+      if (context.activeRunId) {
+        const params = new URLSearchParams({ run_id: context.activeRunId, limit: '1' })
+        try {
+          const response = await fetch(`/dsh-research-kit/agent-activity?${params}`, { signal: AbortSignal.timeout(5000) })
+          activity = await response.json()
+          if (!response.ok || !activity.ok) throw new Error(activity.error || `HTTP ${response.status}`)
+        } catch (failure) { syncError += ` 运行状态暂不可达：${failure.message}`; activity = null }
+      }
+      if (request !== version.current) return
+      setData({ counts, ledger, claims, activity }); setError(syncError)
+    } catch (failure) { if (request === version.current) setError(`读取失败，保留上次数据：${failure.message}`) }
+  }, [context.project, context.activeRunId])
+  React.useEffect(() => { refresh(); const dispose = subscribeEvidenceVault(refresh); return () => { version.current++; dispose() } }, [refresh])
+  const run = activeResearchRun()
+  const scopedRun = run?.project === context.project ? run : null
+  const recentRun = listResearchRuns({ project: context.project, sessionId })[0]
+  const pending = data?.claims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length || 0
+  const question = data?.claims.find(claim => claim.question)?.question
+  const checkpoints = data?.activity?.checkpoints || []
+  const pendingCheckpointCount = checkpoints.reduce((count, cp) => count + Object.values(cp.checkpoints || {}).filter(value => !value.approved).length, 0)
+  const actions = data?.activity?.run_overview?.next_actions || []
+  const outputs = data?.ledger.filter(event => event.kind === 'artifact').slice(0, 3) || []
+  return h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, [
+    h(PageHead, { key: 'head', title: '项目首页', lead: `当前项目：${context.project || '未命名项目'}。从任务开始，随时查看材料、证据与待办。`, actions: [h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态')] }),
+    error ? h(Notice, { key: 'error', tone: 'warn' }, `${error}。可刷新重试；离线数据不代表最新审核状态。`) : null,
+    h(Card, { key: 'tasks', style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 } }, [
+      h(Button, { key: 'review', variant: 'primary', onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) }, '做文献综述'),
+      h(Button, { key: 'paper', onClick: () => onNavigate('catalog', { workflowId: 'review-paper' }) }, '审阅论文'),
+      h(Button, { key: 'claims', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '验证研究结论'),
+      h(Button, { key: 'continue', disabled: !recentRun?.workflowId, onClick: () => onNavigate('catalog', { workflowId: recentRun?.workflowId }) }, '继续上次工作流'),
+    ]),
+    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', style: { display: 'grid', gap: 12 } }, [
+      h(Card, { key: 'progress', style: { display: 'grid', gap: 8 } }, [
+        h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究问题尚未登记'),
+        h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : context.activeRunId ? `当前运行：${context.activeRunId}` : '还没有启动研究工作流'),
+        scopedRun && itemById(scopedRun.workflowId)?.requiresFiles ? h(Notice, { key: 'materials', tone: 'warn' }, '此工作流需要材料：请核对当前会话的 @文件 引用。') : null,
+        h('small', { key: 'boundary', style: { color: C.muted } }, '写入或发送提示词仅记录操作事实；实际执行与完成状态以运行记录和人工审批为准。'),
+      ]),
+      h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
+        h('strong', { key: 'title' }, '待办收件箱'),
+        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 未核验证据 ${data.counts.unverified || 0} · 待确认阶段 ${pendingCheckpointCount}`),
+        h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+          h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '处理 Claim'),
+          h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
+        ]),
+        ...actions.slice(0, 5).map((action, index) => h('p', { key: index, style: { margin: 0, fontSize: 12, color: C.muted } }, typeof action === 'string' ? action : action.message || action.reason || action.action || '查看运行活动中的下一步')),
+        pendingCheckpointCount ? h('small', { key: 'checkpoints' }, '展开页面底部的运行活动，逐阶段检查并确认。') : null,
+      ]),
+      h(Card, { key: 'outputs', style: { display: 'grid', gap: 8 } }, [
+        h('strong', { key: 'title' }, `最近产出 · 已保存证据 ${data.counts.all}`),
+        ...(outputs.length ? outputs.map(output => h('span', { key: output.id }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : [h('span', { key: 'empty', style: { color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
+      ]),
+    ]),
+  ])
+}
+
+
+
 // 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
 // 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
 //
@@ -11934,11 +12524,12 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, embedded: true }),
+  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, embedded: true }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
 }
 
@@ -11966,8 +12557,11 @@ function ResearchConsole(props) {
   const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
   const [catalogError, setCatalogError] = React.useState('')
   const [promptKitError, setPromptKitError] = React.useState('')
+  const [vaultTab, setVaultTab] = React.useState('assets')
+  const [initialWorkflowId, setInitialWorkflowId] = React.useState('')
   const [transferOpen, setTransferOpen] = React.useState(false)
   const current = findConsoleSection(section)
+  const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
   const navRef = React.useRef(null)
   // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
   // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
@@ -12003,27 +12597,29 @@ function ResearchConsole(props) {
     return () => { active = false; dispose() }
   }, [])
   React.useEffect(() => {
-    if (current.id === 'catalog' || promptKitLoaded) return undefined
+    if (!needsPromptKit || promptKitLoaded) return undefined
     let active = true
     loadPromptKit().then(PromptKit => {
       ensureResearchProviders(PromptKit)
       if (active) { setPromptKitLoaded(true); setPromptKitError('') }
     }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
     return () => { active = false }
-  }, [current.id, promptKitLoaded])
+  }, [needsPromptKit, promptKitLoaded])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
   const activeRun = activeResearchRun()
   const commitProject = () => {
     const normalized = String(projectDraft || '').trim().slice(0, 100)
     if (normalized !== researchContext.project) setResearchProject(normalized)
   }
-  const select = id => {
+  const select = (id, options = {}) => {
+    if (options.workflowId) setInitialWorkflowId(options.workflowId)
+    if (options.tab) setVaultTab(options.tab)
     setSection(normalizeConsoleSection(id))
     persistSection(id)
   }
   const navOptions = RESEARCH_CONSOLE_SECTIONS.map(item => ({ value: item.id, label: item.label }))
   const view = SECTION_VIEWS[current.id]
-  const resourceError = catalogError || (current.id === 'catalog' ? '' : promptKitError)
+  const resourceError = catalogError || (needsPromptKit ? promptKitError : '')
   return h(Page, { style: { padding: 0 } }, [
     h(GlobalStyle, { key: 'global-style' }),
     h('div', {
@@ -12038,9 +12634,11 @@ function ResearchConsole(props) {
     }, [
       h(Segmented, { key: 'tabs', value: current.id, options: navOptions, onChange: select, ariaLabel: '科研工作台分区' }),
       h('div', { key: 'meta', style: { display: 'grid', gap: 2, marginTop: 10 } }, [
-        h('p', { key: 'position', style: { ...META_LINE, color: C.slate, fontWeight: 650 } }, `定位：${current.position}`),
-        h('p', { key: 'purpose', style: { ...META_LINE, color: C.muted } }, `核心用途：${current.purpose}`),
-        h('p', { key: 'boundary', style: { ...META_LINE, color: C.muted } }, `职责边界：${current.boundary}`),
+        h('details', { key: 'description', style: { fontSize: 12, color: C.muted } }, [
+          h('summary', { key: 'summary', style: { cursor: 'pointer' } }, current.position),
+          h('p', { key: 'purpose', style: META_LINE }, current.purpose),
+          h('p', { key: 'boundary', style: META_LINE }, current.boundary),
+        ]),
         h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
           h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
           h('input', {
@@ -12056,9 +12654,9 @@ function ResearchConsole(props) {
         ]),
       ]),
     ]),
-    transferOpen ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
-    h('div', { key: 'section', 'data-section': current.id }, catalogLoaded && (current.id === 'catalog' || promptKitLoaded)
-      ? (view ? view(props) : null)
+    transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
+    h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
+      ? (view ? view({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }) : null)
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),
@@ -12124,7 +12722,18 @@ function researchKitApply(ctx) {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())
   }))
-  let depositAssetProvider = null
+  // 沉淀真正需要资产时再加载工件；注册事件订阅不应触发首屏下载。
+  const resolveDepositProvider = async () => {
+    try {
+      const PromptKit = await loadPromptKit()
+      recordPromptKitLoadError(null)
+      return ensureResearchProviders(PromptKit).researchAssetProvider
+    } catch (error) { recordPromptKitLoadError(error); throw error }
+  }
+  const depositAssetProvider = {
+    list: async () => (await resolveDepositProvider()).list(),
+    save: async input => (await resolveDepositProvider()).save(input),
+  }
   disposers.push(ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
     name: 'conversation.chat.assistant-actions', id: 'dsh-research-kit-review-deposit', order: 90,
   }, props => React.createElement(ResearchMessageDepositAction, {
@@ -12132,19 +12741,8 @@ function researchKitApply(ctx) {
   }))))
   // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
   // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
-  let active = true
-  let disposeDeposition = () => {}
-  loadPromptKit().then(PromptKit => {
-    if (!active) return
-    recordPromptKitLoadError(null)
-    const providers = ensureResearchProviders(PromptKit)
-    depositAssetProvider = providers.researchAssetProvider
-    disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
-  }).catch(error => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */
-    // …但必须留痕：conversation.input.right 的草稿增强入口会因此整块静默收起。
-    recordPromptKitLoadError(error)
-  })
-  disposers.push(() => { active = false; disposeDeposition() })
+  const disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: depositAssetProvider }) || (() => {})
+  disposers.push(disposeDeposition)
   return () => disposers.forEach(dispose => dispose?.())
 }
 

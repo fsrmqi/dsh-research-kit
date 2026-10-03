@@ -1,3 +1,4 @@
+import { projectClaimProjection } from './lib/claim-review-client.js'
 import { buildProjectOrganizationPlan } from './lib/project-organizer.js'
 import { knowledgeStore } from './knowledge-store.js'
 import { listResearchRuns, remapResearchRuns, restoreResearchRuns } from './research-context-store.js'
@@ -103,9 +104,10 @@ export async function applyProjectOrganization({ store, assetProvider, mappings,
     const file = await projectOrganizerRequest({ action: 'organize', moves })
     journal = await store.writeOrganizerJournal({ ...journal, status: 'file', fileId: file.id })
     onProgress('正在迁移浏览器证据与关联')
-    const evidenceSnapshot = await store.remapProjects(moves, { dryRun: true, now: journal.createdAt })
+    const claimProjections = (file.moved_claims || []).map(claim => projectClaimProjection(claim, claim.project))
+    const evidenceSnapshot = await store.remapProjects(moves, { dryRun: true, now: journal.createdAt, claimProjections })
     journal = await store.writeOrganizerJournal({ ...journal, evidenceSnapshot })
-    await store.remapProjects(moves, { now: journal.createdAt, expectedSnapshot: evidenceSnapshot })
+    await store.remapProjects(moves, { now: journal.createdAt, expectedSnapshot: evidenceSnapshot, claimProjections })
     journal = await store.writeOrganizerJournal({ ...journal, status: 'evidence' })
     onProgress('正在迁移知识节点')
     const knowledgeSnapshot = await knowledgeStore().remapProjects(moves, { dryRun: true })

@@ -24,7 +24,7 @@ export async function buildResearchEvidenceExport({ project = 'default', run_id 
   const payload = {
     schema_version: 1, kind: 'research-evidence', mode, project: normalizedProject, run_id,
     exported_at: new Date().toISOString(),
-    claims: claims.map(claim => ({ id: claim.id, statement: claim.statement, state: claim.state,
+    claims: claims.map(claim => ({ id: claim.id, statement: claim.statement, question: claim.question || '', links: claim.links || [], state: claim.state,
       evidence_ids: claim.evidence_ids || [], assessed_by: claim.assessed_by || '',
       assessment_reason: claim.assessment_reason || '',
       source_ref: claim.source_ref ? { citation: claim.source_ref.citation,

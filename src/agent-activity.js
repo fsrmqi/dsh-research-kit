@@ -118,7 +118,7 @@ export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
         setArtifacts(data.artifacts || [])
         setRunOverview(data.run_overview || null)
       }
-    } catch { /* fetch error: keep last state */ }
+    } catch (error) { setError(`读取失败，保留上次数据：${error.message}`) }
   }, [runId])
 
   React.useEffect(() => {
@@ -149,7 +149,7 @@ export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await fetchActivity()
-    } catch { /* approve failure: retry next poll */ }
+    } catch (error) { setError(`审批未成功：${error.message}；请重新点击确认。`) }
     setBusy(false)
   }, [fetchActivity])
 
@@ -175,12 +175,12 @@ export function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
       overflow: 'hidden',
     },
   }, [
-    h('div', {
-      key: 'header',
+    h('button', {
+      key: 'header', type: 'button', 'aria-expanded': expanded, 'aria-label': '展开或收起 Agent 活动',
       onClick: () => setExpanded(e => !e),
       style: {
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 14px', cursor: 'pointer', userSelect: 'none',
+        padding: '8px 14px', cursor: 'pointer', userSelect: 'none', width: '100%', background: 'transparent', border: 0, textAlign: 'left', color: C.ink, fontFamily: C.font,
       },
     }, [
       h('span', { key: 'chevron', style: { fontSize: 11, color: C.muted, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▸'),

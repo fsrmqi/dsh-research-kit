@@ -4,6 +4,7 @@ import { Button, Card, Notice } from './ui.js'
 import {
   evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles, invalidateEvidenceSync,
 } from './lib/evidence-vault-sync.js'
+import { synchronizeClaimScopes } from './lib/claim-review-client.js'
 import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup } from './knowledge-store.js'
 import { serializeEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
 import { serializeResearchTransfer, parseResearchTransfer, previewResearchTransfer } from './lib/research-transfer.js'
@@ -25,6 +26,7 @@ async function captureResearchTransfer(assetProvider) {
   if (!assetProvider?.list || !assetProvider?.save) throw new Error('灵感资产服务尚未就绪。')
   const synced = await syncEvidenceVaultWithFiles('', { force: true, pullOnly: true })
   const evidence = evidenceVaultStore()
+  await synchronizeClaimScopes(evidence)
   const knowledge = knowledgeStore()
   const [entries, claims, links, ledger, workspaces, nodes, knowledgeClaims, assets] = await Promise.all([
     evidence.list(), evidence.listResearchClaims(), evidence.listAssetEvidenceLinks(),
@@ -94,6 +96,7 @@ async function applyResearchTransfer(incoming, current, assetProvider, progress)
   progress('正在同步文件侧证据…')
   invalidateEvidenceSync()
   const synced = await syncEvidenceVaultWithFiles('', { force: true, allowExistingSources: true })
+  await synchronizeClaimScopes(store)
   publishEvidenceVault()
   publishKnowledge()
   return { addedEvidence: addedEntries.length, skippedEvidence: merged.skipped, invalidEvidence: merged.invalid,

@@ -55,6 +55,7 @@ const rules = [
   { file: 'README.md', re: /等 (\d+) 个流程族/, expect: [families], label: '流程族数' },
   { file: 'README.md', re: /其余 (\d+) 个数据源标记为/, expect: [fallback], label: '回退来源数' },
   { file: 'README.md', re: /另有 (\d+) 项技能/, expect: [skills.length], label: '技能数' },
+  { file: 'README.md', re: /(\d+) 个研究工具/, expect: [toolCount], label: '门面 MCP 工具数' },
   { file: 'README.md', re: /(\d+) 个 `research_\*` 工具/, expect: [toolCount], label: 'MCP 工具数' },
 
   { file: 'README.en.md', re: /(\d+) human-reviewed (?:research )?workflows/, expect: [workflows.length], label: 'workflow count' },
@@ -84,7 +85,7 @@ const rules = [
   { file: 'docs/DEVELOPMENT.md', re: /当前 (\d+) 条工作流（(\d+) 个类目/, expect: [workflows.length, families], label: '工作流数 / 类目数' },
   { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项技能（`catalog\/skills\/`）与 (\d+) 个数据源/, expect: [skills.length, resources.length], label: '技能数 / 数据源数' },
   { file: 'docs/DEVELOPMENT.md', re: /MCP Server（(\d+) 个 research_\* 工具）/, expect: [toolCount], label: 'MCP 工具数' },
-  { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项目录资产、统一视图四分区/, expect: [total], label: '目录总条目' },
+  { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项目录资产、统一视图五分区/, expect: [total], label: '目录总条目' },
 
   { file: 'docs/MCP-SETUP.md', re: /直接调用 (\d+) 个科研 Tool/, expect: [toolCount], label: 'MCP 工具数' },
   { file: 'docs/MCP-SETUP.md', re: /应列出 (\d+) 个 dsh-research-kit 的 Tool/, expect: [toolCount], label: 'MCP 工具数' },
@@ -101,6 +102,17 @@ const rules = [
   { file: 'README.en.md', re: /(\d+) DSH baseline tags/, expect: [BASELINES.length], label: 'baseline tag count' },
   { file: 'docs/DEVELOPMENT.md', re: /已实现（(\d+) 个基线/, expect: [BASELINES.length], label: '基线数' },
 ]
+
+// Node 最低版本由 package.json 派生，所有 README 声明和徽章都必须一致。
+const nodeMinimum = JSON.parse(readOnce('package.json')).engines.node.replace(/^>=/, '')
+for (const file of ['README.md', 'README.en.md']) {
+  const declared = readOnce(file).split('\n').filter(line => /Node(?:\.js)?|node-%/i.test(line))
+    .map(line => /(?:>=|%3E%3D|≥)\s*(\d+\.\d+(?:\.\d+)?)/.exec(line)).filter(Boolean)
+  if (!declared.length) errors.push(`${file} 缺少 Node 最低版本声明。`)
+  for (const match of declared) if (match[1] !== nodeMinimum) {
+    errors.push(`${file} 的最低版本写作 ${match[1]}，package.json 要求 ${nodeMinimum}`)
+  }
+}
 
 const descChecks = [
   [/(\d+) 条工作流/, workflows.length, '工作流数'],

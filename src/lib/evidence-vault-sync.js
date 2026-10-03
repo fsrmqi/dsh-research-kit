@@ -79,6 +79,7 @@ export function fileEvidenceInput(entry) {
   return {
     id: entry.id,
     title: entry.title,
+    bibliography: entry.bibliography || {},
     sourceDatabase: entry.source_database || entry.sourceDatabase || 'MCP Agent',
     identifier: entry.identifier,
     identifierKind: entry.identifier_type || entry.identifierKind || 'accession',
@@ -117,6 +118,7 @@ export function vaultEvidenceFileEntry(entry) {
     identifier_type: entry.identifierKind || 'accession',
     identifier: entry.identifier || '',
     title: entry.title,
+    bibliography: entry.bibliography || {},
     source_database: entry.sourceDatabase || '',
     url: entry.url || '',
     tags: entry.tags || [],
@@ -173,7 +175,17 @@ async function postFileEvidenceEntries(entries, { allowExistingSources = false }
     byProject.get(project).push(entry)
   }
   let existingSources = 0
+  const chunks = []
   for (const [project, rows] of byProject) {
+    let chunk = [], bytes = 0
+    for (const row of rows) {
+      const size = new TextEncoder().encode(JSON.stringify(row)).length
+      if (chunk.length && (bytes + size > 500000 || chunk.length >= 100)) { chunks.push([project, chunk]); chunk = []; bytes = 0 }
+      chunk.push(row); bytes += size
+    }
+    if (chunk.length) chunks.push([project, chunk])
+  }
+  for (const [project, rows] of chunks) {
     const response = await fetch(EVIDENCE_SYNC_PATH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,7 +226,7 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
   const localEntries = await store.list(project ? { project } : {})
   const localKeys = new Set(localEntries.map(evidenceSyncKey))
   const localById = new Map(localEntries.map(entry => [entry.id, entry]))
-  let imported = 0
+  let imported = 0, ignored = 0
   for (const fileEntry of fileEntries) {
     const local = localById.get(fileEntry.id)
     if (local && Date.parse(fileEntry.updated_at || '') > (local.updatedAt || local.savedAt || 0)) {
@@ -227,14 +239,23 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
       await store.save(fileEvidenceInput(fileEntry), { onDuplicate: 'new' })
       imported++
     } catch {
+      ignored++
       // 非法或无法追溯的文件条目不入库；文件侧保留原样，UI 不伪造条目。
     }
   }
 
   // 迁移备份只需收齐文件侧证据，不应因反向回写时的不同去重规则而拒绝导出。
-  if (pullOnly) return { skipped: false, imported, exported: 0 }
+  if (pullOnly) return { skipped: false, imported, exported: 0, ignored }
 
   const nextLocalEntries = await store.list(project ? { project } : {})
+  const fileById = new Map(fileEntries.map(entry => [entry.id, entry]))
+  let updated = 0
+  for (const local of nextLocalEntries) {
+    const remote = fileById.get(local.id)
+    if (remote && (local.updatedAt || local.savedAt || 0) > (Date.parse(remote.updated_at || remote.saved_at || '') || 0)) {
+      await updateFileEvidenceEntry(local); updated++
+    }
+  }
   const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
   const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
   let existingSources = 0
@@ -242,7 +263,7 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
     existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
     publishEvidenceVault()
   }
-  return { skipped: false, imported, exported: missing.length - existingSources, existingSources }
+  return { skipped: false, imported, exported: missing.length - existingSources, updated, ignored, existingSources }
 }
 
 export function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {

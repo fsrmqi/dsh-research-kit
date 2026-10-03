@@ -63,7 +63,7 @@
     "coverage": "node scripts/check-coverage.mjs",
     "coverage:ci": "node scripts/check-coverage.mjs --with-docs",
     "coverage:update": "node scripts/check-coverage.mjs --update",
-    "verify": "npm run check && npm test && npm run check:dsh-app && npm run coverage:ci",
+    "verify": "npm run check && npm test && npm run check:dsh-app && npm run coverage:ci && npm run check:performance",
     "dev:register": "bash scripts/register.sh",
     "dev:watch": "bash scripts/watch.sh",
     "dev:web": "bash scripts/web.sh",
@@ -71,7 +71,8 @@
     "check": "node --experimental-vm-modules --no-warnings scripts/check-syntax.mjs && node scripts/check-vendor.mjs && node scripts/validate-catalog.mjs && node scripts/validate-diagrams.mjs --repo && node scripts/sync-tool-docs.mjs --check && node scripts/check-doc-stats.mjs && node scripts/check-doc-assets.mjs && node scripts/check-manual-qa.mjs && node scripts/check-client-budget.mjs",
     "test": "npm run build && node --test \"test/*.test.js\" \"test/*.test.mjs\"",
     "test:browser": "npm run build && node scripts/browser-regression.cjs",
-    "prepublishOnly": "npm run check && npm test && npm run check:dsh-app && npm run check:test-count"
+    "prepublishOnly": "npm run check && npm test && npm run check:dsh-app && npm run check:test-count",
+    "check:performance": "node scripts/check-product-performance.mjs"
   },
   "dsh": {
     "bundle": {

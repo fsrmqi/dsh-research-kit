@@ -54,7 +54,18 @@ export function researchKitApply(ctx) {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())
   }))
-  let depositAssetProvider = null
+  // 沉淀真正需要资产时再加载工件；注册事件订阅不应触发首屏下载。
+  const resolveDepositProvider = async () => {
+    try {
+      const PromptKit = await loadPromptKit()
+      recordPromptKitLoadError(null)
+      return ensureResearchProviders(PromptKit).researchAssetProvider
+    } catch (error) { recordPromptKitLoadError(error); throw error }
+  }
+  const depositAssetProvider = {
+    list: async () => (await resolveDepositProvider()).list(),
+    save: async input => (await resolveDepositProvider()).save(input),
+  }
   disposers.push(ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({
     name: 'conversation.chat.assistant-actions', id: 'dsh-research-kit-review-deposit', order: 90,
   }, props => React.createElement(ResearchMessageDepositAction, {
@@ -62,18 +73,7 @@ export function researchKitApply(ctx) {
   }))))
   // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
   // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
-  let active = true
-  let disposeDeposition = () => {}
-  loadPromptKit().then(PromptKit => {
-    if (!active) return
-    recordPromptKitLoadError(null)
-    const providers = ensureResearchProviders(PromptKit)
-    depositAssetProvider = providers.researchAssetProvider
-    disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
-  }).catch(error => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */
-    // …但必须留痕：conversation.input.right 的草稿增强入口会因此整块静默收起。
-    recordPromptKitLoadError(error)
-  })
-  disposers.push(() => { active = false; disposeDeposition() })
+  const disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: depositAssetProvider }) || (() => {})
+  disposers.push(disposeDeposition)
   return () => disposers.forEach(dispose => dispose?.())
 }

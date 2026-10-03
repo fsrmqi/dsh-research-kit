@@ -1,42 +1,92 @@
-import { mkdir, open, rename, stat, unlink } from 'node:fs/promises'
+import { link, mkdir, open, readFile, stat, unlink, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 
-// 独占文件锁：`open(file, 'wx')` 抢锁，陈旧锁用 rename 接管。
-//
-// 三处调用方（checkpoint-manager / claim-ledger / evidence-store）此前各写一份，规则已经漂移：
-// 只有 checkpoint-manager 用了 rename 接管，并在注释里解释了为什么不能用 stat→unlink→open
-// （那中间的窗口足够让另一个等待者插进来拿到新锁）；另两处仍是 unlink。这里统一到 rename 路径，
-// 并在接管后立即删除改名产物，避免 `.stale-*` 在数据目录里堆积。
-//
-// 超时、陈旧判定、空锁宽限期、报错文案仍由调用方传入——它们的数值各不相同，是有意保留的契约，
-// 不在共享层替调用方改写。放在 execution/ 而不是 state/：`state/` 已依赖 `execution/`
-// （claim-ledger、research-context-pack 等），反向依赖没有先例。
 const EMPTY_LOCK_GRACE_MS = 2_000
 const backoffMs = attempt => Math.min(20 + attempt * 10, 80)
+const owners = new WeakMap()
 
-export async function acquireFileLock(file, { timeoutMs, staleMs, emptyGraceMs = EMPTY_LOCK_GRACE_MS, busyMessage } = {}) {
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try { process.kill(pid, 0); return true } catch (error) { return error.code !== 'ESRCH' }
+}
+
+async function staleLock(file, staleMs, emptyGraceMs) {
+  const info = await stat(file)
+  const raw = await readFile(file, 'utf8')
+  let owner
+  try { owner = JSON.parse(raw) } catch {}
+  // 只要持有进程还活着，耗时操作就不能被陈旧时间误判为崩溃。
+  if (processAlive(owner?.pid)) return false
+  const grace = info.size === 0 ? emptyGraceMs : staleMs
+  return Date.now() - info.mtimeMs > grace
+}
+
+// 创建与陈旧接管共用短期协调锁，避免两个等待者依据同一份旧 stat 接管新锁。
+async function acquireGate(file) {
+  const gate = `${file}.gate`
+  const token = JSON.stringify({ pid: process.pid, token: randomUUID() })
+  const prepared = `${gate}.${process.pid}.${randomUUID()}.tmp`
+  // 先写完所有者信息，再用硬链接独占发布；其他进程不会看到活进程的空协调锁。
+  await writeFile(prepared, token, { flag: 'wx' })
+  try {
+    await link(prepared, gate)
+    return async () => {
+      try { if (await readFile(gate, 'utf8') === token) await unlink(gate) }
+      catch (error) { if (error.code !== 'ENOENT') throw error }
+    }
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error
+    // 恢复协调锁时再串行化一次。恢复者自身崩溃时保守停止恢复，不能继续递归抢锁。
+    let recovery
+    try { recovery = await open(`${gate}.recovery`, 'wx') }
+    catch (error) { if (error.code !== 'EEXIST') throw error }
+    if (recovery) {
+      try {
+        try { if (await staleLock(gate, 2_000, 2_000)) await unlink(gate) }
+        catch (error) { if (error.code !== 'ENOENT') throw error }
+      } finally {
+        await recovery.close()
+        await unlink(`${gate}.recovery`)
+      }
+    }
+    return null
+  } finally { await unlink(prepared).catch(() => {}) }
+}
+
+export async function acquireFileLock(file, { timeoutMs = 5_000, staleMs = 10_000, emptyGraceMs = EMPTY_LOCK_GRACE_MS, busyMessage } = {}) {
   await mkdir(path.dirname(file), { recursive: true })
   const startedAt = Date.now()
   for (let attempt = 0; Date.now() - startedAt < timeoutMs; attempt++) {
-    try {
-      return await open(file, 'wx')
-    } catch (error) {
-      if (error?.code !== 'EEXIST') throw error
+    const releaseGate = await acquireGate(file)
+    if (releaseGate) {
       try {
-        const info = await stat(file)
-        // 空锁文件（进程在 open 与 writeFile 之间崩溃）用较短的宽限期，有内容的锁用完整 stale timeout。
-        const isStale = info.size === 0
-          ? Date.now() - info.mtimeMs > emptyGraceMs
-          : Date.now() - info.mtimeMs > staleMs
-        if (isStale) {
-          // 只有 rename 成功的进程成为接管者，避免 stat→unlink→open 之间另一个等待者插入并拿到新锁。
-          const takenOver = `${file}.stale-${process.pid}-${Date.now().toString(36)}`
-          await rename(file, takenOver)
-          await unlink(takenOver).catch(() => {})
+        try {
+          if (await staleLock(file, staleMs, emptyGraceMs)) await unlink(file)
+        } catch (error) { if (error.code !== 'ENOENT') throw error }
+        let handle
+        try { handle = await open(file, 'wx') }
+        catch (error) { if (error.code !== 'EEXIST') throw error }
+        if (handle) {
+          const token = JSON.stringify({ pid: process.pid, token: randomUUID() })
+          try { await handle.writeFile(token) }
+          catch (error) { await handle.close(); await unlink(file); throw error }
+          owners.set(handle, token)
+          return handle
         }
-      } catch {}
-      await new Promise(resolve => setTimeout(resolve, backoffMs(attempt)))
+      } finally { await releaseGate() }
     }
+    await new Promise(resolve => setTimeout(resolve, backoffMs(attempt)))
   }
   throw new Error(busyMessage || '文件正被其他进程写入，请稍后重试。')
+}
+
+export async function releaseFileLock(file, handle) {
+  const token = owners.get(handle)
+  await handle.close()
+  owners.delete(handle)
+  // 原持有者只能释放自己的锁。接管后的锁或人工替换的文件必须保留。
+  try {
+    if (token && await readFile(file, 'utf8') === token) await unlink(file)
+  } catch (error) { if (error.code !== 'ENOENT') throw error }
 }

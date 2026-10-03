@@ -205,10 +205,10 @@ function LoadedResearchDraftEnhancerHost(props) {
   //   inline（默认）：launcher: 'inline' + renderLauncher: null —— 触发钮由
   //     ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在），anchorRef / open /
   //     onOpenChange 让面板锚定该按钮并由插件受控开合（⌘K 也走同一状态）；
-  //   floating（设置里可选）：不传这些属性，交回工件自己的可拖拽悬浮钮与位置记忆，
+  //   floating（设置里可选）：保留受控 open / onOpenChange 以承接首次按需加载；使用工件自己的可拖拽悬浮钮与位置记忆，
   //     旁边并排渲染「沉淀最近回答」伴生圆钮。
   const launcherProps = floating
-    ? {}
+    ? { open, onOpenChange }
     : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
   return React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
@@ -230,7 +230,7 @@ export function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) 
   const failed = state === 'error'
   const label = failed
     ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
-    : '草稿增强加载中…'
+    : state === 'idle' ? '打开对话增强器（⌘K）' : '草稿增强加载中…'
   let stored = null
   try { stored = JSON.parse(window.localStorage.getItem(QUICK_ENHANCER_POSITION_KEY) || 'null') } catch { stored = null }
   const viewportWidth = Number(window.innerWidth) || 0
@@ -315,7 +315,7 @@ export function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, 
 }
 
 export function ResearchDraftEnhancerHost(props) {
-  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+  const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'idle')
   const [errorText, setErrorText] = React.useState(null)
   const [open, setOpen] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
@@ -327,6 +327,7 @@ export function ResearchDraftEnhancerHost(props) {
   const pendingOpen = React.useRef(false)
   React.useEffect(() => {
     if (promptKitReady()) { setState('ready'); return undefined }
+    if (!attempt) return undefined
     let active = true
     setState('loading')
     setErrorText(null)
@@ -349,17 +350,23 @@ export function ResearchDraftEnhancerHost(props) {
     setOpen(true)
   }, [state])
   const onClick = React.useCallback(() => {
-    if (state === 'error') { pendingOpen.current = true; setAttempt(value => value + 1); return }
+    if (state === 'error' || state === 'idle') { pendingOpen.current = true; setState('loading'); setAttempt(value => value + 1); return }
     if (state !== 'ready') { pendingOpen.current = true; return }
     setOpen(value => !value)
   }, [state])
+  React.useEffect(() => {
+    if (state === 'ready') return undefined
+    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); onClick() } }
+    window.addEventListener('keydown', shortcut)
+    return () => window.removeEventListener('keydown', shortcut)
+  }, [state, onClick])
   if (floating) {
     // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
     return React.createElement(React.Fragment, null, [
       React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
       state === 'ready'
         ? React.createElement(LoadedResearchDraftEnhancerHost, {
-          key: 'draft-enhancer-panel', ...props, floating: true,
+          key: 'draft-enhancer-panel', ...props, floating: true, open, onOpenChange: setOpen,
         })
         : React.createElement(ResearchDraftEnhancerFallbackFab, {
           key: 'draft-enhancer-fallback', state, errorText, onClick,

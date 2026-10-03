@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-blue.svg)](https://github.com/topics/dsh-plugin)
-[![Node: >=22.6](https://img.shields.io/badge/node-%3E%3D22.6-green.svg)](https://nodejs.org)
+[![Node: >=22.19](https://img.shields.io/badge/node-%3E%3D22.19-green.svg)](https://nodejs.org)
 [![Listed on DSH Hub](https://img.shields.io/badge/DSH%20plugin-listed-2ea44f.svg?labelColor=3d4451)](https://dshhub.org/plugins/fsrmqi/dsh-research-kit)
 
 [English](README.en.md) · [简体中文](README.md)
@@ -24,7 +24,7 @@ This project is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/d
 | --- | --- |
 | DSH itself | [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness) · [official site](https://deepseek.com/harness) |
 | Plugin ecosystem | [GitHub topic: dsh-plugin](https://github.com/topics/dsh-plugin) |
-| Node.js | `>= 22.6` |
+| Node.js | `>= 22.19` |
 
 > DSH is currently a **Developer Preview** and will iterate quickly, possibly with breaking changes. The `conversation.view` slot and the `inputActions` contract evolve with DSH versions — after upgrading DSH, re-run the [manual QA checklist](docs/MANUAL-QA.md).
 
@@ -75,11 +75,12 @@ Literature, clinical, genetics, omics, protein/chemistry — plus astronomy & sp
 **✍️ Fully visible and editable before send**
 Parameter substitution updates the preview live. After manual edits, later parameter changes never silently rewrite the body, and a "restore generated prompt" action is one click away. Missing required parameters block sending.
 
-**🧭 One view, four sections**
+**🧭 One view, five sections**
 A single `conversation.view` tab, sectioned along the research loop. The section bar stays pinned and shows each section's purpose and responsibility boundary:
 
 | Section | Layer | Purpose |
 | --- | --- | --- |
+| Project Home | Task entry | Research question, workflow, required materials, review inbox and recent outputs |
 | Resources & Workflows | Discover | Catalog search, parameterized assembly, direct database lookup |
 | Method Workshop | Construct | Method cards + variable fill-in → editable prompt; extract a draft from the current conversation |
 | Research Vault | Deposit | Asset CRUD, version diff, verification tracking, **explicit asset–evidence links**; an **Evidence Vault** sub-module saves source metadata and notes per item, project-isolated and de-duplicated, with a read-only "cited by" reverse lookup |
@@ -121,7 +122,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 
 ## Installation
 
-Requires Node `>= 22.6` and a DSH web profile providing four slots: `conversation.view`, `conversation.input.left`, `conversation.input.overlay` and `conversation.input.right` (the unified view, the composer's left entry, the overlay picker, and the draft enhancer on the composer's right). The Plugins-page scale badge, diagnostics copy and status section additionally use `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`; when the host does not provide them they simply do not render, and the in-conversation features are unaffected. The detail page's "Open workbench" action additionally requires the host's public cross-page view navigation `uiConversation.openView(sessionId, view, focus?)` (not yet provided by DSH `0.1.7`; without it that button does not render), and `npm run check:dsh-app -- <dsh repo>` reports that channel as an optional capability.
+Requires Node `>= 22.19` and a DSH web profile providing four slots: `conversation.view`, `conversation.input.left`, `conversation.input.overlay` and `conversation.input.right` (the unified view, the composer's left entry, the overlay picker, and the draft enhancer on the composer's right). The Plugins-page scale badge, diagnostics copy and status section additionally use `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`; when the host does not provide them they simply do not render, and the in-conversation features are unaffected. The detail page's "Open workbench" action additionally requires the host's public cross-page view navigation `uiConversation.openView(sessionId, view, focus?)` (not yet provided by DSH `0.1.7`; without it that button does not render), and `npm run check:dsh-app -- <dsh repo>` reports that channel as an optional capability.
 
 **Local directory (currently recommended; not published to npm)**
 
@@ -158,7 +159,7 @@ Two entrances, one set of catalog assets.
 
 **Option A: the unified Research Workbench view**
 
-1. Open the Research Workbench in a session — it lands on "Resources & Workflows"; search or filter the 589 catalog entries;
+1. Open the Research Workbench in a session — it lands on "Project Home"; choose a task, or open "Resources & Workflows" to search or filter the 589 catalog entries;
 2. Select a workflow and review its purpose, required materials and limitations;
 3. Fill in parameters; for file-dependent workflows, reference files via `@文件` in the DSH composer first;
 4. Toggle skill guidance as needed — the preview updates live; expand the **assembly replay** in the detail pane to verify segment by segment how the prompt was assembled;
@@ -235,7 +236,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 526 regression tests in 75 files, including a host-contract matrix across 4 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 555 regression tests in 76 files, including a host-contract matrix across 4 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -244,7 +245,7 @@ Verified so far: catalog contract validation (589 entries, 589 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (526 / 75 files)
+npm test        # pure-logic, contract and render-level regression tests (555 / 76 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

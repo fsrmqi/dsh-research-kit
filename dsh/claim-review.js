@@ -1,5 +1,5 @@
 import { readProjectEntries, safeProjectName } from '../mcp/execution/evidence-store.js'
-import { listResearchClaims, recordClaimDrafts, recordResearchClaim } from '../mcp/state/claim-ledger.js'
+import { listResearchClaims, recordClaimDrafts, recordResearchClaim, researchClaimPage, importLocalResearchClaims, listClaimProjects } from '../mcp/state/claim-ledger.js'
 import { extractClaimDrafts } from '../mcp/execution/claim-drafts.js'
 import { buildResearchEvidenceExport } from '../mcp/state/research-evidence-export.js'
 import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
@@ -21,11 +21,14 @@ function requestClaim(input) {
   const assessment_reason = String(input.assessment_reason || '').trim()
   if (run_id && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(run_id)) throw new Error('invalid_run_id')
   if (claim_id && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(claim_id)) throw new Error('invalid_claim_id')
-  if (!statement || statement.length > 800 || !Array.isArray(evidence_ids) || evidence_ids.length > 30
+  if (!statement || statement.length > 800 || !Array.isArray(evidence_ids) || evidence_ids.length > 50
     || evidence_ids.some(id => typeof id !== 'string' || id.length > 120)
     || assessed_by.length > 120 || assessment_reason.length > 500) throw new Error('invalid_claim')
   if (state !== 'extracted' && (!assessed_by || !assessment_reason)) throw new Error('审阅状态必须填写评估人和理由。')
-  return { project, run_id, claim_id, statement, state, evidence_ids, assessed_by, assessment_reason }
+  if (input.links !== undefined && (!Array.isArray(input.links) || input.links.length > 50)) throw new Error('invalid_claim_links')
+  if (input.expected_revision !== undefined && (!Number.isInteger(input.expected_revision) || input.expected_revision < 1)) throw new Error('invalid_claim_revision')
+  return { project, run_id, claim_id, statement, state, evidence_ids, assessed_by, assessment_reason,
+    question: input.question, links: input.links, expected_revision: input.expected_revision }
 }
 
 export function claimReviewRoute({ logger } = {}) {
@@ -35,9 +38,10 @@ export function claimReviewRoute({ logger } = {}) {
       try {
         if (req.method === 'GET') {
           const url = new URL(req.url, `http://${req.headers?.host || 'localhost'}`)
+          if (url.searchParams.get('projects') === '1') return reply(res, 200, { ok: true, projects: await listClaimProjects() })
           const project = safeProjectName(url.searchParams.get('project') || 'default')
-          const [claims, entries] = await Promise.all([
-            listResearchClaims({ project, limit: 200 }),
+          const [page, entries] = await Promise.all([
+            researchClaimPage({ project, offset: url.searchParams.get('offset') }),
             readProjectEntries(project),
           ])
           const evidence = entries.slice(-200).reverse().map(entry => ({
@@ -47,11 +51,15 @@ export function claimReviewRoute({ logger } = {}) {
             identifier: entry.identifier,
             url: entry.url,
           }))
-          return reply(res, 200, { ok: true, project, claims, evidence,
-            claim_limit_reached: claims.length === 200, evidence_limit_reached: entries.length > 200 })
+          return reply(res, 200, { ok: true, project, ...page, evidence,
+            claim_limit_reached: page.next_offset !== null, evidence_limit_reached: entries.length > 200 })
         }
         if (req.method === 'POST') {
           const body = await readBody(req)
+          if (body?.action === 'import_local') {
+            const result = await importLocalResearchClaims({ project: body.project, claims: body.claims })
+            return reply(res, 200, { ok: true, ...result })
+          }
           if (body?.action === 'extract' || body?.action === 'save_drafts') {
             const project = safeProjectName(body.project || 'default')
             const text = String(body.text || '')
@@ -78,7 +86,7 @@ export function claimReviewRoute({ logger } = {}) {
         return reply(res, 405, { ok: false, error: 'method_not_allowed' })
       } catch (error) {
         try { logger?.warn?.(`claim-review error: ${error?.message || error}`) } catch {}
-        const status = error?.message === 'body_too_large' ? 413
+        const status = error?.code === 'CLAIM_CONFLICT' ? 409 : error?.message === 'body_too_large' ? 413
           : error?.code === 'INVALID_PROJECT' || error?.message === 'invalid_json'
             || error?.message?.startsWith('invalid_') || error?.message?.includes('必须')
             || error?.message?.includes('不存在') || error?.message?.includes('不能为空')

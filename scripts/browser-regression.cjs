@@ -60,6 +60,7 @@ const server = http.createServer((req,res)=>{
   if(req.method==='POST'){
    let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
     const input=JSON.parse(body||'{}');
+    if(input.action==='import_local'){ for(const row of input.claims||[]) if(!claimRecords.some(item=>item.id===row.id)) claimRecords.push({...row,project:input.project,state:'extracted',evidence_ids:(row.links||[]).map(link=>link.evidenceId)}); return res.end(JSON.stringify({ok:true,added:0})); }
     if(input.action==='extract') return res.end(JSON.stringify({ok:true,drafts:[{statement:'候选 Claim 显示研究结果',state:'extracted',evidence_ids:['qa-evidence-1'],source_ref:{citation:'10.9999/qa',citation_type:'doi',locator:'char:18',excerpt:'候选 Claim 显示研究结果 [1](https://doi.org/10.9999/qa)。'},matched_evidence:true}]}));
     if(input.action==='save_drafts'){
      const claim={id:'qa-claim-2',project:'default',statement:'候选 Claim 显示研究结果',state:'extracted',evidence_ids:['qa-evidence-1'],source_ref:{citation:'10.9999/qa',citation_type:'doi',locator:'char:18'}};
@@ -103,8 +104,21 @@ const server = http.createServer((req,res)=>{
   page.setDefaultTimeout(10000);
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
+  await page.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
+  assert.equal(promptKitRequests,0,'首页不得提前加载 PromptKit');
+  await page.getByRole('tab',{name:'研究证据图谱',exact:true}).click();
+  await page.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
+  assert.equal(promptKitRequests,0,'独立图谱不得等待 PromptKit');
+  await page.getByRole('tab',{name:'项目首页',exact:true}).click();
+  await page.getByRole('button',{name:'验证研究结论',exact:true}).click();
+  await page.getByLabel('新建 Claim 内容').waitFor();
+  await page.getByRole('button',{name:'从最近回答开始',exact:true}).click();
+  assert.ok((await page.getByLabel('待提取的研究段落').inputValue()).includes('Ghd7'));
+  await page.screenshot({path:path.join(artifacts,'claim-onboarding.png'),fullPage:false});
+  assert.equal(promptKitRequests,0,'独立 Claim 入口不得等待 PromptKit');
   await page.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
   await page.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
   await page.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
   await page.getByLabel('新建 Claim 内容').fill('干预 A 改善结局 B');
   await page.getByRole('button',{name:'登记草稿'}).click();
@@ -335,6 +349,7 @@ const server = http.createServer((req,res)=>{
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   console.log('技能、数据库及弹层共享分类栏：通过');
   await page.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
   await page.getByRole('button',{name:'新建资产',exact:true}).click();
   await page.getByLabel('标题（留空自动取正文首行）').fill('水稻耐盐性研究');
   await page.getByLabel('内容',{exact:true}).fill('Ghd7 基因可能影响水稻耐盐性，需进一步验证。');
@@ -365,12 +380,15 @@ const server = http.createServer((req,res)=>{
   });
   await page.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
   await page.getByLabel('包含人工处理过的').check();
-  await page.getByRole('button',{name:'一键用 Agent 判断（2）'}).click();
+  await page.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).click();
   await page.getByText(/Agent 判断完成：/).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human']]);
+  await page.waitForFunction(()=>Array.from(document.querySelectorAll('*')).filter(node=>node.children.length===0&&/Agent 最新判断 · qa-model/.test(node.textContent)).length===2);
   assert.equal(await page.getByText(/Agent 最新判断 · qa-model/).count(),2);
-  await page.getByRole('button',{name:'一键用 Agent 判断（2）'}).click();
-  await page.getByText(/Agent 判断完成：/).waitFor();
+  const secondAssessment = page.waitForResponse(response => response.url().includes('/evidence-agent-assess?'));
+  await page.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).click();
+  await secondAssessment;
+  await page.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human'],['qa-agent-new','qa-agent-human']]);
   assert.equal(await page.getByLabel('设置「人工处理证据」的人工评估依据').inputValue(),'人工已核对');
   if(process.env.RK_QA_AGENT_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_AGENT_SCREENSHOT,fullPage:true});
@@ -399,8 +417,8 @@ const server = http.createServer((req,res)=>{
   const appPage=await isolated.newPage();
   await appPage.goto('http://127.0.0.1:'+server.address().port);
   await appPage.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
-  await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
   await appPage.getByRole('button',{name:'迁移到 App'}).click();
+  await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
   await appPage.getByLabel('选择 Research Kit 迁移文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
   await appPage.getByText('导入预览（总数／预计新增／本端已有）').waitFor();
   await appPage.getByText(/^灵感资产：\d+／\d+／0$/).waitFor();
@@ -414,6 +432,59 @@ const server = http.createServer((req,res)=>{
   await appPage.getByText('水稻耐盐性研究',{exact:true}).first().waitFor();
   await isolated.close();
   console.log('独立页面存储空间导入新增资产：通过');
+  const largeContext=await browser.newContext();
+  const largePage=await largeContext.newPage();
+  largePage.on('pageerror',error=>errors.push(String(error)));
+  await largePage.goto('http://127.0.0.1:'+server.address().port);
+  await largePage.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
+  await largePage.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await largePage.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
+  await largePage.getByText('第 1 页 · 本页 0 条 · 完整范围 0 条',{exact:true}).waitFor();
+  await largePage.evaluate(async()=>{
+    const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+    const tx=db.transaction('evidence','readwrite');
+    for(let index=0;index<10000;index++) tx.objectStore('evidence').put({id:'large-'+String(index).padStart(5,'0'),title:'性能证据 '+String(index).padStart(5,'0'),url:'https://example.org/large/'+index,project:'',savedAt:100,status:'unverified'});
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();
+  });
+  const pageStarted=Date.now();
+  await largePage.getByRole('button',{name:'重试同步',exact:true}).click();
+  await largePage.getByText('第 1 页 · 本页 50 条 · 完整范围 10000 条',{exact:true}).waitFor();
+  assert.equal(await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).count(),50);
+  console.log('真实 IndexedDB 1 万条首个分页可见耗时（含摘要读取）：'+(Date.now()-pageStarted)+'ms');
+  await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).first().check();
+  await largePage.getByRole('button',{name:'下一页',exact:true}).click();
+  await largePage.getByText('第 2 页 · 本页 50 条 · 完整范围 10000 条',{exact:true}).waitFor();
+  await largePage.getByRole('checkbox',{name:'选择「性能证据 09949」用于 Agent 判断或写入 Prompt',exact:true}).waitFor();
+  await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).first().check();
+  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).waitFor();
+  await largePage.screenshot({path:path.join(artifacts,'cross-page-selection.png'),fullPage:false});
+  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).click();
+  assert.ok((await largePage.evaluate(()=>window.draft)).includes('性能证据 09999'));
+  assert.ok((await largePage.evaluate(()=>window.draft)).includes('性能证据 09949'));
+  await largePage.getByRole('button',{name:'上一页',exact:true}).click();
+  await largePage.getByText('第 1 页 · 本页 50 条 · 完整范围 10000 条',{exact:true}).waitFor();
+  await largePage.screenshot({path:path.join(artifacts,'evidence-pagination.png'),fullPage:false});
+  await largePage.getByLabel('搜索证据条目').fill('性能证据 00001');
+  await largePage.getByText('第 1 页 · 本页 1 条 · 完整范围 10000 条',{exact:true}).waitFor();
+  assert.equal(await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).count(),1);
+  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).waitFor();
+  await largePage.getByRole('button',{name:'导入文献引用',exact:true}).click();
+  await largePage.getByLabel('BibTeX 或 RIS 引用内容').fill('@article{qa,title={浏览器引用往返},author={Li and Wang},year={2024},doi={10.9999/browser}}');
+  await largePage.getByRole('button',{name:'预览引用',exact:true}).click();
+  await largePage.getByRole('button',{name:'确认保存所选 0 条（待核验）',exact:true}).waitFor();
+  const beforeImport=await largePage.evaluate(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});return new Promise(resolve=>{const request=db.transaction('evidence').objectStore('evidence').count();request.onsuccess=()=>{db.close();resolve(request.result)}})});
+  assert.equal(beforeImport,10000);
+  await largePage.getByRole('button',{name:'选择全部预览引用',exact:true}).click();
+  await largePage.getByRole('button',{name:'确认保存所选 1 条（待核验）',exact:true}).click();
+  await largePage.getByLabel('搜索证据条目').fill('浏览器引用往返');
+  await largePage.getByText('第 1 页 · 本页 1 条 · 完整范围 10001 条',{exact:true}).waitFor();
+  const imported=await largePage.evaluate(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});return new Promise(resolve=>{const request=db.transaction('evidence').objectStore('evidence').getAll();request.onsuccess=()=>{db.close();resolve(request.result.find(row=>row.title==='浏览器引用往返'))}})});
+  assert.equal(imported.status,'unverified');assert.deepEqual(imported.bibliography.authors,['Li','Wang']);
+  await largePage.setViewportSize({width:390,height:844});
+  assert.ok(await largePage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await largeContext.close();
+  console.log('真实 IndexedDB 1 万条分页、跨页及跨筛选选择、全范围搜索、显式引用导入与窄屏布局：通过');
+
   await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:false});
   if(process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT});
   await page.setViewportSize({width:390,height:844});

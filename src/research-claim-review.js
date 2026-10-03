@@ -1,7 +1,10 @@
+import { readLatestResearchAnswer } from './knowledge-deposition.js'
 import React from 'react'
 import { h, C } from './theme.js'
 import { Button, Card, Field, Input, Textarea, Badge, EmptyState, Notice, Spinner } from './ui.js'
 import { currentResearchContext, activeResearchRun, subscribeResearchContext } from './research-context-store.js'
+import { evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles } from './lib/evidence-vault-sync.js'
+import { requestResearchClaims, synchronizeResearchClaims } from './lib/claim-review-client.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 const CLAIM_REVIEW_API = '/dsh-research-kit/claim-review'
@@ -11,14 +14,8 @@ const CLAIM_REVIEW_LABELS = {
 }
 
 async function claimReviewRequest(project, body, signal) {
-  const response = await fetch(body ? CLAIM_REVIEW_API : `${CLAIM_REVIEW_API}?project=${encodeURIComponent(project)}`, {
-    method: body ? 'POST' : 'GET',
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    signal,
-  })
-  const result = await response.json()
-  if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
+  const result = await requestResearchClaims(project, body, signal)
+  if (body && !['extract', 'export'].includes(body.action)) publishEvidenceVault()
   return result
 }
 
@@ -26,6 +23,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const project = context.project || 'default'
   const [claims, setClaims] = React.useState([])
+  const [claimPage, setClaimPage] = React.useState(0)
   const [evidence, setEvidence] = React.useState([])
   const [limits, setLimits] = React.useState({})
   const [loading, setLoading] = React.useState(true)
@@ -41,14 +39,16 @@ export function ResearchClaimReview({ sessionId = '' }) {
   const requestVersion = React.useRef(0)
 
   React.useEffect(() => subscribeResearchContext(setContext), [])
-  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId('') }, [project])
+  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setClaimPage(0) }, [project])
   const refresh = React.useCallback(async () => {
     const version = ++requestVersion.current
     setLoading(true)
     try {
-      const result = await claimReviewRequest(project)
+      await syncEvidenceVaultWithFiles(context.project || undefined)
+      const result = await synchronizeResearchClaims(evidenceVaultStore(), context.project || '')
       if (version !== requestVersion.current) return
       setClaims(result.claims)
+      setClaimPage(page => Math.min(page, Math.max(0, Math.ceil(result.claims.length / 50) - 1)))
       setEvidence(result.evidence)
       setLimits({ claims: result.claim_limit_reached, evidence: result.evidence_limit_reached })
     } catch (error) {
@@ -155,7 +155,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
     setBusy(true)
     try {
       await claimReviewRequest(project, {
-        project, claim_id: claim.id, statement: claim.statement, state: draft.state,
+        project, claim_id: claim.id, statement: claim.statement, state: draft.state, expected_revision: claim.revision,
         evidence_ids: draft.evidenceIds, assessed_by: reviewer.trim(), assessment_reason: draft.reason.trim(),
       })
       setEditingId('')
@@ -168,7 +168,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
   const evidenceById = new Map(evidence.map(item => [item.id, item]))
   const toggleEvidence = id => setDraft(current => ({ ...current,
     evidenceIds: current.evidenceIds.includes(id)
-      ? current.evidenceIds.filter(item => item !== id) : current.evidenceIds.length < 30 ? [...current.evidenceIds, id] : current.evidenceIds,
+      ? current.evidenceIds.filter(item => item !== id) : current.evidenceIds.length < 50 ? [...current.evidenceIds, id] : current.evidenceIds,
   }))
   const pendingForAgent = claims.filter(claim => !['verified', 'rejected'].includes(claim.state) && !claim.agent_review).slice(0, 6)
 
@@ -176,9 +176,9 @@ export function ResearchClaimReview({ sessionId = '' }) {
     h(Card, { key: 'intro', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'text' }, [
-          h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '科研 Claim 审阅'),
+          h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '登记与人工审核'),
           h('p', { key: 'hint', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.6 } },
-            `当前课题：${project}。确认结论须由研究者填写理由，并关联本课题已保存的证据。`),
+            `当前课题：${context.project || '未命名项目'}。确认结论须由研究者填写理由，并关联本课题已保存的证据。`),
         ]),
         h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', disabled: loading || busy, onClick: refresh }, '刷新台账'),
       ]),
@@ -189,6 +189,12 @@ export function ResearchClaimReview({ sessionId = '' }) {
     h(Card, { key: 'extract', style: { display: 'grid', gap: 10 } }, [
       h('h3', { key: 'title', style: { margin: 0, fontSize: 14 } }, '从研究段落提取候选'),
       h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '粘贴带 DOI、PMID 或 arXiv 引用的段落；先预览并勾选，再登记为待核验 Claim。原文不会整篇保存。'),
+      h(Button, { key: 'latest-answer', size: 'sm', disabled: busy, onClick: () => {
+        const found = readLatestResearchAnswer(sessionId)
+        if (!found) return setNotice('当前会话没有可读取的助手回答；可手动粘贴研究段落。')
+        setSourceText(found.text.slice(0, 12000)); setCandidates([]); setPickedCandidates([])
+        setNotice(`${found.interrupted ? '回答曾被中断；' : ''}${found.text.length > 12000 ? '仅载入前 12000 字；' : ''}已载入最近回答，请先核对内容，再提取并勾选候选。`)
+      }, style: { justifySelf: 'start' } }, '从最近回答开始'),
       h(Textarea, { key: 'input', value: sourceText, onChange: value => { setSourceText(value); setCandidates([]); setPickedCandidates([]) }, rows: 4,
         maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '例如：在某研究条件下，干预 A 改善结局 B [1](https://doi.org/10.1000/example)。' }),
       h(Button, { key: 'extract-button', size: 'sm', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
@@ -215,10 +221,15 @@ export function ResearchClaimReview({ sessionId = '' }) {
         onClick: () => exportClaims('publication') }, '发布检查并导出'),
     ]),
     notice ? h(Notice, { key: 'notice', tone: /失败|请填写|至少/.test(notice) ? 'error' : 'info' }, notice) : null,
-    limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '当前只展示最近 200 条 Claim 或证据；更早记录请使用 MCP 工具查询。') : null,
+    limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
     loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
-    !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '可先登记一条草稿，再逐条审阅。' }) : null,
-    ...claims.map(claim => h(Card, { key: claim.id, style: { display: 'grid', gap: 10 } }, [
+    !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '从已有研究段落提取候选，或去证据库选择来源并建立论断，再返回这里审核。' }) : null,
+    claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
+      h(Button, { key: 'prev', size: 'sm', disabled: !claimPage || busy, onClick: () => setClaimPage(page => page - 1) }, '上一页论断'),
+      h('span', { key: 'count' }, `第 ${claimPage + 1} 页 · 共 ${claims.length} 条`),
+      h(Button, { key: 'next', size: 'sm', disabled: (claimPage + 1) * 50 >= claims.length || busy, onClick: () => setClaimPage(page => page + 1) }, '下一页论断'),
+    ]) : null,
+    ...claims.slice(claimPage * 50, (claimPage + 1) * 50).map(claim => h(Card, { key: claim.id, style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'summary', style: { display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'claim', style: { minWidth: 0, flex: '1 1 280px' } }, [
           h('div', { key: 'labels', style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } }, [

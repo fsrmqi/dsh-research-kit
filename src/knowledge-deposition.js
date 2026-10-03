@@ -380,3 +380,13 @@ export async function depositLatestAssistantMessage({
   })
   return { summary, seq: found.seq, interrupted: found.interrupted }
 }
+
+// 只在用户主动操作时读取当前事件窗口；不持久化回答正文。
+export function readLatestResearchAnswer(sessionId = '') {
+  try {
+    const sid = String(sessionId || depositionSessions?.list?.getSnapshot()?.current || '')
+    if (!sid || !depositionSessions) return null
+    const snapshot = depositionSessions.binding(sid)?.eventSource?.getSnapshot?.()
+    return latestDepositableMessage(snapshot?.entries)
+  } catch { return null }
+}

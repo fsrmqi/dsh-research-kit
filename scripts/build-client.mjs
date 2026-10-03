@@ -23,6 +23,9 @@ files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/rese
 files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
 files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-transfer.js')
 files.splice(files.indexOf('src/agent-activity.js') + 1, 0, 'src/research-transfer-panel.js')
+files.splice(files.indexOf('src/lib/evidence-vault-core.js'), 0, 'src/lib/bibliography.js')
+files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js')
+files.splice(files.indexOf('src/evidence-vault-store.js') + 1, 0, 'src/lib/claim-review-client.js')
 // 入口形态偏好：必须在 dsh/prompt-enhancer-glue.js（按形态分支）与 src/plugin-status.js（设置项）之前。
 files.splice(files.indexOf('src/promptkit-loader.js') + 1, 0, 'src/entry-mode.js')
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，

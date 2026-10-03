@@ -11,10 +11,10 @@ import {
 // 合并三个独立视图后，「分区契约」是唯一保证不丢功能、不叠功能的依据：
 // 每个分区必须声明名称、定位、核心用途、职责边界与数据归属，且导航与实现一一对应。
 
-test('分区契约：四个分区 id 唯一，且顺序遵循科研闭环', () => {
-  assert.equal(RESEARCH_CONSOLE_SECTIONS.length, 4)
+test('分区契约：五个分区 id 唯一，且顺序遵循科研闭环', () => {
+  assert.equal(RESEARCH_CONSOLE_SECTIONS.length, 5)
   const ids = RESEARCH_CONSOLE_SECTIONS.map(section => section.id)
-  assert.deepEqual(ids, ['catalog', 'methods', 'vault', 'evidence'], '分区顺序应遵循「发现 → 构造 → 沉淀 → 证据」')
+  assert.deepEqual(ids, ['home', 'catalog', 'methods', 'vault', 'evidence'], '分区顺序应遵循「发现 → 构造 → 沉淀 → 证据」')
   assert.equal(new Set(ids).size, ids.length, '分区 id 必须唯一')
 })
 

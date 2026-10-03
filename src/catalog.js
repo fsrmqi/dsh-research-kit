@@ -14,6 +14,7 @@ let databaseConfig = databaseMetadataConfig
 let DATABASE_GROUPS = databaseConfig.groups
 let RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides))
 let catalogIndex = new Map()
+let catalogSearchIndex = new Map()
 let catalogLoadPromise = null
 const catalogListeners = new Set()
 
@@ -71,6 +72,11 @@ function rebuildCatalog() {
   RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides || {}))
   catalog = Object.freeze([...workflowEntries, ...skillEntries, ...resourceEntries].map(enrichItem))
   catalogIndex = new Map(catalog.map(item => [item.id, item]))
+  catalogSearchIndex = new Map(catalog.map(item => [item.id, [
+    item.name, (item.tags || []).join(' '), item.description,
+    [item.category, item.databaseMeta?.group, item.databaseMeta?.dataKind].filter(Boolean).join(' '),
+    [item.prompt, item.guidance, item.promptFragment, item.databaseMeta?.queryExample].filter(Boolean).join(' '),
+  ].map(value => String(value || '').toLowerCase())]))
 }
 
 export let catalog = []
@@ -114,18 +120,35 @@ export function loadBrowserCatalog(fetcher = globalThis.fetch) {
   return catalogLoadPromise
 }
 
+const CATALOG_SYNONYMS = [
+  ['rnaseq', 'rna-seq', 'rna seq', '转录组'],
+  ['gwas', '全基因组关联'],
+  ['literature review', '文献综述'],
+  ['systematic review', '系统综述', '系统文献综述'],
+]
+
+export function catalogMatch(item, query = '') {
+  const normalized = String(query).trim().toLowerCase()
+  if (!normalized) return { score: 0, reason: '', term: '' }
+  const terms = CATALOG_SYNONYMS.find(group => group.includes(normalized)) || [normalized]
+  const fields = catalogSearchIndex.get(item.id) || []
+  let best = { score: 0, reason: '', term: '' }
+  for (const term of terms) for (let index = 0; index < fields.length; index++) {
+    if (!fields[index].includes(term)) continue
+    const score = [80, 60, 40, 30, 10][index] + (index === 0 && fields[index] === term ? 20 : index === 0 && fields[index].startsWith(term) ? 10 : 0)
+    if (score > best.score) best = { score, reason: ['名称', '标签', '描述', '分类', '正文'][index] + '匹配', term }
+  }
+  return best
+}
+
 export function searchCatalog({ query = '', type = 'all' } = {}) {
   const normalized = String(query).trim().toLowerCase()
-  return catalog.filter(item => {
-    if (type !== 'all' && item.type !== type) return false
-    if (!normalized) return true
-    // 搜索覆盖名称、描述、分类、标签与正文（prompt/guidance/promptFragment），与 README 3.1 的范围一致。
-    return [item.name, item.description, item.category, ...(item.tags || []), item.prompt, item.guidance, item.promptFragment, item.databaseMeta?.group, item.databaseMeta?.dataKind, item.databaseMeta?.queryExample]
-      .filter(part => typeof part === 'string')
-      .join(' ')
-      .toLowerCase()
-      .includes(normalized)
-  })
+  const rows = catalog.filter(item => type === 'all' || item.type === type)
+  if (!normalized) return rows
+  return rows.map((item, order) => ({ item, order, match: catalogMatch(item, normalized) }))
+    .filter(row => row.match.score > 0)
+    .sort((a, b) => b.match.score - a.match.score || a.order - b.order)
+    .map(row => row.item)
 }
 
 export function itemById(id) {

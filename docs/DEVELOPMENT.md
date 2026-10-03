@@ -2,7 +2,7 @@
 
 本文面向需要改动 `dsh-research-kit` 的开发者：环境准备、模块登记规则、测试策略与交付检查单。
 
-当前仓库处于**可用状态**——589 项目录资产、统一视图四分区、公开数据源直查、方法工坊与草稿增强器、MCP Server（36 个 research_* 工具）与 Agent 活动面板均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
+当前仓库处于**可用状态**——589 项目录资产、统一视图五分区、公开数据源直查、方法工坊与草稿增强器、MCP Server（36 个 research_* 工具）与 Agent 活动面板均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
 
 ## 1. 开始前
 
@@ -19,7 +19,8 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（526 项 / 75 个测试文件）
+npm run check:performance # 目录搜索与大证据图谱的合成性能门禁
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（555 项 / 76 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -83,7 +84,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 | 科研模式任务预设（通用研究/文献与论文/生物信息学/作物遗传育种/临床与人群研究/数据分析与可视化） | 已实现 | `src/research-workbench.js` |
 | 收藏与使用历史（localStorage） | 已实现（`CatalogStorage` 接口） | `src/catalog-storage.js` |
 | 工作台双栏 UI（主题变量/窄屏/aria） | 已实现 | `src/research-workbench.js` + `src/theme.js` |
-| 统一视图容器与四个分区（发现/构造/沉淀/证据） | 已实现 | `src/research-console.js` + `src/lib/console-sections.js` |
+| 统一视图容器与五个分区（首页/发现/构造/沉淀/证据） | 已实现 | `src/research-console.js` + `src/lib/console-sections.js` |
 | 分区契约测试（名称/定位/用途/边界/映射） | 已实现 | `test/research-console.test.js` |
 | 输入框快捷入口与 overlay 选择器 | 已实现 | `src/composer-*.js` + `dsh/standalone-glue.js` |
 | 浮层锚定卡片的可用高度解算（纯函数 + 单测） | 已实现 | `src/lib/overlay-anchor.js` + `test/composer-overlay.test.js` |
@@ -138,7 +139,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 526 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
+**本项无法由单元测试替代。** 仓库内 555 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
@@ -280,3 +281,12 @@ const actions = {
 - [ ] 不会重复注册 view；
 - [ ] 会话切换时操作仍指向正确会话；
 - [ ] 深色主题与窄屏已检查。
+
+
+### 本地研究数据的一致性边界
+
+- 课题名禁止路径保留字符、控制字符和 `.lock` 后缀；非法名称会报 `INVALID_PROJECT`，不再自动替换为另一个课题。合法名称和现有目录保持原样。历史上已被替换而合并的课题无法自动拆分，应先备份，再人工确认归属。
+- 证据 JSONL 的列表读取仍可展示合法条目；发现无法解析的行时，评估、更新、删除和追加都会拒绝写入并保留原文。修复前先备份文件；不要用清空操作代替恢复。
+- Claim 的正文、证据或引用锚点变化后，旧人工核验不能沿用。保留已确认／已驳回状态时必须重新提交评估人和理由，已确认状态还必须重新提交证据 ID；也可先改成待核验，再审阅。旧 Agent 建议在内容变化后清除。
+- 文件锁记录进程和唯一所有者；进程存活时不会因为操作耗时而被接管，释放时只删除自己的锁。崩溃的主锁与协调锁可以恢复；若恢复协调锁的进程也在恢复过程中崩溃，会保守停止。遇到持续繁忙时，先停止所有 Research Kit 写入进程、备份数据，再检查同目录的 `.lock.gate.recovery` 或 `<run_id>.lock.gate.recovery` 遗留文件；不能在写入进程运行时手工删除锁。
+- Context Pack 的预算计算覆盖最终序列化结果，包括协议字段和人工回执；截断时返回 `truncated: true`。检查点损坏会显式报错，不能伪装成没有人工回执。

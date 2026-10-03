@@ -1,3 +1,4 @@
+import { normalizeBibliography } from './bibliography.js'
 // 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
 import { visibleDepositionTags } from './deposition-taxonomy.js'
 import { normalizeResearchClassification } from './research-taxonomy.js'
@@ -153,6 +154,7 @@ export function normalizeEvidenceEntry(value) {
     id: input.id || `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title,
     sourceDatabase: clampText(input.sourceDatabase, 120),
+    bibliography: normalizeBibliography(input.bibliography),
     identifier,
     identifierKind: EVIDENCE_IDENTIFIER_LABELS[identifierKind] ? identifierKind : 'none',
     url,

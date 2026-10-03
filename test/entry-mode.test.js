@@ -55,8 +55,8 @@ test('入口形态接线：槽位按偏好二选一，设置项挂在 Plugins �
   const glue = readFileSync(new URL('../dsh/prompt-enhancer-glue.js', import.meta.url), 'utf8')
   assert.match(glue, /const mode = useEntryMode\(\)/)
   assert.match(glue, /const floating = mode === ENTRY_MODE_FLOATING/)
-  // 悬浮形态交回工件自带的启动钮（不传 inline 那一组属性）；内联形态才传。
-  assert.match(glue, /const launcherProps = floating\s*\?\s*\{\}\s*:\s*\{ launcher: 'inline'/)
+  // 悬浮形态使用工件自带的启动钮，并传受控打开状态以承接首次按需加载；内联形态额外传入口类型。
+  assert.match(glue, /const launcherProps = floating\s*\?\s*\{ open, onOpenChange \}\s*:\s*\{ launcher: 'inline'/)
   assert.match(glue, /\.\.\.launcherProps/)
   // 设置项在 Plugins 详情页的「运行状态」区里，与既有配置预设同一处。
   const status = readFileSync(new URL('../src/plugin-status.js', import.meta.url), 'utf8')

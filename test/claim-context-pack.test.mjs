@@ -202,3 +202,102 @@ test('Claim Agent 路由允许跨源预检，且只接受带会话 ID 的 POST',
   await route.handler({ method: 'POST', url: '/dsh-research-kit/claim-agent-review' }, missing)
   assert.equal(missing.status, 400)
 })
+
+
+test('Claim 内容版本：MCP 修改已确认结论不能沿用旧人工核验', async () => {
+  const { evidenceTools } = await import('../mcp/tools/evidence.js')
+  const { z } = await import('zod/v3')
+  const tool = evidenceTools.find(item => item.name === 'research_claim_record')
+  const schema = z.object(tool.inputSchema)
+  const project = 'verified-content-version'
+  const evidence = await saveEvidence({ project, title: '人工核对来源', identifier_type: 'doi', identifier: '10.9999/version' })
+  const original = await recordResearchClaim({ project, statement: 'A 提升 B', state: 'verified',
+    evidence_ids: [evidence.id], assessed_by: '研究者', assessment_reason: '全文支持 A 提升 B' })
+  const result = await tool.execute(schema.parse({ project, claim_id: original.claim.id, statement: 'A 降低 B', state: 'verified' }))
+  assert.match(JSON.stringify(result), /必须重新提供人工/)
+  assert.equal((await listResearchClaims({ project }))[0].statement, 'A 提升 B')
+  const draft = await recordResearchClaim({ project, claim_id: original.claim.id, statement: 'A 降低 B', state: 'extracted' })
+  assert.equal(draft.claim.assessment_reason, '')
+  await assert.rejects(() => recordResearchClaim({ project, claim_id: original.claim.id, state: 'verified' }), /必须重新提供人工/)
+  assert.equal((await buildResearchEvidenceExport({ project })).ready, false)
+  await recordResearchClaim({ project, claim_id: original.claim.id, state: 'verified',
+    evidence_ids: [evidence.id], assessed_by: '另一位研究者', assessment_reason: '重新核对新版本' })
+  assert.equal((await buildResearchEvidenceExport({ project })).ready, true)
+})
+
+test('Context Pack：多条长回执也必须符合最终序列化字符预算', async () => {
+  const runId = 'receipt-budget-run'
+  for (let i = 0; i < 4; i++) {
+    const stage = `stage-${i}`
+    await initializeCheckpoints(runId, { checkpoints: [{ after_stage: stage }] }, [stage])
+    await recordApproval(runId, stage, { validation_summary: '详细人工核验说明'.repeat(60) })
+  }
+  const pack = await buildResearchContextPack({ project: 'receipt-budget', run_id: runId, budget_chars: 800 })
+  assert.ok(JSON.stringify(pack).length <= 800)
+  assert.equal(pack.truncated, true)
+  assert.equal(pack.injection_policy, 'user_select_required')
+})
+
+test('Context Pack：检查点损坏必须显式报错，不能静默伪装成没有人工回执', async () => {
+  const { writeFile, mkdir } = await import('node:fs/promises')
+  const { dataPath } = await import('../mcp/paths.js')
+  await mkdir(dataPath('checkpoints'), { recursive: true })
+  await writeFile(dataPath('checkpoints', 'corrupt-pack-run.json'), 'invalid json')
+  await assert.rejects(() => buildResearchContextPack({ project: 'receipt-budget', run_id: 'corrupt-pack-run' }), { code: 'CHECKPOINT_STATE_CORRUPT' })
+})
+
+test('统一 Claim 台账：本地迁移保留 ID 和立场，忽略外来已确认状态且幂等', async () => {
+  const { importLocalResearchClaims, researchClaimPage } = await import('../mcp/state/claim-ledger.js')
+  const project = 'unified-local'
+  const evidence = await saveEvidence({ project, identifier_type: 'doi', identifier: '10.9999/unified-local', title: '来源' })
+  const input = { id: 'legacy-local', project, question: '研究问题', statement: '研究论断', state: 'verified',
+    links: [{ evidenceId: evidence.id, stance: 'refutes', locator: '图 2', assessedBy: '研究者' }] }
+  assert.equal((await importLocalResearchClaims({ project, claims: [input] })).added, 1)
+  assert.equal((await importLocalResearchClaims({ project, claims: [{ ...input, statement: '不得覆盖' }] })).added, 0)
+  const page = await researchClaimPage({ project })
+  assert.equal(page.claims[0].id, 'legacy-local'); assert.equal(page.claims[0].state, 'extracted')
+  assert.equal(page.claims[0].links[0].stance, 'refutes'); assert.equal(page.claims[0].question, '研究问题')
+  const updated = await recordResearchClaim({ project, claim_id: 'legacy-local', expected_revision: 1,
+    statement: '研究论断', state: 'verified', evidence_ids: [evidence.id], assessed_by: '研究者', assessment_reason: '核对原文并评估反证' })
+  const exported = await buildResearchEvidenceExport({ project, mode: 'publication' })
+  assert.equal(exported.payload.claims[0].state, 'verified')
+  assert.equal(exported.payload.claims[0].links[0].stance, 'refutes')
+  await assert.rejects(() => recordResearchClaim({ project, claim_id: updated.claim.id, expected_revision: 1, statement: '旧版本内容' }), /已被更新/)
+  await assert.rejects(() => recordResearchClaim({ project, claim_id: updated.claim.id, links: [{ evidenceId: evidence.id, stance: 'supports', locator: '图 3', assessedBy: '另一个人' }] }), /重新提供/)
+})
+
+test('统一 Claim 台账：分页超过 200 条不遗漏，旧 MCP 查询上限保留', async () => {
+  const { importLocalResearchClaims, researchClaimPage } = await import('../mcp/state/claim-ledger.js')
+  const project = 'unified-pagination'
+  for (let offset = 0; offset < 205; offset += 50) await importLocalResearchClaims({ project,
+    claims: Array.from({ length: Math.min(50, 205 - offset) }, (_, index) => ({ id: `local-${offset + index}`, statement: `假设 ${offset + index}`, links: [] })) })
+  const first = await researchClaimPage({ project }); const second = await researchClaimPage({ project, offset: first.next_offset })
+  assert.equal(first.claims.length, 200); assert.equal(second.claims.length, 5); assert.equal(second.next_offset, null)
+  assert.equal(new Set([...first.claims, ...second.claims].map(row => row.id)).size, 205)
+  assert.equal((await listResearchClaims({ project, limit: 999 })).length, 200)
+})
+
+test('项目整理同时迁移证据与 Claim 台账，撤销保留人工审核状态', async () => {
+  const { organizeEvidenceProjects, undoEvidenceProjectOrganization } = await import('../mcp/execution/evidence-store.js')
+  const from = 'joint-before', to = 'joint-after'
+  const evidence = await saveEvidence({ project: from, identifier_type: 'doi', identifier: '10.9999/joint', title: '联合迁移来源' })
+  const created = await recordResearchClaim({ project: from, statement: '人工判断', state: 'verified', evidence_ids: [evidence.id], assessed_by: '研究者', assessment_reason: '已核对全文' })
+  const result = await organizeEvidenceProjects([{ from, to }])
+  assert.equal((await listResearchClaims({ project: from })).length, 0)
+  const moved = (await listResearchClaims({ project: to }))[0]
+  assert.equal(moved.id, created.claim.id); assert.equal(moved.state, 'verified')
+  assert.equal((await buildResearchEvidenceExport({ project: to })).ready, true)
+  await undoEvidenceProjectOrganization(result.id)
+  assert.equal((await listResearchClaims({ project: from }))[0].state, 'verified')
+  assert.equal((await listResearchClaims({ project: to })).length, 0)
+})
+
+test('项目整理后 Claim 有新审核时拒绝撤销，避免覆盖人工判断', async () => {
+  const { organizeEvidenceProjects, undoEvidenceProjectOrganization, finalizeEvidenceProjectOrganization } = await import('../mcp/execution/evidence-store.js')
+  const created = await recordResearchClaim({ project: 'joint-conflict-a', statement: '待审阅声明' })
+  const result = await organizeEvidenceProjects([{ from: 'joint-conflict-a', to: 'joint-conflict-b' }])
+  await recordResearchClaim({ project: 'joint-conflict-b', claim_id: created.claim.id, statement: '新判断内容', state: 'ambiguous' })
+  await assert.rejects(() => undoEvidenceProjectOrganization(result.id), /论断在整理后发生变化/)
+  assert.equal((await listResearchClaims({ project: 'joint-conflict-b' }))[0].statement, '新判断内容')
+  await finalizeEvidenceProjectOrganization(result.id)
+})

@@ -1,9 +1,9 @@
 
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { dataPath } from '../paths.js'
-import { acquireFileLock } from '../execution/file-lock.js'
+import { acquireFileLock, releaseFileLock } from '../execution/file-lock.js'
 
 const CHECKPOINT_DIR = dataPath('checkpoints')
 // 与 Material Passport 的 run_id 契约一致：允许点号，拒绝路径分隔符。
@@ -35,18 +35,9 @@ async function acquireLock(runId) {
 }
 
 async function withRunLock(runId, run) {
-  const token = `${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const handle = await acquireLock(runId)
-  await handle.writeFile(token)
-  await handle.close()
-  try {
-    return await run()
-  } finally {
-    // 只删自己那把锁：持锁超时被接管后，不得删掉接管者的锁。
-    try {
-      if ((await readFile(lockFile(runId), 'utf8')) === token) await unlink(lockFile(runId))
-    } catch {}
-  }
+  try { return await run() }
+  finally { await releaseFileLock(lockFile(runId), handle) }
 }
 
 function emptyState(runId) {

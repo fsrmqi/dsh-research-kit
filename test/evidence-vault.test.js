@@ -400,7 +400,8 @@ test('4c 选择基准：勾选是跨筛选状态，改筛选不撤销已选择',
   // 否则用户勾选后调整筛选条件，被筛掉的条目会静默退出计数——
   // 那等于让「看见什么」悄悄改写「已选择什么」，且计数与用户认知不符。
   const view = readFileSync(new URL('../src/research-evidence-vault.js', import.meta.url), 'utf8')
-  assert.match(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*entries\.filter\(/, '选择集必须以全部证据条目为基准')
+  assert.match(view, /\[\.\.\.selectedRows, \.\.\.entries\]/, '分页选择必须合并已选快照和当前页')
+  assert.match(view, /store\.getMany\(selectedIds\)/, '已选条目必须独立于当前页读取')
   assert.doesNotMatch(view, /selectedEntries\s*=\s*React\.useMemo\(\(\)\s*=>\s*filtered\.filter\(/, '选择集不得以筛选结果为基准')
 })
 

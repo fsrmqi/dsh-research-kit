@@ -3,12 +3,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/fsrmqi/dsh-research-kit/actions/workflows/ci.yml)
 [![DSH Plugin](https://img.shields.io/badge/DSH-Plugin-blue.svg)](https://github.com/topics/dsh-plugin)
-[![Node: >=22.6](https://img.shields.io/badge/node-%3E%3D22.6-green.svg)](https://nodejs.org)
+[![Node: >=22.19](https://img.shields.io/badge/node-%3E%3D22.19-green.svg)](https://nodejs.org)
 [![Listed on DSH Hub](https://img.shields.io/badge/DSH%20plugin-listed-2ea44f.svg?labelColor=3d4451)](https://dshhub.org/plugins/fsrmqi/dsh-research-kit)
 
 [简体中文](README.md) · [English](README.en.md)
 
-> 面向 DeepSeek Harness 的科研工作台与跨宿主 MCP 工具集：351 条人工审核的工作流、109 个技能条目、129 个科学数据源，以及 32 个研究工具。
+> 面向 DeepSeek Harness 的科研工作台与跨宿主 MCP 工具集：351 条人工审核的工作流、109 个技能条目、129 个科学数据源，以及 36 个研究工具。
 
 在 DSH 中，它把反复执行的科研任务变成**参数化、可编辑、发送前可见**的提示词；通过独立 stdio MCP Server，它也可向 Codex、Claude Code、Zed 等宿主提供文献检索、证据管理、研究运行与审阅工具。所有研究判断仍需研究者核验。
 
@@ -77,17 +77,20 @@ Research Kit 把这四点做成可复用的资产。
 **✍️ 发送前完整可见、可编辑**
 参数替换实时生成 Prompt 预览；手动编辑后参数变更不会静默改写正文，并提供「恢复自动生成」。必填参数缺失时不发送。
 
-**🧭 一个视图，四个分区**
+**🧭 一个视图，五个分区**
 只有一个 `conversation.view` 标签，内部按科研闭环分区，顶部导航常驻并显示每个分区的定位与职责边界：
 
 | 分区 | 层 | 作用 |
 | --- | --- | --- |
+| 项目首页 | 任务入口 | 研究问题、当前工作流、材料提醒、待核验收件箱和最近产出 |
 | 资源与工作流 | 发现 | 目录检索、参数化组装、公开数据源直查 |
 | 方法工坊 | 构造 | 方法卡 + 变量填充 → 可编辑 Prompt；可从当前对话提取草稿 |
 | 研究资产库 | 沉淀 | 灵感资产增删改、版本对比、验证状态跟进，**可与证据条目显式互链**；**证据库**子模块逐条保存公开来源的元数据与笔记，按项目隔离去重，并反查「被引用于哪些资产」 |
 | 研究证据图谱 | 证据 | 把本会话的资源、工作流、查询来源、资产、已保存证据与自动沉淀知识连成可追溯关系；支持缩放平移、迷你地图、聚焦/上下游/两点路径模式、结论追溯面板与脱敏快照导出；可开启「自动沉淀」随科研对话积累 |
 
 ![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](docs/assets/research-loop.svg)
+
+性能、搜索、证据分页、文献互操作和统一 Claim 台账的说明见 [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md)。
 
 **⏱ 组装回放：把 Prompt 是怎么拼出来的放给你看**
 启动工作流后，工作台把 `composeWorkflow` 的**真实组装事实**逐段回放——工作流 → 参数 → 附加技能 → 数据源边界 → 人工核验；每一段都能在生成的 Prompt 文本中定位到对应锚点，回放与正文互相印证。详情栏内嵌紧凑回放，「弹出回放窗口」打开独立的 archify 交互 viewer（四种视觉预设、章节叙事、语义透镜、雷达总览）。回放只呈现**已经发生的组装动作**，不预测执行结果，也不代表 Agent 已执行任何工具；`prefers-reduced-motion` 时降级为静态。
@@ -131,7 +134,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.6`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「打开工作台」还要求宿主提供公开的跨页视图导航 `uiConversation.openView(sessionId, view, focus?)`（DSH `0.1.7` 尚未提供，缺失时该按钮不渲染）；`npm run check:dsh-app -- <dsh 仓库>` 会把这一通道按「可选能力」报告。
+要求 Node `>= 22.19`，以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「打开工作台」还要求宿主提供公开的跨页视图导航 `uiConversation.openView(sessionId, view, focus?)`（DSH `0.1.7` 尚未提供，缺失时该按钮不渲染）；`npm run check:dsh-app -- <dsh 仓库>` 会把这一通道按「可选能力」报告。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -168,7 +171,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 **方式一：科研工作台统一视图**
 
-1. 在会话中打开「科研工作台」，默认落在「资源与工作流」，搜索或按类型筛选 589 项资源；
+1. 在会话中打开「科研工作台」，默认进入「项目首页」，可选择综述、审稿、结论验证或继续上次工作流；进入「资源与工作流」搜索或按类型筛选 589 项资源；
 2. 选择工作流，查看目的、所需材料与使用限制；
 3. 填写参数；需要材料的工作流请先在 DSH 输入框用 `@文件` 引用文件；
 4. 按需勾选「附加技能指导」，预览实时更新；详情栏可展开**组装回放**，逐段核对 Prompt 是怎么拼出来的；
@@ -251,7 +254,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、526 项回归测试（75 个测试文件，含 6 项宿主动作缺失的渲染级降级断言、4 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、555 项回归测试（76 个测试文件，含 6 项宿主动作缺失的渲染级降级断言、4 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -260,7 +263,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（526 项 / 75 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（555 项 / 76 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

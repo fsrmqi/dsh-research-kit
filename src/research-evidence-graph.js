@@ -15,6 +15,7 @@ import { catalog, itemById } from './catalog.js'
 import {
   evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks, syncEvidenceVaultWithFiles, removeEvidenceEntryFromFile,
 } from './lib/evidence-vault-sync.js'
+import { synchronizeClaimScopes } from './lib/claim-review-client.js'
 import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,
@@ -187,12 +188,15 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     const selectedProject = projectFilter || undefined
     Promise.resolve()
       .then(() => syncEvidenceVaultWithFiles(selectedProject))
-      .catch(() => {})
+      .catch(error => { if (version === evidenceRefreshVersion.current) setNotice(`文件同步失败，显示本地数据：${error.message}`) })
       .then(() => Promise.all([
         vault.list({ project: selectedProject }),
         vault.listProjects(),
         listAssetEvidenceLinks({ project: selectedProject }),
-        vault.listResearchClaims({ project: selectedProject }),
+        synchronizeClaimScopes(vault, selectedProject).catch(error => {
+          if (version === evidenceRefreshVersion.current) setNotice(`Claim 台账暂不可达，显示离线投影：${error.message}`)
+          return vault.listResearchClaims({ project: selectedProject })
+        }),
       ]))
       .then(([rows, projects, links, claims]) => {
         if (version !== evidenceRefreshVersion.current) return
@@ -201,12 +205,9 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         setAssetEvidenceLinks(Array.isArray(links) ? links : [])
         setResearchClaims(Array.isArray(claims) ? claims : [])
       })
-      .catch(() => {
+      .catch(error => {
         if (version !== evidenceRefreshVersion.current) return
-        setSavedEvidence([])
-        setEvidenceProjects([])
-        setAssetEvidenceLinks([])
-        setResearchClaims([])
+        setNotice(`读取失败，已保留上次数据：${error.message}`)
       })
   }, [vault, projectFilter])
   React.useEffect(() => { refreshSavedEvidence(); return subscribeEvidenceVault(refreshSavedEvidence) }, [refreshSavedEvidence])
@@ -222,7 +223,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       })
       .catch(() => {
         if (version !== knowledgeRefreshVersion.current) return
-        setKnowledgeNodes([]); setKnowledgeClaims([])
+        setNotice('知识库读取失败，已保留上次数据；可重新刷新。')
       })
   }, [])
   React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])

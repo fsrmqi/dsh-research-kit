@@ -155,10 +155,10 @@ test('大图与长列表性能守卫已接线', () => {
   assert.match(vaultView, /assetRefreshVersion\.current/)
   assert.match(vaultView, /React\.memo\(/)
   assert.match(workbench, /useDeferredValue\(query\)/)
-  assert.match(workbench, /useMemo\(\(\) => groupEntriesByCategory\(listEntries\)/)
+  assert.match(workbench, /groupEntriesByCategory\(listEntries\), \[listEntries, deferredQuery, isSpecialView\]/)
   assert.match(overlay, /useDeferredValue\(query\)/)
   assert.doesNotMatch(consoleView, /Promise\.all\(\[loadBrowserCatalog\(\), loadPromptKit\(\)\]\)/)
-  assert.match(consoleView, /current\.id === 'catalog' \|\| promptKitLoaded/)
+  assert.match(consoleView, /!needsPromptKit \|\| promptKitLoaded/)
   assert.match(consoleView, /const \[catalogError, setCatalogError\]/)
   assert.match(consoleView, /const \[promptKitError, setPromptKitError\]/)
   assert.match(replay, /if \(popup\.closed\) return null/g)
@@ -181,4 +181,36 @@ test('轮询策略：唯一的定时轮询在 Agent 活动面板，且受「展�
     '面板收起或页面隐藏时必须根本不启动轮询')
   assert.match(activityView, /document\.visibilityState !== 'hidden'/, '每个 tick 也要复查可见性（切走标签页应立即停）')
   assert.match(activityView, /return \(\) => clearInterval\(timer\)/, '卸载必须清掉定时器')
+})
+
+test('文件同步重试会更新已存在的旧记录，并保留引用元数据', async () => {
+  const originalWindow = globalThis.window; const originalFetch = globalThis.fetch
+  const project = `retry-put-${Date.now()}`
+  const savedAt = Date.now() - 10000
+  globalThis.window = {}
+  const store = evidenceVaultStore()
+  const { entry } = await store.save({ id: project, title: '本地新标题', project, url: 'https://example.org/retry-put', savedAt, updatedAt: Date.now(), bibliography: { authors: ['李'], year: '2024' } })
+  let puts = 0
+  globalThis.fetch = async (_url, options = {}) => {
+    if (options.method === 'PUT') {
+      puts++
+      const payload = JSON.parse(options.body)
+      assert.equal(payload.entry.title, '本地新标题')
+      assert.equal(payload.entry.bibliography.year, '2024')
+      if (puts === 1) return { ok: false, status: 503 }
+      return { ok: true, json: async () => ({ ok: true }) }
+    }
+    return { ok: true, json: async () => ({ ok: true, entries: [{ id: entry.id, title: '旧标题', project, url: entry.url, saved_at: new Date(savedAt).toISOString(), updated_at: new Date(savedAt).toISOString() }] }) }
+  }
+  try {
+    await assert.rejects(() => syncEvidenceVaultWithFiles(project, { force: true }), /503/)
+    const result = await syncEvidenceVaultWithFiles(project, { force: true })
+    assert.equal(result.updated, 1)
+    assert.equal(puts, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
+    await store.remove(entry.id)
+  }
 })

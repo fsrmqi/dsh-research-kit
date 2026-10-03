@@ -57,7 +57,7 @@ const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderI
   && previous.dependencies.length === next.dependencies.length
   && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-export function ResearchVault({ assetProvider, inputActions, sessionId, embedded = false }) {
+export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, embedded = false }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -70,7 +70,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [notice, setNotice] = React.useState('')
-  const [tab, setTab] = React.useState('assets')
+  const [tab, setTab] = React.useState(initialTab)
   // 删除是不可逆的：与「清空项目」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const setError = message => setNotice(`⚠️ ${message}`)
@@ -86,6 +86,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
   const assetRefreshVersion = React.useRef(0)
 
   const refreshLinks = React.useCallback(() => {
+    if (tab !== 'assets') return
     const version = ++linkRefreshVersion.current
     Promise.all([
       evidenceVaultStore().list(),
@@ -100,7 +101,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
       if (version !== linkRefreshVersion.current) return
       setEvidenceEntries([]); setAssetLinks([]); setKnowledgeNodes([])
     })
-  }, [])
+  }, [tab])
   React.useEffect(() => { refreshLinks() }, [refreshLinks])
   React.useEffect(() => subscribeEvidenceVault(refreshLinks), [refreshLinks])
 
@@ -288,7 +289,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
       ],
     }),
     h('div', { key: 'subnav', style: { marginTop: 14 } }, [
-      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: setTab, ariaLabel: '沉淀层子模块' }),
+      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: value => { setTab(value); onTabChange?.(value) }, ariaLabel: '沉淀层子模块' }),
     ]),
     tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的 JSON 备份（增量合并，不覆盖现有资产）'),
@@ -479,6 +480,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-function ResearchVaultHost({ embedded = false, inputActions, sessionId }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId })
+function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange })
 }
