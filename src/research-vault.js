@@ -9,10 +9,10 @@ import { assertManageableBody, filterAssets } from './lib/vault-core.js'
 import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
 import { deriveAssetEvidenceCandidates } from './lib/asset-evidence-links.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
+import { EvidenceVaultPane } from './research-evidence-vault.js'
 import {
-  EvidenceVaultPane, evidenceVaultStore, subscribeEvidenceVault,
-  linkAssetToEvidence, removeAssetEvidenceLinkEntry,
-} from './research-evidence-vault.js'
+  evidenceVaultStore, subscribeEvidenceVault, linkAssetToEvidence, removeAssetEvidenceLinkEntry,
+} from './lib/evidence-vault-sync.js'
 import { knowledgeStore } from './knowledge-store.js'
 import { ResearchClaimReview } from './research-claim-review.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'

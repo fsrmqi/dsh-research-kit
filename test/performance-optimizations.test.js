@@ -5,7 +5,7 @@ import { catalogDataRoute } from '../dsh/catalog-data.js'
 import { archifyTemplateRoute } from '../dsh/archify-template.js'
 import { promptKitClientRoute } from '../dsh/promptkit-client.js'
 import { loadArchifyTemplate } from '../src/route-replay.js'
-import { evidenceVaultStore, invalidateEvidenceSync, syncEvidenceVaultWithFiles } from '../src/research-evidence-vault.js'
+import { evidenceVaultStore, invalidateEvidenceSync, syncEvidenceVaultWithFiles } from '../src/lib/evidence-vault-sync.js'
 
 function captureRoute(route, method = 'GET', requestHeaders = {}) {
   return new Promise((resolve, reject) => {
@@ -149,7 +149,8 @@ test('大图与长列表性能守卫已接线', () => {
   assert.match(graph, /const exportLayout = hiddenNodeCount \? layoutEvidenceGraph\(graph\) : layout/)
   assert.match(vault, /selectedIdSet\.has\(item\.id\)/)
   assert.match(vault, /contentVisibility: 'auto'/)
-  assert.match(vault, /EVIDENCE_SYNC_CACHE_LIMIT = 64/)
+  const vaultSync = readFileSync(new URL('../src/lib/evidence-vault-sync.js', import.meta.url), 'utf8')
+  assert.match(vaultSync, /EVIDENCE_SYNC_CACHE_LIMIT = 64/)
   assert.match(vaultView, /linkRefreshVersion\.current/)
   assert.match(vaultView, /assetRefreshVersion\.current/)
   assert.match(vaultView, /React\.memo\(/)

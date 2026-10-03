@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeEvidenceEntry } from '../src/lib/evidence-vault-core.js'
-import { fileEvidenceInput, vaultEvidenceFileEntry, evidenceSyncKey } from '../src/research-evidence-vault.js'
+import { fileEvidenceInput, vaultEvidenceFileEntry, evidenceSyncKey } from '../src/lib/evidence-vault-sync.js'
 
 test('未归属证据文件往返不变成 default 课题，去重键一致', () => {
   const original = normalizeEvidenceEntry({ title: '待归属来源', identifier: '10.1000/unassigned', project: '' })

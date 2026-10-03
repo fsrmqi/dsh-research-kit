@@ -1,7 +1,9 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import { Button, Card, Notice } from './ui.js'
-import { evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles, invalidateEvidenceSync } from './research-evidence-vault.js'
+import {
+  evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles, invalidateEvidenceSync,
+} from './lib/evidence-vault-sync.js'
 import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup } from './knowledge-store.js'
 import { serializeEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
 import { serializeResearchTransfer, parseResearchTransfer, previewResearchTransfer } from './lib/research-transfer.js'

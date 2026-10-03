@@ -12,7 +12,9 @@ import {
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { catalog, itemById } from './catalog.js'
-import { evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks, syncEvidenceVaultWithFiles, removeEvidenceEntryFromFile } from './research-evidence-vault.js'
+import {
+  evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks, syncEvidenceVaultWithFiles, removeEvidenceEntryFromFile,
+} from './lib/evidence-vault-sync.js'
 import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,

@@ -5755,6 +5755,16 @@ async function applyProjectOrganization({ store, assetProvider, mappings, onProg
 }
 
 
+// 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
+//
+// 与灵感资产的边界：灵感资产回答「想过什么」，证据库回答「依据什么」。
+// 隐私边界（不可协商，与 ROADMAP §4 一致）：
+//   - 只入库用户逐条确认的元数据与主动写下的笔记；禁止自动入库；
+//   - 不保存 API 原始响应、全文或附件；检索词仅在用户点击“记录本次检索”后写入账本；
+//   - 保存不等于认可，新条目一律落到「未核验」。
+//
+// 本文件是存取层（状态与订阅 / 文件同步 / 保存删除 / 互链 / 当前项目）；界面层在
+// src/research-evidence-vault.js，保存表单与面板只调用本模块的导出。
 
 // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
 //
@@ -6105,6 +6115,14 @@ const STATUS_COLORS = {
 }
 
 // 保存确认表单：嵌在查询结果条目下方。必须经过这一步才入库——
+
+
+// 证据库界面层：保存表单（EvidenceSaveForm）与证据库面板（EvidenceVaultPane：
+// 列表/筛选/导入导出/Agent 批量初判/互链反查/项目整理）。
+//
+// 持久化、文件同步与互链写入在 src/lib/evidence-vault-sync.js —— 面板只调用它的导出，
+// 不再把 IndexedDB / fetch 细节和 800 行组件混在同一个文件里（拆分前合计 1248 行）。
+
 // 用户要看到并确认将要保存的内容，这是「不静默持久化」的具体落点。
 function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved }) {
   const detected = React.useMemo(

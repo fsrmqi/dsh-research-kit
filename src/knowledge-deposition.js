@@ -1,7 +1,7 @@
 import { extractKnowledge, normalizeKnowledgeLabel } from './lib/knowledge-extract.js'
 import { autoDepositionTags } from './lib/deposition-taxonomy.js'
 import { knowledgeStore, publishKnowledge } from './knowledge-store.js'
-import { saveEvidenceEntry, getActiveProject } from './research-evidence-vault.js'
+import { saveEvidenceEntry, getActiveProject } from './lib/evidence-vault-sync.js'
 
 // 自动沉淀编排：接入 DSH「回答完成」事件，把助手回答自动转成知识结构并联动三个库。
 //

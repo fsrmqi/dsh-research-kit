@@ -94,6 +94,7 @@ dsh-research-kit/
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
 │   ├── tool-registry-projection.js  # 客户端工具注册表投影：只保留浏览器渲染字段（服务端/文档字段不进 ui/client.js，省约 7.6 KB）
+│   ├── lib/evidence-vault-sync.js   # 证据库存取层：状态与订阅 / 文件同步 / 保存删除 / 互链 / 当前项目（界面层只调它的导出）
 │   ├── lib/idb.js                   # IndexedDB 工具：工厂探测 / 请求转 Promise / 事务壳（证据库与知识库共用，事务提交后才 resolve）
 │   ├── lib/download.js              # 导出落盘唯一实现：<a download> + Blob URL **延迟**回收（原先 6 处各写一遍，其中两处同步回收会取消下载）
 │   ├── catalog-category-filter.js   # 工作台与弹层共用的分类筛选组件（快捷分类与颜色集中在此）
@@ -101,7 +102,7 @@ dsh-research-kit/
 │   ├── research-workbench.js        # 分区①「资源与工作流」：目录检索 + Prompt 组装 + 内嵌组装回放
 │   ├── route-replay.js              # 组装回放：trace 分段、引用块预览、独立 viewer 弹窗（§3.2）
 │   ├── research-vault.js            # 分区③「研究资产库」：灵感资产增删改 / 版本 / 验证状态 + 证据库子模块切换
-│   ├── research-evidence-vault.js   # 证据库面板（项目切换 / 删除 / 导入导出 / Agent 批量初判）与保存表单
+│   ├── research-evidence-vault.js   # 证据库界面层：面板（项目切换 / 删除 / 导入导出 / Agent 批量初判）与保存表单
 │   ├── research-evidence-graph.js   # 分区④「研究证据图谱」：关系图渲染（缩放平移/迷你地图/范围模式/导出）+ 已保存证据接入 + 方向性锚点 + 自动沉淀开关与结论追溯面板
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
