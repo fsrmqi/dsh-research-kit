@@ -22,6 +22,8 @@ files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/rese
 files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
 files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-transfer.js')
 files.splice(files.indexOf('src/agent-activity.js') + 1, 0, 'src/research-transfer-panel.js')
+// 入口形态偏好：必须在 dsh/prompt-enhancer-glue.js（按形态分支）与 src/plugin-status.js（设置项）之前。
+files.splice(files.indexOf('src/promptkit-loader.js') + 1, 0, 'src/entry-mode.js')
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
 // 若 import 跨行则只删掉首行，剩余行会残留成非法语句（产物语法错误）。
 function collapseImports(source) {
@@ -67,13 +69,14 @@ const ORDERED_SYMBOLS = [
   'knowledgeStore', 'publishKnowledge',           // src/knowledge-store.js（图谱面板）
   'researchMethodProvider', 'researchAssetProvider', 'ResearchPromptStudioHost', // dsh/prompt-studio-glue.js
   'ResearchVaultHost',             // src/research-vault.js
+  'readEntryMode', 'useEntryMode', 'EntryModeSetting', // src/entry-mode.js（入口形态偏好 + Plugins 页设置项）
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
   'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
   'ResearchPluginStatusSection',   // src/plugin-status.js（standalone-glue 注册状态区）
   'ResearchKitBadge', 'ResearchKitDiagnosticsAction', 'ResearchKitOpenWorkbenchAction', // src/plugin-status.js（Plugins 页徽章、诊断与跨页跳转动作）
   'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
   'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
-  'ResearchDepositButton',         // src/composer-deposit-button.js（悬浮伴生钮；内联入口后不再由 glue 渲染，模块与单测保留）
+  'ResearchDepositButton',         // src/composer-deposit-button.js（悬浮入口形态下的沉淀伴生钮）
   'ResearchConsole',               // src/research-console.js
 ]
 function assertSymbolOrder(body) {

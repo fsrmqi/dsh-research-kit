@@ -108,3 +108,19 @@ test('源码接线：四处宿主动作守卫必须存在', async () => {
   assert.match(overlay, /const hasDraftAction = canWriteDraft\(inputActions\)/, '输入框浮层缺少安全写入守卫')
   assert.match(overlay, /if \(!hasDraftAction\) return setNotice\(/, '输入框浮层缺少写入前的降级提示')
 })
+
+test('草稿增强入口：内联/悬浮两种形态各自只渲染对应入口，且都不抛错', async () => {
+  const { ResearchDraftEnhancerHost } = await import('../dsh/prompt-enhancer-glue.js')
+  const { writeEntryMode } = await import('../src/entry-mode.js')
+  // 默认内联：触发钮由插件自绘，工件未就绪（SSR 不跑 effect）时入口依然在。
+  writeEntryMode('inline')
+  const inline = renderToStaticMarkup(createElement(ResearchDraftEnhancerHost, {}))
+  assert.match(inline, /data-research-kit="draft-enhancer-trigger"/)
+  assert.equal(inline.includes('draft-enhancer-fallback'), false, '内联形态不应出现悬浮兜底钮')
+  // 悬浮：兜底悬浮钮顶上（工件没就绪时的可重试入口），工具条图标钮不再渲染。
+  writeEntryMode('floating')
+  const floating = renderToStaticMarkup(createElement(ResearchDraftEnhancerHost, {}))
+  assert.match(floating, /data-research-kit="draft-enhancer-fallback"/)
+  assert.equal(floating.includes('draft-enhancer-trigger'), false, '悬浮形态不应再渲染工具条图标钮')
+  writeEntryMode('inline')
+})

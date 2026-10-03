@@ -49,12 +49,19 @@ test('伴生钮位置：越界存储位被钳回 vendored 拖拽范围，非法�
   assert.ok(Number.isFinite(tiny.x) && Number.isFinite(tiny.y))
 })
 
-test('伴生钮接线：内联入口不再并排渲染悬浮圆钮，位置键与 vendored 落盘键逐字一致', () => {
+test('伴生钮接线：只在「悬浮」入口形态下并排渲染，位置键与 vendored 落盘键逐字一致', () => {
   const glue = readFileSync(new URL('../dsh/prompt-enhancer-glue.js', import.meta.url), 'utf8')
-  // 入口内联化（launcher: 'inline'）后停止渲染悬浮伴生钮：它按 vendored 落盘坐标（或右下角默认位）
-  // 固定定位，锚点（悬浮 FAB）消失后会变成宿主发送区附近的孤立圆钮。能力不丢——每条助手消息
-  // 下方的 conversation.chat.assistant-actions（dsh-research-kit-review-deposit）仍是沉淀入口。
-  assert.doesNotMatch(glue, /ResearchDepositButton/, '内联入口不得再并排渲染悬浮沉淀钮')
+  // 入口形态是本机偏好（src/entry-mode.js），两种形态二选一：
+  //   floating —— 工件自带可拖拽悬浮钮 + 并排的沉淀伴生圆钮（本次改版前的行为）；
+  //   inline（默认）—— 触发钮由插件自绘在输入框工具条里，不再渲染伴生钮：它按 vendored
+  //     落盘坐标固定定位，锚点（悬浮 FAB）消失后会变成宿主发送区旁的孤立圆钮。能力不丢——
+  //     每条助手消息下方的 conversation.chat.assistant-actions 仍是沉淀入口。
+  assert.match(glue, /const floating = mode === ENTRY_MODE_FLOATING/)
+  assert.match(glue, /if \(floating\) \{/)
+  assert.match(glue, /React\.createElement\(ResearchDepositButton, \{ key: 'research-deposit-button' \}\)/)
+  assert.match(glue, /ResearchDraftEnhancerFallbackFab/, '悬浮形态下工件没就绪也要有兜底悬浮钮')
+  const inlineBranch = glue.slice(glue.indexOf('React.createElement(ResearchDraftEnhancerTrigger, {'))
+  assert.doesNotMatch(inlineBranch, /ResearchDepositButton/, '内联分支不得并排渲染悬浮沉淀钮')
   assert.match(glue, /React\.createElement\(PromptKit\.QuickEnhancer, \{/)
   const button = readFileSync(new URL('../src/composer-deposit-button.js', import.meta.url), 'utf8')
   assert.equal(QUICK_ENHANCER_POSITION_KEY, 'dsh-research-kit.promptkit.quick-action.position.v1', '位置键必须与 vendored storagePrefix + quick-action.position.v1 一致')

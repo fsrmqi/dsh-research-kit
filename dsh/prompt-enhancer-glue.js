@@ -1,3 +1,4 @@
+import React from 'react'
 // 研究草稿增强器：把 vendored PromptKit.QuickEnhancer 适配到 Research Kit 的科研边界。
 // 增强服务端（dsh/semantic-enhance.js）复用当前会话模型路由；浏览器端不持有任何 Key。
 //
@@ -11,6 +12,8 @@ import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
 import { C, GlobalStyle } from '../src/theme.js'
 import { IconButton } from '../src/ui.js'
+import { ResearchDepositButton, QUICK_ENHANCER_POSITION_KEY } from '../src/composer-deposit-button.js'
+import { useEntryMode, ENTRY_MODE_FLOATING } from '../src/entry-mode.js'
 import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
@@ -145,7 +148,7 @@ function LoadedResearchDraftEnhancerHost(props) {
   ensureResearchProviders(PromptKit)
   // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
   // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
-  const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange } = props
+  const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange, floating } = props
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
   const draft = zonedDraft !== undefined ? zonedDraft : hookedInput?.draft
@@ -198,12 +201,15 @@ function LoadedResearchDraftEnhancerHost(props) {
   }, [sessionId])
   React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
   // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-  // 入口改为宿主工具条里的内联按钮（conversation.input.right，紧挨模型选择器）：
-  //   launcher: 'inline'        —— 不再渲染悬浮可拖拽 FAB，也就没有悬浮位置需要维持；
-  //   renderLauncher: () => null —— 触发钮由 ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在）；
-  //   anchorRef / open / onOpenChange —— 面板锚定插件自己的按钮，并由插件受控开合（⌘K 也走同一状态）。
-  // 「沉淀最近回答」不再需要悬浮伴生钮：它另有 conversation.chat.assistant-actions 入口
-  // （dsh-research-kit-review-deposit）；内联后不再在输入框旁留一个无主的浮动圆钮。
+  // 面板本体两种形态共用，只有「启动钮归谁」不同（入口形态见 src/entry-mode.js）：
+  //   inline（默认）：launcher: 'inline' + renderLauncher: null —— 触发钮由
+  //     ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在），anchorRef / open /
+  //     onOpenChange 让面板锚定该按钮并由插件受控开合（⌘K 也走同一状态）；
+  //   floating（设置里可选）：不传这些属性，交回工件自己的可拖拽悬浮钮与位置记忆，
+  //     旁边并排渲染「沉淀最近回答」伴生圆钮。
+  const launcherProps = floating
+    ? {}
+    : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
   return React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
     methodProvider: researchMethodProvider,
@@ -213,12 +219,45 @@ function LoadedResearchDraftEnhancerHost(props) {
     messages,
     searchMemory,
     storagePrefix: 'dsh-research-kit.promptkit.',
-    launcher: 'inline',
-    renderLauncher: () => null,
-    anchorRef,
-    open,
-    onOpenChange,
+    ...launcherProps,
   })
+}
+
+// 悬浮形态下的加载兜底。工件没就绪时右下角不能什么都不留，否则又回到
+// 「插件装着、入口却消失」这种无从定位的状态。它就落在工件自己会用的位置上
+// （读同一个位置键，缺省用工件默认的右下角），加载完成后由工件的悬浮钮原样接替。
+export function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
+  const failed = state === 'error'
+  const label = failed
+    ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
+    : '草稿增强加载中…'
+  let stored = null
+  try { stored = JSON.parse(window.localStorage.getItem(QUICK_ENHANCER_POSITION_KEY) || 'null') } catch { stored = null }
+  const viewportWidth = Number(window.innerWidth) || 0
+  const viewportHeight = Number(window.innerHeight) || 0
+  const x = Number.isFinite(Number(stored?.x)) ? Number(stored.x) : Math.max(24, viewportWidth - 86)
+  const y = Number.isFinite(Number(stored?.y)) ? Number(stored.y) : Math.max(96, viewportHeight - 158)
+  return React.createElement(React.Fragment, null, [
+    React.createElement(GlobalStyle, { key: 'style' }),
+    React.createElement('div', {
+      key: 'fab',
+      'data-research-kit': 'draft-enhancer-fallback',
+      'data-state': state,
+      style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
+    }, React.createElement(IconButton, {
+      name: 'sparkles',
+      label,
+      size: 18,
+      active: failed,
+      onClick,
+      style: {
+        width: 44, height: 44, borderRadius: '50%',
+        border: `1px solid ${failed ? C.amber : C.line}`,
+        background: C.surface, color: failed ? C.amber : C.muted,
+        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+      },
+    })),
+  ])
 }
 
 // PromptKit 工件是懒加载的（见 src/promptkit-loader.js）。它加载失败时，
@@ -275,12 +314,15 @@ export function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, 
   ])
 }
 
-function ResearchDraftEnhancerHost(props) {
+export function ResearchDraftEnhancerHost(props) {
   const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
   const [errorText, setErrorText] = React.useState(null)
   const [open, setOpen] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
   const anchorRef = React.useRef(null)
+  // 入口形态：内联（默认，输入框图标钮）或悬浮（右下角可拖拽钮 + 沉淀伴生钮）。
+  const mode = useEntryMode()
+  const floating = mode === ENTRY_MODE_FLOATING
   // 工件尚未就绪时点过按钮：加载完成后替他展开面板，避免「点了没反应」。
   const pendingOpen = React.useRef(false)
   React.useEffect(() => {
@@ -311,6 +353,19 @@ function ResearchDraftEnhancerHost(props) {
     if (state !== 'ready') { pendingOpen.current = true; return }
     setOpen(value => !value)
   }, [state])
+  if (floating) {
+    // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
+    return React.createElement(React.Fragment, null, [
+      React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
+      state === 'ready'
+        ? React.createElement(LoadedResearchDraftEnhancerHost, {
+          key: 'draft-enhancer-panel', ...props, floating: true,
+        })
+        : React.createElement(ResearchDraftEnhancerFallbackFab, {
+          key: 'draft-enhancer-fallback', state, errorText, onClick,
+        }),
+    ])
+  }
   return React.createElement(React.Fragment, null, [
     React.createElement(ResearchDraftEnhancerTrigger, {
       key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,

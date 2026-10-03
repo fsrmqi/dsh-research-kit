@@ -61,8 +61,14 @@ test('内联草稿增强入口：触发钮不依赖懒加载工件，面板走�
   assert.match(glue, /export function ResearchDraftEnhancerTrigger/)
   assert.match(glue, /React\.createElement\(ResearchDraftEnhancerTrigger, \{/)
   const host = glue.slice(glue.indexOf('function ResearchDraftEnhancerHost'))
-  assert.ok(host.indexOf('ResearchDraftEnhancerTrigger') < host.indexOf("state === 'ready'"),
-    '触发钮必须先于 ready 分支渲染（工件挂起/失败时入口仍在，并可点击重试）')
+  // 入口形态二选一：内联分支里触发钮必须先于 ready 分支渲染（否则工件挂起/失败时整块静默消失）。
+  assert.match(host, /const mode = useEntryMode\(\)/)
+  assert.match(host, /const floating = mode === ENTRY_MODE_FLOATING/)
+  const inlineBranch = host.slice(host.lastIndexOf('return React.createElement(React.Fragment, null, ['))
+  const triggerAt = inlineBranch.indexOf('ResearchDraftEnhancerTrigger')
+  const readyAt = inlineBranch.indexOf("state === 'ready'")
+  assert.ok(triggerAt >= 0 && readyAt > triggerAt,
+    '内联分支里触发钮必须先于 ready 条件渲染（工件挂起/失败时入口仍在，并可点击重试）')
   // 工件侧：内联入口 + 宿主自绘触发钮 + 受控开合 + 锚定插件按钮。
   assert.match(glue, /launcher: 'inline'/)
   assert.match(glue, /renderLauncher: \(\) => null/)
@@ -77,6 +83,7 @@ test('内联草稿增强入口：触发钮不依赖懒加载工件，面板走�
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
   assert.match(bundle, /launcher: 'inline'/)
   assert.match(bundle, /PROMPTKIT_LOAD_TIMEOUT_MS/)
+  assert.match(bundle, /ENTRY_MODE_INLINE|'inline'/)
 })
 
 test('新版 DSH 工具详情卡覆盖全部 research MCP 工具', async () => {

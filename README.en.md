@@ -95,7 +95,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 
 - **Science mode presets** — one-click bundles: **General research, Literature & papers, Bioinformatics, Crop breeding, Clinical & population research, Data analysis & visualization**. Each attaches a matching skill set and research discipline (pipeline versioning and QC traceability, agricultural trials and G×E boundaries, privacy and bias, statistical prerequisites and chart interpretability, and so on). Presets are guidance bundles, not capability switches — nothing auto-executes.
 - **Composer quick entry** — "Resources / Workflows" buttons on the composer toolbar open an overlay picker without leaving the chat; a selected workflow goes through a preview dialog and writes the draft. **It never auto-sends.**
-- **Draft enhancer** — an icon-only button at the right of the composer (tooltip carries the wording), one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original. The semantic tier can optionally search a host-connected Memory Center MCP via the "project memory" toggle (retrieve → preview sources → user opts in → assemble; off by default, never silently injected).
+- **Draft enhancer** — an icon-only button at the right of the composer (tooltip carries the wording), one click beside the composer: a lightweight tier (zero-token structuring) and a semantic tier (reuses the current session model, streams, five-dimension diagnosis, cancellable), with three strength levels; enhanced drafts can be undone and compared against the original. The semantic tier can optionally search a host-connected Memory Center MCP via the "project memory" toggle (retrieve → preview sources → user opts in → assemble; off by default, never silently injected). The entry form is switchable in the Plugins detail page ("Runtime status"): **composer icon button** (default) or **floating companion** (draggable, remembers its spot, restores the deposit companion button) — changes apply instantly, no restart.
 - **Host capability probe** — the database detail panel shows one line of deployment-level facts: which of Web / Shell / filesystem / model routing are composed, and which MCP servers are actually connected (parsed from the tool registry, bounded). Facts only — it never claims a database is usable and never rewrites catalog labels.
 - **Manual deposition** — without enabling auto deposition, one click deposits the most recent assistant reply of the current session (same extraction chain, everything starts as "to verify"): the entry sits in the per-message action row under each assistant reply, and results show in a transient status chip.
 - **Safe draft insertion** — async results use the newer DSH `captureInsertion()` / `insertText()` contract to insert at the caret with a draft-revision check. If the host lacks it, the plugin falls back to replacing the draft; when the user's newer draft would be overwritten, it asks for a manual paste instead.
@@ -235,7 +235,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 513 regression tests in 71 files, including a host-contract matrix across 4 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 517 regression tests in 72 files, including a host-contract matrix across 4 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -244,7 +244,7 @@ Verified so far: catalog contract validation (589 entries, 589 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (513 / 71 files)
+npm test        # pure-logic, contract and render-level regression tests (517 / 72 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 

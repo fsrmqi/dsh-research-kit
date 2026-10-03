@@ -1390,6 +1390,81 @@ window.__ModuleLoader__.load({
 
 
 
+    // 草稿增强的「入口形态」是本机偏好，不是插件配置：改完即时生效——不必重启 profile
+    // 重载插件（插件配置要重开才生效），重装插件也不受影响。
+    //   inline   输入框右侧纯图标钮（紧挨模型选择器），面板贴着按钮弹出 —— 默认，占用最小；
+    //   floating 右下角可拖拽悬浮钮（位置自动记忆）+「沉淀最近回答」伴生圆钮 —— 与旧版一致。
+    const ENTRY_MODE_KEY = 'dsh-research-kit.entry-mode.v1'
+    const ENTRY_MODE_INLINE = 'inline'
+    const ENTRY_MODE_FLOATING = 'floating'
+    const ENTRY_MODE_OPTIONS = [
+      { value: ENTRY_MODE_INLINE, label: '输入框图标钮' },
+      { value: ENTRY_MODE_FLOATING, label: '悬浮伴生钮' },
+    ]
+    const ENTRY_MODE_HINTS = {
+      [ENTRY_MODE_INLINE]: '输入框右侧一个纯图标钮（悬停显示说明），面板贴着它弹出；不占右下角，也不再另放沉淀圆钮——手动沉淀走每条助手回答下方的操作区。',
+      [ENTRY_MODE_FLOATING]: '右下角可拖拽的悬浮钮，位置自动记忆；旁边恢复「沉淀最近回答」伴生圆钮，与本次改版前的行为一致。',
+    }
+
+    const entryModeListeners = new Set()
+
+    /** 只认两个合法值：任何脏数据（null / 旧值 / 手改）一律回落到默认的内联形态。 */
+    function normalizeEntryMode(value) {
+      return value === ENTRY_MODE_FLOATING ? ENTRY_MODE_FLOATING : ENTRY_MODE_INLINE
+    }
+
+    function readEntryMode() {
+      try {
+        return normalizeEntryMode(window.localStorage.getItem(ENTRY_MODE_KEY))
+      } catch {
+        return ENTRY_MODE_INLINE // 存储不可用（隐私模式等）时用默认形态，不报错
+      }
+    }
+
+    /** 写入并广播：输入框那一侧的槽位与设置区同一次渲染就换过来，无需刷新页面。 */
+    function writeEntryMode(value) {
+      const mode = normalizeEntryMode(value)
+      try { window.localStorage.setItem(ENTRY_MODE_KEY, mode) } catch { /* 写不了也仍然即时生效 */ }
+      for (const listener of [...entryModeListeners]) {
+        try { listener(mode) } catch { /* 单个订阅者出错不牵连其它 */ }
+      }
+      return mode
+    }
+
+    function subscribeEntryMode(listener) {
+      entryModeListeners.add(listener)
+      return () => entryModeListeners.delete(listener)
+    }
+
+    function useEntryMode() {
+      const [mode, setMode] = React.useState(readEntryMode)
+      React.useEffect(() => subscribeEntryMode(setMode), [])
+      return mode
+    }
+
+    /** Plugins 详情页里的设置项：悬浮伴生钮 ↔ 输入框图标钮，二选一。 */
+    function EntryModeSetting() {
+      const mode = useEntryMode()
+      return h('section', {
+        'aria-label': '草稿增强入口',
+        'data-research-kit': 'entry-mode-setting',
+        style: { display: 'grid', gap: 8, padding: '12px 14px', border: `1px solid ${C.line}`, borderRadius: 12, background: C.surfaceAlt },
+      }, [
+        h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
+          h('div', { key: 'copy', style: { display: 'grid', gap: 2 } }, [
+            h('strong', { key: 'title', style: { fontSize: 13 } }, '草稿增强入口'),
+            h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '本机设置 · 改完即时生效'),
+          ]),
+          h(Segmented, {
+            key: 'segmented', value: mode, options: ENTRY_MODE_OPTIONS, onChange: writeEntryMode, ariaLabel: '草稿增强入口形态',
+          }),
+        ]),
+        h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.6 } }, ENTRY_MODE_HINTS[mode]),
+      ])
+    }
+
+
+
     const CATEGORY_TYPE_LABELS = { workflow: '工作流程', skill: '技能', database: '数据库' }
     const WORKBENCH_CATEGORY_SHORTCUTS = {
       workflow: ['论文与手稿', '文献研究', '生物信息学', '作物遗传育种'],
@@ -11217,7 +11292,7 @@ window.__ModuleLoader__.load({
       ensureResearchProviders(PromptKit)
       // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
       // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
-      const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange } = props
+      const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange, floating } = props
       const zonedDraft = input?.draft
       const hookedInput = useInput ? useInput(value => value) : undefined
       const draft = zonedDraft !== undefined ? zonedDraft : hookedInput?.draft
@@ -11270,12 +11345,15 @@ window.__ModuleLoader__.load({
       }, [sessionId])
       React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
       // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-      // 入口改为宿主工具条里的内联按钮（conversation.input.right，紧挨模型选择器）：
-      //   launcher: 'inline'        —— 不再渲染悬浮可拖拽 FAB，也就没有悬浮位置需要维持；
-      //   renderLauncher: () => null —— 触发钮由 ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在）；
-      //   anchorRef / open / onOpenChange —— 面板锚定插件自己的按钮，并由插件受控开合（⌘K 也走同一状态）。
-      // 「沉淀最近回答」不再需要悬浮伴生钮：它另有 conversation.chat.assistant-actions 入口
-      // （dsh-research-kit-review-deposit）；内联后不再在输入框旁留一个无主的浮动圆钮。
+      // 面板本体两种形态共用，只有「启动钮归谁」不同（入口形态见 src/entry-mode.js）：
+      //   inline（默认）：launcher: 'inline' + renderLauncher: null —— 触发钮由
+      //     ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在），anchorRef / open /
+      //     onOpenChange 让面板锚定该按钮并由插件受控开合（⌘K 也走同一状态）；
+      //   floating（设置里可选）：不传这些属性，交回工件自己的可拖拽悬浮钮与位置记忆，
+      //     旁边并排渲染「沉淀最近回答」伴生圆钮。
+      const launcherProps = floating
+        ? {}
+        : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
       return React.createElement(PromptKit.QuickEnhancer, {
         key: 'promptkit-quick-enhancer',
         methodProvider: researchMethodProvider,
@@ -11285,12 +11363,45 @@ window.__ModuleLoader__.load({
         messages,
         searchMemory,
         storagePrefix: 'dsh-research-kit.promptkit.',
-        launcher: 'inline',
-        renderLauncher: () => null,
-        anchorRef,
-        open,
-        onOpenChange,
+        ...launcherProps,
       })
+    }
+
+    // 悬浮形态下的加载兜底。工件没就绪时右下角不能什么都不留，否则又回到
+    // 「插件装着、入口却消失」这种无从定位的状态。它就落在工件自己会用的位置上
+    // （读同一个位置键，缺省用工件默认的右下角），加载完成后由工件的悬浮钮原样接替。
+    function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
+      const failed = state === 'error'
+      const label = failed
+        ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
+        : '草稿增强加载中…'
+      let stored = null
+      try { stored = JSON.parse(window.localStorage.getItem(QUICK_ENHANCER_POSITION_KEY) || 'null') } catch { stored = null }
+      const viewportWidth = Number(window.innerWidth) || 0
+      const viewportHeight = Number(window.innerHeight) || 0
+      const x = Number.isFinite(Number(stored?.x)) ? Number(stored.x) : Math.max(24, viewportWidth - 86)
+      const y = Number.isFinite(Number(stored?.y)) ? Number(stored.y) : Math.max(96, viewportHeight - 158)
+      return React.createElement(React.Fragment, null, [
+        React.createElement(GlobalStyle, { key: 'style' }),
+        React.createElement('div', {
+          key: 'fab',
+          'data-research-kit': 'draft-enhancer-fallback',
+          'data-state': state,
+          style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
+        }, React.createElement(IconButton, {
+          name: 'sparkles',
+          label,
+          size: 18,
+          active: failed,
+          onClick,
+          style: {
+            width: 44, height: 44, borderRadius: '50%',
+            border: `1px solid ${failed ? C.amber : C.line}`,
+            background: C.surface, color: failed ? C.amber : C.muted,
+            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+          },
+        })),
+      ])
     }
 
     // PromptKit 工件是懒加载的（见 src/promptkit-loader.js）。它加载失败时，
@@ -11353,6 +11464,9 @@ window.__ModuleLoader__.load({
       const [open, setOpen] = React.useState(false)
       const [attempt, setAttempt] = React.useState(0)
       const anchorRef = React.useRef(null)
+      // 入口形态：内联（默认，输入框图标钮）或悬浮（右下角可拖拽钮 + 沉淀伴生钮）。
+      const mode = useEntryMode()
+      const floating = mode === ENTRY_MODE_FLOATING
       // 工件尚未就绪时点过按钮：加载完成后替他展开面板，避免「点了没反应」。
       const pendingOpen = React.useRef(false)
       React.useEffect(() => {
@@ -11383,6 +11497,19 @@ window.__ModuleLoader__.load({
         if (state !== 'ready') { pendingOpen.current = true; return }
         setOpen(value => !value)
       }, [state])
+      if (floating) {
+        // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
+        return React.createElement(React.Fragment, null, [
+          React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
+          state === 'ready'
+            ? React.createElement(LoadedResearchDraftEnhancerHost, {
+              key: 'draft-enhancer-panel', ...props, floating: true,
+            })
+            : React.createElement(ResearchDraftEnhancerFallbackFab, {
+              key: 'draft-enhancer-fallback', state, errorText, onClick,
+            }),
+        ])
+      }
       return React.createElement(React.Fragment, null, [
         React.createElement(ResearchDraftEnhancerTrigger, {
           key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,
@@ -11484,6 +11611,7 @@ window.__ModuleLoader__.load({
           h('strong', { key: 'title', style: { fontSize: 14 } }, '运行状态'),
           h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '部署事实 · 不改变目录标注'),
         ]),
+        h(EntryModeSetting, { key: 'entry-mode' }),
         state.status === 'loading' ? h('p', { key: 'loading', style: { margin: 0, color: C.muted, fontSize: 13 } }, '正在探测宿主能力……') : null,
         state.status === 'error' ? h('p', { key: 'error', style: { margin: 0, color: C.amber, fontSize: 13 } }, `探测失败：${state.error}`) : null,
         capabilities ? h('div', { key: 'services', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, SERVICES.map(([key, label]) => {

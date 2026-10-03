@@ -103,7 +103,8 @@ dsh-research-kit/
 │   ├── database-query-panel.js      # 公开数据源直查面板（工作台详情内嵌）
 │   ├── composer-launcher.js         # 输入框工具行「资源/工作流程」入口
 │   ├── composer-overlay.js          # 输入框 overlay 资源选择器与启动弹窗
-│   ├── composer-deposit-button.js   # 悬浮沉淀伴生钮：内联入口后不再挂载，保留位置解算纯函数与单测
+│   ├── composer-deposit-button.js   # 沉淀伴生钮：仅悬浮入口形态下并排渲染；位置解算为纯函数（含单测）
+│   ├── entry-mode.js                # 草稿增强入口形态偏好（内联/悬浮）：本机存储 + 订阅即时生效
 │   ├── host-capabilities-client.js  # 宿主能力摘要：事实汇总（纯函数）+ 进程级 5 分钟缓存取数
 │   └── lib/
 │       ├── icons.js                 # 图标 path
@@ -162,7 +163,7 @@ dsh-research-kit/
 │   ├── standalone-glue.js           # DSH 槽位注册唯一入口（view + input.left + input.overlay + input.right）
 │   ├── slot-registry.js             # 四个槽位的 id/order/label 单一事实源（纯数据）
 │   ├── prompt-studio-glue.js        # 分区②「方法工坊」宿主与 provider 实例化
-│   ├── prompt-enhancer-glue.js      # 草稿增强器宿主：内联图标钮 + 受控面板装配 + 研究上下文桥接 + SSE 客户端
+│   ├── prompt-enhancer-glue.js      # 草稿增强器宿主：按入口形态装配（内联图标钮/悬浮钮）+ 研究上下文桥接 + SSE 客户端
 │   ├── database-query.js            # 公开数据源直查适配器、缓存与限流（Node half）
 │   ├── semantic-enhance.js          # 语义增强 system 指令与两条路由（Node half）
 │   ├── host-capabilities.js         # 宿主能力探测：装配事实 + MCP 连接清单（Node half，只读）
@@ -218,7 +219,7 @@ dsh-research-kit/
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
 │       ├── manual-qa-count.mjs      # MANUAL-QA 章节「N 项」的自洽判定（条目可写为表格行或小节标题；含章节数/条目总数下限）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 513 项测试（71 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 517 项测试（72 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）

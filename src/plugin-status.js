@@ -2,6 +2,7 @@ import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
 import { Button } from './ui.js'
 import { catalog, loadBrowserCatalog } from './catalog.js'
+import { EntryModeSetting } from './entry-mode.js'
 
 const SERVICES = [
   ['web', 'Web'],
@@ -87,6 +88,7 @@ export function ResearchPluginStatusSection({ subject }) {
       h('strong', { key: 'title', style: { fontSize: 14 } }, '运行状态'),
       h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '部署事实 · 不改变目录标注'),
     ]),
+    h(EntryModeSetting, { key: 'entry-mode' }),
     state.status === 'loading' ? h('p', { key: 'loading', style: { margin: 0, color: C.muted, fontSize: 13 } }, '正在探测宿主能力……') : null,
     state.status === 'error' ? h('p', { key: 'error', style: { margin: 0, color: C.amber, fontSize: 13 } }, `探测失败：${state.error}`) : null,
     capabilities ? h('div', { key: 'services', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, SERVICES.map(([key, label]) => {
