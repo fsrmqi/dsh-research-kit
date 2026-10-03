@@ -63,7 +63,9 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **新增源码模块只要登记一处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。
 >
-> **语法不用登记：** `npm run check` 的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 208 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析，取代了此前那条 59 项、每加一个文件都要手动补的 `node --check` 清单——它漏掉 149 个文件，却看起来还在守语法（`dsh/claim-review.js` 这类模块加个语法错误，老门禁照样绿）。清单里那 11 个 `mcp/tools/*.js` 的重复检查（`precheck`）也一并删掉了。
+> **唯一例外是构建期生成物：** 客户端工具注册表不登记文件，而是登记一个生成标记 `'__generated:tool-registry-data'`——构建时由 `mcp/tool-registry-projection.js` 把全部工具投影成只含渲染字段（`CLIENT_TOOL_FIELDS`）的源码片段，`example` / `helpRoute` / `tier` / `artifactKind` / `category` 等只有服务端与文档用的字段不进产物。生成物必须排在 `mcp/tool-labels.js` 之前（它顶层就用 `TOOL_REGISTRY` 建索引，`const` 不提升）。新增浏览器要用的工具字段先加进 `CLIENT_TOOL_FIELDS`，否则会被投影裁掉——`test/tool-registry-projection.test.js` 会在消费方越界读字段时失败。
+>
+> **语法不用登记：** `npm run check` 的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 228 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析，取代了此前那条 59 项、每加一个文件都要手动补的 `node --check` 清单——它漏掉 149 个文件，当时那条清单却看起来还在守语法（`dsh/claim-review.js` 这类模块加个语法错误，老门禁照样绿）。清单里那 11 个 `mcp/tools/*.js` 的重复检查（`precheck`）也一并删掉了。
 
 > **顶层符号名必须全局唯一，且每次改完源码都要重新 `npm run build`。** 所有模块被拼进同一个函数作用域，因此两个文件各写一个 `const sessions` 会让整个产物 `SyntaxError: Identifier 'sessions' has already been declared`——而这个错误只在**重新构建**时才出现：不 build 就跑 `npm run check`，检查的仍是旧产物，会一直显示为通过。**重名 `function` 比重名 `const` 更阴险**：声明合法、后者静默覆盖前者，产物照样通过 `node --check`，只在运行到调用点才炸（实测：`research-selection-store.js` 与 `evidence-store.js` 各有一个 `stateFor`，形状不同，覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏）。现已由构建期的 `assertUniqueTopLevelSymbols` 硬失败并报出 `文件:行`，不必靠记忆；函数重名按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。
 

@@ -98,7 +98,7 @@ catalog / state / theme
 
 **漏登记 `files` 不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条顺序断言，把「顺序错位」提前成构建期错误。
 
-> 语法不需要登记：`npm run check` 里的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 208 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析。此前「第 2 步：`package.json` 的逐文件 `node --check` 清单」已删除——那条清单只有 59 个文件、漏了 149 个，却看起来还在守语法。
+> 语法不需要登记：`npm run check` 里的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 228 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析。此前「第 2 步：`package.json` 的逐文件 `node --check` 清单」已删除——那条清单只有 59 个文件、漏了 149 个，当时那条清单却看起来还在守语法。
 
 ### 任何改动后必须运行
 
@@ -174,7 +174,7 @@ export const inject = ['webServer', 'web', 'llm', 'sessions']
 
 ## 10. 已知风险
 
-- 主包 `ui/client.js` 实测约 **729 KB**（gzip 约 **216 KB**；上限 800 KB / 250 KB，以 `node scripts/check-client-budget.mjs` 的输出为准）。目录是独立 `ui/catalog-data.json`（约 847 KB），PromptKit 是按需加载的 `ui/promptkit.js`（约 666 KB），Archify 模板只在打开完整回放窗口时加载。`scripts/check-client-budget.mjs` 会阻止主包、gzip、目录或 PromptKit 工件超过预算；引入新功能前仍需比较首屏解析与首次功能加载时间。
+- 主包 `ui/client.js` 实测约 **723 KB**（gzip 约 **216 KB**；上限 800 KB / 250 KB，以 `node scripts/check-client-budget.mjs` 的输出为准）。目录是独立 `ui/catalog-data.json`（约 847 KB），PromptKit 是按需加载的 `ui/promptkit.js`（约 666 KB），Archify 模板只在打开完整回放窗口时加载。`scripts/check-client-budget.mjs` 会阻止主包、gzip、目录或 PromptKit 工件超过预算；引入新功能前仍需比较首屏解析与首次功能加载时间。
 - 工件的全局 CSS 与 `--pk-*` 变量可能与宿主或本仓库的 `--rk-*` 相互影响，改动视觉层时需在真实宿主复核。
 - 两个入口可能同时监听键盘、外部点击与 `storage` 事件；所有新事件必须命名空间化。
 - DSH 的 slot props 与模型路由随版本变化，真实 profile 验证不可省略。

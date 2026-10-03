@@ -25,7 +25,7 @@
 <text x="118" y="250" font-size="12" fill="#5F5E5A" text-anchor="middle">界面逻辑 · 宿主路由 · 工具</text>
 
 <rect x="218" y="192" width="370" height="84" rx="12" fill="#FFFFFF" stroke="#CECBF6" stroke-width="0.5"/>
-<text x="234" y="218" font-size="13" font-weight="500" fill="#3C3489">mcp/tool-registry.js</text>
+<text x="234" y="218" font-size="13" font-weight="500" fill="#3C3489">mcp/tool-registry-data.js</text>
 <text x="234" y="240" font-size="12" fill="#5F5E5A">文档里的工具表由 sync-tool-docs 生成，不要手写</text>
 <text x="234" y="260" font-size="12" fill="#5F5E5A">新工具要声明领域、分级、访问权限与确认要求</text>
 

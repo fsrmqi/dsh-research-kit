@@ -270,6 +270,6 @@ research_help                    ← 不确定从哪开始就问它（不执行�
 
 ## 附：本页事实的来源
 
-本页所有工作流 ID、参数名、文件依赖、限制声明与检查点，均取自 `catalog/workflows/`（以 `paper-manuscript.json`、`paper-writing.json`、`submission.json`、`literature.json`、`advanced.json` 为主）；工具名、访问级别与确认要求取自 `mcp/tool-registry.js`；数据源可用性取自 `catalog/resources/`。规模数字由 `npm run check` 的 `scripts/check-doc-stats.mjs` 与实测比对。
+本页所有工作流 ID、参数名、文件依赖、限制声明与检查点，均取自 `catalog/workflows/`（以 `paper-manuscript.json`、`paper-writing.json`、`submission.json`、`literature.json`、`advanced.json` 为主）；工具名、访问级别与确认要求取自 `mcp/tool-registry-data.js`；数据源可用性取自 `catalog/resources/`。规模数字由 `npm run check` 的 `scripts/check-doc-stats.mjs` 与实测比对。
 
 目录条目会随版本变化，本页的清单请配合界面或 `research_catalog_search` 使用。

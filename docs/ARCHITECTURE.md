@@ -93,7 +93,6 @@ dsh-research-kit/
 │   ├── knowledge-deposition.js      # 自动沉淀编排：开关、assistant/message 事件接线、水位线、联动灵感资产与证据库
 │   ├── theme.js                     # 视觉令牌单一真源（--rk-* 明暗双源 + 交互反馈）
 │   ├── ui.js                        # 统一基础组件层（按钮/卡片/输入/标签/空态/弹窗…）
-│   ├── tool-registry-projection.js  # 客户端工具注册表投影：只保留浏览器渲染字段（服务端/文档字段不进 ui/client.js，省约 7.6 KB）
 │   ├── lib/evidence-vault-sync.js   # 证据库存取层：状态与订阅 / 文件同步 / 保存删除 / 互链 / 当前项目（界面层只调它的导出）
 │   ├── lib/idb.js                   # IndexedDB 工具：工厂探测 / 请求转 Promise / 事务壳（证据库与知识库共用，事务提交后才 resolve）
 │   ├── lib/download.js              # 导出落盘唯一实现：<a download> + Blob URL **延迟**回收（原先 6 处各写一遍，其中两处同步回收会取消下载）
@@ -123,7 +122,10 @@ dsh-research-kit/
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
 ├── mcp/                           # MCP Server：36 个 research_* 工具的注册、实现与执行层
 │   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
-│   ├── tool-registry.js           # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与活动面板由此派生
+│   ├── tool-registry-data.js      # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与文档由此派生
+│   ├── tool-labels.js             # 浏览器侧标签函数（toolLabel / artifactKindLabel）与名称索引；客户端产物只带它 + 投影数据
+│   ├── tool-registry-projection.js # 客户端注册表投影：只保留渲染字段（服务端/文档字段不进 ui/client.js，省约 7.6 KB）
+│   ├── tool-registry.js           # 门面：re-export 数据与标签函数，公开面不变（server.js / call-logger / 文档脚本都从这里取）
 │   ├── paths.js                   # MCP 本地数据根目录解析（DSH_RESEARCH_KIT_HOME 可配置）
 │   ├── tools/
 │   │   ├── index.js               # 对外注册入口：聚合工具数组并保持稳定导出
@@ -243,15 +245,18 @@ dsh-research-kit/
 | `src/research-selection-store.js` | 会话级资源选择的读写与广播 | 跨会话持久化。 |
 | `src/research-context-store.js` | 跨分区的当前项目与研究运行元数据；只保存工作流身份、阶段、状态和时间，不保存 Prompt、检索词、文件或模型输出。运行 id 可作为 MCP passport / checkpoint / 证据 / 活动日志的可选关联键 | 替代证据、资产、知识或 MCP 的领域存储；声称某个运行已执行工具，或改变证据去重。 |
 | `src/evidence-store.js` | 在当前页面内存中汇总本会话已选资源、已启动工作流与直查来源的**索引**，并向各视图实时广播 | 执行查询、持久化、保存原始文件或检索词、生成结论。 |
-| `src/evidence-vault-store.js` | 证据库持久化：IndexedDB schema v2（条目 + 资产-证据 link 表，守卫式升级）、按项目隔离与去重、备份序列化，并提供内存降级；link 的建立/解除/端点删除联动 | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目或自动建立 link。 |
+| `src/evidence-vault-store.js` | 证据库持久化：IndexedDB schema v2（条目 + 资产-证据 link 表，守卫式升级）、按项目隔离与去重、备份序列化，并提供内存降级；link 的建立/解除/端点删除联动；事务壳复用 `src/lib/idb.js` | 触碰 DOM；在降级时伪装成已持久化；保存未经用户确认的条目或自动建立 link。 |
 | `src/lib/asset-evidence-links.js` | 资产-证据互链纯逻辑：稳定 link id、候选推导（同项目 / 共同标签 / 知识链种子）、图谱边转换 | 自动建立 link；把候选当成已确认事实；在候选里携带笔记或全文。 |
+| `src/lib/idb.js` | IndexedDB 通用壳：工厂探测、请求转 Promise、事务提交后才 resolve（完成回调先于业务逻辑挂载）；store 名与业务一律由调用方传入 | 触碰 DOM；给某个库开特例；在事务未提交时 resolve，或吞掉中止错误。 |
+| `src/lib/evidence-vault-sync.js` | 证据库存取层：状态与订阅、文件同步（拉取 / 推送 / 冲突）、保存 / 删除 / 清空、互链读写、当前项目；界面层只调它的导出 | 渲染界面；自动入库或读对话原文；在内存降级时伪装成已持久化。 |
+| `src/lib/download.js` | 导出落盘的唯一实现：`<a download>` + Blob URL **延迟**回收；无 DOM 时如实降级 | 同步回收 Blob URL（会取消下载）；在无宿主环境假装成功。 |
 | `src/knowledge-store.js` | 自动沉淀知识库持久化：节点/关系双 store、稳定 id 去重合并、冲突并列保留，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；改写用户推进过的核验状态。 |
 | `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与处理水位线、**增量扫描** DSH 会话事件流（`sessions.binding().eventSource`，每次通知只扫上次扫过的尾部之后的新增段）、调用提取器并联动三个库；另提供手动沉淀入口（沉淀当前会话最近一条回答，图谱页与增强器伴生钮共用） | 在开关关闭时自动提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
 | `src/lib/knowledge-extract.js` | 规则化结构提取：知识节点/关系/引用来源，确定性与有界性输出 | 访问 DOM、网络或存储；把无法核验的提取结果标为已核验。 |
 | `src/theme.js` | 主题 CSS 变量与 GlobalStyle 注入 | 读取宿主私有主题 API。 |
 | `src/ui.js` | 无业务状态的基础组件与图标 | 持有业务逻辑或读取目录数据。 |
 | `src/research-console.js` | 分区调度、分区导航、两级吸顶偏移实测 | 持有任何分区的业务逻辑，或读写分区的数据。 |
-| `src/research-workbench.js` / `research-vault.js` / `research-evidence-graph.js` / `research-evidence-vault.js` | React 状态、渲染、调用注入的宿主动作 | 直接依赖 DSH 私有全局或发网络请求。 |
+| `src/research-workbench.js` / `research-vault.js` / `research-evidence-graph.js` / `research-evidence-vault.js` | React 状态、渲染、调用注入的宿主动作；证据库面板经 `src/lib/evidence-vault-sync.js` 存取，不直接碰 IndexedDB | 直接依赖 DSH 私有全局或发网络请求。 |
 | `src/lib/*` | 与 DOM 解耦的纯逻辑（协议解析、布局解算、隐私边界、稳定性标识符识别、备份格式、分区契约） | 触碰 DOM 或宿主 API。 |
 | `src/route-replay.js` / `src/lib/archify-adapter.js` | 把 `composeWorkflow` 的 `trace` 渲染为可核对的组装回放（详情内嵌 + 独立 viewer 窗口）；IR / trace → archify `data-*` 契约与哨兵槽位替换 | 预测执行结果；改写 vendored 模板；把回放当作执行证据。 |
 | `src/composer-launcher.js` / `composer-overlay.js` | 输入框入口、overlay 选择器、启动弹窗 | 绕过 `inputActions` 直接发送或读取文件。 |

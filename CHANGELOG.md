@@ -16,6 +16,14 @@
 - 🧩 **插件详情页新增规模徽章、诊断复制与「打开工作台」**：Plugins 页的 Research Kit 详情标题旁新增规模徽章，显示构建期烘焙的工作流 / 技能 / 数据源数量（徽章紧邻标题，不做运行时探测，避免先闪 0 再跳数）；头部新增「复制诊断」，把插件版本、目录规模、宿主能力探测与 UA 写入本机剪贴板，便于反馈问题——只在用户点击时执行，不上传、不含会话内容或凭据。头部另新增「打开工作台」：请求宿主把主区切回当前会话并选中 `dsh-research-kit-console` 视图，省去「关掉 Plugins 页 → 自己点回标签页」两步。前两者只在本插件详情页渲染，宿主未提供 `plugins.detail.badge` / `plugins.detail.actions` 槽位时静默不显示。**「打开工作台」依赖宿主公开的跨页视图导航 `uiConversation.openView(sessionId, view, focus?)`（DSH 0.1.7 尚未提供，本仓库已附带实现）**；该服务采用软探测（不写进客户端 `inject` 列表），宿主没有时按钮整块不渲染，插件其余功能不受影响，`npm run check:dsh-app` 也把该通道按「可选能力」报告而非判为不兼容。
 - 🤖 **证据库一键 Agent 批量初判**：证据库新增批量判断入口，默认跳过已人工处理条目，可勾选后重新取得当前会话模型的最新结果。请求按最多 6 条分批，支持进度与取消；模型输出严格校验条目 ID 和证据维度枚举。Agent 判断写入独立的 `agentAssessment`，保留最近 5 次历史，不覆盖人工核验状态、人工依据或状态字段；写回前做并发快照检查，期间被修改或删除的条目会跳过。该初判只发送标题、链接、标识符、来源数据库、保存原因和笔记，不读取来源全文、不等同于 DOI/全文核验，结果仍需人工确认。
 
+### 变更
+
+- 📦 **主包瘦身约 52 KB（约 6.7%），预算余量回到 9.6%**：构建器此前给每个模块正文逐行注入 4 空格缩进（约 46 KB 纯装饰），现直接按原样拼接；导出链收敛后下掉 9 个「只在本文件里用」的 `export`；客户端工具注册表改为**构建期投影**——只保留 `name` / `labelZh` / `summaryZh` / `access` / `requiresConfirmation` 五个渲染字段，`example` / `helpRoute` / `tier` / `artifactKind` / `category` 等只有服务端与文档消费的字段不再进 `ui/client.js`（新增 `mcp/tool-registry-projection.js` + `test/tool-registry-projection.test.js` 守住边界）。
+- 🔗 **导出落盘只剩一份实现**：`<a download>` + Blob URL 回收集中到 `src/lib/download.js`，且改为**延迟回收**——原先 6 处各写一遍，其中两处紧接 `click()` 同步 `revokeObjectURL`，在真实浏览器里会取消下载（`test/download.test.js` 用异步回收断言 + 收敛守卫拦回）。
+- 🧱 **IndexedDB 事务壳收敛到 `src/lib/idb.js`**：工厂探测、请求转 Promise、`withTransaction` / `withObjectStore` 供证据库与知识库共用；完成回调改为**先挂载再执行**业务逻辑，因此业务逻辑自己抛错时的中止不再被漏掉；`src/knowledge-store.js` 不再反向依赖证据库的 store 模块。
+- 🗂 **证据库 1248 行拆成「存取层 + 界面层」**：状态订阅 / 文件同步 / 保存删除 / 互链 / 当前项目移到 `src/lib/evidence-vault-sync.js`（约 364 行），`src/research-evidence-vault.js` 只留 `EvidenceSaveForm` 与 `EvidenceVaultPane`（约 904 行）；原 18 个对外导出一个不减，消费方按符号归属改 import。工具注册表同时拆成「数据真值源 `mcp/tool-registry-data.js` / 浏览器标签 `mcp/tool-labels.js` / 门面 `mcp/tool-registry.js`」。
+- 📚 **文档登记同步**：ARCHITECTURE 受控清单补登新模块并把职责表补到三层（`idb` / `evidence-vault-sync` / `download`），DEVELOPMENT 记下构建期生成物的登记方式，贡献地图与论文手册改指数据真值源，方法手册的主包体积改为实测值。
+
 ### 修复
 
 - 🔧 **Agent 批量判断空响应处理**：前端不再直接对空响应调用 `Response.json()`；服务端也避免把正常响应关闭误判为客户端取消。异常时显示可读的 HTTP/模型路由提示，批处理可明确报告已完成与未处理数量。
