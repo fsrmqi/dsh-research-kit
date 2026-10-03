@@ -9,7 +9,8 @@
 import { itemById, loadBrowserCatalog, subscribeCatalog } from '../src/catalog.js'
 import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
-import { ResearchDepositButton } from '../src/composer-deposit-button.js'
+import { C, GlobalStyle } from '../src/theme.js'
+import { IconButton } from '../src/ui.js'
 import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
@@ -142,7 +143,9 @@ function researchContextSummary(sessionId) {
 function LoadedResearchDraftEnhancerHost(props) {
   const PromptKit = getPromptKit()
   ensureResearchProviders(PromptKit)
-  const { sessionId, input, useInput, useChat, inputActions } = props
+  // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
+  // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
+  const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange } = props
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
   const draft = zonedDraft !== undefined ? zonedDraft : hookedInput?.draft
@@ -195,35 +198,129 @@ function LoadedResearchDraftEnhancerHost(props) {
   }, [sessionId])
   React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
   // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-  // 手动沉淀伴生钮与 vendored 触发钮并排（固定定位互不影响布局）：
-  // 「沉淀最近回答」贴在增强器按钮上方，随其拖拽位置与窗口变化重算（见 composer-deposit-button.js）。
-  return React.createElement(React.Fragment, null, [
-    React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
-    React.createElement(PromptKit.QuickEnhancer, {
-      key: 'promptkit-quick-enhancer',
-      methodProvider: researchMethodProvider,
-      assetProvider: researchAssetProvider,
-      composer,
-      enhancer,
-      messages,
-      searchMemory,
-      storagePrefix: 'dsh-research-kit.promptkit.',
+  // 入口改为宿主工具条里的内联按钮（conversation.input.right，紧挨模型选择器）：
+  //   launcher: 'inline'        —— 不再渲染悬浮可拖拽 FAB，也就没有悬浮位置需要维持；
+  //   renderLauncher: () => null —— 触发钮由 ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在）；
+  //   anchorRef / open / onOpenChange —— 面板锚定插件自己的按钮，并由插件受控开合（⌘K 也走同一状态）。
+  // 「沉淀最近回答」不再需要悬浮伴生钮：它另有 conversation.chat.assistant-actions 入口
+  // （dsh-research-kit-review-deposit）；内联后不再在输入框旁留一个无主的浮动圆钮。
+  return React.createElement(PromptKit.QuickEnhancer, {
+    key: 'promptkit-quick-enhancer',
+    methodProvider: researchMethodProvider,
+    assetProvider: researchAssetProvider,
+    composer,
+    enhancer,
+    messages,
+    searchMemory,
+    storagePrefix: 'dsh-research-kit.promptkit.',
+    launcher: 'inline',
+    renderLauncher: () => null,
+    anchorRef,
+    open,
+    onOpenChange,
+  })
+}
+
+// PromptKit 工件是懒加载的（见 src/promptkit-loader.js）。它加载失败时，
+// conversation.input.right 这整块入口会静默收起——除控制台外现场不留任何痕迹，
+// 于是「插件装着、四个槽里唯独少了草稿增强」无从定位。这里把最后一次失败原因
+// 写进 localStorage（成功即清除），供 Plugins 页诊断与排障读取。
+export const PROMPTKIT_LOAD_ERROR_KEY = 'dsh-research-kit.promptkit.load-error.v1'
+// 成功也要留痕：否则「加载成功但槽位没挂载」与「页面还在跑旧产物」在磁盘上无法区分。
+export const PROMPTKIT_LOADED_KEY = 'dsh-research-kit.promptkit.loaded.v1'
+
+/** 标记加载成功（error 为空）或记录失败原因（error 非空）。 */
+export function recordPromptKitLoadError(error) {
+  if (error == null) {
+    try {
+      window.localStorage.removeItem(PROMPTKIT_LOAD_ERROR_KEY)
+      window.localStorage.setItem(PROMPTKIT_LOADED_KEY, new Date().toISOString())
+    } catch { /* 存储不可用时无痕放弃 */ }
+    return
+  }
+  try {
+    window.localStorage.setItem(PROMPTKIT_LOAD_ERROR_KEY, `${new Date().toISOString()} ${String(error?.message || error)}`)
+  } catch { /* 同上：写不了也仍然有控制台输出 */ }
+  console.error('[dsh-research-kit] PromptKit 工件加载失败，草稿增强入口保持收起：', error)
+}
+
+// 输入框右侧的内联入口：纯图标按钮（宿主原生 IconButton，与模型选择器等图标钮同规格）。
+// 不带文字标签，说明性文字只放在 title / aria-label 里。
+// 它由插件自己渲染，不依赖懒加载的 PromptKit 工件——工件挂起或加载失败时入口仍然在，
+// 用户看到「加载中 / 失败可重试」，而不是整块槽位静默消失。外层 div 持有 ref 作为面板锚点
+// （IconButton 不转发 ref，且外层矩形即按钮矩形）。
+export function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, anchorRef }) {
+  const active = Boolean(open)
+  const label = state === 'error'
+    ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
+    : state === 'loading' ? '草稿增强加载中…' : '打开对话增强器（⌘K）'
+  return React.createElement('div', {
+    ref: anchorRef,
+    'data-research-kit': 'draft-enhancer-trigger',
+    'data-state': state,
+    style: { display: 'flex', alignItems: 'center' },
+  }, [
+    React.createElement(GlobalStyle, { key: 'style' }),
+    React.createElement(IconButton, {
+      key: 'trigger',
+      name: 'sparkles',
+      label,
+      active,
+      onClick,
+      onPointerDown: event => event.stopPropagation(),
+      'aria-haspopup': 'dialog',
+      'aria-expanded': Boolean(open),
+      style: state === 'error' ? { borderColor: C.amber, color: C.amber } : undefined,
     }),
   ])
 }
 
 function ResearchDraftEnhancerHost(props) {
   const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+  const [errorText, setErrorText] = React.useState(null)
+  const [open, setOpen] = React.useState(false)
+  const [attempt, setAttempt] = React.useState(0)
+  const anchorRef = React.useRef(null)
+  // 工件尚未就绪时点过按钮：加载完成后替他展开面板，避免「点了没反应」。
+  const pendingOpen = React.useRef(false)
   React.useEffect(() => {
+    if (promptKitReady()) { setState('ready'); return undefined }
     let active = true
+    setState('loading')
+    setErrorText(null)
     loadPromptKit().then(PromptKit => {
       ensureResearchProviders(PromptKit)
+      recordPromptKitLoadError(null)
       if (active) setState('ready')
-    }).catch(() => { if (active) setState('error') })
+    }).catch(error => {
+      recordPromptKitLoadError(error)
+      if (!active) return
+      // 失败不再静默收起：入口保留并显示可重试文案，原因同时写进 localStorage 与控制台。
+      setErrorText(String(error?.message || error))
+      setState('error')
+    })
     return () => { active = false }
-  }, [])
-  // 输入框右侧空间有限；加载失败时静默收起，控制台会给出完整错误提示。
-  return state === 'ready' ? React.createElement(LoadedResearchDraftEnhancerHost, props) : null
+  }, [attempt])
+  React.useEffect(() => {
+    if (state !== 'ready' || !pendingOpen.current) return
+    pendingOpen.current = false
+    setOpen(true)
+  }, [state])
+  const onClick = React.useCallback(() => {
+    if (state === 'error') { pendingOpen.current = true; setAttempt(value => value + 1); return }
+    if (state !== 'ready') { pendingOpen.current = true; return }
+    setOpen(value => !value)
+  }, [state])
+  return React.createElement(React.Fragment, null, [
+    React.createElement(ResearchDraftEnhancerTrigger, {
+      key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,
+    }),
+    state === 'ready'
+      ? React.createElement(LoadedResearchDraftEnhancerHost, {
+        key: 'draft-enhancer-panel', ...props, anchorRef, open, onOpenChange: setOpen,
+      })
+      : null,
+  ])
 }
 
 // 由 standalone-glue 统一注册为 conversation.input.right（顺序见 slot-registry.js）。

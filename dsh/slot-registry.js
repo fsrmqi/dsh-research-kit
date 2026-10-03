@@ -13,6 +13,16 @@ export const RESEARCH_SLOTS = [
 
 // 用给定的 slots 服务注册全部槽位；inject 回调立即执行（与 glue 行为一致）。
 // components 数组与 RESEARCH_SLOTS 顺序一一对应，由 glue 传入 React 组件。
+//
+// 注册现场留痕：宿主上「某个入口没出现」时，先要分清是「inject 回调压根没跑」
+// 还是「register 抛错」——二者在界面上都只是安静地少一块，排障时无从下手。
+const SLOT_PROBE_KEY = 'dsh-research-kit.slots.probe.v1'
+const slotProbe = []
+function recordSlotProbe(text) {
+  slotProbe.push(text)
+  try { window.localStorage.setItem(SLOT_PROBE_KEY, slotProbe.join(' | ')) } catch { /* 存储不可用时无痕放弃 */ }
+}
+
 export function registerResearchSlots(ctx, components) {
   const registrations = []
   const disposers = RESEARCH_SLOTS.map((definition, index) =>
@@ -24,7 +34,14 @@ export function registerResearchSlots(ctx, components) {
         label: () => definition.label
       }
       registrations.push({ options, component: components[index] })
-      return ctx.slots.register(options, components[index])
+      try {
+        const dispose = ctx.slots.register(options, components[index])
+        recordSlotProbe(`${definition.id}=ok`)
+        return dispose
+      } catch (error) {
+        recordSlotProbe(`${definition.id}=error:${String(error?.message || error)}`)
+        throw error
+      }
     })
   )
   return () => disposers.forEach(dispose => dispose?.())

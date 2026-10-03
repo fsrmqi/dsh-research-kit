@@ -66,10 +66,14 @@ export function researchKitApply(ctx) {
   let disposeDeposition = () => {}
   loadPromptKit().then(PromptKit => {
     if (!active) return
+    recordPromptKitLoadError(null)
     const providers = ensureResearchProviders(PromptKit)
     depositAssetProvider = providers.researchAssetProvider
     disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
-  }).catch(() => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */ })
+  }).catch(error => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */
+    // …但必须留痕：conversation.input.right 的草稿增强入口会因此整块静默收起。
+    recordPromptKitLoadError(error)
+  })
   disposers.push(() => { active = false; disposeDeposition() })
   return () => disposers.forEach(dispose => dispose?.())
 }

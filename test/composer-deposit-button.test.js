@@ -49,11 +49,12 @@ test('伴生钮位置：越界存储位被钳回 vendored 拖拽范围，非法�
   assert.ok(Number.isFinite(tiny.x) && Number.isFinite(tiny.y))
 })
 
-test('伴生钮接线：由增强器宿主并排渲染，位置键与 vendored 落盘键逐字一致', () => {
+test('伴生钮接线：内联入口不再并排渲染悬浮圆钮，位置键与 vendored 落盘键逐字一致', () => {
   const glue = readFileSync(new URL('../dsh/prompt-enhancer-glue.js', import.meta.url), 'utf8')
-  assert.match(glue, /import \{ ResearchDepositButton \} from '\.\.\/src\/composer-deposit-button\.js'/)
-  // 伴生钮必须是 QuickEnhancer 的兄弟节点（Fragment 并排），不得包进 vendored 组件内部。
-  assert.match(glue, /React\.createElement\(ResearchDepositButton, \{ key: 'research-deposit-button' \}\)/)
+  // 入口内联化（launcher: 'inline'）后停止渲染悬浮伴生钮：它按 vendored 落盘坐标（或右下角默认位）
+  // 固定定位，锚点（悬浮 FAB）消失后会变成宿主发送区附近的孤立圆钮。能力不丢——每条助手消息
+  // 下方的 conversation.chat.assistant-actions（dsh-research-kit-review-deposit）仍是沉淀入口。
+  assert.doesNotMatch(glue, /ResearchDepositButton/, '内联入口不得再并排渲染悬浮沉淀钮')
   assert.match(glue, /React\.createElement\(PromptKit\.QuickEnhancer, \{/)
   const button = readFileSync(new URL('../src/composer-deposit-button.js', import.meta.url), 'utf8')
   assert.equal(QUICK_ENHANCER_POSITION_KEY, 'dsh-research-kit.promptkit.quick-action.position.v1', '位置键必须与 vendored storagePrefix + quick-action.position.v1 一致')

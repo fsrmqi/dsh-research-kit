@@ -9,6 +9,7 @@ browser-results/
 
 # 一次性临时目录：DSH 基线源码 stage、watch 的 pid、覆盖率原始输出
 /.tmp/
+/.tmp-*/          # 临时工作副本（如 .tmp-upstream 镜像）：绝不允许入仓
 /coverage/
 
 # 内部开发笔记：仅本地保留，不随仓库发布

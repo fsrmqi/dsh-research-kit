@@ -73,7 +73,7 @@ const ORDERED_SYMBOLS = [
   'ResearchKitBadge', 'ResearchKitDiagnosticsAction', 'ResearchKitOpenWorkbenchAction', // src/plugin-status.js（Plugins 页徽章、诊断与跨页跳转动作）
   'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
   'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
-  'ResearchDepositButton',         // src/composer-deposit-button.js（增强器伴生钮，prompt-enhancer-glue 渲染）
+  'ResearchDepositButton',         // src/composer-deposit-button.js（悬浮伴生钮；内联入口后不再由 glue 渲染，模块与单测保留）
   'ResearchConsole',               // src/research-console.js
 ]
 function assertSymbolOrder(body) {

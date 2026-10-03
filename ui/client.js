@@ -925,7 +925,7 @@ window.__ModuleLoader__.load({
       }, [icon ? h(Icon, { key: 'i', name: icon, size: 13 }) : null, children])
     }
 
-    function IconButton({ name, size = 15, onClick, label, active = false, disabled = false, style }) {
+    function IconButton({ name, size = 15, onClick, label, active = false, disabled = false, style, ...rest }) {
       return h('button', {
         type: 'button',
         onClick,
@@ -934,6 +934,7 @@ window.__ModuleLoader__.load({
         'aria-label': label,
         'aria-pressed': active,
         className: 'rk-btn',
+        ...rest,
         style: {
           width: 26, height: 26, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           border: `1px solid ${active ? C.tealLineStrong : C.line}`, borderRadius: '50%',
@@ -1245,6 +1246,13 @@ window.__ModuleLoader__.load({
 
     const PROMPTKIT_CLIENT_PATH = '/dsh-research-kit/promptkit-client'
 
+    // 宿主（尤其桌面 App 经 dsh-app:// 协议转发）对这条路由可能既不回包也不报错：
+    // <script> 的 load / error 都永远不触发，入口就会无限停在「加载中」而看不见任何失败。
+    // 因此两条传输各自带硬超时：<script> 挂起后换 fetch 再试一次（不同的浏览器取数路径），
+    // 两条都失败才报错，且错误里带上各自的原因——便于区分「路由没通」与「传输被挂起」。
+    const PROMPTKIT_LOAD_TIMEOUT_MS = 6000
+    const PROMPTKIT_FETCH_TIMEOUT_MS = 6000
+
     let promptKitNamespace = null
     let promptKitPromise = null
 
@@ -1257,8 +1265,97 @@ window.__ModuleLoader__.load({
       return promptKitNamespace
     }
 
-    // PromptKit 是体积最大的可选界面依赖。通过同源脚本按需加载，避免首屏解析整份工坊代码；
-    // 单例 Promise 同时保证控制台、输入框增强器和自动沉淀接线并发挂载时只请求一次。
+    // 传输一：同源经典脚本。宿主按需分发工件，避免首屏解析整份工坊代码。
+    function loadViaScript() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = PROMPTKIT_CLIENT_PATH
+        script.async = true
+        window.__DSH_RESEARCH_REACT__ = React
+        let settled = false
+        const cleanup = () => {
+          if (window.__DSH_RESEARCH_REACT__ === React) delete window.__DSH_RESEARCH_REACT__
+          script.remove()
+        }
+        const fail = error => {
+          if (settled) return
+          settled = true
+          window.clearTimeout(timer)
+          cleanup()
+          reject(error)
+        }
+        const timer = window.setTimeout(() => {
+          fail(new Error(`<script> 形态 ${PROMPTKIT_LOAD_TIMEOUT_MS / 1000}s 内未返回（宿主可能挂住了这条路由）`))
+        }, PROMPTKIT_LOAD_TIMEOUT_MS)
+        script.onload = () => {
+          if (settled) return
+          const loaded = window.__DSH_RESEARCH_PROMPTKIT__
+          if (!loaded) {
+            fail(new Error('工件已取回，但未导出可用命名空间'))
+            return
+          }
+          settled = true
+          window.clearTimeout(timer)
+          cleanup()
+          resolve(loaded)
+        }
+        script.onerror = () => fail(new Error('脚本请求失败（onerror）'))
+        document.head.appendChild(script)
+      })
+    }
+
+    // 传输二：fetch 取回文本后就地求值。
+    // 工件是同源、我们自己的构建产物，运行期只依赖 window.__DSH_RESEARCH_REACT__；
+    // 若宿主配置了禁止 eval 的 CSP，这里会失败并如实报错（不再静默停在加载中）。
+    // 注意：脚本形态若在超时后才姗姗到达，工件会再执行一次并覆盖全局命名空间——
+    // 组件用的是本模块已解析的那一份，因此只是多一次幂等初始化，不会错乱。
+    function loadViaFetch() {
+      return new Promise((resolve, reject) => {
+        if (typeof fetch !== 'function') {
+          reject(new Error('当前环境没有 fetch'))
+          return
+        }
+        const controller = typeof AbortController === 'function' ? new AbortController() : null
+        let settled = false
+        const timer = window.setTimeout(() => {
+          if (settled) return
+          settled = true
+          try { controller?.abort() } catch { /* 取消失败不影响判定 */ }
+          reject(new Error(`fetch 形态 ${PROMPTKIT_FETCH_TIMEOUT_MS / 1000}s 内未返回`))
+        }, PROMPTKIT_FETCH_TIMEOUT_MS)
+        Promise.resolve()
+          .then(() => fetch(PROMPTKIT_CLIENT_PATH, { credentials: 'same-origin', ...(controller ? { signal: controller.signal } : {}) }))
+          .then(response => {
+            if (!response.ok) throw new Error(`fetch 形态 HTTP ${response.status}`)
+            return response.text()
+          })
+          .then(code => {
+            if (settled) return
+            if (!code) throw new Error('fetch 形态返回空响应')
+            window.__DSH_RESEARCH_REACT__ = React
+            try {
+              // eslint-disable-next-line no-new-func
+              new Function(code)()
+            } finally {
+              if (window.__DSH_RESEARCH_REACT__ === React) delete window.__DSH_RESEARCH_REACT__
+            }
+            const loaded = window.__DSH_RESEARCH_PROMPTKIT__
+            if (!loaded) throw new Error('工件已求值，但未导出可用命名空间')
+            settled = true
+            window.clearTimeout(timer)
+            resolve(loaded)
+          })
+          .catch(error => {
+            if (settled) return
+            settled = true
+            window.clearTimeout(timer)
+            reject(error instanceof Error ? error : new Error(String(error)))
+          })
+      })
+    }
+
+    // PromptKit 是体积最大的可选界面依赖。单例 Promise 保证控制台、输入框增强器与
+    // 方法工坊接线并发挂载时只请求一次（跨传输也只走一轮）。
     function loadPromptKit() {
       if (promptKitNamespace) return Promise.resolve(promptKitNamespace)
       if (promptKitPromise) return promptKitPromise
@@ -1270,32 +1367,23 @@ window.__ModuleLoader__.load({
         promptKitNamespace = existing
         return Promise.resolve(existing)
       }
-      promptKitPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = PROMPTKIT_CLIENT_PATH
-        script.async = true
-        window.__DSH_RESEARCH_REACT__ = React
-        const cleanup = () => {
-          if (window.__DSH_RESEARCH_REACT__ === React) delete window.__DSH_RESEARCH_REACT__
-          script.remove()
-        }
-        script.onload = () => {
-          const loaded = window.__DSH_RESEARCH_PROMPTKIT__
-          cleanup()
-          if (!loaded) {
-            promptKitPromise = null
-            reject(new Error('PromptKit 工件已加载，但未导出可用命名空间。'))
-            return
+      promptKitPromise = (async () => {
+        const failures = []
+        for (const [label, transport] of [['script', loadViaScript], ['fetch', loadViaFetch]]) {
+          try {
+            return await transport()
+          } catch (error) {
+            failures.push(`${label}: ${error?.message || error}`)
           }
-          promptKitNamespace = loaded
-          resolve(loaded)
         }
-        script.onerror = () => {
-          cleanup()
-          promptKitPromise = null
-          reject(new Error('PromptKit 工件加载失败，请刷新后重试。'))
-        }
-        document.head.appendChild(script)
+        throw new Error(`PromptKit 工件加载失败（${PROMPTKIT_CLIENT_PATH}）—— ${failures.join('；')}`)
+      })().then(loaded => {
+        promptKitNamespace = loaded
+        return loaded
+      }, error => {
+        // 失败必须清掉单例：用户在入口按钮上点「重试」时重新走两条传输。
+        promptKitPromise = null
+        throw error
       })
       return promptKitPromise
     }
@@ -10881,6 +10969,16 @@ window.__ModuleLoader__.load({
 
     // 用给定的 slots 服务注册全部槽位；inject 回调立即执行（与 glue 行为一致）。
     // components 数组与 RESEARCH_SLOTS 顺序一一对应，由 glue 传入 React 组件。
+    //
+    // 注册现场留痕：宿主上「某个入口没出现」时，先要分清是「inject 回调压根没跑」
+    // 还是「register 抛错」——二者在界面上都只是安静地少一块，排障时无从下手。
+    const SLOT_PROBE_KEY = 'dsh-research-kit.slots.probe.v1'
+    const slotProbe = []
+    function recordSlotProbe(text) {
+      slotProbe.push(text)
+      try { window.localStorage.setItem(SLOT_PROBE_KEY, slotProbe.join(' | ')) } catch { /* 存储不可用时无痕放弃 */ }
+    }
+
     function registerResearchSlots(ctx, components) {
       const registrations = []
       const disposers = RESEARCH_SLOTS.map((definition, index) =>
@@ -10892,7 +10990,14 @@ window.__ModuleLoader__.load({
             label: () => definition.label
           }
           registrations.push({ options, component: components[index] })
-          return ctx.slots.register(options, components[index])
+          try {
+            const dispose = ctx.slots.register(options, components[index])
+            recordSlotProbe(`${definition.id}=ok`)
+            return dispose
+          } catch (error) {
+            recordSlotProbe(`${definition.id}=error:${String(error?.message || error)}`)
+            throw error
+          }
         })
       )
       return () => disposers.forEach(dispose => dispose?.())
@@ -11110,7 +11215,9 @@ window.__ModuleLoader__.load({
     function LoadedResearchDraftEnhancerHost(props) {
       const PromptKit = getPromptKit()
       ensureResearchProviders(PromptKit)
-      const { sessionId, input, useInput, useChat, inputActions } = props
+      // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
+      // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
+      const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange } = props
       const zonedDraft = input?.draft
       const hookedInput = useInput ? useInput(value => value) : undefined
       const draft = zonedDraft !== undefined ? zonedDraft : hookedInput?.draft
@@ -11163,35 +11270,129 @@ window.__ModuleLoader__.load({
       }, [sessionId])
       React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
       // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-      // 手动沉淀伴生钮与 vendored 触发钮并排（固定定位互不影响布局）：
-      // 「沉淀最近回答」贴在增强器按钮上方，随其拖拽位置与窗口变化重算（见 composer-deposit-button.js）。
-      return React.createElement(React.Fragment, null, [
-        React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
-        React.createElement(PromptKit.QuickEnhancer, {
-          key: 'promptkit-quick-enhancer',
-          methodProvider: researchMethodProvider,
-          assetProvider: researchAssetProvider,
-          composer,
-          enhancer,
-          messages,
-          searchMemory,
-          storagePrefix: 'dsh-research-kit.promptkit.',
+      // 入口改为宿主工具条里的内联按钮（conversation.input.right，紧挨模型选择器）：
+      //   launcher: 'inline'        —— 不再渲染悬浮可拖拽 FAB，也就没有悬浮位置需要维持；
+      //   renderLauncher: () => null —— 触发钮由 ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在）；
+      //   anchorRef / open / onOpenChange —— 面板锚定插件自己的按钮，并由插件受控开合（⌘K 也走同一状态）。
+      // 「沉淀最近回答」不再需要悬浮伴生钮：它另有 conversation.chat.assistant-actions 入口
+      // （dsh-research-kit-review-deposit）；内联后不再在输入框旁留一个无主的浮动圆钮。
+      return React.createElement(PromptKit.QuickEnhancer, {
+        key: 'promptkit-quick-enhancer',
+        methodProvider: researchMethodProvider,
+        assetProvider: researchAssetProvider,
+        composer,
+        enhancer,
+        messages,
+        searchMemory,
+        storagePrefix: 'dsh-research-kit.promptkit.',
+        launcher: 'inline',
+        renderLauncher: () => null,
+        anchorRef,
+        open,
+        onOpenChange,
+      })
+    }
+
+    // PromptKit 工件是懒加载的（见 src/promptkit-loader.js）。它加载失败时，
+    // conversation.input.right 这整块入口会静默收起——除控制台外现场不留任何痕迹，
+    // 于是「插件装着、四个槽里唯独少了草稿增强」无从定位。这里把最后一次失败原因
+    // 写进 localStorage（成功即清除），供 Plugins 页诊断与排障读取。
+    const PROMPTKIT_LOAD_ERROR_KEY = 'dsh-research-kit.promptkit.load-error.v1'
+    // 成功也要留痕：否则「加载成功但槽位没挂载」与「页面还在跑旧产物」在磁盘上无法区分。
+    const PROMPTKIT_LOADED_KEY = 'dsh-research-kit.promptkit.loaded.v1'
+
+    /** 标记加载成功（error 为空）或记录失败原因（error 非空）。 */
+    function recordPromptKitLoadError(error) {
+      if (error == null) {
+        try {
+          window.localStorage.removeItem(PROMPTKIT_LOAD_ERROR_KEY)
+          window.localStorage.setItem(PROMPTKIT_LOADED_KEY, new Date().toISOString())
+        } catch { /* 存储不可用时无痕放弃 */ }
+        return
+      }
+      try {
+        window.localStorage.setItem(PROMPTKIT_LOAD_ERROR_KEY, `${new Date().toISOString()} ${String(error?.message || error)}`)
+      } catch { /* 同上：写不了也仍然有控制台输出 */ }
+      console.error('[dsh-research-kit] PromptKit 工件加载失败，草稿增强入口保持收起：', error)
+    }
+
+    // 输入框右侧的内联入口：纯图标按钮（宿主原生 IconButton，与模型选择器等图标钮同规格）。
+    // 不带文字标签，说明性文字只放在 title / aria-label 里。
+    // 它由插件自己渲染，不依赖懒加载的 PromptKit 工件——工件挂起或加载失败时入口仍然在，
+    // 用户看到「加载中 / 失败可重试」，而不是整块槽位静默消失。外层 div 持有 ref 作为面板锚点
+    // （IconButton 不转发 ref，且外层矩形即按钮矩形）。
+    function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, anchorRef }) {
+      const active = Boolean(open)
+      const label = state === 'error'
+        ? `草稿增强加载失败，点击重试${errorText ? `：${errorText}` : ''}`
+        : state === 'loading' ? '草稿增强加载中…' : '打开对话增强器（⌘K）'
+      return React.createElement('div', {
+        ref: anchorRef,
+        'data-research-kit': 'draft-enhancer-trigger',
+        'data-state': state,
+        style: { display: 'flex', alignItems: 'center' },
+      }, [
+        React.createElement(GlobalStyle, { key: 'style' }),
+        React.createElement(IconButton, {
+          key: 'trigger',
+          name: 'sparkles',
+          label,
+          active,
+          onClick,
+          onPointerDown: event => event.stopPropagation(),
+          'aria-haspopup': 'dialog',
+          'aria-expanded': Boolean(open),
+          style: state === 'error' ? { borderColor: C.amber, color: C.amber } : undefined,
         }),
       ])
     }
 
     function ResearchDraftEnhancerHost(props) {
       const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
+      const [errorText, setErrorText] = React.useState(null)
+      const [open, setOpen] = React.useState(false)
+      const [attempt, setAttempt] = React.useState(0)
+      const anchorRef = React.useRef(null)
+      // 工件尚未就绪时点过按钮：加载完成后替他展开面板，避免「点了没反应」。
+      const pendingOpen = React.useRef(false)
       React.useEffect(() => {
+        if (promptKitReady()) { setState('ready'); return undefined }
         let active = true
+        setState('loading')
+        setErrorText(null)
         loadPromptKit().then(PromptKit => {
           ensureResearchProviders(PromptKit)
+          recordPromptKitLoadError(null)
           if (active) setState('ready')
-        }).catch(() => { if (active) setState('error') })
+        }).catch(error => {
+          recordPromptKitLoadError(error)
+          if (!active) return
+          // 失败不再静默收起：入口保留并显示可重试文案，原因同时写进 localStorage 与控制台。
+          setErrorText(String(error?.message || error))
+          setState('error')
+        })
         return () => { active = false }
-      }, [])
-      // 输入框右侧空间有限；加载失败时静默收起，控制台会给出完整错误提示。
-      return state === 'ready' ? React.createElement(LoadedResearchDraftEnhancerHost, props) : null
+      }, [attempt])
+      React.useEffect(() => {
+        if (state !== 'ready' || !pendingOpen.current) return
+        pendingOpen.current = false
+        setOpen(true)
+      }, [state])
+      const onClick = React.useCallback(() => {
+        if (state === 'error') { pendingOpen.current = true; setAttempt(value => value + 1); return }
+        if (state !== 'ready') { pendingOpen.current = true; return }
+        setOpen(value => !value)
+      }, [state])
+      return React.createElement(React.Fragment, null, [
+        React.createElement(ResearchDraftEnhancerTrigger, {
+          key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,
+        }),
+        state === 'ready'
+          ? React.createElement(LoadedResearchDraftEnhancerHost, {
+            key: 'draft-enhancer-panel', ...props, anchorRef, open, onOpenChange: setOpen,
+          })
+          : null,
+      ])
     }
 
     // 由 standalone-glue 统一注册为 conversation.input.right（顺序见 slot-registry.js）。
@@ -12074,10 +12275,14 @@ window.__ModuleLoader__.load({
       let disposeDeposition = () => {}
       loadPromptKit().then(PromptKit => {
         if (!active) return
+        recordPromptKitLoadError(null)
         const providers = ensureResearchProviders(PromptKit)
         depositAssetProvider = providers.researchAssetProvider
         disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: providers.researchAssetProvider }) || (() => {})
-      }).catch(() => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */ })
+      }).catch(error => { /* PromptKit/沉淀接线失败不影响四个视图槽位 */
+        // …但必须留痕：conversation.input.right 的草稿增强入口会因此整块静默收起。
+        recordPromptKitLoadError(error)
+      })
       disposers.push(() => { active = false; disposeDeposition() })
       return () => disposers.forEach(dispose => dispose?.())
     }

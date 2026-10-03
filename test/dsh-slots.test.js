@@ -54,6 +54,31 @@ test('生成产物包含新模块并使用 research-kit 命名空间', () => {
   assert.ok(!source.includes("storagePrefix: 'promptkit.'"), '不得使用 PromptKit 默认 storage 前缀')
 })
 
+test('内联草稿增强入口：触发钮不依赖懒加载工件，面板走受控 inline 接线', () => {
+  const glue = readFileSync(new URL('../dsh/prompt-enhancer-glue.js', import.meta.url), 'utf8')
+  // 触发钮必须由插件自绘、且先于 ready 分支渲染：App 里 /promptkit-client 路由挂起时
+  // 脚本 load/error 都不触发，若入口挂在 ready 分支上，整块槽位就会静默消失（本次回归根因）。
+  assert.match(glue, /export function ResearchDraftEnhancerTrigger/)
+  assert.match(glue, /React\.createElement\(ResearchDraftEnhancerTrigger, \{/)
+  const host = glue.slice(glue.indexOf('function ResearchDraftEnhancerHost'))
+  assert.ok(host.indexOf('ResearchDraftEnhancerTrigger') < host.indexOf("state === 'ready'"),
+    '触发钮必须先于 ready 分支渲染（工件挂起/失败时入口仍在，并可点击重试）')
+  // 工件侧：内联入口 + 宿主自绘触发钮 + 受控开合 + 锚定插件按钮。
+  assert.match(glue, /launcher: 'inline'/)
+  assert.match(glue, /renderLauncher: \(\) => null/)
+  assert.match(glue, /anchorRef,/)
+  assert.match(glue, /onOpenChange,/)
+  // 加载器：路由既不回包也不报错时必须超时成「可重试的失败」，不能永远加载中。
+  const loader = readFileSync(new URL('../src/promptkit-loader.js', import.meta.url), 'utf8')
+  assert.match(loader, /export const PROMPTKIT_LOAD_TIMEOUT_MS = \d+/)
+  assert.match(loader, /window\.setTimeout\(/)
+  assert.match(loader, /promptKitPromise = null/, '失败必须清掉单例，允许重试')
+  // 构建产物必须带上同一套接线。
+  const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
+  assert.match(bundle, /launcher: 'inline'/)
+  assert.match(bundle, /PROMPTKIT_LOAD_TIMEOUT_MS/)
+})
+
 test('新版 DSH 工具详情卡覆盖全部 research MCP 工具', async () => {
   const { researchToolNames, researchToolDetailModel, researchToolArgumentSummary } = await import('../src/research-toolview.js')
   const glue = readFileSync(new URL('../dsh/standalone-glue.js', import.meta.url), 'utf8')

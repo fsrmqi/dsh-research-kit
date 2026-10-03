@@ -718,7 +718,7 @@
     onSelectionChange(cb) { return () => {} }
 
     /** 用 text 替换给定选区；不支持选区的宿主可不实现。 */
-    replaceSelection(text, selection = this.getSelection()) { this.write(text) }
+    replaceSelection(text, selection = this.getSelection()) { this.write(text); return true }
 
     /**
      * 订阅草稿变化（含用户手动输入与 write() 写入），组件据此同步本地状态。
@@ -1113,11 +1113,12 @@
     }
 
     replaceSelection(text, selection = this.getSelection()) {
-      if (!this.el || !selection) { this.write(text); return }
+      if (!this.el || !selection) { this.write(text); return true }
       const next = `${this.el.value.slice(0, selection.start)}${text}${this.el.value.slice(selection.end)}`
       this.write(next)
       const caret = selection.start + String(text).length
       this.el.setSelectionRange?.(caret, caret)
+      return true
     }
 
     onChange(cb) {
@@ -1885,8 +1886,9 @@
       if (typeof text !== 'string' || (!allowEmpty && !text.trim())) throw new Error('未返回有效正文，草稿未改动。')
       const selected = snapshot.selection
       const after = selected ? `${snapshot.before.slice(0, selected.start)}${text}${snapshot.before.slice(selected.end)}` : text
-      if (selected && snapshot.composer.replaceSelection) snapshot.composer.replaceSelection(text, selected)
-      else snapshot.composer.write(after)
+      if (selected && snapshot.composer.replaceSelection) {
+        if (snapshot.composer.replaceSelection(text, selected) !== true) throw new Error('选区已变化或输入框已锁定，未覆盖草稿；请重新选择。')
+      } else snapshot.composer.write(after)
       return after
     }
     return { capture, assertCurrent, commit, invalidate }
@@ -2104,7 +2106,7 @@
 
   /* ================= QuickEnhancer 浮层关闭与宿主事件隔离 ================= */
   // 管理宿主事件隔离与分层关闭；不承担 Vault 数据或增强业务。
-  function usePanelDismiss({ open, vaultOpen, setOpen, setVaultOpen, rootRef, panelRef }) {
+  function usePanelDismiss({ open, vaultOpen, setOpen, setVaultOpen, rootRef, panelRef, anchorRef }) {
     // 抽屉与插件根已抬升到宿主浮层之上（zIndex 20001/20002），「关闭 ×」按钮必然露在最上层、始终可点，
     // 不再需要「被遮挡时自动左移」的运行时检测（此前那套 elementFromPoint 轮询既脆弱又拖性能）。
     const closeBtnRef = React.useRef(null)
@@ -2177,13 +2179,18 @@
     React.useEffect(() => {
       if (!open) return
       const onPointerDown = event => {
-        if (!rootRef.current?.contains(event.target)) setOpen(false)
+        const target = event.target
+        if (rootRef.current?.contains(target)) return
+        // 内联（inline）模式下触发钮不在插件根内，但它属于「内部」：
+        // 若按外部点击处理，点触发钮会先关面板、再被触发钮重开，出现一次闪断。
+        if (anchorRef?.current?.contains(target)) return
+        setOpen(false)
       }
       // 抽屉打开时点外部只关抽屉（由上方捕获 handler 负责），主面板保留，避免一次点击关两层。
       if (vaultOpen) return undefined
       window.addEventListener('pointerdown', onPointerDown)
       return () => window.removeEventListener('pointerdown', onPointerDown)
-    }, [open, vaultOpen])
+    }, [open, vaultOpen, anchorRef])
     return { closeBtnRef }
   }
 
@@ -2622,7 +2629,7 @@
   //   nudgeEnabled   (可选) boolean：宿主级行为助推总开关，默认 true；与 localStorage 开关为「与」关系
   //   onSubmitDraft  (可选) (text) => void | Promise：宿主「发送当前草稿」钩子；注入后启用「发送前自动增强」
   // @ 文件引用补全不在此组件实现：DSH 原生 @ 提及已是超集，插件不得在宿主输入框上重复提供。
-  function ConversationQuickAction({ methodProvider, assetProvider, composer, enhancer, messages, searchMemory, onSubmitDraft, storagePrefix = 'promptkit.', nudgeEnabled = true }) {
+  function ConversationQuickAction({ methodProvider, assetProvider, composer, enhancer, messages, searchMemory, onSubmitDraft, storagePrefix = 'promptkit.', nudgeEnabled = true, launcher = 'floating', renderLauncher, anchorRef, open: openProp, onOpenChange }) {
     const storageKey = name => `${storagePrefix}quick-action.${name}`
     const msgs = list(messages)
     const [draft, setDraft] = React.useState(() => composer?.getDraft?.() || '')
@@ -2635,7 +2642,28 @@
       const off = composer.onChange(setDraft)
       return typeof off === 'function' ? off : undefined
     }, [composer])
-    const [open, setOpen] = React.useState(false)
+    // 入口形态：'floating'（默认，自带可拖拽悬浮钮，行为与历史版本一致）
+    //          'inline'（触发钮内联在宿主工具条里，面板视口固定定位并锚定触发钮）。
+    const floating = launcher !== 'inline'
+    // 受控开关：宿主传了 open 就由宿主驱动开合（内联触发钮/宿主自绘触发钮都依赖这一点）。
+    const [internalOpen, setInternalOpen] = React.useState(false)
+    const controlled = openProp !== undefined
+    const open = controlled ? !!openProp : internalOpen
+    const openPropRef = React.useRef(openProp)
+    openPropRef.current = openProp
+    const controlledRef = React.useRef(controlled)
+    controlledRef.current = controlled
+    const onOpenChangeRef = React.useRef(onOpenChange)
+    onOpenChangeRef.current = onOpenChange
+    const openRef = React.useRef(open)
+    openRef.current = open
+    // setOpen 保持 React 的函数式写法（组件内部多处 setOpen(value => !value)）。
+    const setOpen = React.useCallback(value => {
+      const next = typeof value === 'function' ? value(openRef.current) : value
+      openRef.current = next
+      if (!controlledRef.current) setInternalOpen(next)
+      if (next !== openPropRef.current) onOpenChangeRef.current?.(next)
+    }, [])
     const [mode, setMode] = React.useState('enhance')
     const [enhancementKind, setEnhancementKind] = React.useState('light')
     const [selected, setSelected] = React.useState([])
@@ -2661,7 +2689,7 @@
     const [vaultOpen, setVaultOpen] = React.useState(false)
     const rootRef = React.useRef(null)
     const panelRef = React.useRef(null)
-    const { closeBtnRef } = usePanelDismiss({ open, vaultOpen, setOpen, setVaultOpen, rootRef, panelRef })
+    const { closeBtnRef } = usePanelDismiss({ open, vaultOpen, setOpen, setVaultOpen, rootRef, panelRef, anchorRef })
     const [vaultItems, setVaultItems] = React.useState([])
     const [vaultSearch, setVaultSearch] = React.useState('')
     // 搜索防抖：斜杠菜单（slashMatches）保持即时过滤，灵感库面板用防抖值避免大数据集逐键重算。
@@ -2746,6 +2774,24 @@
     const isNudgeOptedOut = type => { try { const raw = JSON.parse(window.localStorage.getItem(nudgeOptoutKey(type)) || 'null'); return !!raw && typeof raw.until === 'number' && raw.until > Date.now() } catch { return false } }
     const setNudgeOptout = type => { try { window.localStorage.setItem(nudgeOptoutKey(type), JSON.stringify({ until: Date.now() + NUDGE_OPTOUT_DAYS * 864e5 })) } catch {} }
     const { position, viewport, onPointerDown: beginDrag, consumeSuppressedClick } = useFloatingLauncher(storageKey('position.v1'))
+    // 内联模式的锚点矩形：优先用宿主传入的 anchorRef（宿主自绘触发钮、按钮先于组件出现），
+    // 否则用内联根自身。面板开合期间跟随 resize/scroll 重新测量。
+    const inlineRootRef = React.useRef(null)
+    const [anchorRect, setAnchorRect] = React.useState(null)
+    React.useEffect(() => {
+      if (floating || !(open || slashOpen)) return undefined
+      const measure = () => {
+        const node = anchorRef?.current || inlineRootRef.current
+        setAnchorRect(node ? node.getBoundingClientRect() : null)
+      }
+      measure()
+      window.addEventListener('resize', measure)
+      window.addEventListener('scroll', measure, true)
+      return () => {
+        window.removeEventListener('resize', measure)
+        window.removeEventListener('scroll', measure, true)
+      }
+    }, [floating, open, slashOpen, anchorRef, viewport])
     React.useEffect(() => { if (!open) cancelEnhance({ silent: true }) }, [open, enhancer])
     React.useEffect(() => { if (!enhancer && enhancementKind === 'semantic') setEnhancementKind('light') }, [enhancer, enhancementKind])
     React.useEffect(() => { if (mode === 'library' && !libraryOpen) setLibraryOpen(true) }, [mode, libraryOpen])
@@ -3452,10 +3498,13 @@
 
     // 视口度量：抽屉/面板宽度与极简窄屏判断都依赖它，必须在使用点之前定义。
     const vw = viewport?.width || (typeof window !== 'undefined' ? window.innerWidth : 1024)
+    const vh = viewport?.height || (typeof window !== 'undefined' ? window.innerHeight : 768)
     const wide = vw >= 620
     // 窄屏适配：<480px 时面板/抽屉铺满视口，避免双栏挤压成不可读的单列。
     const panelW = vw < 480 ? vw - 32 : Math.min(wide ? 640 : 440, vw - 32)
-    const panelLeft = floatingPanelLeft(position.x, vw, panelW)
+    // 面板锚点中心：悬浮模式取 FAB 自身，内联模式取内联触发钮（或宿主传入的 anchorRef）。
+    const anchorX = floating ? position.x + 22 : anchorRect ? anchorRect.left + anchorRect.width / 2 : vw / 2
+    const panelLeft = floatingPanelLeft(anchorX, vw, panelW)
     const panelOffset = panelLeft - position.x
     const vaultPanel = assetProvider ? h('aside', { key: 'vault-panel', ref: panelRef, popover: 'manual', role: 'dialog', 'aria-label': '灵感库', style: { position: 'fixed', inset: '0 0 auto auto', margin: 0, border: 0, width: vw < 480 ? 'calc(100vw - 16px)' : 'min(390px, calc(100vw - 24px))', height: '100vh', overflowY: 'auto', padding: '18px', boxSizing: 'border-box', borderLeft: `1px solid ${C.tealLine}`, background: C.surface, boxShadow: '-16px 0 38px var(--pk-shadow-lg)', zIndex: 20002, display: 'grid', alignContent: 'start', gap: '10px' } }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '10px', position: 'relative', zIndex: 1 } }, [
@@ -3560,8 +3609,13 @@
       vaultTab === 'graph' ? graphTab : null,
     ]) : null
     const rankedCommon = [...common].sort((a, b) => Number(methodUsage[b.id] || 0) - Number(methodUsage[a.id] || 0))
-    const panelAbove = position.y > 370
-    const panelMaxHeight = Math.max(250, Math.min(640, panelAbove ? position.y - 82 : window.innerHeight - position.y - 82))
+    // 内联模式没有 FAB 坐标：上下展开方向与最大高度改由触发钮的实际矩形决定。
+    const panelAbove = floating ? position.y > 370 : anchorRect ? anchorRect.top > 380 : false
+    const panelMaxHeight = floating
+      ? Math.max(250, Math.min(640, panelAbove ? position.y - 82 : window.innerHeight - position.y - 82))
+      : Math.max(250, Math.min(640, panelAbove ? (anchorRect?.top ?? vh) - 82 : vh - (anchorRect?.bottom ?? 0) - 82))
+    // 内联模式未传 renderLauncher 时的兜底触发钮（宿主可整块替换）。
+    const inlineButtonStyle = { width: '32px', height: '32px', padding: 0, border: `1px solid ${C.tealLine}`, borderRadius: '9px', background: C.surface, color: C.teal, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'background .16s ease, border-color .16s ease' }
     const buttonStyle = { width: '44px', height: '44px', padding: 0, border: 0, borderRadius: '50%', background: C.actionBg, color: C.actionFg, cursor: 'grab', fontSize: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .16s ease, box-shadow .16s ease' }
     const fan = common.map((method, index) => h('button', { key: method.id, title: `选择：${method.title}`, disabled: loading, onClick: () => { setEnhancementMethodId(method.id); setAdvancedEnhancement(true); setOpen(true) }, style: { position: 'absolute', right: `${-8 + index * 48}px`, bottom: panelAbove ? `${62 + Math.abs(index - 1) * 25}px` : 'auto', top: panelAbove ? 'auto' : `${62 + Math.abs(index - 1) * 25}px`, width: '42px', height: '42px', overflow: 'hidden', border: `1px solid ${enhancementMethodId === method.id ? C.teal : C.tealLine}`, borderRadius: '50%', background: enhancementMethodId === method.id ? C.tealTint : C.surface, boxShadow: '0 6px 16px var(--pk-shadow-faint)', color: C.teal, cursor: 'pointer', fontSize: '10px', fontWeight: 800, lineHeight: 1.15, animation: 'pk-fan-in .22s ease both', animationDelay: `${index * 35}ms` } }, method.title.slice(0, 4)))
     const methodItems = showAllMethods ? methods : rankedCommon
@@ -3759,7 +3813,18 @@
             ])
           ]
     ) : null
-    const panel = open ? h('section', { key: 'panel', className: 'pk-scroll', role: 'dialog', 'aria-label': '对话增强器', style: { position: 'absolute', left: `${panelOffset}px`, transform: 'none', ...(panelAbove ? { bottom: '66px' } : { top: '66px' }), width: `${panelW}px`, boxSizing: 'border-box', maxHeight: `${panelMaxHeight}px`, overflowY: 'auto', overscrollBehavior: 'contain', padding: vw < 480 ? '10px' : '14px', border: `1px solid ${C.tealLine}`, borderRadius: '15px', background: C.surface, boxShadow: '0 20px 50px var(--pk-shadow-lg)', color: C.ink, zIndex: 30, animation: 'pk-pop .2s ease' } }, [
+    // 悬浮模式：面板绝对定位在 FAB 根容器内（历史行为）。
+    // 内联模式：面板改视口固定定位并锚定触发钮，才能跳出宿主输入区的 overflow / stacking。
+    const panelPlacement = floating
+      ? { position: 'absolute', left: `${panelOffset}px`, ...(panelAbove ? { bottom: '66px' } : { top: '66px' }) }
+      : anchorRect
+        ? { position: 'fixed', left: `${panelLeft}px`, ...(panelAbove ? { bottom: `${Math.max(12, vh - anchorRect.top + 10)}px` } : { top: `${anchorRect.bottom + 10}px` }) }
+        : { position: 'fixed', left: `${panelLeft}px`, bottom: '80px' }
+    // 斜杠候选（/pk）沿用同一锚点：内联模式下不再飞到右下角——那是悬浮 FAB 的旧坐标。
+    const slashPlacement = floating || !anchorRect
+      ? { right: '76px', bottom: '86px' }
+      : { left: `${panelLeft}px`, ...(panelAbove ? { bottom: `${Math.max(12, vh - anchorRect.top + 10)}px` } : { top: `${anchorRect.bottom + 10}px` }) }
+    const panel = open ? h('section', { key: 'panel', className: 'pk-scroll', role: 'dialog', 'aria-label': '对话增强器', style: { ...panelPlacement, transform: 'none', ...(panelAbove ? { bottom: '66px' } : { top: '66px' }), width: `${panelW}px`, boxSizing: 'border-box', maxHeight: `${panelMaxHeight}px`, overflowY: 'auto', overscrollBehavior: 'contain', padding: vw < 480 ? '10px' : '14px', border: `1px solid ${C.tealLine}`, borderRadius: '15px', background: C.surface, boxShadow: '0 20px 50px var(--pk-shadow-lg)', color: C.ink, zIndex: floating ? 30 : 20001, animation: 'pk-pop .2s ease' } }, [
           h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'start' } }, [h('div', { key: 'copy' }, [h('strong', { key: 'title', style: { fontSize: '14px' } }, '对话增强器'), h('div', { key: 'sub', style: { marginTop: '3px', color: C.muted, fontSize: '12px', lineHeight: 1.45 } }, '用方法增强当前草稿，结果只填入消息框，不会自动发送；需要精修时可在高级工坊补充事实与约束。')]), h('div', { key: 'actions', style: { display: 'flex', alignItems: 'center', gap: '7px', flexShrink: 0 } }, [
             mode === 'enhance' ? enhanceActionNode : null,
             h('span', { key: 'divider', 'aria-hidden': 'true', style: { width: '1px', height: '20px', background: C.divide, margin: '0 1px' } }),
@@ -3797,7 +3862,7 @@
           // panel 同级，点击抽屉控制会被误判为外部点击并连主面板一起关闭。
           vaultOpen ? vaultPanel : null,
         ]) : null
-    const slashMenu = slashOpen ? h('div', { key: 'slash-menu', role: 'listbox', style: { position: 'fixed', right: '76px', bottom: '86px', width: 'min(360px, calc(100vw - 32px))', padding: '8px', border: `1px solid ${C.tealLine}`, borderRadius: '12px', background: C.surface, boxShadow: C.shadowLg, zIndex: 20004 } }, [h('div', { key: 'label', style: { padding: '4px 6px 7px', color: C.muted, fontSize: '11px' } }, `灵感库 · /pk ${vaultSearch} · ↑↓ 选择，Enter 插入`), ...(slashMatches.length ? slashMatches.map((item, index) => h('button', { key: item.id, role: 'option', 'aria-selected': index === slashActiveIndex, onClick: () => useVaultItem(item, 'replace'), style: { width: '100%', padding: '8px', border: 0, borderRadius: '7px', background: index === slashActiveIndex ? C.tealTint : 'transparent', color: C.ink, textAlign: 'left', cursor: 'pointer' } }, [h('strong', { key: 'title', style: { fontSize: '12px' } }, item.title), h('div', { key: 'meta', style: { marginTop: '2px', color: C.muted, fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, item.tags?.length ? `#${item.tags.join(' #')}` : item.type)])) : [h('div', { key: 'empty', style: { padding: '10px 6px', color: C.muted, fontSize: '11px' } }, '未找到匹配灵感；继续输入关键词或按 Esc。')])]) : null
+    const slashMenu = slashOpen ? h('div', { key: 'slash-menu', role: 'listbox', style: { position: 'fixed', ...slashPlacement, width: 'min(360px, calc(100vw - 32px))', padding: '8px', border: `1px solid ${C.tealLine}`, borderRadius: '12px', background: C.surface, boxShadow: C.shadowLg, zIndex: 20004 } }, [h('div', { key: 'label', style: { padding: '4px 6px 7px', color: C.muted, fontSize: '11px' } }, `灵感库 · /pk ${vaultSearch} · ↑↓ 选择，Enter 插入`), ...(slashMatches.length ? slashMatches.map((item, index) => h('button', { key: item.id, role: 'option', 'aria-selected': index === slashActiveIndex, onClick: () => useVaultItem(item, 'replace'), style: { width: '100%', padding: '8px', border: 0, borderRadius: '7px', background: index === slashActiveIndex ? C.tealTint : 'transparent', color: C.ink, textAlign: 'left', cursor: 'pointer' } }, [h('strong', { key: 'title', style: { fontSize: '12px' } }, item.title), h('div', { key: 'meta', style: { marginTop: '2px', color: C.muted, fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, item.tags?.length ? `#${item.tags.join(' #')}` : item.type)])) : [h('div', { key: 'empty', style: { padding: '10px 6px', color: C.muted, fontSize: '11px' } }, '未找到匹配灵感；继续输入关键词或按 Esc。')])]) : null
     const variableFillNode = VariableFillNode({
       fill: variableFill ? {
         ...variableFill,
@@ -3810,7 +3875,26 @@
         void applyVaultItem(payload.item, payload.mode, payload.current, payload.slashInvocation, payload.values)
       },
     })
-    return h('div', { ref: rootRef, style: { position: 'fixed', left: `${position.x}px`, top: `${position.y}px`, zIndex: 20001 } }, [h(GlobalStyle, { key: 'gcss' }), slashMenu, variableFillNode, reviewPanel, h('button', { key: 'launcher', type: 'button', className: 'pk-fab', onPointerDown: beginDrag, onClick: () => { if (consumeSuppressedClick()) return; setMode('enhance'); setLibraryOpen(false); setOpen(true) }, style: buttonStyle, title: '智能增强（⌘K）', 'aria-label': '打开智能增强', onMouseEnter: event => { event.currentTarget.style.transform = 'scale(1.06)' }, onMouseLeave: event => { event.currentTarget.style.transform = 'scale(1)' } }, h(Icon, { key: 'ic', name: 'sparkles', size: 18 })), panel])
+    // 内联根同时充当 usePanelDismiss 的「插件自身 UI」边界，两个 ref 都指向它。
+    const attachRoot = React.useCallback(node => {
+      inlineRootRef.current = node
+      rootRef.current = node
+    }, [])
+    const openLauncher = () => {
+      setMode('enhance')
+      setLibraryOpen(false)
+      setOpen(value => !value)
+    }
+    const launcherNode = floating
+      ? h('button', { key: 'launcher', type: 'button', className: 'pk-fab', onPointerDown: beginDrag, onClick: () => { if (consumeSuppressedClick()) return; setMode('enhance'); setLibraryOpen(false); setOpen(true) }, style: buttonStyle, title: '智能增强（⌘K）', 'aria-label': '打开智能增强', onMouseEnter: event => { event.currentTarget.style.transform = 'scale(1.06)' }, onMouseLeave: event => { event.currentTarget.style.transform = 'scale(1)' } }, h(Icon, { key: 'ic', name: 'sparkles', size: 18 }))
+      : typeof renderLauncher === 'function'
+        // 宿主返回值会进入子节点数组，key 安全由插件这侧保证，宿主无需关心 React 细节。
+        ? h('span', { key: 'inline-launcher', style: { display: 'inline-flex', alignItems: 'center' } }, renderLauncher({ open, toggle: openLauncher, anchorRef: inlineRootRef }))
+        : h('button', { key: 'launcher', type: 'button', className: 'pk-fab', title: '智能增强（⌘K）', 'aria-label': '打开智能增强', onClick: openLauncher, style: inlineButtonStyle }, h(Icon, { key: 'ic', name: 'sparkles', size: 18 }))
+    if (floating) {
+      return h('div', { ref: rootRef, style: { position: 'fixed', left: `${position.x}px`, top: `${position.y}px`, zIndex: 20001 } }, [h(GlobalStyle, { key: 'gcss' }), slashMenu, variableFillNode, reviewPanel, launcherNode, panel])
+    }
+    return h('div', { key: 'inline-root', ref: attachRoot, style: { position: 'relative', display: 'inline-flex', alignItems: 'center' } }, [h(GlobalStyle, { key: 'gcss' }), slashMenu, variableFillNode, reviewPanel, launcherNode, panel])
   }
 
     return {
