@@ -22,6 +22,7 @@ import {
   serializeEvidenceBackup, parseEvidenceBackup, mergeEntries, planCitationWrite,
   buildEvidenceExplainPack,
 } from './lib/evidence-vault-core.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
 //
@@ -362,15 +363,6 @@ function stamp() {
   const now = new Date()
   const pad = value => String(value).padStart(2, '0')
   return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-}
-
-function downloadJson(text, filename) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
 }
 
 const STATUS_COLORS = {
@@ -789,7 +781,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         && (item.origin === 'user' || item.updatedAt > 0))
       const text = serializeEvidenceBackup({ entries, project, claims: scopedClaims, links: scopedLinks, ledger, workspaces: scopedWorkspaces })
       const suffix = project || '全部项目'
-      downloadJson(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
+      downloadJsonFile(text, `dsh-research-kit-evidence-${suffix}-${stamp()}.json`)
       setNotice(`已导出 ${entries.length} 条证据、${scopedClaims.length} 条论断、${scopedLinks.length} 条关联、${ledger.length} 条账本事件与 ${scopedWorkspaces.length} 个课题设置。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
@@ -800,7 +792,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       if (!filtered.length) return setNotice('当前筛选范围内没有可导出的证据条目。')
       const text = JSON.stringify(buildEvidenceExplainPack(filtered, project), null, 2) + '\n'
       const suffix = project || '全部项目'
-      downloadJson(text, `evidence-explain-pack-${suffix}-${stamp()}.json`)
+      downloadJsonFile(text, `evidence-explain-pack-${suffix}-${stamp()}.json`)
       setNotice(`已导出 ${filtered.length} 条证据作为解释图素材（按当前筛选范围；渲染时用 --evidence <路径> 并入）。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
@@ -812,7 +804,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         id: item.id, title: item.title, identifier: item.identifier, identifierKind: item.identifierKind,
         url: item.url, project: item.project, status: item.status,
       }))
-      downloadJson(JSON.stringify({ kind: 'dsh-research-record', version: 1, exportedAt: Date.now(), project,
+      downloadJsonFile(JSON.stringify({ kind: 'dsh-research-record', version: 1, exportedAt: Date.now(), project,
         ledger, claims, citations: cited }, null, 2) + '\n', `dsh-research-record-${project || 'all'}-${stamp()}.json`)
       setNotice(`已导出 ${ledger.length} 条账本事件、${claims.length} 条论断及 ${cited.length} 条纳入来源。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }

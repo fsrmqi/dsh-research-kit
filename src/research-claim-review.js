@@ -2,6 +2,7 @@ import React from 'react'
 import { h, C } from './theme.js'
 import { Button, Card, Field, Input, Textarea, Badge, EmptyState, Notice, Spinner } from './ui.js'
 import { currentResearchContext, activeResearchRun, subscribeResearchContext } from './research-context-store.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 const CLAIM_REVIEW_API = '/dsh-research-kit/claim-review'
 const CLAIM_AGENT_REVIEW_API = '/dsh-research-kit/claim-agent-review'
@@ -131,13 +132,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
         return
       }
       if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
-      const blob = new Blob([JSON.stringify(result.payload, null, 2) + '\n'], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `research-evidence-${mode}.json`
-      link.click()
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      downloadJsonFile(JSON.stringify(result.payload, null, 2) + '\n', `research-evidence-${mode}.json`)
       setNotice(mode === 'publication' ? '发布检查通过，已导出带人工判断的研究证据。' : '已导出带状态标注的 Claim 草稿。')
     } catch (error) { setNotice(`导出失败：${error.message}`) }
     finally { setBusy(false) }

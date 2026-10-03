@@ -22,6 +22,7 @@ import {
   KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUSES, KNOWLEDGE_STATUS_LABELS,
   KNOWLEDGE_POLARITY_LABELS, CLAIM_RELATION_LABELS,
 } from './lib/knowledge-extract.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 const GRAPH_VIEW_MODES = [
   { value: 'all', label: '全部' },
@@ -109,16 +110,10 @@ function buildGraphSvgMarkup(layout, routes, theme) {
     + `\n  ${edges}\n  ${nodes}\n</svg>`
 }
 
+// 薄委托：保留本名（导出接线的源码锚点），回收时机统一由 src/lib/download.js 决定。
 function downloadGraphFile(text, type, filename) {
-  if (typeof document === 'undefined' || typeof URL === 'undefined' || typeof Blob === 'undefined') return
-  const url = URL.createObjectURL(new Blob([text], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+  return downloadText(text, type, filename)
 }
-
 function knowledgeBackupStamp() {
   const now = new Date()
   const pad = value => String(value).padStart(2, '0')

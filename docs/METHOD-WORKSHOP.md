@@ -174,7 +174,7 @@ export const inject = ['webServer', 'web', 'llm', 'sessions']
 
 ## 10. 已知风险
 
-- 主包 `ui/client.js` 当前约 **550 KB**（gzip 约 **161 KB**）。目录是独立 `ui/catalog-data.json`（约 842 KB），PromptKit 是按需加载的 `ui/promptkit.js`（约 660 KB），Archify 模板只在打开完整回放窗口时加载。`scripts/check-client-budget.mjs` 会阻止主包、gzip、目录或 PromptKit 工件超过预算；引入新功能前仍需比较首屏解析与首次功能加载时间。
+- 主包 `ui/client.js` 实测约 **729 KB**（gzip 约 **216 KB**；上限 800 KB / 250 KB，以 `node scripts/check-client-budget.mjs` 的输出为准）。目录是独立 `ui/catalog-data.json`（约 847 KB），PromptKit 是按需加载的 `ui/promptkit.js`（约 666 KB），Archify 模板只在打开完整回放窗口时加载。`scripts/check-client-budget.mjs` 会阻止主包、gzip、目录或 PromptKit 工件超过预算；引入新功能前仍需比较首屏解析与首次功能加载时间。
 - 工件的全局 CSS 与 `--pk-*` 变量可能与宿主或本仓库的 `--rk-*` 相互影响，改动视觉层时需在真实宿主复核。
 - 两个入口可能同时监听键盘、外部点击与 `storage` 事件；所有新事件必须命名空间化。
 - DSH 的 slot props 与模型路由随版本变化，真实 profile 验证不可省略。

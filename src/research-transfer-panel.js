@@ -6,6 +6,7 @@ import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup } from './kn
 import { serializeEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
 import { serializeResearchTransfer, parseResearchTransfer, previewResearchTransfer } from './lib/research-transfer.js'
 import { listResearchRuns, importResearchRuns, MAX_RESEARCH_RUNS } from './research-context-store.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 const TRANSFER_SECTIONS = [
   ['evidence', '证据'], ['claims', '论断'], ['links', '资产关联'], ['ledger', '筛选账本'],
@@ -14,12 +15,8 @@ const TRANSFER_SECTIONS = [
 ]
 
 function transferDownload(text, name) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  // 迁移包可能很大，保留更保守的回收延时。
+  return downloadJsonFile(text, name, { revokeDelayMs: 10_000 })
 }
 
 async function captureResearchTransfer(assetProvider) {

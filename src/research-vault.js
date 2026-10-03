@@ -15,6 +15,7 @@ import {
 } from './research-evidence-vault.js'
 import { knowledgeStore } from './knowledge-store.js'
 import { ResearchClaimReview } from './research-claim-review.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
 // StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
@@ -242,9 +243,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, embedded
   const exportJson = async () => {
     try {
       const contents = await assetProvider.export()
-      const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }))
-      const link = document.createElement('a')
-      link.href = url; link.download = 'dsh-research-kit-vault.json'; link.click(); URL.revokeObjectURL(url)
+      downloadJsonFile(contents, 'dsh-research-kit-vault.json')
       setNotice('已导出研究灵感资产备份（JSON）。')
     } catch (error) { setError(error?.message || error) }
   }

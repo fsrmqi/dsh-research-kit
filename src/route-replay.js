@@ -9,6 +9,7 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import { buildArchifySvg, archifyApplyTemplate, archifyLayoutRow } from './lib/archify-adapter.js'
+import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
 export const ARCHIFY_TEMPLATE_PATH = '/dsh-research-kit/archify-template'
 let archifyTemplatePromise = null
@@ -157,12 +158,7 @@ export function RouteReplay({ trace, prompt }) {
   const exportSnapshot = () => {
     const { markup: full } = buildReplaySvgMarkup(trace, theme, { lit: total, reduced: true })
     const html = `<!doctype html><meta charset="utf-8"><title>组装回放快照</title><style>body{margin:0;padding:24px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:16px;margin:0 0 6px}p{margin:0 0 14px;color:${theme.muted};font-size:12px}</style><h1>组装回放快照</h1><p>本快照只记录一次真实的 Prompt 组装事实（工作流、参数、附加技能、数据源边界），不表示工作流已被执行；结果需人工核验。</p>${full}`
-    const blob = new Blob([html], { type: 'text/html' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = 'route-replay-snapshot.html'
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+    downloadText(html, 'text/html', 'route-replay-snapshot.html')
   }
   const litSet = new Set(Array.from({ length: lit }, (_, i) => i))
   return h('div', { className: 'rk-replay', style: { border: `1px solid ${C.line}`, borderRadius: 12, padding: 12, background: C.surface, display: 'grid', gap: 10 } }, [
