@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { clientToolRegistrySource } from '../mcp/tool-registry-projection.js'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,7 +17,7 @@ const buildStats = {
   resources: catalogData.resources.length,
   direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
 }
-const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/research-context-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/promptkit-loader.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/research-taxonomy.js', 'src/lib/deposition-taxonomy.js', 'src/lib/project-organizer.js', 'src/lib/research-claims.js', 'src/lib/asset-evidence-links.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/agent-evidence-batch.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/lib/input-actions.js', 'src/lib/download.js', 'src/lib/idb.js', 'src/host-capabilities-client.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/project-organizer.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-claim-review.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/message-deposit-action.js', 'src/composer-deposit-button.js', 'src/route-replay.js', 'src/research-workbench.js', 'mcp/tool-registry.js', 'src/research-toolview.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/plugin-status.js', 'src/agent-activity.js', 'src/research-console.js', 'dsh/standalone-glue.js']
+const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/research-context-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/promptkit-loader.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/research-taxonomy.js', 'src/lib/deposition-taxonomy.js', 'src/lib/project-organizer.js', 'src/lib/research-claims.js', 'src/lib/asset-evidence-links.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/agent-evidence-batch.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/lib/input-actions.js', 'src/lib/download.js', 'src/lib/idb.js', 'src/host-capabilities-client.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/project-organizer.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-claim-review.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/message-deposit-action.js', 'src/composer-deposit-button.js', 'src/route-replay.js', 'src/research-workbench.js', '__generated:tool-registry-data', 'mcp/tool-labels.js', 'src/research-toolview.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/plugin-status.js', 'src/agent-activity.js', 'src/research-console.js', 'dsh/standalone-glue.js']
 files.splice(files.indexOf('src/lib/research-claims.js') + 1, 0, 'src/lib/research-ledger.js')
 files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/research-workspaces.js')
 files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
@@ -47,7 +48,15 @@ const promptKitEmbed = readFileSync(resolve(root, 'vendor/promptkit-embed.js'), 
 // 工件内置的 DshSessionEnhancer 是未接线的死代码，但硬编码了 PromptKit 独立插件路由；
 // 构建时统一改写为本插件路由，保证产物内不出现跨插件 fetch 路径。
 const promptKitEmbedRewritten = promptKitEmbed.replaceAll('/dsh-promptkit/semantic-enhance', '/dsh-research-kit/semantic-enhance')
-const projects = files.map(file => ({ file, source: strip(readFileSync(resolve(root, file), 'utf8')) }))
+// 客户端工具注册表只投影浏览器用得到的字段（生成物必须先于 mcp/tool-labels.js：
+// 它顶层就用 TOOL_REGISTRY 建索引，const 不提升）。
+const GENERATED_SOURCES = {
+  '__generated:tool-registry-data': () => clientToolRegistrySource(),
+}
+const projects = files.map(file => ({
+  file,
+  source: GENERATED_SOURCES[file] ? GENERATED_SOURCES[file]() : strip(readFileSync(resolve(root, file), 'utf8')),
+}))
 let body = projects.map(entry => entry.source).join('\n\n')
 // 大目录由 Node half 的同源路由按需提供。空壳保持源码模块契约不变，首次视图挂载后
 // catalog.js 会原子替换 live binding，并通知所有已挂载消费者。
