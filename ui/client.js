@@ -3589,6 +3589,52 @@ function downloadJsonFile(text, filename, options) {
 }
 
 
+// IndexedDB 小工具：工厂探测、请求转 Promise、事务壳。
+//
+// 原先这两个 store 各写一份事务壳，且知识库要反向 import 证据库模块才能拿到工厂与
+// 请求转换函数。集中到这里之后：两个 store 只保留各自的 schema 与业务语义，
+// 「事务何时算成功」只有一处实现 —— 事务未提交就 resolve，调用方会误以为写入已落盘。
+
+function indexedDbFactory() {
+  try {
+    return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
+  } catch {
+    return null
+  }
+}
+
+function requestToPromise(request) {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败'))
+  })
+}
+
+// run 收到的是事务本身（多 store 写入需要），返回值原样透出；等 oncomplete 才 resolve。
+// errorMessage / abortMessage 可覆盖：迁移类操作要给出比「事务失败」更有指向的文案。
+async function withTransaction(db, storeNames, mode, run, {
+  errorMessage = 'IndexedDB 事务失败',
+  abortMessage = 'IndexedDB 事务被中止',
+} = {}) {
+  const tx = db.transaction(storeNames, mode)
+  // 先挂完成回调再执行 run：run 自己抛错时事务同样会中止，
+  // 那时才挂回调就会漏掉这次中止（IndexedDB 的回调是异步的，正常路径看不出差别）。
+  const settled = new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error || new Error(errorMessage))
+    tx.onabort = () => reject(tx.error || new Error(abortMessage))
+  })
+  settled.catch(() => {}) // run 抛错时由这里兜住，避免未处理的拒绝
+  const value = await run(tx)
+  await settled
+  return value
+}
+
+function withObjectStore(db, storeName, mode, run) {
+  return withTransaction(db, storeName, mode, tx => run(tx.objectStore(storeName)))
+}
+
+
 // 宿主能力探测的浏览器端消费：拉取 Node half 的 /dsh-research-kit/host-capabilities，
 // 把探测结果汇总成一行事实摘要（装配了哪些服务、连了哪些 MCP 服务器）。
 //
@@ -4526,23 +4572,6 @@ const WORKSPACES_STORE = 'researchWorkspaces'
 const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
-// indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
-// 导出而非复制——构建器把全部模块拼进同一作用域，同名顶层函数会静默覆盖。
-function indexedDbFactory() {
-  try {
-    return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
-  } catch {
-    return null
-  }
-}
-
-function requestToPromise(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败'))
-  })
-}
-
 // 「当前项目」是工作上下文而非证据数据，体积恒定，放 localStorage 更合适：
 // 视图初始化时可同步读取，不必等 IndexedDB 打开。localStorage 不可用时退回进程内变量。
 function readStoredProject() {
@@ -4624,14 +4653,7 @@ function createEvidenceVaultStore() {
   const withStore = async (mode, run, storeName = STORE) => {
     const db = await connect()
     if (!db) return undefined
-    const tx = db.transaction(storeName, mode)
-    const value = await run(tx.objectStore(storeName))
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
-      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
-    })
-    return value
+    return withObjectStore(db, storeName, mode, run)
   }
 
   // 内存降级路径的 link 存储：与 IndexedDB 路径行为一致（去重按稳定 id）。
@@ -4949,16 +4971,12 @@ function createEvidenceVaultStore() {
       if (dryRun) return snapshot
       const db = await connect()
       if (db) {
-        const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
-        for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
-        for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
-        for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
-        for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = resolve
-          tx.onerror = () => reject(tx.error || new Error('证据项目迁移失败'))
-          tx.onabort = () => reject(tx.error || new Error('证据项目迁移中止'))
-        })
+        await withTransaction(db, [STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite', tx => {
+          for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
+          for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
+          for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
+          for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
+        }, { errorMessage: '证据项目迁移失败', abortMessage: '证据项目迁移中止' })
       } else {
         memory = [...evidenceAfter, ...memory.filter(item => !map.has(item.project))]
         memoryLinks = [...linksAfter, ...memoryLinks.filter(item => !map.has(item.project))]
@@ -5252,14 +5270,7 @@ function createKnowledgeStore() {
   const withStore = async (storeName, mode, run) => {
     const db = await connect()
     if (!db) return undefined
-    const tx = db.transaction(storeName, mode)
-    const value = await run(tx.objectStore(storeName))
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
-      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
-    })
-    return value
+    return withObjectStore(db, storeName, mode, run)
   }
 
   const readNodes = async () => {
@@ -5322,14 +5333,10 @@ function createKnowledgeStore() {
       if (dryRun) return snapshot
       const db = await connect()
       if (db) {
-        const tx = db.transaction([KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite')
-        for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
-        for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = resolve
-          tx.onerror = () => reject(tx.error || new Error('知识项目迁移失败'))
-          tx.onabort = () => reject(tx.error || new Error('知识项目迁移中止'))
-        })
+        await withTransaction(db, [KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite', tx => {
+          for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
+          for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
+        }, { errorMessage: '知识项目迁移失败', abortMessage: '知识项目迁移中止' })
       } else {
         memory.nodes = [...nodesAfter, ...memory.nodes.filter(item => !map.has(item.project))]
         memory.claims = [...claimsAfter, ...memory.claims.filter(item => !map.has(item.project))]

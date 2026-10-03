@@ -3,7 +3,7 @@ import {
   KNOWLEDGE_STATUSES, KNOWLEDGE_KINDS, KNOWLEDGE_ENTITY_KINDS,
   knowledgeKeyFor,
 } from './lib/knowledge-extract.js'
-import { indexedDbFactory, requestToPromise } from './evidence-vault-store.js'
+import { indexedDbFactory, requestToPromise, withObjectStore, withTransaction } from './lib/idb.js'
 
 // 自动沉淀知识库持久化：IndexedDB 双 store（nodes / claims）。
 //
@@ -234,14 +234,7 @@ export function createKnowledgeStore() {
   const withStore = async (storeName, mode, run) => {
     const db = await connect()
     if (!db) return undefined
-    const tx = db.transaction(storeName, mode)
-    const value = await run(tx.objectStore(storeName))
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
-      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
-    })
-    return value
+    return withObjectStore(db, storeName, mode, run)
   }
 
   const readNodes = async () => {
@@ -304,14 +297,10 @@ export function createKnowledgeStore() {
       if (dryRun) return snapshot
       const db = await connect()
       if (db) {
-        const tx = db.transaction([KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite')
-        for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
-        for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = resolve
-          tx.onerror = () => reject(tx.error || new Error('知识项目迁移失败'))
-          tx.onabort = () => reject(tx.error || new Error('知识项目迁移中止'))
-        })
+        await withTransaction(db, [KNOWLEDGE_NODE_STORE, KNOWLEDGE_CLAIM_STORE], 'readwrite', tx => {
+          for (const row of nodesAfter) tx.objectStore(KNOWLEDGE_NODE_STORE).put(row)
+          for (const row of claimsAfter) tx.objectStore(KNOWLEDGE_CLAIM_STORE).put(row)
+        }, { errorMessage: '知识项目迁移失败', abortMessage: '知识项目迁移中止' })
       } else {
         memory.nodes = [...nodesAfter, ...memory.nodes.filter(item => !map.has(item.project))]
         memory.claims = [...claimsAfter, ...memory.claims.filter(item => !map.has(item.project))]

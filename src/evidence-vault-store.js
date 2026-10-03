@@ -3,6 +3,7 @@ import { normalizeAssetEvidenceLink } from './lib/asset-evidence-links.js'
 import { normalizeResearchClaim } from './lib/research-claims.js'
 import { normalizeResearchLedgerEvent } from './lib/research-ledger.js'
 import { normalizeWorkspaceName, workspaceForProject, workspaceIdForProject } from './lib/research-workspaces.js'
+import { indexedDbFactory, requestToPromise, withObjectStore, withTransaction } from './lib/idb.js'
 
 // 证据库持久化：IndexedDB 最小 schema。
 //
@@ -27,23 +28,6 @@ const WORKSPACES_STORE = 'researchWorkspaces'
 // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
 const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
-
-// indexedDB 工厂与请求转 Promise 也被 knowledge-store（自动沉淀知识库）复用：
-// 导出而非复制——构建器把全部模块拼进同一作用域，同名顶层函数会静默覆盖。
-export function indexedDbFactory() {
-  try {
-    return typeof globalThis !== 'undefined' && globalThis.indexedDB ? globalThis.indexedDB : null
-  } catch {
-    return null
-  }
-}
-
-export function requestToPromise(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error || new Error('IndexedDB 请求失败'))
-  })
-}
 
 // 「当前项目」是工作上下文而非证据数据，体积恒定，放 localStorage 更合适：
 // 视图初始化时可同步读取，不必等 IndexedDB 打开。localStorage 不可用时退回进程内变量。
@@ -126,14 +110,7 @@ export function createEvidenceVaultStore() {
   const withStore = async (mode, run, storeName = STORE) => {
     const db = await connect()
     if (!db) return undefined
-    const tx = db.transaction(storeName, mode)
-    const value = await run(tx.objectStore(storeName))
-    await new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error || new Error('IndexedDB 事务失败'))
-      tx.onabort = () => reject(tx.error || new Error('IndexedDB 事务被中止'))
-    })
-    return value
+    return withObjectStore(db, storeName, mode, run)
   }
 
   // 内存降级路径的 link 存储：与 IndexedDB 路径行为一致（去重按稳定 id）。
@@ -451,16 +428,12 @@ export function createEvidenceVaultStore() {
       if (dryRun) return snapshot
       const db = await connect()
       if (db) {
-        const tx = db.transaction([STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite')
-        for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
-        for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
-        for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
-        for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
-        await new Promise((resolve, reject) => {
-          tx.oncomplete = resolve
-          tx.onerror = () => reject(tx.error || new Error('证据项目迁移失败'))
-          tx.onabort = () => reject(tx.error || new Error('证据项目迁移中止'))
-        })
+        await withTransaction(db, [STORE, LINKS_STORE, CLAIMS_STORE, LEDGER_STORE], 'readwrite', tx => {
+          for (const row of evidenceAfter) tx.objectStore(STORE).put(row)
+          for (const row of linksAfter) tx.objectStore(LINKS_STORE).put(row)
+          for (const row of claimsAfter) tx.objectStore(CLAIMS_STORE).put(row)
+          for (const row of ledgerAfter) tx.objectStore(LEDGER_STORE).put(row)
+        }, { errorMessage: '证据项目迁移失败', abortMessage: '证据项目迁移中止' })
       } else {
         memory = [...evidenceAfter, ...memory.filter(item => !map.has(item.project))]
         memoryLinks = [...linksAfter, ...memoryLinks.filter(item => !map.has(item.project))]
