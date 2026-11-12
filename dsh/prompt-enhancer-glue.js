@@ -11,6 +11,7 @@ import { itemById, loadBrowserCatalog, subscribeCatalog } from '../src/catalog.j
 import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
 import { C, GlobalStyle } from '../src/theme.js'
+import { bodyPortal } from '../src/lib/overlay-anchor.js'
 import { IconButton } from '../src/ui.js'
 import { ResearchDepositButton, QUICK_ENHANCER_POSITION_KEY } from '../src/composer-deposit-button.js'
 import { useEntryMode, ENTRY_MODE_FLOATING } from '../src/entry-mode.js'
@@ -237,26 +238,28 @@ export function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) 
   const viewportHeight = Number(window.innerHeight) || 0
   const x = Number.isFinite(Number(stored?.x)) ? Number(stored.x) : Math.max(24, viewportWidth - 86)
   const y = Number.isFinite(Number(stored?.y)) ? Number(stored.y) : Math.max(96, viewportHeight - 158)
+  const fab = React.createElement('div', {
+    key: 'fab',
+    'data-research-kit': 'draft-enhancer-fallback',
+    'data-state': state,
+    style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
+  }, React.createElement(IconButton, {
+    name: 'sparkles',
+    label,
+    size: 18,
+    active: failed,
+    onClick,
+    style: {
+      width: 44, height: 44, borderRadius: '50%',
+      border: `1px solid ${failed ? C.amber : C.line}`,
+      background: C.surface, color: failed ? C.amber : C.muted,
+      boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+    },
+  }))
+  // fixed 浮层必须挂到 body：0.2.2-rc.1 的 composer seat 成了 fixed 后代的 containing block。
   return React.createElement(React.Fragment, null, [
     React.createElement(GlobalStyle, { key: 'style' }),
-    React.createElement('div', {
-      key: 'fab',
-      'data-research-kit': 'draft-enhancer-fallback',
-      'data-state': state,
-      style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
-    }, React.createElement(IconButton, {
-      name: 'sparkles',
-      label,
-      size: 18,
-      active: failed,
-      onClick,
-      style: {
-        width: 44, height: 44, borderRadius: '50%',
-        border: `1px solid ${failed ? C.amber : C.line}`,
-        background: C.surface, color: failed ? C.amber : C.muted,
-        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
-      },
-    })),
+    bodyPortal(fab, 'fab'),
   ])
 }
 

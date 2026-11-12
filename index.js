@@ -20,6 +20,21 @@ import { promptKitClientRoute } from './dsh/promptkit-client.js'
 export const inject = ['webServer', 'web', 'llm', 'sessions']
 export { Config }
 
+// DSH 0.2.2 起宿主把「用户为下一步选定的模型」记为 durable selection（`agent.model.current()`），
+// `agent.options.provider/model` 只是没记录选择时的兜底路由。这里优先读 selection，读不到再退回
+// options——0.2.1 及更早的宿主没有 `agent.model`，可选链让这段在旧宿主上是恒 undefined，不抛错。
+// 只取 provider/model 标识，不持有 Key，也不缓存 selection（用户随时可能切模型）。
+function readAgentSelection(agent) {
+  try {
+    const selection = typeof agent?.model?.current === 'function' ? agent.model.current() : undefined
+    const provider = selection?.provider
+    const model = selection?.model
+    return provider && model ? { provider, model } : null
+  } catch {
+    return null
+  }
+}
+
 // 会话模型路由的惰性兜底：agent/created 只在插件已加载后触发，
 // 若插件在会话创建之后才启用（或热重载），该会话永远不会补发事件，增强会误报
 // 「尚未建立模型路由」。故在缓存未命中时向 ctx.sessions 反查一次。
@@ -31,7 +46,10 @@ function resolveRouteFromSessions(sessions, sessionId) {
     const session = typeof sessions.get === 'function' ? sessions.get(sessionId)
       : typeof sessions.resolve === 'function' ? sessions.resolve(sessionId)
         : sessions[sessionId]
-    const options = session?.agent?.options || session?.options
+    const agent = session?.agent
+    const selected = readAgentSelection(agent)
+    if (selected) return selected
+    const options = agent?.options || session?.options
     const provider = options?.provider
     const model = options?.model
     return provider && model ? { provider, model } : null
@@ -42,11 +60,19 @@ function resolveRouteFromSessions(sessions, sessionId) {
 
 function createSessionRoutes(sessions) {
   const known = new Map()
+  const agents = new Map()
   return {
     set(sessionId, route) { known.set(sessionId, route) },
-    delete(sessionId) { known.delete(sessionId) },
-    clear: () => known.clear(),
+    // 保存 agent 才能在每次读取时问宿主要「当前选择」；仅存 provider/model 会漏掉运行中的切换。
+    track(sessionId, agent) { if (agent) agents.set(sessionId, agent) },
+    delete(sessionId) { known.delete(sessionId); agents.delete(sessionId) },
+    clear() { known.clear(); agents.clear() },
     get(sessionId) {
+      const selected = readAgentSelection(agents.get(sessionId))
+      if (selected) {
+        known.set(sessionId, selected)
+        return selected
+      }
       if (known.has(sessionId)) return known.get(sessionId)
       const fallback = resolveRouteFromSessions(sessions, sessionId)
       // 缓存兜底结果，避免每次增强都反查宿主。
@@ -66,11 +92,17 @@ export function apply(ctx, config = Config({})) {
   const routes = createSessionRoutes(ctx.sessions)
   ctx.effect(() => {
     ctx.on('agent/created', ({ agent }) => {
+      const sessionId = String(agent?.session?.id ?? '')
+      if (!sessionId) return
+      routes.track(sessionId, agent)
       const provider = agent?.options?.provider
       const model = agent?.options?.model
-      if (provider && model) routes.set(String(agent.session.id), { provider, model })
+      if (provider && model) routes.set(sessionId, { provider, model })
     })
-    ctx.on('agent/disposed', ({ agent }) => routes.delete(String(agent.session.id)))
+    ctx.on('agent/disposed', ({ agent }) => {
+      // 事件处理器里任何异常都会冒到宿主事件循环；会话访问器抛错时只放弃这次清理（clear 兜底）。
+      try { routes.delete(String(agent?.session?.id ?? '')) } catch { /* 清理尽力而为 */ }
+    })
     return () => routes.clear()
   }, 'dsh-research-kit session model routes')
   ctx.effect(() => ctx.webServer.register(semanticEnhanceRoute({ llm: ctx.llm, routes, logger })), 'dsh-research-kit semantic enhancement')

@@ -140,7 +140,8 @@ dsh-research-kit/
 │   │   ├── runs.js                # 研究运行、护照与人工检查点
 │   │   └── shared.js              # 证据字段投影与多源文献去重（跨工具共享）
 │   ├── state/                     # 运行状态与产物
-│   │   ├── checkpoint-manager.js   # 管道检查点与人工审批
+│   │   ├── checkpoint-manager.js   # 管道检查点与人工审批（权威顺序：先事实、后投影）
+│   │   ├── checkpoint-facts.js     # 检查点只追加事实日志：seq 链、摘要、重放
 │   │   ├── claim-ledger.js         # 显式科研 Claim 台账：认识论状态与证据引用，不存正文
 │   │   ├── material-passport.js    # 跨会话状态快照（护照 YAML）
 │   │   ├── research-context-pack.js # Claim/证据/验证回执的有界只读上下文包
@@ -225,7 +226,7 @@ dsh-research-kit/
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
 │       ├── manual-qa-count.mjs      # MANUAL-QA 章节「N 项」的自洽判定（条目可写为表格行或小节标题；含章节数/条目总数下限）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 555 项测试（76 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 598 项测试（77 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）
@@ -437,18 +438,23 @@ vendor 为 SHA 锁定工件不可改，因此由 `dsh/prompt-studio-glue.js` 的
 
 预设是「指导组合」，不是能力开关——不自动执行任何工具，不改变宿主能力。
 
-### 3.1 打开工作台与浏览资源
+### 3.1 回到会话与浏览资源
 
 ```text
 DSH 加载 ui/client.js
   → ModuleLoader 执行 researchKitApply(ctx)
   → 在 conversation.view 注册“科研工作台”
-  → 用户打开工作台
+  → [Plugins 详情页「回到会话」] src/lib/host-navigation.js 解出主区当前会话
+      → uiWorkspace.openSession(sessionId)（同步 retain，把主区切回 Conversation）
+      → 尽力 uiConversation.binding(sessionId).activate('dsh-research-kit-console')
+  → 用户打开工作台（视图标签仍由宿主会话状态决定：此前停在工作台则直接恢复，否则先落在默认对话视图）
   → 默认「发现」分区只加载目录 JSON；进入依赖资产 provider 的分区时再加载 PromptKit 同源脚本（各消费者共享单例 Promise）
   → ResearchWorkbench 从已加载 catalog 数据读取资源
   → searchCatalog({ query, type }) 返回列表
   → itemById(selectedId) 返回右侧详情
 ```
+
+两条宿主服务都软探测（`ctx.get` 缺失即降级），且**不写进** `dsh.client.inject`：缺 `uiWorkspace` 只会让「回到会话」按钮不渲染（缺 `uiConversation.binding` 时按钮照常渲染、只跳过视图激活），都不会让插件装载失败。顺序不可交换——`openSession` 之后 `binding(id)` 才是当前代；先 binding 会因会话未激活而抛错。`activate()` 只把目标加入会话的活跃目标集，**不选中标签**（宿主会话 store 的 `s.view` 决定渲染哪个视图，跨页无公开写入口）；因此入口只承诺「切回当前会话」，详见 [COMPATIBILITY.md](COMPATIBILITY.md) §4。
 
 目录数据构建为独立的 `ui/catalog-data.json`，工作台首次挂载后经同源 `/dsh-research-kit/catalog-data` 路由加载；并发消费者共享同一个 Promise。这样主 JS 不再解析 800KB 级目录对象。更新目录后必须重新执行 `npm run build`。
 
@@ -465,6 +471,12 @@ DSH 加载 ui/client.js
   → inputActions.setDraft(finalPrompt)
   → [仅发送按钮] inputActions.submit()
   → DSH 将 Prompt 交给当前会话 / 当前模型 / 已配置工具
+
+[“在新会话开始”]
+  → 同一套组装与校验
+  → src/lib/host-navigation.js 先探测 uiWorkspace.startSession + conversation.input.requestDraftInitialization（通道 0.2.1-rc.1+，whenDraftExists 语义 rc.3+）
+  → uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })
+  → 宿主把 prompt 预填为草稿（不自动发送）；研究运行以 sessionId='' 记录（发起会话未知）
 ```
 
 `finalPrompt` 的优先级是：用户编辑后的 Prompt > 根据当前字段值新组装的 Prompt。手动编辑后，字段和技能勾选的后续变更**不会**自动改写正文；UI 必须显示这一状态，并提供“恢复自动生成”操作。资源切换或当前筛选使所选条目失效时，必须切换到当前结果集的第一项并清空编辑态，避免把上一个工作流的内容错误发送。

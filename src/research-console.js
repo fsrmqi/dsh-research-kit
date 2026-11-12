@@ -24,7 +24,7 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
   home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, embedded: true }),
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, launchSession: props.launchSession, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。

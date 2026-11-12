@@ -2,6 +2,7 @@ import React from 'react'
 import { h, C } from './theme.js'
 import { Icon } from './lib/icons.js'
 import { depositLatestAssistantMessage } from './knowledge-deposition.js'
+import { bodyPortal } from './lib/overlay-anchor.js'
 
 // 手动沉淀伴生钮：贴着对话增强器的浮动按钮停靠（用户要求「往对话增强器按钮上放一个」）。
 // vendored QuickEnhancer 的触发钮是 44px 浮动圆钮、位置持久化在 localStorage；
@@ -97,7 +98,9 @@ export function ResearchDepositButton() {
   }
 
   if (!position) return null
-  return h(React.Fragment, null, [
+  // 悬浮钮与状态条都是 position: fixed：必须 portal 到 body，否则 0.2.2-rc.1 起会被
+  // composer seat 的 transform containing block 带偏（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+  return bodyPortal(h(React.Fragment, null, [
     status ? h('div', {
       key: 'status',
       role: 'status',
@@ -130,5 +133,5 @@ export function ResearchDepositButton() {
       onMouseEnter: event => { event.currentTarget.style.transform = 'scale(1.06)' },
       onMouseLeave: event => { event.currentTarget.style.transform = 'none' },
     }, h(Icon, { name: 'sparkles', size: 18 })),
-  ])
+  ]))
 }

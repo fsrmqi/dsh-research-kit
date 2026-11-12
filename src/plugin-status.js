@@ -167,20 +167,25 @@ export function ResearchKitDiagnosticsAction({ subject }) {
 
 /**
  * 本插件唯一对话视图的 id。必须与 dsh/slot-registry.js 的 RESEARCH_SLOTS 条目一致，
- * 否则「打开工作台」会请求一个宿主不认识、因而不予选中的视图（单测断言两者相等）。
+ * 否则导航请求会指向一个宿主不认识、因而不予激活的视图（单测断言两者相等）。
  */
 export const RESEARCH_KIT_CONSOLE_VIEW = 'dsh-research-kit-console'
 
 /**
- * 请求宿主把主区切到科研工作台视图（宿主 side：`uiConversation.openView`）。
- * sessionId 传 undefined 表示「主区当前持有的那个会话」，由宿主解析 ——
- * 插件详情页与对话挂载树无关，拿到会话 id 的合法途径只有宿主自己。
- * @param {unknown} openView 宿主注入的视图导航；缺失时为 undefined。
- * @returns {boolean} 宿主是否接受了请求（false = 无可展示会话或视图未注册）。
+ * 请求宿主把主区切回当前会话（「回到会话」按钮）。
+ *
+ * 导航面（见 src/lib/host-navigation.js）：`uiWorkspace.openSession(当前会话)` 切回主区，再尽力
+ * `uiConversation.binding(id).activate('dsh-research-kit-console')` 激活该视图的数据源。**不承诺选中
+ * 视图标签**：标签是宿主会话 store 的 `s.view`，跨页没有公开的选中入口；只有该会话此前停在科研工作台
+ * （宿主持久化了这个选择）时才会一并恢复。详情页与对话挂载树无关，「当前会话」由会话列表快照里的
+ * `retainedBy.mainView` 解出。
+ *
+ * @param {unknown} open 已绑好服务的打开动作；通道缺失时为 undefined（按钮据此整块不渲染）。
+ * @returns {boolean} 是否已把主区切回会话（false = 通道缺失、无会话或宿主拒绝）。
  */
-export function researchKitOpenWorkbench(openView) {
-  if (typeof openView !== 'function') return false
-  return openView(undefined, RESEARCH_KIT_CONSOLE_VIEW) !== false
+export function researchKitOpenWorkbench(open) {
+  if (typeof open !== 'function') return false
+  try { return open() !== false } catch { return false }
 }
 
 /**
@@ -236,19 +241,19 @@ export function ResearchKitPresetConfig({ view, form }) {
 }
 
 /**
- * Plugins 页头部动作：跳到对话区里的科研工作台。
- * 宿主需同时提供 `uiConversation.openView`（跨页选中视图）与主区可见的会话；
+ * Plugins 页头部动作：把主区切回当前会话。
+ * 导航面由 src/lib/host-navigation.js 软探测（`uiWorkspace.openSession`；视图激活为加分项）；
  * 通道缺失时整个按钮不渲染 —— 留一个点了毫无反应的死按钮比没有更糟。
- * 宿主补通道的方式见 docs/PRODUCT.md 的集成边界表。
+ * 宿主集成边界见 docs/PRODUCT.md 的集成边界表。
  */
-export function ResearchKitOpenWorkbenchAction({ subject, openView }) {
+export function ResearchKitOpenWorkbenchAction({ subject, open }) {
   const [denied, setDenied] = React.useState(false)
   const timer = React.useRef(null)
   React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   if (!isResearchBundle(subject)) return null
-  if (typeof openView !== 'function') return null
-  const open = () => {
-    if (researchKitOpenWorkbench(openView)) return
+  if (typeof open !== 'function') return null
+  const handle = () => {
+    if (researchKitOpenWorkbench(open)) return
     if (timer.current) clearTimeout(timer.current)
     setDenied(true)
     timer.current = setTimeout(() => setDenied(false), 2000)
@@ -256,8 +261,8 @@ export function ResearchKitOpenWorkbenchAction({ subject, openView }) {
   return h(React.Fragment, null, [
     h(GlobalStyle, { key: 'style' }),
     h(Button, {
-      key: 'open', size: 'sm', variant: 'ghost', icon: 'layers', onClick: open,
-      title: '把主区切回当前会话并打开「科研工作台」视图；宿主未提供跨页视图导航时不显示此按钮。',
-    }, denied ? '暂不可用' : '打开工作台'),
+      key: 'open', size: 'sm', variant: 'ghost', icon: 'layers', onClick: handle,
+      title: '把主区切回当前会话；该会话此前停在科研工作台时会一并恢复该视图。宿主未提供会话导航服务时不显示此按钮。',
+    }, denied ? '暂不可用' : '回到会话'),
   ])
 }

@@ -104,6 +104,57 @@ test('流式语义增强：会话模型路由可驱动 SSE 逐段推送并给出
   assert.equal(response2.status, 503)
 })
 
+test('模型路由（DSH 0.2.2）：优先读 agent.model.current() 的 durable 选择，options 只是兜底', async () => {
+  const { listeners, registered, ctx } = makeContext()
+  const calls = []
+  ctx.llm = { async *stream(options) {
+    calls.push(options)
+    yield { type: 'text-delta', text: '[DIAG] concept_clarity: 足够\n[DIAG] hidden_premise: [OK]\n[DIAG] falsifiability: [OK]\n[DIAG] actionability: 可行\n[DIAG] context_fit: 契合\n===PROMPT===\n改写' }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  } }
+  apply(ctx)
+  // 0.2.2 的形状：options 是兜底路由，model.current() 才是用户选中的那条。
+  listeners.get('agent/created')({ agent: {
+    session: { id: 's2' },
+    options: { provider: 'fallback', model: 'fallback-model' },
+    model: { current: () => ({ provider: 'recorded', model: 'recorded-model', reasoningEffort: 'high' }) },
+  } })
+  const route = registered.find(item => item.path === SEMANTIC_ENHANCE_STREAM_PATH)
+  const response = sseResponse()
+  const request = {
+    method: 'POST', url: `${SEMANTIC_ENHANCE_STREAM_PATH}?session_id=s2`, on() {}, off() {},
+    async *[Symbol.asyncIterator]() { yield JSON.stringify({ draft: '请改写这段研究草稿', lang: 'zh' }) },
+  }
+  await route.handler(request, response)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].provider, 'recorded')
+  assert.equal(calls[0].model, 'recorded-model')
+  const doneFrame = response.chunks.join('').split('\n\n').find(frame => frame.startsWith('event: done'))
+  assert.equal(JSON.parse(doneFrame.split('\ndata: ')[1]).model, 'recorded-model')
+})
+
+test('模型路由：model.current() 缺失或抛错时退回 options（0.2.1 及更早的宿主形状）', async () => {
+  for (const agentModel of [undefined, { current: () => { throw new Error('not recorded') } }, { current: () => ({}) }]) {
+    const { listeners, registered, ctx } = makeContext()
+    const calls = []
+    ctx.llm = { async *stream(options) {
+      calls.push(options)
+      yield { type: 'text-delta', text: '[DIAG] concept_clarity: 足够\n[DIAG] hidden_premise: [OK]\n[DIAG] falsifiability: [OK]\n[DIAG] actionability: 可行\n[DIAG] context_fit: 契合\n===PROMPT===\n改写' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    } }
+    apply(ctx)
+    listeners.get('agent/created')({ agent: { session: { id: 's3' }, options: { provider: 'test', model: 'test-model' }, ...agentModel === undefined ? {} : { model: agentModel } } })
+    const route = registered.find(item => item.path === SEMANTIC_ENHANCE_STREAM_PATH)
+    await route.handler({
+      method: 'POST', url: `${SEMANTIC_ENHANCE_STREAM_PATH}?session_id=s3`, on() {}, off() {},
+      async *[Symbol.asyncIterator]() { yield JSON.stringify({ draft: '请改写这段研究草稿', lang: 'zh' }) },
+    }, sseResponse())
+    assert.equal(calls.length, 1, '每种形状都应正常走完一次请求')
+    assert.equal(calls[0].provider, 'test')
+    assert.equal(calls[0].model, 'test-model')
+  }
+})
+
 test('语义增强：未注册会话路由时拒绝并给出可读错误', async () => {
   const { registered, ctx } = makeContext()
   apply(ctx)

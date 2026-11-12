@@ -1195,7 +1195,10 @@ function Notice({ tone = 'info', icon, children, style }) {
 }
 
 function Modal({ title, subtitle, onClose, footer, children, width = 660, labelledBy }) {
-  return h('div', {
+  // 弹层是 position: fixed 的全屏遮罩：必须 portal 到 body。DSH 0.2.2-rc.1 起 composer seat
+  // 有 will-change: transform，会成为 fixed 后代的 containing block；composer 槽里的选择器弹窗
+  // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+  return bodyPortal(h('div', {
     role: 'presentation',
     onMouseDown: onClose,
     style: {
@@ -1227,7 +1230,7 @@ function Modal({ title, subtitle, onClose, footer, children, width = 660, labell
       key: 'foot',
       style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, alignItems: 'center', flexWrap: 'wrap' },
     }, footer) : null,
-  ]))
+  ])))
 }
 
 function Page({ children, style }) {
@@ -3671,6 +3674,7 @@ function findConsoleSection(id, sections = RESEARCH_CONSOLE_SECTIONS) {
 // 高度上限来自会话滚动区的裁剪：滚动区 overflow-y 为 auto，超出上沿的部分不可达，
 // 故可用高度取「锚点顶边 → 滚动区顶边」，再扣掉与卡片的间隙和顶部留白。
 
+
 const POPOVER_GAP = 8           // 浮层底边与输入卡片顶边的间隙
 const POPOVER_TOP_CLEARANCE = 8 // 浮层顶边与滚动区顶边的最小留白
 const POPOVER_MAX_HEIGHT = 620  // 上限，避免大屏下浮层过长
@@ -3698,6 +3702,28 @@ function findScrollport(node) {
     element = element.parentElement
   }
   return null
+}
+
+/**
+ * 把 `position: fixed` 的浮层挂到 `document.body` 上。
+ *
+ * 为什么需要：DSH 0.2.2-rc.1 给 docked composer 的 seat 加了 `will-change: transform`，
+ * 使 seat 成为 fixed 后代的 containing block——挂在 composer 槽里的 fixed 浮层会相对 seat
+ * 偏移并被裁（宿主文档也要求 composer 内的固定浮层 portal 到 body）。绝对定位的锚定浮层
+ * （本文件上半）不受影响。
+ *
+ * SSR（react-dom/server）不支持 portal，会直接抛错；没有可 portal 的 body 时原样返回节点，
+ * 让服务端渲染与纯逻辑测试保持可用。
+ *
+ * @param {unknown} node 要挂到 body 的 React 节点
+ * @param {string} [key] 数组子节点里的 React key（portal 本身不接受元素上的 key）
+ * @returns {unknown} portal，或原节点（SSR / 无 body）
+ */
+function bodyPortal(node, key) {
+  if (node == null) return null
+  const container = typeof document === 'undefined' ? undefined : document.body
+  const portalable = container != null && container.nodeType === 1 && typeof container.addEventListener === 'function'
+  return portalable ? createPortal(node, container, key) : node
 }
 
 
@@ -3729,6 +3755,90 @@ function writeDraftText(inputActions, text, { mode = 'insert' } = {}) {
   if (typeof inputActions?.setDraft !== 'function') return { ok: false }
   inputActions.setDraft(value)
   return { ok: true, inserted: false, fallback: mode !== 'replace' }
+}
+
+
+// 宿主导航与草稿初始化（浏览器半）：把「回到会话」与「开新会话并预填草稿」收敛成可测的纯函数。
+//
+// 用到的宿主公开 API：
+//   - `uiWorkspace.openSession(target)`   切换主区到指定会话（同步 retain）；
+//   - `uiConversation.binding(id).activate(view)` 把目标视图加入该会话的活跃目标集（**不是**选中标签页，
+//     见下）；
+//   - `uiWorkspace.startSession(ws, options)` 新建会话并预填草稿（`prompt` 自 0.2.1-rc.1 起，
+//     `whenDraftExists` 自 0.2.1-rc.3 起被识别），草稿初始化由 `conversation.input.requestDraftInitialization` 承担。
+//
+// 视图标签是宿主自己的 UI 状态：会话 store 的 `s.view` 决定渲染哪个视图，`binding.activate()` 只保证该目标
+// 的数据源被激活。因此跨页无法可靠地「选中科研工作台标签」——只有该会话此前停在科研工作台（宿主持久化了这个
+// 选择）时，回到会话才会一并恢复。入口文案按这个事实写「回到会话」，不承诺选标签。
+//
+// 服务是否装配仍要软探测：旧宿主 / 无 UI 装配时返回 false，调用方按「该入口不渲染」降级，
+// 绝不让探测反过来打断插件装载（与 dsh/optional-service.js 的三条规则一致；本文件进浏览器产物，
+// 因此不 import 宿主半区的 optional-service）。
+
+/** 在会话列表快照里找主区当前持有的会话；宿主内置客户端也这样取（DocumentTitle / ui-open-in-app）。 */
+function currentMainSessionId(sessions) {
+  try {
+    const state = sessions?.list?.getSnapshot?.()
+    const rows = state?.byId && typeof state.byId === 'object' ? state.byId : {}
+    for (const row of Object.values(rows)) {
+      if (Number(row?.retainedBy?.mainView ?? 0) > 0 && typeof row?.id === 'string' && row.id) return row.id
+    }
+  } catch { /* 快照不可读时按「没有当前会话」处理 */ }
+  return ''
+}
+
+/**
+ * 把主区切回当前会话，并尽力把科研工作台视图标记为活跃目标。
+ *
+ * 顺序不能反：`openSession` 同步 retain 目标会话并把主区切回 Conversation，之后
+ * `binding(id)` 才是「当前代」；先 binding 会抛 `inactive session`。
+ *
+ * @returns 是否已把主区切回会话；通道缺失或没有当前会话时为 false（调用方据此提示降级）。
+ */
+function returnToConversation({ uiWorkspace, uiConversation, sessions, view } = {}) {
+  if (typeof uiWorkspace?.openSession !== 'function') return false
+  const sessionId = currentMainSessionId(sessions)
+  if (!sessionId) return false
+  try {
+    uiWorkspace.openSession(sessionId)
+  } catch { return false }
+  // 视图激活是加分项：宿主没有绑定服务、或该视图尚未注册时不得把「已切回会话」判成失败。
+  try {
+    const binding = typeof uiConversation?.binding === 'function' ? uiConversation.binding(sessionId) : null
+    if (typeof binding?.activate === 'function') binding.activate(String(view ?? ''))
+  } catch { /* 标签选中由宿主持久化状态决定，这里失败不影响导航结果 */ }
+  return true
+}
+
+/**
+ * 宿主是否支持「开新会话并把内容预填成草稿」。
+ *
+ * 探测两条：`uiWorkspace.startSession`（承载 `prompt`）与 **`conversation` 服务**的
+ * `input.requestDraftInitialization`（真正写草稿的通道；注意不是 `uiConversation`——它没有 `input`）。
+ * 两者都自 DSH 0.2.1-rc.1 起存在；0.1.7 / 0.2.0 线缺失，因此这两条线不显示该入口。
+ * `whenDraftExists` 语义需 0.2.1-rc.3+：更早宿主会保留已有草稿（本入口新开会话、草稿为空，照常预填）。
+ */
+function supportsSessionLaunch({ uiWorkspace, conversation } = {}) {
+  return typeof uiWorkspace?.startSession === 'function'
+    && typeof conversation?.input?.requestDraftInitialization === 'function'
+}
+
+/**
+ * 开一个新会话并预填研究提示词（不自动发送）。
+ *
+ * `whenDraftExists` 默认 `append`：0.2.1-rc.3+ 上已有文字/内联引用保留原文并另起段落追加，附件始终保留；
+ * 更早宿主不识别该字段，按「已有草稿则保留」处理。
+ *
+ * @returns 是否已发出导航请求；提示词为空或通道缺失时为 false，调用方据此提示降级。
+ */
+function launchResearchSession({ uiWorkspace, conversation } = {}, { prompt, whenDraftExists = 'append' } = {}) {
+  const text = String(prompt ?? '')
+  if (!text.trim()) return false
+  if (!supportsSessionLaunch({ uiWorkspace, conversation })) return false
+  try {
+    uiWorkspace.startSession(undefined, { prompt: text, whenDraftExists })
+    return true
+  } catch { return false }
 }
 
 
@@ -10238,7 +10348,9 @@ function ResearchDepositButton() {
   }
 
   if (!position) return null
-  return h(React.Fragment, null, [
+  // 悬浮钮与状态条都是 position: fixed：必须 portal 到 body，否则 0.2.2-rc.1 起会被
+  // composer seat 的 transform containing block 带偏（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+  return bodyPortal(h(React.Fragment, null, [
     status ? h('div', {
       key: 'status',
       role: 'status',
@@ -10271,7 +10383,7 @@ function ResearchDepositButton() {
       onMouseEnter: event => { event.currentTarget.style.transform = 'scale(1.06)' },
       onMouseLeave: event => { event.currentTarget.style.transform = 'none' },
     }, h(Icon, { name: 'sparkles', size: 18 })),
-  ])
+  ]))
 }
 
 
@@ -10638,7 +10750,7 @@ function highlightCatalogText(value, term) {
   return [...parts, text.slice(offset)]
 }
 
-function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, embedded = false }) {
+function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, launchSession, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
@@ -10790,20 +10902,39 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   )
   const listGroups = React.useMemo(() => deferredQuery.trim() && !isSpecialView ? [{ category: '按相关性排序', rows: listEntries }] : groupEntriesByCategory(listEntries), [listEntries, deferredQuery, isSpecialView])
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
-  const recordUse = (status = 'draft') => {
+  // 研究运行的 sessionId 记录「由哪个会话发起」。开新会话这条路发起时新会话 id 还不可知
+  // （宿主 startSession 只返回 void），传空串如实表示「发起会话未知」，不冒充当前会话。
+  const recordUse = (status = 'draft', { runSessionId = sessionId } = {}) => {
     if (!workflow) return
     // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
     setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
     if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
     return startResearchRun({
-      project: getActiveProject(), sessionId, workflowId: workflow.id, workflowName: workflow.name,
+      project: getActiveProject(), sessionId: runSessionId, workflowId: workflow.id, workflowName: workflow.name,
       stages: taskPlan?.stages || [], status,
     })
   }
   const runPrompt = (run, prompt) => run
     ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 research_evidence_save、research_run_export），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
     : prompt
+  // 「在新会话开始」：宿主 0.2.1-rc.1 起有草稿预填通道，`whenDraftExists`（默认 append，不覆盖已有文字）
+  // 自 0.2.1-rc.3 起被识别；更早的宿主（0.1.7 / 0.2.0 线）没有该通道，入口不渲染，避免点了没反应。
+  const startNewSession = () => {
+    if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
+    if (typeof launchSession !== 'function') return setNotice('当前宿主版本不支持开新会话并预填草稿；请改用“写入输入框”或“复制 Prompt”。')
+    if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法开始新会话。')
+    try {
+      composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
+      const run = recordUse('draft', { runSessionId: '' })
+      if (!launchSession({ prompt: runPrompt(run, finalPrompt) })) {
+        return setNotice(`宿主未接受开新会话请求；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建，可改用“写入输入框”。`)
+      }
+      // 0.2.1-rc.3+ 才识别 whenDraftExists：更早宿主遇到已有草稿会整段保留（此时提示词不会写入），
+      // 所以提示语只说「已请求预填」，不承诺输入框里一定出现正文。
+      setNotice(`已请求在新会话预填研究运行${run ? `「${run.workflowName}」` : ''}的提示词；请切到新会话确认（目标会话已有草稿时，较早宿主会保留原草稿）。`)
+    } catch (error) { setNotice(error.message) }
+  }
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
     if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
@@ -11041,6 +11172,9 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
             h('div', { key: 'actions', style: { display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' } }, [
               h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '写入输入框'),
               h(Button, { key: 'send', variant: 'primary', icon: 'send', disabled: !hasSubmitAction, onClick: send }, '发送到当前会话'),
+              typeof launchSession === 'function'
+                ? h(Button, { key: 'new-session', variant: 'ghost', icon: 'layers', onClick: startNewSession }, '在新会话开始')
+                : null,
               h(Button, { key: 'copy', variant: 'ghost', icon: 'copy', onClick: copyPrompt }, '复制 Prompt'),
               (workflow.placeholders || []).length || editedPrompt !== null
                 ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: clearForm }, '清空表单')
@@ -11620,26 +11754,28 @@ function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
   const viewportHeight = Number(window.innerHeight) || 0
   const x = Number.isFinite(Number(stored?.x)) ? Number(stored.x) : Math.max(24, viewportWidth - 86)
   const y = Number.isFinite(Number(stored?.y)) ? Number(stored.y) : Math.max(96, viewportHeight - 158)
+  const fab = React.createElement('div', {
+    key: 'fab',
+    'data-research-kit': 'draft-enhancer-fallback',
+    'data-state': state,
+    style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
+  }, React.createElement(IconButton, {
+    name: 'sparkles',
+    label,
+    size: 18,
+    active: failed,
+    onClick,
+    style: {
+      width: 44, height: 44, borderRadius: '50%',
+      border: `1px solid ${failed ? C.amber : C.line}`,
+      background: C.surface, color: failed ? C.amber : C.muted,
+      boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
+    },
+  }))
+  // fixed 浮层必须挂到 body：0.2.2-rc.1 的 composer seat 成了 fixed 后代的 containing block。
   return React.createElement(React.Fragment, null, [
     React.createElement(GlobalStyle, { key: 'style' }),
-    React.createElement('div', {
-      key: 'fab',
-      'data-research-kit': 'draft-enhancer-fallback',
-      'data-state': state,
-      style: { position: 'fixed', left: x, top: y, zIndex: 20001, display: 'flex' },
-    }, React.createElement(IconButton, {
-      name: 'sparkles',
-      label,
-      size: 18,
-      active: failed,
-      onClick,
-      style: {
-        width: 44, height: 44, borderRadius: '50%',
-        border: `1px solid ${failed ? C.amber : C.line}`,
-        background: C.surface, color: failed ? C.amber : C.muted,
-        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
-      },
-    })),
+    bodyPortal(fab, 'fab'),
   ])
 }
 
@@ -11936,20 +12072,25 @@ function ResearchKitDiagnosticsAction({ subject }) {
 
 /**
  * 本插件唯一对话视图的 id。必须与 dsh/slot-registry.js 的 RESEARCH_SLOTS 条目一致，
- * 否则「打开工作台」会请求一个宿主不认识、因而不予选中的视图（单测断言两者相等）。
+ * 否则导航请求会指向一个宿主不认识、因而不予激活的视图（单测断言两者相等）。
  */
 const RESEARCH_KIT_CONSOLE_VIEW = 'dsh-research-kit-console'
 
 /**
- * 请求宿主把主区切到科研工作台视图（宿主 side：`uiConversation.openView`）。
- * sessionId 传 undefined 表示「主区当前持有的那个会话」，由宿主解析 ——
- * 插件详情页与对话挂载树无关，拿到会话 id 的合法途径只有宿主自己。
- * @param {unknown} openView 宿主注入的视图导航；缺失时为 undefined。
- * @returns {boolean} 宿主是否接受了请求（false = 无可展示会话或视图未注册）。
+ * 请求宿主把主区切回当前会话（「回到会话」按钮）。
+ *
+ * 导航面（见 src/lib/host-navigation.js）：`uiWorkspace.openSession(当前会话)` 切回主区，再尽力
+ * `uiConversation.binding(id).activate('dsh-research-kit-console')` 激活该视图的数据源。**不承诺选中
+ * 视图标签**：标签是宿主会话 store 的 `s.view`，跨页没有公开的选中入口；只有该会话此前停在科研工作台
+ * （宿主持久化了这个选择）时才会一并恢复。详情页与对话挂载树无关，「当前会话」由会话列表快照里的
+ * `retainedBy.mainView` 解出。
+ *
+ * @param {unknown} open 已绑好服务的打开动作；通道缺失时为 undefined（按钮据此整块不渲染）。
+ * @returns {boolean} 是否已把主区切回会话（false = 通道缺失、无会话或宿主拒绝）。
  */
-function researchKitOpenWorkbench(openView) {
-  if (typeof openView !== 'function') return false
-  return openView(undefined, RESEARCH_KIT_CONSOLE_VIEW) !== false
+function researchKitOpenWorkbench(open) {
+  if (typeof open !== 'function') return false
+  try { return open() !== false } catch { return false }
 }
 
 /**
@@ -12005,19 +12146,19 @@ function ResearchKitPresetConfig({ view, form }) {
 }
 
 /**
- * Plugins 页头部动作：跳到对话区里的科研工作台。
- * 宿主需同时提供 `uiConversation.openView`（跨页选中视图）与主区可见的会话；
+ * Plugins 页头部动作：把主区切回当前会话。
+ * 导航面由 src/lib/host-navigation.js 软探测（`uiWorkspace.openSession`；视图激活为加分项）；
  * 通道缺失时整个按钮不渲染 —— 留一个点了毫无反应的死按钮比没有更糟。
- * 宿主补通道的方式见 docs/PRODUCT.md 的集成边界表。
+ * 宿主集成边界见 docs/PRODUCT.md 的集成边界表。
  */
-function ResearchKitOpenWorkbenchAction({ subject, openView }) {
+function ResearchKitOpenWorkbenchAction({ subject, open }) {
   const [denied, setDenied] = React.useState(false)
   const timer = React.useRef(null)
   React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
   if (!isResearchBundle(subject)) return null
-  if (typeof openView !== 'function') return null
-  const open = () => {
-    if (researchKitOpenWorkbench(openView)) return
+  if (typeof open !== 'function') return null
+  const handle = () => {
+    if (researchKitOpenWorkbench(open)) return
     if (timer.current) clearTimeout(timer.current)
     setDenied(true)
     timer.current = setTimeout(() => setDenied(false), 2000)
@@ -12025,9 +12166,9 @@ function ResearchKitOpenWorkbenchAction({ subject, openView }) {
   return h(React.Fragment, null, [
     h(GlobalStyle, { key: 'style' }),
     h(Button, {
-      key: 'open', size: 'sm', variant: 'ghost', icon: 'layers', onClick: open,
-      title: '把主区切回当前会话并打开「科研工作台」视图；宿主未提供跨页视图导航时不显示此按钮。',
-    }, denied ? '暂不可用' : '打开工作台'),
+      key: 'open', size: 'sm', variant: 'ghost', icon: 'layers', onClick: handle,
+      title: '把主区切回当前会话；该会话此前停在科研工作台时会一并恢复该视图。宿主未提供会话导航服务时不显示此按钮。',
+    }, denied ? '暂不可用' : '回到会话'),
   ])
 }
 
@@ -12525,7 +12666,7 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
   home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, embedded: true }),
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, launchSession: props.launchSession, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
@@ -12676,9 +12817,28 @@ function ResearchConsole(props) {
 
 
 function researchKitApply(ctx) {
+  // 可选宿主服务只软探测（与 dsh/optional-service.js 同一规则）：写进 dsh.client.inject 会让缺该
+  // 服务的旧宿主拒绝装载整个插件；这里缺任何一个都只是让对应入口降级/不渲染。
+  // 草稿初始化通道在 `conversation` 服务上（`uiConversation` 没有 input），别把两者混为一谈。
+  const hostNavigation = {
+    uiWorkspace: ctx.get?.('uiWorkspace'),
+    uiConversation: ctx.get?.('uiConversation'),
+    conversation: ctx.get?.('conversation'),
+    sessions: ctx.sessions,
+  }
+  // Plugins 详情页「回到会话」：主区切回当前会话（视图标签由宿主持久化状态决定，跨页无法代选）。
+  // 通道缺失时按钮整块不渲染 —— 留一个点了没反应的死按钮比没有更糟。
+  const openConversation = typeof hostNavigation.uiWorkspace?.openSession === 'function'
+    ? () => returnToConversation({ ...hostNavigation, view: RESEARCH_KIT_CONSOLE_VIEW })
+    : null
+  // 开新会话并预填草稿：0.2.1-rc.1 起有 prompt 通道，whenDraftExists 语义 0.2.1-rc.3 起
+  // （0.1.7 / 0.2.0 线没有该通道，因此不显示入口）。
+  const launchSession = supportsSessionLaunch(hostNavigation)
+    ? input => launchResearchSession(hostNavigation, input)
+    : null
   // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
   function ResearchConsoleHost(props) {
-    return React.createElement(ResearchConsole, props)
+    return React.createElement(ResearchConsole, { ...props, launchSession })
   }
   // 组件数组顺序与 slot-registry.js 的 RESEARCH_SLOTS 一一对应。
   const components = [
@@ -12704,17 +12864,12 @@ function researchKitApply(ctx) {
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-diagnostics',
   }, ResearchKitDiagnosticsAction)))
-  // 跨页跳转（详情页 → 对话区「科研工作台」）依赖宿主公开的视图导航服务。
-  // 与 Node half 的 ctx.get?.('tools') 同法软探测：旧宿主没有该服务时按钮整块不渲染，
-  // 插件照常加载 —— 不把它写进 inject 列表，避免旧宿主因缺少服务而拒绝加载整个插件。
-  const conversationViews = ctx.get?.('uiConversation')
-  const openWorkbenchView = typeof conversationViews?.openView === 'function'
-    ? (sessionId, view, focus) => conversationViews.openView(sessionId, view, focus)
-    : null
+  // 跨页跳转（详情页 → 当前会话）依赖宿主公开的会话导航服务；服务探测在
+  // src/lib/host-navigation.js 里，通道缺失时按钮整块不渲染、插件照常加载。
   disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-open-workbench',
-  }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, openView: openWorkbenchView }))))
+  }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, open: openConversation }))))
   disposers.push(ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
     name: 'plugins.row.config', key: 'dsh-research-kit#dsh-research-kit',
   }, ResearchKitPresetConfig)))

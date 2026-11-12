@@ -241,8 +241,9 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 
 **恢复或推进运行**
 1. `research_run_status` — 参数示例：`{ run_id: 'run-1a2b3c' }`
-2. `research_run_checkpoint_approve` — 参数示例：`{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认' }`
-3. `research_run_export` — 参数示例：`{ run_id: 'run-1a2b3c', current_stage: 'synthesis', workflow_id: 'review-paper' }`
+2. `research_run_checkpoint_status` — 参数示例：`{ run_id: 'run-1a2b3c', explain: true }`
+3. `research_run_checkpoint_approve` — 参数示例：`{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认', expected_seq: 3 }`
+4. `research_run_export` — 参数示例：`{ run_id: 'run-1a2b3c', current_stage: 'synthesis', workflow_id: 'review-paper' }`
 
 **生成 AI 使用披露**
 1. `research_disclosure_list_policies` — 参数示例：`{}`

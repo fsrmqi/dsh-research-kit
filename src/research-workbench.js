@@ -128,7 +128,7 @@ function highlightCatalogText(value, term) {
   return [...parts, text.slice(offset)]
 }
 
-export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, embedded = false }) {
+export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, launchSession, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
@@ -280,20 +280,39 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   )
   const listGroups = React.useMemo(() => deferredQuery.trim() && !isSpecialView ? [{ category: '按相关性排序', rows: listEntries }] : groupEntriesByCategory(listEntries), [listEntries, deferredQuery, isSpecialView])
   // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
-  const recordUse = (status = 'draft') => {
+  // 研究运行的 sessionId 记录「由哪个会话发起」。开新会话这条路发起时新会话 id 还不可知
+  // （宿主 startSession 只返回 void），传空串如实表示「发起会话未知」，不冒充当前会话。
+  const recordUse = (status = 'draft', { runSessionId = sessionId } = {}) => {
     if (!workflow) return
     // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
     setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
     if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
     return startResearchRun({
-      project: getActiveProject(), sessionId, workflowId: workflow.id, workflowName: workflow.name,
+      project: getActiveProject(), sessionId: runSessionId, workflowId: workflow.id, workflowName: workflow.name,
       stages: taskPlan?.stages || [], status,
     })
   }
   const runPrompt = (run, prompt) => run
     ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 research_evidence_save、research_run_export），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
     : prompt
+  // 「在新会话开始」：宿主 0.2.1-rc.1 起有草稿预填通道，`whenDraftExists`（默认 append，不覆盖已有文字）
+  // 自 0.2.1-rc.3 起被识别；更早的宿主（0.1.7 / 0.2.0 线）没有该通道，入口不渲染，避免点了没反应。
+  const startNewSession = () => {
+    if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
+    if (typeof launchSession !== 'function') return setNotice('当前宿主版本不支持开新会话并预填草稿；请改用“写入输入框”或“复制 Prompt”。')
+    if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法开始新会话。')
+    try {
+      composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
+      const run = recordUse('draft', { runSessionId: '' })
+      if (!launchSession({ prompt: runPrompt(run, finalPrompt) })) {
+        return setNotice(`宿主未接受开新会话请求；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建，可改用“写入输入框”。`)
+      }
+      // 0.2.1-rc.3+ 才识别 whenDraftExists：更早宿主遇到已有草稿会整段保留（此时提示词不会写入），
+      // 所以提示语只说「已请求预填」，不承诺输入框里一定出现正文。
+      setNotice(`已请求在新会话预填研究运行${run ? `「${run.workflowName}」` : ''}的提示词；请切到新会话确认（目标会话已有草稿时，较早宿主会保留原草稿）。`)
+    } catch (error) { setNotice(error.message) }
+  }
   const write = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
     if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法写入提示词。可改用“复制 Prompt”。')
@@ -531,6 +550,9 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
             h('div', { key: 'actions', style: { display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' } }, [
               h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '写入输入框'),
               h(Button, { key: 'send', variant: 'primary', icon: 'send', disabled: !hasSubmitAction, onClick: send }, '发送到当前会话'),
+              typeof launchSession === 'function'
+                ? h(Button, { key: 'new-session', variant: 'ghost', icon: 'layers', onClick: startNewSession }, '在新会话开始')
+                : null,
               h(Button, { key: 'copy', variant: 'ghost', icon: 'copy', onClick: copyPrompt }, '复制 Prompt'),
               (workflow.placeholders || []).length || editedPrompt !== null
                 ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: clearForm }, '清空表单')

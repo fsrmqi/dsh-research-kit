@@ -119,50 +119,58 @@ test('Desktop 与 Claim 契约检查覆盖路由、会话传递与自定义协�
   assert.match(bundle, /发布检查并导出/)
 })
 
-test('跳转动作向宿主请求当前会话的科研工作台视图', () => {
+test('跳转动作把当前会话切回主区（视图选中由宿主决定，不在此承诺）', () => {
   const calls = []
-  const accepted = (sessionId, view, focus) => { calls.push([sessionId, view, focus]); return true }
+  const accepted = () => { calls.push(1); return true }
   assert.equal(researchKitOpenWorkbench(accepted), true)
-  // sessionId 留空 = 由宿主解析「主区当前持有的会话」；详情页拿不到会话 id，也不该去猜。
-  assert.deepEqual(calls, [[undefined, RESEARCH_KIT_CONSOLE_VIEW, undefined]])
-  // 宿主拒绝（无会话 / 视图未注册）时如实返回 false，UI 据此给 2 秒短提示。
+  // 参数为空：会话解析与导航都封装在 src/lib/host-navigation.js 里，详情页只负责触发。
+  assert.deepEqual(calls, [1])
+  // 没有主区会话 / 宿主拒绝或抛错时如实返回 false，UI 据此给 2 秒短提示。
   assert.equal(researchKitOpenWorkbench(() => false), false)
+  assert.equal(researchKitOpenWorkbench(() => { throw new Error('inactive session') }), false)
   assert.equal(researchKitOpenWorkbench(undefined), false)
-  assert.equal(researchKitOpenWorkbench({ openView: () => true }), false)
+  assert.equal(researchKitOpenWorkbench({ open: () => true }), false)
 })
 
 test('跳转目标视图 id 与 slot-registry 注册完全一致', () => {
   const registry = readFileSync(new URL('../dsh/slot-registry.js', import.meta.url), 'utf8')
   assert.ok(
     registry.includes(`slot: 'conversation.view', id: '${RESEARCH_KIT_CONSOLE_VIEW}'`),
-    'RESEARCH_KIT_CONSOLE_VIEW 必须与 RESEARCH_SLOTS 的 conversation.view 条目一致，否则宿主不予选中',
+    'RESEARCH_KIT_CONSOLE_VIEW 必须与 RESEARCH_SLOTS 的 conversation.view 条目一致，否则导航会指向宿主不认识、因而不予激活的视图',
   )
   assert.ok(bundle.includes(`const RESEARCH_KIT_CONSOLE_VIEW = '${RESEARCH_KIT_CONSOLE_VIEW}'`))
 })
 
-test('没有宿主视图导航时不渲染跳转按钮，有通道才渲染', () => {
+test('没有宿主导航通道时不渲染跳转按钮，有通道才渲染', () => {
   // 通道缺失时整块不渲染：留个点了没反应的死按钮比没有更糟。
   assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject })), '')
-  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, openView: 'nope' })), '')
-  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: foreignBundle, openView: () => true })), '')
-  const markup = renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, openView: () => true }))
-  assert.match(markup, /打开工作台/)
-  assert.match(markup, /跨页视图导航/)
+  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, open: 'nope' })), '')
+  assert.equal(renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: foreignBundle, open: () => true })), '')
+  const markup = renderToStaticMarkup(React.createElement(ResearchKitOpenWorkbenchAction, { subject: researchSubject, open: () => true }))
+  // 文案如实：只承诺「回到会话」，不承诺跨页选中视图标签（宿主没有该公开入口）。
+  assert.match(markup, /回到会话/)
+  assert.doesNotMatch(markup, /打开工作台/)
+  assert.match(markup, /会话导航/)
 })
 
-test('跨页跳转是软探测：不写进客户端 inject 列表，且已在 seam 清单里登记为可选', () => {
+test('会话导航是软探测：不写进客户端 inject 列表，且宿主 seam 覆盖两条公开 API', () => {
   // 客户端 inject 清单硬编码在构建脚本里；新增服务若写进去，旧宿主的客户端会因缺服务拒绝加载整插件。
   assert.ok(bundle.includes("inject: ['slots', 'sessions']"), '产物必须保持最小 inject 列表')
+  assert.match(glue, /ctx\.get\?\.\('uiWorkspace'\)/)
   assert.match(glue, /ctx\.get\?\.\('uiConversation'\)/)
+  // 草稿初始化在 `conversation` 服务上（`uiConversation` 没有 input）——探错服务会让入口恒不渲染。
+  assert.match(glue, /ctx\.get\?\.\('conversation'\)/)
   assert.ok(glue.includes('dsh-research-kit-open-workbench'))
-  // 可选 seam 必须标 optional：宿主不提供时按钮不该渲染，也不该让兼容性检查失败。
-  assert.match(seamData, /id: 'view-navigation'/)
-  assert.match(seamData, /optional: true/)
-  assert.match(seamData, /binding\(source: SessionBinding \| SessionId\)/)
-  // 当前接线仍指向宿主不存在的 openView —— 这是已登记的缺口（KNOWN_GAPS 的绊线守着它），
-  // 修好之后绊线测试会失败，提醒同步删除缺口记录与文档。
-  assert.match(seamData, /id: 'cross-page-view-navigation'/)
-  assert.match(seamData, /conversationViews\.openView\(/)
+  // 导航面已从「宿主不存在的 openView」换成真实 API（openSession + binding/activate），
+  // 对应的两条 seam 都是必需项，排在 HOST_SEAMS 里由九条基线逐条核对。
+  assert.match(seamData, /id: 'workspace-session-navigation'/)
+  assert.match(seamData, /openSession\(target: SessionTarget\): void/)
+  assert.match(seamData, /id: 'conversation-view-activation'/)
+  assert.match(seamData, /binding\(source: SessionBinding \| SessionId\): ConversationBinding/)
+  assert.match(seamData, /activate\(target: string\): void/)
+  assert.doesNotMatch(seamData, /id: 'view-navigation'/)
+  assert.doesNotMatch(seamData, /id: 'cross-page-view-navigation'/)
+  assert.doesNotMatch(glue, /conversationViews\.openView\(/)
 })
 
 test('预设是原子写入的 ops，字段集合与 dsh/config.js 逐个对齐', () => {

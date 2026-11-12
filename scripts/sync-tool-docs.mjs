@@ -35,7 +35,7 @@ const TASK_GUIDES = [
   },
   {
     task: '恢复或推进运行',
-    chain: ['research_run_status', 'research_run_checkpoint_approve', 'research_run_export'],
+    chain: ['research_run_status', 'research_run_checkpoint_status', 'research_run_checkpoint_approve', 'research_run_export'],
   },
   {
     task: '生成 AI 使用披露',

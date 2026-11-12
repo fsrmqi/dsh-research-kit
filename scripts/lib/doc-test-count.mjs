@@ -27,7 +27,7 @@ const TEST_COUNT_PATTERNS = [
   { file: 'docs/ARCHITECTURE.md', re: /(\d+) 项测试（(\d+) 个测试文件/, label: '架构文档' },
   { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项 \/ (\d+) 个测试文件/, label: '开发手册命令段' },
   { file: 'docs/DEVELOPMENT.md', re: /仓库内 (\d+) 项测试/, label: '开发手册正文' },
-  { file: 'docs/COMPATIBILITY.md', re: /每个基线恒定 (\d+) 个用例/, label: '兼容性矩阵每基线用例数', constant: 5 },
+  { file: 'docs/COMPATIBILITY.md', re: /每个基线恒定 (\d+) 个用例/, label: '兼容性矩阵每基线用例数', constant: 4 },
 ]
 
 /**

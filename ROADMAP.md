@@ -159,18 +159,20 @@
 
 **后续候选（按痛点登记，未定案）**：P1 草稿三出口互不知情（最小解：写入成功提示带来源标签 + 当前草稿前 N 字预览，不新增出口）；P2 目录「浏览型」缺下一步动线（注意：推荐下一步工作流 `recommendedWorkflowsForResources` 已存在于输入框弹层，工作台侧未接入——先复用再新造）；P9 领域预设「假全局」（最小解：分区①常驻条 + 目录默认收窄到相关类目，不碰工坊）；P6 核验激励（挂点在 P5：核验状态决定边的视觉权重）；P8 开启说明的防御性措辞精简（小活）。
 
-### 13. DSH 兼容性矩阵与两条已知缺口（矩阵已落地 · 2026-09-28）
+### 13. DSH 兼容性矩阵与已知缺口（矩阵已落地 · 2026-09-28；缺口 1 已于 2026-10-30 修复）
 
-**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：4 个基线 tag、11 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
+**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：11 个基线 tag、12 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
 同批补上「门禁可信度」：seam 清单与产物 require 提取各有冻结清单与空转守卫（此前平台模块检查因只认双引号而恒真、删两条无 slot 的 seam 仍全绿）、源码来源自证绑 git tag/HEAD（已解包副本只算未自证）、覆盖率棘轮加上测试规模只许涨（比值型覆盖率挡不住"删测试"）、TAP 汇总行解析要求唯一（锁住"Node 会转义用例输出"这层隐形依赖）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
-**已知缺口 1 · 跨页视图导航**：Plugins 详情页的「打开工作台」按钮在已发布的 0.1.7 与 `0.2.0-rc.1`/`rc.2` 上不渲染。`dsh/standalone-glue.js` 适配的是 `uiConversation.openView(sessionId, view, focus)`，而这些发布没有该方法，探测结果为 `undefined`；按钮整体缺席而非报错。
+**已知缺口 1 · 跨页视图导航（已修复 · 2026-10-30）**：旧接线探测服务级 `uiConversation.openView(sessionId, view, focus?)`，而已发布的 0.1.7、`0.2.0-rc.1`/`rc.2` 与 `0.2.1-rc.1`～`rc.5` 都没有该方法，按钮一直静默缺席。核对宿主源码后确认真正可用的公开导航面是 `uiWorkspace.openSession(target)`（切回主区，同步 retain；0.1.7 起）+ `uiConversation.binding(source).activate(target)`（把目标加入会话活跃目标集；0.1.7 起）。
 
-- **修法**：改 glue 层用 `binding(...)` + `activate(...)`，然后在真实 profile 上验证按钮真的能把主区切到科研工作台视图；不要为了让 seam 变绿而放宽 token。
-- **验收**：真实 profile 点击一次（[MANUAL-QA.md](docs/MANUAL-QA.md)）+ 修好后 `KNOWN_GAPS` 的绊线测试**必须失败**，届时同步删除本段、[COMPATIBILITY.md](docs/COMPATIBILITY.md) 的缺口表与 `scripts/lib/dsh-baselines.mjs` 里的记录。
-- **为什么不在本次直接改**：客户端接线改动属于「必须真实 profile 验收」的一类（宿主 props 形状与调用时序无法由单测证明），在无法运行真实 profile 的环境里改它只会把一个已知缺口换成一个未知缺口。
+- **实际修法**：新增 [`src/lib/host-navigation.js`](src/lib/host-navigation.js) 组合这两条 API（先从会话列表快照取 `retainedBy.mainView > 0` 的当前会话，`openSession` 之后再 `binding(id).activate(...)`；顺序反了会因会话未激活抛错）。删掉 `view-navigation` 可选 seam 与 `cross-page-view-navigation` 缺口，改由两条必需 seam（`workspace-session-navigation`、`conversation-view-activation`）逐基线核对。入口文案据此改为「回到会话」：`activate` 不选中视图标签（标签是宿主会话 store 的 `s.view`，跨页无公开写入口），因此只承诺「主区切回当前会话」，此前停在工作台时由宿主自行恢复。
+- **剩余验收**：真实 profile 点击一次（[MANUAL-QA.md](docs/MANUAL-QA.md) P4 / Desktop 新增面专项③）。单测能证明调用顺序与降级路径，不能证明目标宿主的响应；「跨页直接选中工作台标签」需要宿主提供公开入口，当前不作为插件承诺。
+- **同批**：工作台新增「在新会话开始」入口（`conversation` 服务的 `input.requestDraftInitialization` + `uiWorkspace.startSession` 的 `prompt`，DSH `0.2.1-rc.1` 起；`whenDraftExists` 语义 rc.3 起，更早按「已有草稿则保留」；`0.1.7`/`0.2.0` 线不渲染），验收见 MANUAL-QA F5。会话视图的「更多会话视图」菜单自 rc.3 起由宿主原生提供，插件不做任何注册。
+- **0.2.2 线（2026-11-06）**：`dsh-v0.2.2-rc.1` 入基线（10 条基线 × 13 条检查全部成立），peer 上界放宽到 `<0.2.3-0` 并补 `engines.dsh`。0.2.2 是 0.2.1-rc.5 的直接后继；客户端改动以新增 API 为主（另有本插件未使用的 `fileMentions` / `readAttachment` 变化），只有两处需要跟：composer seat 的 transform containing block 让插件 fixed 浮层改 portal 到 body（视觉回归），以及模型路由改读 `agent.model.current()`。跨页预选视图在 rc.1 上仍无公开入口，边界同上一条。
+- **0.2.2-rc.2（2026-11-11）**：`dsh-v0.2.2-rc.2` 入基线（11 条基线 × 13 条检查全部成立），peer 范围与 `engines.dsh` 无需改动（仍在 `<0.2.3-0` 内）。rc.2 线性包含 rc.1（merge-base 即 rc.1 tag），但改动面是整条 master 发布列车：12 条 seam 与平台模块表仍逐字成立，客户端新增 `hoc` 槽种、`conversation.hero.frame` / `conversation.chat.markdown.fence`、composer 文件粘贴路由与失败重试、`insertQuote` 可选摘要、plugin-manager Git 更新入口，均不被本插件使用；本插件依赖的 toolview / view / input / plugins props 形状未变。当前 Desktop App 与 CLI 即为 rc.2。
 
-**已知缺口 2 · `dsh.client.inject` 里的幽灵包名**：`package.json` 的 `dsh.client.inject` 含 `@deepseek-ai/dsh-client-runtime`，该名字在 0.1.7-rc.1/rc.2 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到（另两个注入项两处都能查到）。客户端产物实际只 require `react`/`react-dom`，因此不影响装载，只是「我依赖谁」失真。
+**已知缺口 2 · `dsh.client.inject` 里的幽灵包名**：`package.json` 的 `dsh.client.inject` 含 `@deepseek-ai/dsh-client-runtime`，该名字在 0.1.7/0.2.0/0.2.1 各已列 rc 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到（另两个注入项两处都能查到）。客户端产物实际只 require `react`/`react-dom`，因此不影响装载，只是「我依赖谁」失真。
 
 - **修法**：核实真实包名后替换或删除该条目；`npm run check:dsh-app` 目前已把它作为警告打印。
 - **验收**：绊线（`package.json` 里仍有该字符串）失败后同步删除记录。

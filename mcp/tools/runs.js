@@ -4,7 +4,7 @@ import { readCallLogs } from '../execution/call-logger.js'
 import { contract } from '../execution/contract.js'
 import { inventoryEvidence } from '../execution/evidence-inventory.js'
 import { err, wrap } from '../execution/wrapper.js'
-import { getCheckpointState, initializeCheckpoints, recordApproval } from '../state/checkpoint-manager.js'
+import { explainRun, getCheckpointState, initializeCheckpoints, recordApproval } from '../state/checkpoint-manager.js'
 import { buildResearchContextPack } from '../state/research-context-pack.js'
 import { exportPassport, importPassport } from '../state/material-passport.js'
 import { buildRunOverview, listRecentRuns } from '../state/run-overview.js'
@@ -228,10 +228,13 @@ export const runCheckpointTools = [
     description: 'Get the checkpoint state for a research pipeline run.',
     inputSchema: {
       run_id: z.string().describe('Run ID from research_run_export'),
+      explain: z.boolean().optional().describe('Include the append-only fact timeline that explains every checkpoint decision for this run.'),
     },
-    async execute({ run_id }) {
+    async execute({ run_id, explain }) {
       const state = await getCheckpointState(run_id)
-      return wrap(state, { source: 'checkpoint-manager', confidence: 'verified' })
+      if (!explain) return wrap(state, { source: 'checkpoint-manager', confidence: 'verified' })
+      const timeline = await explainRun(run_id)
+      return wrap({ ...state, explain: timeline }, { source: 'checkpoint-manager', confidence: 'verified' })
     },
   },
 
@@ -244,10 +247,11 @@ export const runCheckpointTools = [
       note: z.string().optional().describe('Optional note about the approval'),
       evidence_ids: z.array(z.string()).max(30).optional().describe('Evidence IDs reviewed for this approval; recorded as a validation receipt, not as automatic claim verification.'),
       validation_summary: z.string().max(500).optional().describe('Short human validation basis recorded with the checkpoint receipt.'),
+      expected_seq: z.number().int().nonnegative().optional().describe('Optional seq read from research_run_checkpoint_status; the approval is rejected with CHECKPOINT_CONFLICT if another write advanced the run since.'),
     },
-    async execute({ run_id, stage, note, evidence_ids, validation_summary }) {
+    async execute({ run_id, stage, note, evidence_ids, validation_summary, expected_seq }) {
       try {
-        const result = await recordApproval(run_id, stage, { approved_by: 'user', note, evidence_ids, validation_summary })
+        const result = await recordApproval(run_id, stage, { approved_by: 'user', note, evidence_ids, validation_summary, expected_seq })
         return wrap(result, { source: 'checkpoint-manager', confidence: 'verified' })
       } catch (e) {
         return err(e.message)

@@ -1,4 +1,5 @@
 import { h, C } from './theme.js'
+import { bodyPortal } from './lib/overlay-anchor.js'
 import { Icon } from './lib/icons.js'
 
 // 统一基础组件层。所有科研视图（工作台 / 资源选择器 / 研究资产库 / 数据库面板 / 输入框入口）
@@ -302,7 +303,10 @@ export function Notice({ tone = 'info', icon, children, style }) {
 }
 
 export function Modal({ title, subtitle, onClose, footer, children, width = 660, labelledBy }) {
-  return h('div', {
+  // 弹层是 position: fixed 的全屏遮罩：必须 portal 到 body。DSH 0.2.2-rc.1 起 composer seat
+  // 有 will-change: transform，会成为 fixed 后代的 containing block；composer 槽里的选择器弹窗
+  // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+  return bodyPortal(h('div', {
     role: 'presentation',
     onMouseDown: onClose,
     style: {
@@ -334,7 +338,7 @@ export function Modal({ title, subtitle, onClose, footer, children, width = 660,
       key: 'foot',
       style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22, alignItems: 'center', flexWrap: 'wrap' },
     }, footer) : null,
-  ]))
+  ])))
 }
 
 export function Page({ children, style }) {

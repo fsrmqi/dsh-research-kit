@@ -56,6 +56,13 @@ test('工作台对照组：宿主提供 inputActions 后两个按钮恢复可用
   assert.doesNotMatch(buttonMarkup(html, '发送到当前会话') || '', /disabled/, '发送按钮应恢复可用')
 })
 
+test('工作台：「在新会话开始」只在宿主支持草稿预填时渲染（更早宿主不留死按钮）', () => {
+  const without = render(ResearchWorkbench, { sessionId: 'r2', inputActions: hostActionsStub, embedded: true })
+  assert.doesNotMatch(without, /在新会话开始/, '宿主未提供 launchSession 时不应出现该入口')
+  const withLaunch = render(ResearchWorkbench, { sessionId: 'r2', inputActions: hostActionsStub, launchSession: () => true, embedded: true })
+  assert.match(buttonMarkup(withLaunch, '在新会话开始') || '', /<button/, '宿主支持时应渲染可点击入口')
+})
+
 test('证据库：宿主不支持写入时「写入 Prompt」按钮为禁用态', () => {
   const html = render(EvidenceVaultPane, {})
   assert.match(buttonMarkup(html, '写入 Prompt') || '', /disabled/, '宿主无 setDraft 时写入按钮应禁用')

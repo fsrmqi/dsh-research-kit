@@ -5,6 +5,7 @@ import {
   POPOVER_GAP,
   POPOVER_TOP_CLEARANCE,
   POPOVER_MAX_HEIGHT,
+  bodyPortal,
   overlayMaxHeight,
 } from '../src/lib/overlay-anchor.js'
 
@@ -89,4 +90,34 @@ test('弹层与工作台同口径记录工作流使用：写入与复制都经�
   // 会话轨迹按当前会话隔离：store 取自 sessionId，且弹窗确实接到了它。
   assert.match(source, /createEvidenceStore\(sessionId\)/)
   assert.match(source, /catalogStorage: storage, sessionId, onClose/, '弹窗未接收 sessionId')
+})
+
+test('bodyPortal：fixed 浮层在真实 body 上走 portal，SSR / 无 body 时原样返回', () => {
+  const node = { type: 'div' }
+  // 纯 Node（SSR 或逻辑测试）：没有 document，不能调用 createPortal（react-dom/server 会抛错）。
+  assert.equal(bodyPortal(node), node)
+  assert.equal(bodyPortal(null), null)
+  // 有 document 但 body 不是可挂载元素（测试桩常常如此）时同样原样返回。
+  const restoreDocument = globalThis.document
+  globalThis.document = { body: { appendChild() {} } }
+  try { assert.equal(bodyPortal(node), node) } finally { globalThis.document = restoreDocument }
+  // 真实 body 形状（nodeType 1 + addEventListener）：返回 portal 对象而非原节点。
+  const body = { nodeType: 1, addEventListener() {} }
+  globalThis.document = { body }
+  try {
+    const portal = bodyPortal(node)
+    assert.notEqual(portal, node)
+    assert.equal(typeof portal, 'object')
+    // react-dom 的 portal 对象带 containerInfo：目标容器必须正是 body 本身。
+    assert.equal(portal.containerInfo, body)
+  } finally { globalThis.document = restoreDocument }
+})
+
+test('Modal：SSR 下不调用 portal（react-dom/server 对 portal 直接抛错），弹层标记仍完整', async () => {
+  const { Modal } = await import('../src/ui.js')
+  const { createElement } = await import('react')
+  const { renderToStaticMarkup } = await import('react-dom/server')
+  const markup = renderToStaticMarkup(createElement(Modal, { title: '工作流程', onClose: () => {} }, '正文'))
+  assert.match(markup, /role="dialog"/)
+  assert.match(markup, /rk-pop/)
 })

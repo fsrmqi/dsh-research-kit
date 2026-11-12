@@ -204,7 +204,7 @@ export const TOOL_REGISTRY = [
     category: 'run', tier: 'fine', access: 'read-only', requiresConfirmation: false,
     helpRoute: 'resume', labelZh: '检查点状态',
     summaryZh: '查看管道检查点状态',
-    example: "{ run_id: 'run-1a2b3c' }",
+    example: "{ run_id: 'run-1a2b3c', explain: true }",
     artifactKind: '',
   },
   {
@@ -212,7 +212,7 @@ export const TOOL_REGISTRY = [
     category: 'run', tier: 'fine', access: 'writes', requiresConfirmation: true,
     helpRoute: 'resume', labelZh: '审批检查点',
     summaryZh: '审批检查点继续执行',
-    example: "{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认' }",
+    example: "{ run_id: 'run-1a2b3c', stage: 'literature_search', note: '人工已确认', expected_seq: 3 }",
     artifactKind: '',
   },
   {

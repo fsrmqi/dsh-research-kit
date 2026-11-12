@@ -186,7 +186,8 @@ Prompt 中的参数使用 `{topic}` 这种显式占位符。启动器只替换�
 | 插件页行配置预设 | `plugins.row.config` | 行配置里「直连研究」「Agent 辅助」两行各带一个「应用」按钮：一次带修订号的写入应用该预设的全部运行字段（含 `allowAgentFallback`），不动 profile 之外的设置；宿主拒绝写入时显示「预设未保存」而不是静默丢弃，只读或表单未就绪时禁用／不渲染。字段取值与 `presets/*.patch.yml` 由测试逐字段比对。 |
 | 插件详情页规模徽章 | `plugins.detail.badge` | 标题旁显示构建期烘焙的工作流 / 技能 / 数据源数量；不做运行时探测，不推断可用性。 |
 | 插件详情页诊断复制 | `plugins.detail.actions` | 头部「复制诊断」把版本、目录规模、能力探测与 UA 写入本机剪贴板；不上传、不含会话内容或凭据。 |
-| 插件详情页打开工作台 | `plugins.detail.actions` + 宿主 `uiConversation.openView` | 头部「打开工作台」把主区切回当前会话并选中 `dsh-research-kit-console`。宿主未提供跨页视图导航时按钮不渲染（软探测，不写进客户端 `inject` 列表）；`check:dsh-app` 按可选能力报告该通道。 |
+| 插件详情页回到会话 | `plugins.detail.actions` + 宿主 `uiWorkspace.openSession`（旁路 `uiConversation.binding().activate()`） | 头部「回到会话」把主区从 Plugins 页切回当前会话；该会话上次停在 `dsh-research-kit-console` 时随之恢复该视图。视图标签是宿主会话状态，跨页没有公开选中入口，因此**不承诺**选中标签（详见 COMPATIBILITY §4）。宿主服务软探测（`ctx.get?.()`），缺失时按钮整块不渲染，不写进客户端 `inject` 列表；`check:dsh-app` 逐基线核对导航 seam。 |
+| 工作台开新会话 | `conversation.view` + 宿主 `uiWorkspace.startSession` 的 `prompt`（`whenDraftExists` 0.2.1-rc.3+） | 工作台第三个出口「在新会话开始」把同一份组装结果预填为新会话草稿（不自动发送，`whenDraftExists: 'append'` 在 rc.3+ 保留已有输入并追加，附件始终保留）。草稿预填通道自 DSH `0.2.1-rc.1` 起，`0.1.7` / `0.2.0` 线该按钮不渲染。 |
 | 当前草稿 | `useInput` / `inputActions` | 最终 Prompt 可写入输入框，保留用户再次编辑的机会。 |
 | 发送任务 | `inputActions.submit()` | 只经宿主当前会话发送。 |
 | 文件材料 | DSH 原生 `@文件` | 插件只提示使用该能力，不重复上传功能、不读取文件内容。 |
@@ -195,7 +196,7 @@ Prompt 中的参数使用 `{topic}` 这种显式占位符。启动器只替换�
 
 `conversation.view` 与 `inputActions` 的契约随 DSH 版本演进，因此每次升级都必须按[手工验收清单](MANUAL-QA.md)在真实 profile 复验；宿主 props 变更只改 `dsh/standalone-glue.js`。
 
-Web 与 Desktop App 加载的是**同一份** `ui/client.js`（App 的页面在 `dsh-app://app/`，请求由宿主转发给本机 Web Host；`check:dsh-app` 看守三条 `desktop-*` seam），所以上表除 `uiConversation.openView` 这条可选能力外，对两种形态同样成立——正因宿主源可能是 http(s) 也可能是自定义协议，客户端只许用相对路由与 `location.href` 基准，这条边界由 `test/build-client.test.js` 看守。
+Web 与 Desktop App 加载的是**同一份** `ui/client.js`（App 的页面在 `dsh-app://app/`，请求由宿主转发给本机 Web Host；`check:dsh-app` 看守三条 `desktop-*` seam），所以上表对两种形态同样成立——正因宿主源可能是 http(s) 也可能是自定义协议，客户端只许用相对路由与 `location.href` 基准，这条边界由 `test/build-client.test.js` 看守。
 
 ## 6. 实施状态
 

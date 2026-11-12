@@ -12,10 +12,11 @@
 // 失败信息会点名是哪条 seam 变了，而不是「某处坏了」。
 //
 // 基线覆盖 0.1.7 与 0.2 线已验证的 rc。更早的 0.1.5/0.1.6 线不在范围内（宿主自身的
-// peer 准入会拒绝装载）。
+// peer 准入会拒绝装载）。0.2.2 线的 rc.1 与 rc.2 均已发布；rc.2 是当前 Desktop App 与 CLI
+// 随附的宿主，按 docs/COMPATIBILITY.md §6 增行（peer 范围已覆盖，无需改动）。
 
 /** package.json 里声明的宿主版本范围；BASELINES 的每个版本都必须落在其中。 */
-export const PEER_RANGE = '>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.1-0'
+export const PEER_RANGE = '>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0'
 
 /** 参与 compat 矩阵的宿主基线。version 必须与 tag 指向的 package.json 一致。 */
 export const BASELINES = [
@@ -43,15 +44,59 @@ export const BASELINES = [
     version: '0.2.0-rc.2',
     notes: '0.2 线最新 rc；确认既有 UI 槽位、会话事件与 Desktop 转发仍可用。',
   },
+  {
+    id: 'dsh-v0.2.1-rc.1',
+    tag: 'dsh-v0.2.1-rc.1',
+    version: '0.2.1-rc.1',
+    notes: '0.2.1 线首个 rc；0.2.1 的 toolview 注入面收窄与 DraftSnapshot 草稿模型首次出现，按此行核对它们未波及本插件。',
+  },
+  {
+    id: 'dsh-v0.2.1-rc.2',
+    tag: 'dsh-v0.2.1-rc.2',
+    version: '0.2.1-rc.2',
+    notes: '0.2.1 线第二个 rc；确认 toolview 注入面收窄、草稿模型改 DraftSnapshot 后既有 seam 仍逐字成立。',
+  },
+  {
+    id: 'dsh-v0.2.1-rc.3',
+    tag: 'dsh-v0.2.1-rc.3',
+    version: '0.2.1-rc.3',
+    notes: '0.2.1 线第三个 rc；宿主新增导航入口定制、视图固定与埋点（5ff2919 / 39d2903 / 6751649 等），确认未触及本插件注册的视图与槽位契约。',
+  },
+  {
+    id: 'dsh-v0.2.1-rc.4',
+    tag: 'dsh-v0.2.1-rc.4',
+    version: '0.2.1-rc.4',
+    notes: '0.2.1 线第四个 rc；宿主修 ACP/MCP 诊断输出与视图 tooltip（cc4446e / 41736cd / c38265a），其中 MCP 修复对本插件的 tools-only MCP server 是净收益。',
+  },
+  {
+    id: 'dsh-v0.2.1-rc.5',
+    tag: 'dsh-v0.2.1-rc.5',
+    version: '0.2.1-rc.5',
+    notes: '0.2.1 线最新 rc；rc.4 之后的发布分支。0.2.2-rc.1 直接从它切出，二者是线性后继关系。',
+  },
+  {
+    id: 'dsh-v0.2.2-rc.1',
+    tag: 'dsh-v0.2.2-rc.1',
+    version: '0.2.2-rc.1',
+    notes: '0.2.2 线首个 rc；接在 0.2.1-rc.5 之后，主机新增的客户端面与插件 API 变化见 CHANGELOG 与 docs/COMPATIBILITY.md。',
+  },
+  {
+    id: 'dsh-v0.2.2-rc.2',
+    tag: 'dsh-v0.2.2-rc.2',
+    version: '0.2.2-rc.2',
+    notes: '0.2.2 线第二个 rc，也是当前 Desktop App 与 CLI（0.2.2-rc.2）随附的宿主版本；rc.1→rc.2 的客户端契约改动均为新增（conversation.hero.frame / conversation.chat.markdown.fence 两个 hoc 槽、composer 文件粘贴路由与失败重试、insertQuote 可选摘要、plugin-manager Git 更新入口），本插件未使用；12 条 seam + 平台表逐字成立。',
+  },
 ]
 
 /**
  * 宿主契约 seam。
  *
  * - `file` + `tokens`：在宿主源码里必须**逐字**存在（`git show <tag>:<file>` 或工作树读取）。
- * - `optional: true`：宿主不提供时插件只是不显示对应入口，因此「缺失」不算失败，
- *   只如实报告可用性（不把可选能力写成必选依赖）。
- * - `slot`：声明该 seam 覆盖的槽位名，供「插件注册的槽位都有人看守」这条断言比对。
+ * - `slot` / `slots`：声明该 seam 覆盖的槽位名，供「插件注册的槽位都有人看守」这条断言比对。
+ *
+ * 全部 seam 都是必需：宿主移除任一条都会点名失败。插件对**较新宿主能力**的降级（例如
+ * 0.2.1-rc.1 起才有的「开新会话并预填草稿」通道；`whenDraftExists` 语义 rc.3 起）由运行期功能探测承担，不写成 seam ——
+ * 旧基线会把「可选」当成通过，而真正该守的是「探测到才显示入口」这条接线契约（见 PLUGIN_CONTRACTS）。
  */
 export const HOST_SEAMS = [
   {
@@ -134,16 +179,23 @@ export const HOST_SEAMS = [
     ],
   },
   {
-    // 唯一一条可选 seam，且**在全部已声明基线上都不存在**（见 KNOWN_GAPS 的
-    // cross-page-view-navigation）：它的作用不是证明宿主可用，而是「宿主哪天补上
-    // uiConversation.openView 就立刻变绿」的探测。这条恒缺失状态由
-    // test/dsh-compat-matrix.test.mjs 的 ABSENT_OPTIONAL_SEAMS 冻结——没有它，
-    // 一条永远打 ○ 的 seam 会安静地给人「12 条 seam 都在守」的错觉。
-    id: 'view-navigation',
-    label: '跨页视图导航（Plugins 详情页「打开工作台」；宿主未提供时按钮整块不渲染）',
+    // 2026-10-30 起「回到会话」改用宿主的会话导航面（此前探测的 uiConversation.openView
+    // 在全部已发布基线上都不存在，已删除该探测与对应已知缺口）：
+    // 先 uiWorkspace.openSession 切回当前会话，再 uiConversation.binding(id).activate(view)。
+    id: 'workspace-session-navigation',
+    label: '会话导航服务（Plugins 详情页「回到会话」：主区切回当前会话）',
+    file: 'packages/client/ui-workspace/src/client/navigation.ts',
+    tokens: ["super(ctx, 'uiWorkspace')", 'openSession(target: SessionTarget): void'],
+  },
+  {
+    id: 'conversation-view-activation',
+    label: '会话内视图激活（把工作台目标加入活跃集；不负责选中标签）',
     file: 'packages/client/ui-conversation/src/client/conversation/assembly.ts',
-    tokens: ['super(ctx, \'uiConversation\')', 'openView(sessionId: SessionId | undefined, view: string, focus?: string): boolean'],
-    optional: true,
+    tokens: [
+      "super(ctx, 'uiConversation')",
+      'binding(source: SessionBinding | SessionId): ConversationBinding',
+      'activate(target: string): void',
+    ],
   },
 ]
 
@@ -175,6 +227,39 @@ export const PLUGIN_CONTRACTS = [
       "'/dsh-research-kit/claim-review'",
       "'/dsh-research-kit/claim-agent-review'",
       'session_id=${encodeURIComponent(sessionId)}',
+    ],
+  },
+  {
+    id: 'host-navigation-wiring',
+    label: '「回到会话」与「在新会话开始」的宿主服务软探测',
+    file: 'dsh/standalone-glue.js',
+    tokens: [
+      "ctx.get?.('uiWorkspace')",
+      "ctx.get?.('uiConversation')",
+      // 草稿初始化通道在 `conversation` 服务上：探成 uiConversation 会让入口在任何宿主上都不渲染。
+      "ctx.get?.('conversation')",
+      'returnToConversation({ ...hostNavigation, view: RESEARCH_KIT_CONSOLE_VIEW })',
+      'launchResearchSession(hostNavigation, input)',
+      'supportsSessionLaunch(hostNavigation)',
+    ],
+  },
+  {
+    id: 'workbench-new-session-entry',
+    label: '工作台「在新会话开始」入口按宿主能力降级',
+    file: 'src/research-workbench.js',
+    tokens: [
+      "typeof launchSession === 'function'",
+      "recordUse('draft', { runSessionId: '' })",
+    ],
+  },
+  {
+    id: 'model-route-selection',
+    label: '会话模型路由优先读 0.2.2 的 durable 模型选择，旧宿主退回 options',
+    file: 'index.js',
+    tokens: [
+      'readAgentSelection(agents.get(sessionId))',
+      'agent?.model?.current',
+      'routes.track(sessionId, agent)',
     ],
   },
 ]
@@ -211,28 +296,13 @@ export function declaredSlots() {
  */
 export const KNOWN_GAPS = [
   {
-    id: 'cross-page-view-navigation',
-    seam: 'view-navigation',
-    label: 'Plugins 详情页「打开工作台」按钮在全部已声明基线上永不渲染',
-    evidence:
-      'dsh/standalone-glue.js 调用的是 uiConversation.openView(sessionId, view, focus)，'
-      + '而已声明的四条基线（0.1.7-rc.1/rc.2 与 0.2.0-rc.1/rc.2）的实际导航面都是 '
-      + 'uiConversation.binding(source: SessionBinding | SessionId) + ConversationBinding.activate(target: string)'
-      + '（packages/client/ui-conversation/src/client/conversation/assembly.ts），四条基线上都没有 openView'
-      + '（0.2 的两份 rc 已实测：`git grep "openView(sessionId"` 零命中）。探测恒为 undefined，'
-      + '按钮整块不渲染——不是崩，是静默缺席。因此 view-navigation 这条可选 seam 在四条基线上恒为缺失，'
-      + '它是「宿主何时补上该 API」的探测（见 test/dsh-compat-matrix.test.mjs 的 ABSENT_OPTIONAL_SEAMS）：'
-      + '哪天它变绿，就该修好 glue 层并回来删掉这条缺口。',
-    tripwire: { file: 'dsh/standalone-glue.js', token: 'conversationViews.openView(' },
-    trackedIn: 'ROADMAP.md',
-  },
-  {
     id: 'phantom-client-inject',
     label: 'package.json 的 dsh.client.inject 含一个宿主查无此名的模块',
     evidence:
       'dsh.client.inject 写的是其它客户端插件行的包名，宿主按依赖闭合解析。'
       + '@deepseek-ai/dsh-client-runtime 在 0.1.7-rc.1/rc.2 的工作区包名里不存在，'
       + '在宿主自带的 docs/dependency-catalog.json（@deepseek-ai/dsh@0.1.5-rc.1 的安装闭合）里同样不存在；'
+      + '0.2.0 与 0.2.1 各 rc 的工作区包名里也查无此名（compat 矩阵逐基线审计）。'
       + '另两个注入项（ui-conversation / ui-tool）两处都能查到。'
       + '客户端产物实际 require 的只有 react / react-dom，因此该条目不影响装载，只是「我依赖谁」失真。',
     tripwire: { file: 'package.json', token: '"@deepseek-ai/dsh-client-runtime"' },

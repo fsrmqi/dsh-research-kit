@@ -3,14 +3,34 @@ import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
 import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
-import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction, ResearchKitPresetConfig } from '../src/plugin-status.js'
+import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction, ResearchKitPresetConfig, RESEARCH_KIT_CONSOLE_VIEW } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
+import { launchResearchSession, returnToConversation, supportsSessionLaunch } from '../src/lib/host-navigation.js'
 
 export function researchKitApply(ctx) {
+  // 可选宿主服务只软探测（与 dsh/optional-service.js 同一规则）：写进 dsh.client.inject 会让缺该
+  // 服务的旧宿主拒绝装载整个插件；这里缺任何一个都只是让对应入口降级/不渲染。
+  // 草稿初始化通道在 `conversation` 服务上（`uiConversation` 没有 input），别把两者混为一谈。
+  const hostNavigation = {
+    uiWorkspace: ctx.get?.('uiWorkspace'),
+    uiConversation: ctx.get?.('uiConversation'),
+    conversation: ctx.get?.('conversation'),
+    sessions: ctx.sessions,
+  }
+  // Plugins 详情页「回到会话」：主区切回当前会话（视图标签由宿主持久化状态决定，跨页无法代选）。
+  // 通道缺失时按钮整块不渲染 —— 留一个点了没反应的死按钮比没有更糟。
+  const openConversation = typeof hostNavigation.uiWorkspace?.openSession === 'function'
+    ? () => returnToConversation({ ...hostNavigation, view: RESEARCH_KIT_CONSOLE_VIEW })
+    : null
+  // 开新会话并预填草稿：0.2.1-rc.1 起有 prompt 通道，whenDraftExists 语义 0.2.1-rc.3 起
+  // （0.1.7 / 0.2.0 线没有该通道，因此不显示入口）。
+  const launchSession = supportsSessionLaunch(hostNavigation)
+    ? input => launchResearchSession(hostNavigation, input)
+    : null
   // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
   function ResearchConsoleHost(props) {
-    return React.createElement(ResearchConsole, props)
+    return React.createElement(ResearchConsole, { ...props, launchSession })
   }
   // 组件数组顺序与 slot-registry.js 的 RESEARCH_SLOTS 一一对应。
   const components = [
@@ -36,17 +56,12 @@ export function researchKitApply(ctx) {
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-diagnostics',
   }, ResearchKitDiagnosticsAction)))
-  // 跨页跳转（详情页 → 对话区「科研工作台」）依赖宿主公开的视图导航服务。
-  // 与 Node half 的 ctx.get?.('tools') 同法软探测：旧宿主没有该服务时按钮整块不渲染，
-  // 插件照常加载 —— 不把它写进 inject 列表，避免旧宿主因缺少服务而拒绝加载整个插件。
-  const conversationViews = ctx.get?.('uiConversation')
-  const openWorkbenchView = typeof conversationViews?.openView === 'function'
-    ? (sessionId, view, focus) => conversationViews.openView(sessionId, view, focus)
-    : null
+  // 跨页跳转（详情页 → 当前会话）依赖宿主公开的会话导航服务；服务探测在
+  // src/lib/host-navigation.js 里，通道缺失时按钮整块不渲染、插件照常加载。
   disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-open-workbench',
-  }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, openView: openWorkbenchView }))))
+  }, props => React.createElement(ResearchKitOpenWorkbenchAction, { ...props, open: openConversation }))))
   disposers.push(ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
     name: 'plugins.row.config', key: 'dsh-research-kit#dsh-research-kit',
   }, ResearchKitPresetConfig)))

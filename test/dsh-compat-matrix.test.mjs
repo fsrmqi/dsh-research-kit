@@ -13,7 +13,7 @@
 // 第 2 层为什么不再用 { skip }：TAP 的 `# tests` 不计被 skip 的 suite，于是同一个仓库会
 // 「干净 clone 实测 459 / 有源码 469」，文档数字在对与错之间反复横跳——`check:test-count`
 // 在干净 clone 上必红，而 `prepublishOnly` 串了它，干净 clone 上连 npm publish 都会被挡。
-// 现在每个基线恒定 5 个用例：有源码就核对宿主；没源码就核对降级路径（跳过原因可读可操作、
+// 现在每个基线恒定 4 个用例：有源码就核对宿主；没源码就核对降级路径（跳过原因可读可操作、
 // 检查函数对缺失源码 fail-closed、CLI 拒绝把「没源码」当通过）。用例数不再随环境变化。
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
@@ -49,18 +49,18 @@ const REQUIRED_SEAM_IDS = [
   'chat-assistant-actions',
   'conversation-input-slots',
   'conversation-view',
+  'conversation-view-activation',
   'desktop-app-origin',
   'desktop-plugin-api-forward',
   'desktop-request-forward',
   'input-contract',
   'plugin-detail-slots',
   'tool-call-toolview',
+  'workspace-session-navigation',
 ]
-const OPTIONAL_SEAM_IDS = ['view-navigation']
-// 可选 seam 的**预期状态**：清单里的这些 seam 在全部已声明基线上都不存在，所以它们是
-// 「宿主哪天补上就变绿」的探测，不是当前可用的能力。有源码时第 2 层逐基线断言 ok === false；
-// 一旦宿主真的提供了该 API，断言会失败并点名要删掉的清单与文档——不让它从「恒 ○」悄悄变绿。
-const ABSENT_OPTIONAL_SEAMS = ['view-navigation']
+// 全部 seam 都是必需；较新宿主能力（如 0.2.1-rc.1 起的会话草稿预填；whenDraftExists 语义 rc.3 起）的降级由 PLUGIN_CONTRACTS
+// 里的「探测到才显示入口」接线断言看守，不写成可选 seam——可选 seam 在旧基线上恒绿，
+// 反而会掩盖「宿主补上了却没人用」。
 // 受支持基线的冻结清单：与上面的 seam / 槽位清单同一手法——把事实源（BASELINES）的清单
 // 在这里再抄一份当绊线。删掉一条基线、或悄悄多加一条，都必须同时改这里与文档里的「N 个基线」
 // （后者由 check-doc-stats 的规则看守）。
@@ -69,6 +69,13 @@ const DECLARED_BASELINE_IDS = [
   'dsh-v0.1.7-rc.2',
   'dsh-v0.2.0-rc.1',
   'dsh-v0.2.0-rc.2',
+  'dsh-v0.2.1-rc.1',
+  'dsh-v0.2.1-rc.2',
+  'dsh-v0.2.1-rc.3',
+  'dsh-v0.2.1-rc.4',
+  'dsh-v0.2.1-rc.5',
+  'dsh-v0.2.2-rc.1',
+  'dsh-v0.2.2-rc.2',
 ]
 const DECLARED_SLOT_NAMES = [
   'conversation.chat.assistant-actions',
@@ -90,11 +97,14 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
   test('基线数据自洽，且每个版本都落在 peerDependencies 声明的范围内', () => {
     assert.deepEqual(baselineDataProblems(), [])
     assert.equal(PACKAGE.peerDependencies['@deepseek-ai/dsh'], PEER_RANGE)
-    // peer 范围的边界书写与基线表必须一致：写 0.2.1-0 却把 0.2.1 的 tag 列进基线，
+    // 宿主 0.2.1 线起优先读 engines.dsh 并忽略 peer；两边范围不一致会出现
+    // 「peer 说支持、engines.dsh 说不支持」的静默拒绝，必须在数据层就对齐。
+    assert.equal(PACKAGE.engines.dsh, PEER_RANGE)
+    // peer 范围的边界书写与基线表必须一致：写 0.2.2-0 却把 0.2.1 的 tag 列进基线，
     // 等于「声明不支持、实际在验」，反向则是「声明支持、没人验过」。
-    assert.match(PEER_RANGE, /^>=0\.1\.7-0 <0\.1\.8-0 \|\| >=0\.2\.0-0 <0\.2\.1-0$/)
+    assert.match(PEER_RANGE, /^>=0\.1\.7-0 <0\.1\.8-0 \|\| >=0\.2\.0-0 <0\.2\.3-0$/)
     for (const baseline of BASELINES) {
-      assert.match(baseline.version, /^0\.(1\.7|2\.0)-/, `${baseline.id} 必须在 peer 范围内`)
+      assert.match(baseline.version, /^0\.(1\.7|2\.[012])-/, `${baseline.id} 必须在 peer 范围内`)
     }
   })
 
@@ -108,38 +118,19 @@ describe('compat 矩阵 —— 不依赖宿主（任何环境都跑）', () => {
       for (const token of seam.tokens) assert.ok(token.length > 1, `${seam.id} 的 token 过短，会误命中：${token}`)
     }
     assert.deepEqual(
-      HOST_SEAMS.filter(seam => !seam.optional).map(seam => seam.id).sort(),
+      HOST_SEAMS.map(seam => seam.id).sort(),
       REQUIRED_SEAM_IDS,
-      '必需 seam 清单变了：删/改 seam 必须同步这条冻结清单与 docs/COMPATIBILITY.md 的表格',
+      'seam 清单变了：删/改 seam 必须同步这条冻结清单与 docs/COMPATIBILITY.md 的表格',
     )
-    assert.deepEqual(
-      HOST_SEAMS.filter(seam => seam.optional).map(seam => seam.id).sort(),
-      OPTIONAL_SEAM_IDS,
-      '可选 seam 清单变了：必须同步这条冻结清单与 docs/COMPATIBILITY.md',
-    )
+    assert.equal(HOST_SEAMS.filter(seam => seam.optional).length, 0, '全部 seam 都是必需：可选 seam 会掩盖「宿主补上了却没人用」')
   })
 
-  test('基线清单被冻结，且可选 seam 的「恒缺失」状态挂在已知缺口上', () => {
+  test('基线清单被冻结', () => {
     assert.deepEqual(
       BASELINES.map(baseline => baseline.id).sort(),
       [...DECLARED_BASELINE_IDS].sort(),
       '受支持基线变了：必须同步这条冻结清单、KNOWN_GAPS、docs/COMPATIBILITY.md 与文档里的「N 个基线」',
     )
-    const optional = HOST_SEAMS.filter(seam => seam.optional).map(seam => seam.id)
-    for (const id of ABSENT_OPTIONAL_SEAMS) {
-      assert.ok(optional.includes(id), `${id} 已不是可选 seam：请同步 ABSENT_OPTIONAL_SEAMS 与 KNOWN_GAPS`)
-      assert.ok(
-        KNOWN_GAPS.some(gap => gap.seam === id),
-        `可选 seam ${id} 在全部基线上都缺失，必须在 KNOWN_GAPS 里有 seam: '${id}' 的记录——`
-          + '否则一条永远打 ○ 的 seam 会让人以为它还在看守什么',
-      )
-    }
-    for (const id of optional.filter(seam => !ABSENT_OPTIONAL_SEAMS.includes(seam))) {
-      assert.ok(
-        !KNOWN_GAPS.some(gap => gap.seam === id),
-        `可选 seam ${id} 不在恒缺失清单里，却挂着已知缺口：请二者取一`,
-      )
-    }
   })
 
   test('插件注册的每个槽位都在矩阵里被看守（新增槽位不许无人看守）', () => {
@@ -229,34 +220,6 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
           [],
         )
         assert.equal(outcome.required.length, REQUIRED_SEAM_IDS.length, '必需 seam 数量与冻结清单不一致')
-      })
-
-      test('可选 seam 的状态如实报告，且不参与失败判定', t => {
-        // 这条断言过去是恒真的：unavailableOptional 的定义就是 !ok && optional，断言它
-        // 「都是 optional」不可能失败。改成对探针做行为断言——探针里必需与可选 seam 都缺，
-        // 两类必须分开统计，否则「可选」会变成整体放行的借口。
-        const probe = checkHostSeams(ghost())
-        assert.ok(probe.failures.length > 0, '探针应产生必需失败，否则这条断言没有区分力')
-        assert.ok(probe.unavailableOptional.every(seam => seam.optional), '可选缺失清单里混进了必需 seam')
-        assert.ok(probe.failures.every(seam => !seam.optional), '必需失败清单里混进了可选 seam')
-        if (picked.source) {
-          const real = checkHostSeams(picked.source)
-          if (real.unavailableOptional.length) {
-            assert.equal(real.failures.length, 0, '可选 seam 缺失不得计入失败判定')
-          }
-          // 「恒 ○」必须是被断言的状态，而不是被默认接受的结果：宿主一旦补上这个 API，
-          // 这里立刻失败，逼着回去修接线并删掉缺口记录与文档。
-          for (const result of real.results.filter(seam => seam.optional)) {
-            const expected = !ABSENT_OPTIONAL_SEAMS.includes(result.id)
-            assert.equal(result.ok, expected, expected
-              ? `${baseline.id} 上可选 seam ${result.id} 应当存在：宿主提供时对应入口必须能渲染`
-              : `${baseline.id} 上可选 seam ${result.id} 已被宿主提供：请改用真实导航面修好 dsh/standalone-glue.js，`
-                + '并同步删掉 ABSENT_OPTIONAL_SEAMS、KNOWN_GAPS 的 cross-page-view-navigation、docs/COMPATIBILITY.md 与 ROADMAP.md')
-          }
-          t.diagnostic(`真实基线：可选缺失 ${real.unavailableOptional.length} 条 / 失败 ${real.failures.length} 条`)
-        } else {
-          t.diagnostic('无源码：仅验证了必需失败与可选缺失的统计分离')
-        }
       })
 
       test('浏览器模块表能回答产物的每个 require（回答不了的 require 是必然启动崩溃）', t => {
