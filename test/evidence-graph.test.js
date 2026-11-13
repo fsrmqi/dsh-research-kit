@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildEvidenceGraph, layoutEvidenceGraph, routeEvidenceEdges,
   evidenceNeighborhood, findEvidencePath,
-  encodeGraphView, decodeGraphView, clampGraphScale,
+  encodeGraphView, decodeGraphView, clampGraphScale, splitEvidenceGraphByConnectivity,
   GRAPH_SCALE_RANGE, GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT
 } from '../src/lib/evidence-graph-core.js'
 
@@ -38,6 +38,37 @@ test('已保存证据按来源库和查询来源接入图谱，且不暴露笔�
   assert.ok(graph.edges.some(edge => edge.from === 'evidence:ev1' && edge.to === 'resource:pubmed' && edge.kind === 'saved-from'))
   assert.ok(graph.edges.some(edge => edge.from === 'evidence:ev1' && edge.to === 'source:42' && edge.kind === 'saved-copy'))
   assert.ok(!JSON.stringify(graph).includes('不应进入图谱'))
+})
+
+// ── 连通性拆分：零关系图不能当成关系图绘制 ─────────────────────────────────────
+test('连通性拆分：只有孤立证据的零关系图不产生可绘制的「有关系部分」', () => {
+  const graph = buildEvidenceGraph({
+    savedEvidence: [
+      { id: 'ev1', title: '只保存未关联 A', identifier: '10.1/a' },
+      { id: 'ev2', title: '只保存未关联 B', identifier: '10.1/b' },
+    ],
+  })
+  assert.equal(graph.edges.length, 0)
+  const split = splitEvidenceGraphByConnectivity(graph)
+  assert.deepEqual(split.connected, [], '零关系图不应有任何连通节点')
+  assert.deepEqual(split.isolated.map(node => node.id).sort(), ['evidence:ev1', 'evidence:ev2'])
+  assert.deepEqual(split.edges, [])
+})
+
+test('连通性拆分：有关系节点与孤立节点互不混淆，且对半成品输入 fail-safe', () => {
+  const graph = buildEvidenceGraph({
+    resources: [{ id: 'pubmed', type: 'database', name: 'PubMed' }],
+    queries: [{ id: 'q', databaseId: 'pubmed', databaseName: 'PubMed', sources: [{ id: 's', title: '来源', url: 'https://example.test/s' }] }],
+    savedEvidence: [
+      { id: 'ev1', title: '连上来源库与查询来源', sourceDatabase: 'PubMed', identifier: '1', url: 'https://example.test/s' },
+      { id: 'ev2', title: '仍然孤立' },
+    ],
+  })
+  const split = splitEvidenceGraphByConnectivity(graph)
+  assert.ok(split.connected.some(node => node.id === 'evidence:ev1'))
+  assert.ok(split.isolated.some(node => node.id === 'evidence:ev2'))
+  assert.deepEqual([...split.connectedIds].sort(), ['evidence:ev1', 'query:q', 'resource:pubmed', 'source:s'])
+  assert.deepEqual(splitEvidenceGraphByConnectivity(null), { edges: [], connected: [], isolated: [], connectedIds: new Set() })
 })
 
 // ── 布局：确定性 + 稳定性 ─────────────────────────────────────────────────────
@@ -162,6 +193,19 @@ test('节点高度常量与端口计算基准一致', () => {
 // ── 导出脱敏（源码接线断言） ──────────────────────────────────────────────────
 // 导出物只允许消费「图上已显示的布局与路由」，绝不能回读证据库原文或笔记。
 // 纯逻辑层已断言图谱本身不含笔记，这里钉住导出没有另开一条读原文的路径。
+test('零关系图默认不画网格：组件在布局前拆分连通性，孤立节点需显式打开', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')
+  const needles = [
+    'splitEvidenceGraphByConnectivity(graph)',
+    'const hasCanvas = graph.nodes.length > 0 && displayGraph.nodes.length > 0 && (graph.edges.length > 0 || showIsolated || hasExplicitFocus)',
+    '仍要显示未关联节点',
+    '它们之间没有记录到的关系，下面的卡片只是按类型排列的网格',
+    '显示未关联节点（',
+  ]
+  for (const needle of needles) assert.ok(source.includes(needle), `缺少零关系图的接线守卫：${needle}`)
+})
+
 test('导出只消费图上已显示的布局与路由，不读取证据原文', async () => {
   const { readFile } = await import('node:fs/promises')
   const source = await readFile(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')

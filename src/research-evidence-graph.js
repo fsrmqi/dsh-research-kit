@@ -4,7 +4,7 @@ import {
   Page, PageHead, Toolbar, Button, Card, EmptyState, Modal, Notice, Segmented, Badge, Select, Textarea,
 } from './ui.js'
 import {
-  buildEvidenceGraph, EVIDENCE_NODE_COLORS,
+  buildEvidenceGraph, EVIDENCE_NODE_COLORS, splitEvidenceGraphByConnectivity,
   layoutEvidenceGraph, routeEvidenceEdges, evidenceNeighborhood, findEvidencePath,
   encodeGraphView, decodeGraphView, clampGraphScale,
   GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT, GRAPH_SCALE_RANGE
@@ -14,7 +14,9 @@ import { createEvidenceStore } from './evidence-store.js'
 import { catalog, itemById } from './catalog.js'
 import {
   evidenceVaultStore, subscribeEvidenceVault, getActiveProject, listAssetEvidenceLinks, syncEvidenceVaultWithFiles, removeEvidenceEntryFromFile,
+  clearEvidenceEntriesFromFile, publishEvidenceVault,
 } from './lib/evidence-vault-sync.js'
+import { selectTestProjects } from './lib/test-projects.js'
 import { synchronizeClaimScopes } from './lib/claim-review-client.js'
 import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
@@ -162,6 +164,11 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [knowledgeBackupOpen, setKnowledgeBackupOpen] = React.useState(false)
   const [knowledgeBackupText, setKnowledgeBackupText] = React.useState('')
   const [flowing, setFlowing] = React.useState(true)
+  // 未关联节点默认不画：它们之间没有任何关系，铺成网格只是一堵卡片墙。
+  const [showIsolated, setShowIsolated] = React.useState(false)
+  // 清理遗留测试课题：只列明显的测试/演示/探针名，并且必须由用户确认后才删除。
+  const [cleanupOpen, setCleanupOpen] = React.useState(false)
+  const [cleaning, setCleaning] = React.useState(false)
   const [view, setView] = React.useState(() => decodeGraphView(typeof window === 'undefined' ? '' : window.location.hash))
   const [pan, setPan] = React.useState({ x: 0, y: 0 })
   const [notice, setNotice] = React.useState('')
@@ -270,6 +277,9 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       ? knowledgeClaims.filter(item => visibleKnowledgeNodeIdSet.has(item.from) && visibleKnowledgeNodeIdSet.has(item.to))
       : knowledgeClaims
   ), [knowledgeClaims, visibleKnowledgeNodeIdSet, projectFilter])
+  // 测试课题候选：只从当前可见证据里汇总；真实课题名不命中（见 lib/test-projects.js）。
+  const testProjects = React.useMemo(() => selectTestProjects(savedEvidence), [savedEvidence])
+  const testProjectEntryCount = testProjects.reduce((sum, item) => sum + item.count, 0)
   const projectOptions = React.useMemo(() => {
     const names = new Set(evidenceProjects)
     for (const item of savedEvidence) { if (item.project) names.add(item.project) }
@@ -299,6 +309,27 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
     assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
   }), [graphResources, records, includeSession, includePersistent, visibleAssets, graphEvidence, knowledgeInput, assetEvidenceLinks, visibleResearchClaims])
+  // 连通性拆分基于完整图：默认只把「出现在关系里」的节点交给布局，
+  // 孤立节点（典型是只保存、尚未关联到查询来源/知识/论断的证据）单独汇总。
+  const connectivity = React.useMemo(() => splitEvidenceGraphByConnectivity(graph), [graph])
+  const displayGraph = React.useMemo(() => {
+    if (showIsolated) return graph
+    const keep = new Set(connectivity.connected.map(node => node.id))
+    // 从链接/点击定位到的节点即使孤立也必须显示，否则「聚焦某个未关联证据」会空白。
+    for (const id of [
+      view.focus, view.from, view.to, selectedKnowledgeId,
+      selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : '',
+    ]) if (id) keep.add(id)
+    return { nodes: graph.nodes.filter(node => keep.has(node.id)), edges: graph.edges }
+  }, [graph, connectivity, showIsolated, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+  const isolatedKindSummary = React.useMemo(() => {
+    const counts = new Map()
+    for (const node of connectivity.isolated) {
+      const label = GRAPH_KIND_LABELS[node.kind] || node.kind || '节点'
+      counts.set(label, (counts.get(label) || 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => `${label} ${count}`).join('、')
+  }, [connectivity])
   // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
   const highlighted = React.useMemo(() => {
     if (view.mode === 'all') return null
@@ -309,21 +340,26 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   // 性能裁剪必须发生在布局和路由之前；否则虽然 DOM 只有 300 个节点，CPU 仍会计算全图。
   // 完整图保留在 graph 中，仅在用户导出时按需布局。
   const interactiveGraph = React.useMemo(() => {
-    if (graph.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return graph
+    if (displayGraph.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return displayGraph
     const priority = new Set([
       ...(highlighted || []), view.focus, view.from, view.to, selectedKnowledgeId,
       selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : '',
     ].filter(Boolean))
     const nodes = [
-      ...graph.nodes.filter(node => priority.has(node.id)),
-      ...graph.nodes.filter(node => !priority.has(node.id)),
+      ...displayGraph.nodes.filter(node => priority.has(node.id)),
+      ...displayGraph.nodes.filter(node => !priority.has(node.id)),
     ].slice(0, GRAPH_RENDER_NODE_LIMIT)
     const ids = new Set(nodes.map(node => node.id))
-    return { ...graph, nodes, edges: graph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)) }
-  }, [graph, highlighted, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
+    return { ...displayGraph, nodes, edges: displayGraph.edges.filter(edge => ids.has(edge.from) && ids.has(edge.to)) }
+  }, [displayGraph, highlighted, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
   const layout = React.useMemo(() => layoutEvidenceGraph(interactiveGraph), [interactiveGraph])
   const routes = React.useMemo(() => routeEvidenceEdges(interactiveGraph, layout), [interactiveGraph, layout])
-  const hiddenNodeCount = graph.nodes.length - interactiveGraph.nodes.length
+  // 两种「没画」不能共用一条文案：未关联节点是设计取舍（可开关），渲染上限是性能取舍。
+  const hiddenIsolatedCount = graph.nodes.length - displayGraph.nodes.length
+  const renderLimitedCount = displayGraph.nodes.length - interactiveGraph.nodes.length
+  // 显式聚焦/路径端点即使孤立也要出画布：用户是在「定位到某个证据」，不是在浏览整图。
+  const hasExplicitFocus = Boolean(view.focus || view.from || view.to)
+  const hasCanvas = graph.nodes.length > 0 && displayGraph.nodes.length > 0 && (graph.edges.length > 0 || showIsolated || hasExplicitFocus)
 
   const scale = view.scale
   const viewWidth = layout.width / scale
@@ -466,6 +502,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   })() : null
 
   const canvas = h('svg', {
+    key: 'canvas',
     ref: frameRef,
     viewBox: `${pan.x} ${pan.y} ${viewWidth} ${viewHeight}`,
     width: '100%',
@@ -573,8 +610,10 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
 
   const exportGraph = format => {
     const theme = readGraphTheme()
-    const exportLayout = hiddenNodeCount ? layoutEvidenceGraph(graph) : layout
-    const exportRoutes = hiddenNodeCount ? routeEvidenceEdges(graph, exportLayout) : routes
+    // 导出与当前视图一致：默认不含未关联节点；若因渲染上限少画了节点，导出仍给出全部有关联部分。
+    const exportSource = renderLimitedCount ? displayGraph : interactiveGraph
+    const exportLayout = layoutEvidenceGraph(exportSource)
+    const exportRoutes = routeEvidenceEdges(exportSource, exportLayout)
     const svg = buildGraphSvgMarkup(exportLayout, exportRoutes, theme)
     if (format === 'svg') downloadGraphFile(svg, 'image/svg+xml', 'research-evidence-chain.svg')
     else downloadGraphFile(`<!doctype html><meta charset="utf-8"><title>科研证据链路</title><style>body{margin:0;padding:28px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:17px;margin:0 0 6px}p{margin:0 0 18px;opacity:.7}</style><h1>科研证据链路</h1><p>${GRAPH_EXPORT_SCOPE}</p>${svg}`, 'text/html', 'research-evidence-chain.html')
@@ -634,12 +673,43 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
+  // ── 清理遗留测试课题 ──────────────────────────────────────────────────────────
+  // 只清理「文件名与数据两侧都在」的测试证据：先删文件再删本地 IndexedDB，
+  // 两步都成功才算删掉一条；顺序不能反——先删本地会让下一次同步把文件里的旧条目
+  // 当成「本地缺失、文件有」重新导回。
+  const cleanupTestProjects = async () => {
+    if (cleaning || !testProjects.length) return
+    setCleaning(true)
+    let removedEntries = 0
+    const failures = []
+    try {
+      for (const item of testProjects) {
+        try {
+          await clearEvidenceEntriesFromFile(item.project)
+          removedEntries += await vault.removeByProject(item.project)
+        } catch (error) {
+          failures.push(`${item.project}（${error?.message || error}）`)
+        }
+      }
+      publishEvidenceVault()
+      setCleanupOpen(false)
+      const currentIsCleaned = testProjects.some(item => item.project === projectFilter)
+      if (currentIsCleaned) setProjectFilter('')
+      refreshSavedEvidence()
+      setNotice(failures.length
+        ? `已清理 ${removedEntries} 条测试证据；以下课题失败，未删除本地缓存：${failures.join('、')}。`
+        : `已清理 ${testProjects.length} 个测试课题、${removedEntries} 条证据；真实课题未受影响。`)
+    } finally {
+      setCleaning(false)
+    }
+  }
+
   const content = [
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
       title: '研究证据图谱',
-      lead: '连接本会话的资源、工作流和查询来源，并接入已保存证据与自动沉淀的研究知识；不显示检索词、原始文件、全文或笔记。箭头表示代码记录到的关系方向，不代表已核验的科学结论。可缩放、拖拽与框选范围。',
+      lead: '连接本会话的资源、工作流和查询来源，并接入已保存证据与自动沉淀的研究知识；不显示检索词、原始文件、全文或笔记。箭头表示代码记录到的关系方向，不代表已核验的科学结论。默认只绘制存在关系的节点，未关联节点只在需要时展开。可缩放、拖拽与框选范围。',
       actions: [
         h(Button, { key: 'motion', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停链路流动' : '播放链路流动'),
         h(Button, { key: 'export', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照'),
@@ -704,16 +774,34 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         ariaLabel: '按证据方向筛选图谱', style: { width: 'auto', minWidth: 110 } }),
       h('span', { key: 'nodes', style: { color: C.muted, fontSize: 13 } }, `${graph.nodes.length} 个节点`),
       h('span', { key: 'edges', style: { color: C.muted, fontSize: 13 } }, `${graph.edges.length} 条关系`),
-      h('span', { key: 'scale', style: { color: C.muted, fontSize: 13 } }, `${Math.round(scale * 100)}%`),
-      h(Button, { key: 'out', size: 'sm', variant: 'soft', disabled: scale <= GRAPH_SCALE_RANGE.min, title: '缩小', onClick: () => zoomBy(1 / 1.2) }, '缩小'),
-      h(Button, { key: 'in', size: 'sm', variant: 'soft', disabled: scale >= GRAPH_SCALE_RANGE.max, title: '放大', onClick: () => zoomBy(1.2) }, '放大'),
-      h(Button, { key: 'reset', size: 'sm', variant: 'ghost', onClick: resetView }, '复位'),
-      h('span', { key: 'hint', style: { marginLeft: 'auto', color: C.muted, fontSize: 12 } }, '按住 Ctrl / ⌘ 滚轮缩放；拖拽平移')
+      connectivity.isolated.length ? h(Button, {
+        key: 'isolated', size: 'sm', variant: showIsolated ? 'soft' : 'ghost', 'aria-pressed': showIsolated,
+        title: showIsolated
+          ? '隐藏没有关系的节点，回到只显示关系的汇总视图'
+          : '显示没有关系的节点；它们之间没有连线，只是按类型排列的卡片网格',
+        onClick: () => setShowIsolated(value => !value),
+      }, showIsolated ? `隐藏未关联节点（${connectivity.isolated.length}）` : `显示未关联节点（${connectivity.isolated.length}）`) : null,
+      hasCanvas ? h('span', { key: 'scale', style: { color: C.muted, fontSize: 13 } }, `${Math.round(scale * 100)}%`) : null,
+      hasCanvas ? h(Button, { key: 'out', size: 'sm', variant: 'soft', disabled: scale <= GRAPH_SCALE_RANGE.min, title: '缩小', onClick: () => zoomBy(1 / 1.2) }, '缩小') : null,
+      hasCanvas ? h(Button, { key: 'in', size: 'sm', variant: 'soft', disabled: scale >= GRAPH_SCALE_RANGE.max, title: '放大', onClick: () => zoomBy(1.2) }, '放大') : null,
+      hasCanvas ? h(Button, { key: 'reset', size: 'sm', variant: 'ghost', onClick: resetView }, '复位') : null,
+      hasCanvas ? h('span', { key: 'hint', style: { marginLeft: 'auto', color: C.muted, fontSize: 12 } }, '按住 Ctrl / ⌘ 滚轮缩放；拖拽平移') : null
     ]) : null,
     knowledgeDegraded ? h(Notice, { key: 'knowledge-degraded', tone: 'warn', icon: 'shield', style: { margin: '10px var(--rk-gutter) 0' } },
       '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
-    hiddenNodeCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
-      `当前图谱共有 ${graph.nodes.length} 个节点；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${hiddenNodeCount} 个未绘制）。导出仍包含完整图谱，请使用项目或生命周期筛选缩小范围。`) : null,
+    renderLimitedCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
+      `当前有关联的节点共 ${displayGraph.nodes.length} 个；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderLimitedCount} 个未绘制）。导出仍包含全部有关系节点，请使用项目或生命周期筛选缩小范围。`) : null,
+    // 有关系但也有孤立节点：默认不画它们，明确告诉读者「少了什么」，并提供一键对照。
+    hiddenIsolatedCount && graph.edges.length
+      ? h('div', { key: 'graph-isolated-hidden', style: { display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', margin: '10px var(--rk-gutter) 0' } }, [
+          h(Notice, { key: 'n', tone: 'info', icon: 'filter', style: { margin: 0, flex: '1 1 320px' } },
+            `默认只绘制有关系的节点；另有 ${hiddenIsolatedCount} 个未关联节点已隐藏${isolatedKindSummary ? `（${isolatedKindSummary}）` : ''}。`),
+          h(Button, { key: 'show', size: 'sm', variant: 'ghost', onClick: () => setShowIsolated(true) }, `显示未关联节点（${hiddenIsolatedCount}）`),
+        ]) : null,
+    // 用户显式打开孤立节点且全图没有关系：这不是图谱，必须说明它只是卡片网格。
+    showIsolated && graph.edges.length === 0 && graph.nodes.length
+      ? h(Notice, { key: 'graph-isolated-only', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
+        `正在显示 ${graph.nodes.length} 个未关联节点。它们之间没有记录到的关系，下面的卡片只是按类型排列的网格，不代表图谱结构。`) : null,
     // 图例：只列图上实际出现的节点类型，随图动态增减；自动沉淀开启时附带最近一次沉淀摘要。
     graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
       [
@@ -728,8 +816,27 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       ]) : null,
     notice ? h(Notice, { key: 'notice', tone: 'info', style: { margin: '0 var(--rk-gutter) 12px' } }, notice) : null,
     graph.nodes.length
-      ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
-          h('div', { style: { position: 'relative' } }, [canvas, minimap]))
+      ? (hasCanvas
+        ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
+            h('div', { style: { position: 'relative' } }, [canvas, minimap]))
+        : h(Card, { key: 'no-relations', style: { margin: '18px var(--rk-gutter) 14px', padding: 18, display: 'grid', gap: 12 } }, [
+            h(EmptyState, {
+              key: 'summary',
+              icon: 'search',
+              text: `当前范围有 ${graph.nodes.length} 个节点，但没有记录到的关系。`,
+              hint: `图谱只绘制存在关系的节点，不会把 ${graph.nodes.length} 张互不相连的卡片铺成网格。已保存证据不会仅因同属一个项目就互连：把它关联到研究论断、自动沉淀知识或本次会话的查询来源（并在保存时标注来源库）后才会出现连线。`
+                + (isolatedKindSummary ? `当前未关联：${isolatedKindSummary}。` : '')
+                + '可以先按上方项目筛选收窄范围；需要看全部卡片时可临时打开「显示未关联节点」。',
+            }),
+            h('div', { key: 'actions', style: { display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' } }, [
+              h(Button, { key: 'show', size: 'sm', variant: 'soft', onClick: () => setShowIsolated(true) },
+                `仍要显示未关联节点（${connectivity.isolated.length}）`),
+              testProjects.length ? h(Button, {
+                key: 'cleanup', size: 'sm', variant: 'ghost', onClick: () => setCleanupOpen(true),
+                title: '删除明显的测试/演示课题在文件与本地缓存中的证据；真实课题不会出现在列表里',
+              }, `清理测试课题（${testProjects.length} 个 / ${testProjectEntryCount} 条）`) : null,
+            ]),
+          ]))
       : h(EmptyState, {
         key: 'empty',
         text: (scope !== 'all' || projectFilter) && (savedEvidence.length || assets.length || knowledgeNodes.length || records.queries.length)
@@ -857,6 +964,23 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => { setKnowledgeBackupOpen(false); setKnowledgeBackupText('') } }, '取消'),
       ]),
     ]) : null,
+    cleanupOpen ? h(Modal, {
+      key: 'cleanup-test-projects',
+      title: '清理测试课题',
+      subtitle: '只删除下列明显像测试/演示/探针的课题；会同时删除本机证据文件与当前页面的本地缓存。',
+      onClose: () => { if (!cleaning) setCleanupOpen(false) },
+      footer: [
+        h(Button, { key: 'cancel', variant: 'ghost', disabled: cleaning, onClick: () => setCleanupOpen(false) }, '取消'),
+        h(Button, { key: 'go', variant: 'danger', disabled: cleaning, onClick: cleanupTestProjects }, cleaning ? '正在清理…' : '确认清理'),
+      ],
+    }, [
+      h('p', { key: 'intro', style: { margin: 0, fontSize: 13, lineHeight: 1.6 } },
+        `将删除 ${testProjects.length} 个课题、共 ${testProjectEntryCount} 条证据：`),
+      h('div', { key: 'list', style: { display: 'grid', gap: 4, fontSize: 13 } },
+        testProjects.map(item => h('span', { key: item.project }, `${item.project} · ${item.count} 条`))),
+      h(Notice, { key: 'warning', tone: 'warn', icon: 'shield' },
+        '不可撤销。真实课题（例如大麦候选基因课题）不会出现在列表里；如果某个课题其实是真实数据，请取消并改用证据库里逐条删除。'),
+    ]) : null,
     exportOpen ? h(Modal, {
       key: 'export-modal',
       title: '导出证据链路快照',
@@ -869,7 +993,9 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       ]
     }, [
       h('p', { key: 'scope', style: { margin: 0, fontSize: 13, lineHeight: 1.6, color: C.muted } }, GRAPH_EXPORT_SCOPE),
-      h('p', { key: 'count', style: { margin: '10px 0 0', fontSize: 13 } }, `本次将导出 ${graph.nodes.length} 个节点、${graph.edges.length} 条关系。`)
+      h('p', { key: 'count', style: { margin: '10px 0 0', fontSize: 13 } },
+        `本次将导出 ${renderLimitedCount ? displayGraph.nodes.length : interactiveGraph.nodes.length} 个节点、${graph.edges.length} 条关系`
+        + `${hiddenIsolatedCount ? `（另有 ${hiddenIsolatedCount} 个未关联节点未导出，可在图谱中临时显示后导出）` : ''}。`)
     ]) : null
   ]
   return embedded ? h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, content) : h(Page, null, content)

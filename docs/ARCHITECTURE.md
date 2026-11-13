@@ -115,6 +115,7 @@ dsh-research-kit/
 │       ├── vault-core.js            # 灵感资产纯逻辑与隐私边界
 │       ├── knowledge-extract.js     # 自动沉淀结构化提取器（纯逻辑）：知识节点/关系/引用来源，确定性与有界性契约
 │       ├── evidence-graph-core.js   # 证据图谱节点与边纯逻辑（含已保存证据与自动沉淀知识接入）
+│       ├── test-projects.js        # 测试/演示课题识别（保守名称模式；default 仅在整桶条目都像测试时纳入）
 │       ├── evidence-vault-core.js   # 证据条目纯逻辑：标识符识别、规范化、隐私校验、去重键、备份格式
 │       ├── asset-evidence-links.js  # 资产-证据互链纯逻辑：稳定 link id、候选推导（项目/标签/知识链种子）、图谱边转换
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
@@ -226,7 +227,7 @@ dsh-research-kit/
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
 │       ├── manual-qa-count.mjs      # MANUAL-QA 章节「N 项」的自洽判定（条目可写为表格行或小节标题；含章节数/条目总数下限）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 598 项测试（77 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 604 项测试（78 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）
@@ -250,6 +251,7 @@ dsh-research-kit/
 | `src/lib/asset-evidence-links.js` | 资产-证据互链纯逻辑：稳定 link id、候选推导（同项目 / 共同标签 / 知识链种子）、图谱边转换 | 自动建立 link；把候选当成已确认事实；在候选里携带笔记或全文。 |
 | `src/lib/idb.js` | IndexedDB 通用壳：工厂探测、请求转 Promise、事务提交后才 resolve（完成回调先于业务逻辑挂载）；store 名与业务一律由调用方传入 | 触碰 DOM；给某个库开特例；在事务未提交时 resolve，或吞掉中止错误。 |
 | `src/lib/evidence-vault-sync.js` | 证据库存取层：状态与订阅、文件同步（拉取 / 推送 / 冲突）、保存 / 删除 / 清空、互链读写、当前项目；界面层只调它的导出 | 渲染界面；自动入库或读对话原文；在内存降级时伪装成已持久化。 |
+| `src/lib/test-projects.js` | 测试/演示课题识别：保守名称模式 + `default` 桶整桶测试内容判定，只产出清理候选 | 自动删除任何课题；把名字不像测试的真实课题纳入候选。 |
 | `src/lib/download.js` | 导出落盘的唯一实现：`<a download>` + Blob URL **延迟**回收；无 DOM 时如实降级 | 同步回收 Blob URL（会取消下载）；在无宿主环境假装成功。 |
 | `src/knowledge-store.js` | 自动沉淀知识库持久化：节点/关系双 store、稳定 id 去重合并、冲突并列保留，并提供内存降级 | 触碰 DOM；在降级时伪装成已持久化；改写用户推进过的核验状态。 |
 | `src/knowledge-deposition.js` | 自动沉淀编排：读写开关与处理水位线、**增量扫描** DSH 会话事件流（`sessions.binding().eventSource`，每次通知只扫上次扫过的尾部之后的新增段）、调用提取器并联动三个库；另提供手动沉淀入口（沉淀当前会话最近一条回答，图谱页与增强器伴生钮共用） | 在开关关闭时自动提取内容；发送任何网络请求；回放开关关闭期间的历史消息；让沉淀失败冒泡到宿主。 |
@@ -541,10 +543,13 @@ composeWorkflow(workflow, values, …)
   ├─ 已保存证据（IndexedDB dsh-research-kit-evidence，只读接入；见 §3.4）
   └─ 自动沉淀知识（IndexedDB dsh-research-kit-knowledge；节点/关系，见 §3.6）
   → buildEvidenceGraph() 纯逻辑产出节点与边（不含检索词、全文、笔记与来源摘录）
+  → splitEvidenceGraphByConnectivity() 把「出现在关系里的节点」与「孤立节点」分开（见下）
   → layoutEvidenceGraph() 确定性分层布局：按 kind 分列，同列按 id 字典序（新增节点不让已有节点跳位）
   → routeEvidenceEdges() 端口路由 + 方向性锚点：正向右缘→左缘，逆向左缘→右缘，贝塞尔连线
   → 视图层只消费布局结果：缩放平移、迷你地图、范围模式、导出均为确定性重算，不持有图算法
 ```
+
+**零关系图不画成卡片墙。** 已保存证据只有能连到同库资源、本会话查询来源、研究论断或自动沉淀知识时才有边；一批「只保存、未关联」的证据会形成节点很多但关系为 0 的图。旧实现按稀疏网格把每个节点都铺成 136×54 的卡片，192 个节点就是 192 张互不相连的卡片，既不是图谱也读不完。现由 `splitEvidenceGraphByConnectivity()` 在布局前拆成两部分：默认只把**有关系**的节点交给 `layoutEvidenceGraph`，未关联节点只汇总数量（按类型），并提供「显示未关联节点」显式开关——打开后才绘制网格，同时用警示条说明「它们之间没有记录到的关系，卡片网格不代表图谱结构」。因此 **0 条关系的范围不再渲染画布**，改为一张说明卡：告诉读者节点数、关系为 0 的原因（证据尚未关联）、按类型统计的未关联构成，以及一个临时展开入口。导出快照与当前视图一致（默认不含未关联节点；渲染上限外的有关系节点仍完整导出），缩放/平移控件只在有画布时出现。
 
 **视图能力（§3.1 Viewer）。** `research-evidence-graph.js` 在纯逻辑之上提供：Ctrl / ⌘ 滚轮缩放（`clampGraphScale` 限幅 0.4–2.5）与拖拽平移（带边界钳制，图拖不丢）；右下角迷你地图点击跳转、视口框实时联动；聚焦 / 上游 / 下游 / 两点路径四种范围模式（`evidenceNeighborhood` BFS、`findEvidencePath` 无向最短路，非范围内节点降透明度而非移除，保留参照系）；`prefers-reduced-motion` 时链路流动动画由全局 CSS 关闭；窄屏（<880px）随统一容器单列收敛，画布不再设固定最小宽度。
 

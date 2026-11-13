@@ -132,6 +132,32 @@ export function buildEvidenceGraph(params) {
   return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
 }
 
+/**
+ * 按「是否出现在任何一条关系里」把图拆成有关系与孤立两部分。
+ *
+ * 为什么要有它：已保存证据只有在能连到同库资源、本会话查询来源或沉淀知识时才有边；
+ * 一批只保存、未关联的证据会形成「零关系」的图。把这类节点当成关系图铺成网格，
+ * 读者看到的是几百张互不相连的卡片，既不是图谱也读不完。图组件据此默认只绘制
+ * 有关系的内容，并把孤立节点计数交给调用方汇总展示。
+ * @param {object} graph - 可能为 null / 半成品；输入一律收敛成对象数组。
+ * @returns {{edges: object[], connected: object[], isolated: object[], connectedIds: Set<string>}}
+ */
+export function splitEvidenceGraphByConnectivity(graph = {}) {
+  const nodes = evidenceGraphList(graph?.nodes)
+  const edges = evidenceGraphList(graph?.edges)
+  const connectedIds = new Set()
+  for (const edge of edges) {
+    if (edge?.from) connectedIds.add(edge.from)
+    if (edge?.to) connectedIds.add(edge.to)
+  }
+  return {
+    edges,
+    connected: nodes.filter(node => connectedIds.has(node.id)),
+    isolated: nodes.filter(node => !connectedIds.has(node.id)),
+    connectedIds,
+  }
+}
+
 export const EVIDENCE_NODE_COLORS = {
   database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
   message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',

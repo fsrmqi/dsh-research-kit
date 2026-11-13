@@ -23,6 +23,7 @@ files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/rese
 files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
 files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-transfer.js')
 files.splice(files.indexOf('src/agent-activity.js') + 1, 0, 'src/research-transfer-panel.js')
+files.splice(files.indexOf('src/lib/evidence-graph-core.js') + 1, 0, 'src/lib/test-projects.js')
 files.splice(files.indexOf('src/lib/evidence-vault-core.js'), 0, 'src/lib/bibliography.js')
 files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js')
 files.splice(files.indexOf('src/evidence-vault-store.js') + 1, 0, 'src/lib/claim-review-client.js')
