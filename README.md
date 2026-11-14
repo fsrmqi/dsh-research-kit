@@ -134,7 +134,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`，当前随附的 Desktop App / CLI 是 `0.2.2-rc.2`。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
+要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`，当前随附的 Desktop App / CLI 是 `0.2.2-rc.3`。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -254,7 +254,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 当前版本 `0.3.0`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、605 项回归测试（78 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、11 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、609 项回归测试（78 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、12 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
 
@@ -263,7 +263,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（605 项 / 78 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（609 项 / 78 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

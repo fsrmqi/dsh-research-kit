@@ -12,7 +12,7 @@
 // 失败信息会点名是哪条 seam 变了，而不是「某处坏了」。
 //
 // 基线覆盖 0.1.7 与 0.2 线已验证的 rc。更早的 0.1.5/0.1.6 线不在范围内（宿主自身的
-// peer 准入会拒绝装载）。0.2.2 线的 rc.1 与 rc.2 均已发布；rc.2 是当前 Desktop App 与 CLI
+// peer 准入会拒绝装载）。0.2.2 线的 rc.1～rc.3 均已发布；rc.3 是当前 Desktop App 与 CLI
 // 随附的宿主，按 docs/COMPATIBILITY.md §6 增行（peer 范围已覆盖，无需改动）。
 
 /** package.json 里声明的宿主版本范围；BASELINES 的每个版本都必须落在其中。 */
@@ -84,7 +84,13 @@ export const BASELINES = [
     id: 'dsh-v0.2.2-rc.2',
     tag: 'dsh-v0.2.2-rc.2',
     version: '0.2.2-rc.2',
-    notes: '0.2.2 线第二个 rc，也是当前 Desktop App 与 CLI（0.2.2-rc.2）随附的宿主版本；rc.1→rc.2 的客户端契约改动均为新增（conversation.hero.frame / conversation.chat.markdown.fence 两个 hoc 槽、composer 文件粘贴路由与失败重试、insertQuote 可选摘要、plugin-manager Git 更新入口），本插件未使用；12 条 seam + 平台表逐字成立。',
+    notes: '0.2.2 线第二个 rc；rc.1→rc.2 的客户端契约改动均为新增（conversation.hero.frame / conversation.chat.markdown.fence 两个 hoc 槽、composer 文件粘贴路由与失败重试、insertQuote 可选摘要、plugin-manager Git 更新入口），本插件未使用；12 条 seam + 平台表逐字成立。',
+  },
+  {
+    id: 'dsh-v0.2.2-rc.3',
+    tag: 'dsh-v0.2.2-rc.3',
+    version: '0.2.2-rc.3',
+    notes: '0.2.2 线第三个 rc，也是当前 Desktop App 与 CLI（0.2.2-rc.3）随附的宿主版本；rc.2→rc.3 新增 sidebar.session.action hoc 槽、workspace.picker Factory（含 workspace.picker.directoryFlow）与官方可选 bundle deepseek-chat-import，本插件未注册这些面；12 条 seam + 平台表逐字成立。',
   },
 ]
 

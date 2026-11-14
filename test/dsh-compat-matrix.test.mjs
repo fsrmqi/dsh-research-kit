@@ -76,6 +76,7 @@ const DECLARED_BASELINE_IDS = [
   'dsh-v0.2.1-rc.5',
   'dsh-v0.2.2-rc.1',
   'dsh-v0.2.2-rc.2',
+  'dsh-v0.2.2-rc.3',
 ]
 const DECLARED_SLOT_NAMES = [
   'conversation.chat.assistant-actions',
