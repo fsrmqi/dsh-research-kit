@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildEvidenceGraph, layoutEvidenceGraph, routeEvidenceEdges,
   evidenceNeighborhood, findEvidencePath,
-  encodeGraphView, decodeGraphView, clampGraphScale, splitEvidenceGraphByConnectivity,
+  encodeGraphView, decodeGraphView, clampGraphScale, splitEvidenceGraphByConnectivity, summarizeEvidenceProjects,
   GRAPH_SCALE_RANGE, GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT
 } from '../src/lib/evidence-graph-core.js'
 
@@ -69,6 +69,23 @@ test('连通性拆分：有关系节点与孤立节点互不混淆，且对半�
   assert.ok(split.isolated.some(node => node.id === 'evidence:ev2'))
   assert.deepEqual([...split.connectedIds].sort(), ['evidence:ev1', 'query:q', 'resource:pubmed', 'source:s'])
   assert.deepEqual(splitEvidenceGraphByConnectivity(null), { edges: [], connected: [], isolated: [], connectedIds: new Set() })
+})
+
+test('证据概览：按项目汇总条数、标识符构成与最近保存时间，真实课题不被测试名规则影响', () => {
+  const rows = summarizeEvidenceProjects([
+    { project: '大麦候选基因A-5438bp插入雄性不育', identifier_type: 'doi', saved_at: '2026-09-18T08:00:00Z' },
+    { project: '大麦候选基因A-5438bp插入雄性不育', identifier_type: 'pmid', saved_at: '2026-09-18T09:00:00Z' },
+    { project: 'barley-NP1-IPE1-family', identifier_type: 'none' },
+    { project: '', identifier_type: 'doi' },
+    null,
+  ])
+  assert.deepEqual(rows.map(row => [row.project, row.count]), [
+    ['大麦候选基因A-5438bp插入雄性不育', 2],
+    ['未归属项目', 1],
+    ['barley-NP1-IPE1-family', 1],
+  ])
+  assert.deepEqual(rows[0].identifiers, [{ kind: 'doi', count: 1 }, { kind: 'pmid', count: 1 }])
+  assert.equal(rows[0].latestSavedAt, Date.parse('2026-09-18T09:00:00Z'))
 })
 
 // ── 布局：确定性 + 稳定性 ─────────────────────────────────────────────────────

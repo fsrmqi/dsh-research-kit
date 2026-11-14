@@ -158,6 +158,39 @@ export function splitEvidenceGraphByConnectivity(graph = {}) {
   }
 }
 
+/**
+ * 把「没有关系、只剩清单」的证据按项目汇总，供图谱页在零关系时展示可读的概览。
+ *
+ * 为什么不在图里塞清单：节点图回答的是「谁连到谁」，当 170 条证据之间没有一条边时，
+ * 继续画点只会得到卡片墙。概览只给项目、条数、标识符构成与最近保存时间，
+ * 完整条目浏览仍交给「研究资产库」——两个视图各回答一个问题。
+ * @param {object[]} entries - 已保存证据（可含 null / 半成品；输入先收敛）。
+ * @returns {{project: string, count: number, identifiers: {kind: string, count: number}[], latestSavedAt: number}[]}
+ */
+export function summarizeEvidenceProjects(entries = []) {
+  const projects = new Map()
+  for (const entry of evidenceGraphList(entries)) {
+    const project = String(entry.project || '').trim() || '未归属项目'
+    if (!projects.has(project)) projects.set(project, { project, count: 0, identifiers: new Map(), latestSavedAt: 0 })
+    const group = projects.get(project)
+    group.count += 1
+    const kind = String(entry.identifier_type || entry.identifierKind || 'none')
+    group.identifiers.set(kind, (group.identifiers.get(kind) || 0) + 1)
+    const savedAt = Date.parse(entry.saved_at || entry.savedAt || '') || Number(entry.savedAt) || 0
+    if (savedAt > group.latestSavedAt) group.latestSavedAt = savedAt
+  }
+  return [...projects.values()]
+    .map(group => ({
+      project: group.project,
+      count: group.count,
+      identifiers: [...group.identifiers.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([kind, count]) => ({ kind, count })),
+      latestSavedAt: group.latestSavedAt,
+    }))
+    .sort((a, b) => b.count - a.count || a.project.localeCompare(b.project, 'zh-CN'))
+}
+
 export const EVIDENCE_NODE_COLORS = {
   database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
   message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',

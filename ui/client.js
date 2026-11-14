@@ -2777,6 +2777,39 @@ function splitEvidenceGraphByConnectivity(graph = {}) {
   }
 }
 
+/**
+ * 把「没有关系、只剩清单」的证据按项目汇总，供图谱页在零关系时展示可读的概览。
+ *
+ * 为什么不在图里塞清单：节点图回答的是「谁连到谁」，当 170 条证据之间没有一条边时，
+ * 继续画点只会得到卡片墙。概览只给项目、条数、标识符构成与最近保存时间，
+ * 完整条目浏览仍交给「研究资产库」——两个视图各回答一个问题。
+ * @param {object[]} entries - 已保存证据（可含 null / 半成品；输入先收敛）。
+ * @returns {{project: string, count: number, identifiers: {kind: string, count: number}[], latestSavedAt: number}[]}
+ */
+function summarizeEvidenceProjects(entries = []) {
+  const projects = new Map()
+  for (const entry of evidenceGraphList(entries)) {
+    const project = String(entry.project || '').trim() || '未归属项目'
+    if (!projects.has(project)) projects.set(project, { project, count: 0, identifiers: new Map(), latestSavedAt: 0 })
+    const group = projects.get(project)
+    group.count += 1
+    const kind = String(entry.identifier_type || entry.identifierKind || 'none')
+    group.identifiers.set(kind, (group.identifiers.get(kind) || 0) + 1)
+    const savedAt = Date.parse(entry.saved_at || entry.savedAt || '') || Number(entry.savedAt) || 0
+    if (savedAt > group.latestSavedAt) group.latestSavedAt = savedAt
+  }
+  return [...projects.values()]
+    .map(group => ({
+      project: group.project,
+      count: group.count,
+      identifiers: [...group.identifiers.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([kind, count]) => ({ kind, count })),
+      latestSavedAt: group.latestSavedAt,
+    }))
+    .sort((a, b) => b.count - a.count || a.project.localeCompare(b.project, 'zh-CN'))
+}
+
 const EVIDENCE_NODE_COLORS = {
   database: '#0f766e', skill: '#7c3aed', workflow: '#2563eb', query: '#b45309', 'agent-query': '#b45309', source: '#15803d', asset: '#52606d', evidence: '#be123c', plan: '#0e7490', stage: '#64748b',
   message: '#94a3b8', question: '#8b5cf6', entity: '#475569', finding: '#dc2626', hypothesis: '#d97706', method: '#0d9488',
@@ -8992,6 +9025,7 @@ const GRAPH_KIND_LABELS = {
   message: '来源消息', question: '研究问题', entity: '实体', finding: '研究发现', hypothesis: '假设', method: '方法',
 }
 const GRAPH_LEGEND_ORDER = ['message', 'question', 'entity', 'finding', 'hypothesis', 'method', 'database', 'skill', 'workflow', 'query', 'source', 'plan', 'stage', 'asset', 'evidence']
+const IDENTIFIER_KIND_LABELS = { doi: 'DOI', pmid: 'PMID', pmcid: 'PMCID', arxiv: 'arXiv', nct: 'NCT', accession: '编号', none: '无标识符' }
 const KNOWLEDGE_STATUS_OPTIONS = KNOWLEDGE_STATUSES.map(status => ({ value: status, label: KNOWLEDGE_STATUS_LABELS[status] }))
 // 节点范围：把「会话记录」与「持久沉淀」分开看——两类节点生命周期不同，混在一幅图里曾是最常见的困惑。
 const GRAPH_SCOPE_MODES = [
@@ -9078,7 +9112,7 @@ function downloadKnowledgeJson(text, filename) {
   downloadGraphFile(text, 'application/json', filename)
 }
 
-function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
+function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onNavigate }) {
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [resourceIds, setResourceIds] = React.useState(() => selection.get())
@@ -9229,6 +9263,7 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
   // 测试课题候选：只从当前可见证据里汇总；真实课题名不命中（见 lib/test-projects.js）。
   const testProjects = React.useMemo(() => selectTestProjects(savedEvidence), [savedEvidence])
   const testProjectEntryCount = testProjects.reduce((sum, item) => sum + item.count, 0)
+  const projectOverview = React.useMemo(() => summarizeEvidenceProjects(graphEvidence), [graphEvidence])
   const projectOptions = React.useMemo(() => {
     const names = new Set(evidenceProjects)
     for (const item of savedEvidence) { if (item.project) names.add(item.project) }
@@ -9777,6 +9812,21 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
                 + (isolatedKindSummary ? `当前未关联：${isolatedKindSummary}。` : '')
                 + '可以先按上方项目筛选收窄范围；需要看全部卡片时可临时打开「显示未关联节点」。',
             }),
+            projectOverview.length ? h('div', {
+              key: 'projects',
+              style: { display: 'grid', gap: 4, width: '100%', maxWidth: 760, margin: '0 auto', fontSize: 13 },
+            }, [
+              h('strong', { key: 'title', style: { fontSize: 12, color: C.muted, fontWeight: 650 } }, '按项目概览'),
+              ...projectOverview.map(row => h('div', {
+                key: row.project,
+                style: { display: 'flex', gap: 12, alignItems: 'baseline', padding: '5px 0', borderBottom: `1px solid ${C.line}` },
+              }, [
+                h('span', { key: 'name', style: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, row.project),
+                h('span', { key: 'count', style: { color: C.muted, whiteSpace: 'nowrap' } }, `${row.count} 条`),
+                h('span', { key: 'ids', style: { color: C.muted, fontSize: 12, whiteSpace: 'nowrap' } },
+                  row.identifiers.map(item => `${IDENTIFIER_KIND_LABELS[item.kind] || item.kind} ${item.count}`).join(' · ')),
+              ])),
+            ]) : null,
             h('div', { key: 'actions', style: { display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' } }, [
               h(Button, { key: 'show', size: 'sm', variant: 'soft', onClick: () => setShowIsolated(true) },
                 `仍要显示未关联节点（${connectivity.isolated.length}）`),
@@ -9784,6 +9834,9 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
                 key: 'cleanup', size: 'sm', variant: 'ghost', onClick: () => setCleanupOpen(true),
                 title: '删除明显的测试/演示课题在文件与本地缓存中的证据；真实课题不会出现在列表里',
               }, `清理测试课题（${testProjects.length} 个 / ${testProjectEntryCount} 条）`) : null,
+              typeof onNavigate === 'function' ? h(Button, {
+                key: 'vault', size: 'sm', variant: 'ghost', onClick: () => onNavigate('vault'),
+              }, '去研究资产库查看完整证据') : null,
             ]),
           ]))
       : h(EmptyState, {
@@ -9950,8 +10003,8 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false }) {
   return embedded ? h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, content) : h(Page, null, content)
 }
 
-function ResearchEvidenceGraphHost({ sessionId, embedded = false }) {
-  return h(ResearchEvidenceGraph, { sessionId, assetProvider: researchAssetProvider, embedded })
+function ResearchEvidenceGraphHost({ sessionId, embedded = false, onNavigate }) {
+  return h(ResearchEvidenceGraph, { sessionId, assetProvider: researchAssetProvider, embedded, onNavigate })
 }
 
 
@@ -12866,7 +12919,7 @@ const SECTION_VIEWS = {
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
   vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, embedded: true }),
-  evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true }),
+  evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate }),
 }
 
 function readStoredSection() {
