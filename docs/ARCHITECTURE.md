@@ -182,7 +182,7 @@ dsh-research-kit/
 │   ├── archify-template.js          # Archify viewer 同源延迟模板路由
 │   ├── static-artifact-route.js     # 生成物静态路由：强 ETag + no-cache（304 复用，避免新旧产物混搭）
 │   ├── config.js                    # 插件配置 schema 与 readConfigValue（volatile 即时读取）
-│   ├── agent-activity.js           # Agent 活动面板：调用轨迹聚合、运行 ID 自动捕获与检查点确认桥接（HTTP handler）
+│   ├── agent-activity.js           # 运行摘要、产出投影与检查点确认（HTTP handler）
 │   ├── evidence-sync.js            # 证据库文件同步：IndexedDB ↔ 文件系统真源双向同步（HTTP handler）
 │   ├── evidence-agent-assess.js   # 当前会话模型的证据元数据批量初判（不读取全文、不改人工状态）
 │   ├── claim-review.js              # Claim 台账审阅：候选提取、草稿保存、登记与导出（HTTP handler）
@@ -653,7 +653,7 @@ type Workflow = BaseItem & {
 
 - **`input_schema` 不是第二份真相。** 它是 `placeholders` 的机器可读投影（`hint || label` 作 description，必填项进入 `required`），MCP 侧的 `research_workflow_compose` 用它接收参数。人读表单仍以 `placeholders` 为准。
 - **`tool_mode` 不改变执行方式。** 插件从不执行工作流；它只是 `research_catalog_search` 返回给宿主 Agent 的一个意图信号（检索/查询类倾向 `direct`，其余 `guided`），由启发式规则推断而来。
-- **`agent_guidance` 与 `checkpoints` 只经 MCP 路径交付。** 两者由 `research_workflow_compose` 随组装结果返回；`checkpoints` 再由 `research_run_start` 实例化为某个研究运行的待确认闸门。界面路径启动工作流**不创建研究运行**，因此没有检查点——界面侧的「Agent 活动面板」展示并审批的是 MCP 侧创建的运行。
+- **`agent_guidance` 与 `checkpoints` 只经 MCP 路径交付。** 两者由 `research_workflow_compose` 随组装结果返回；`checkpoints` 再由 `research_run_start` 实例化为某个研究运行的待确认闸门。界面路径启动工作流**不创建研究运行**，因此没有检查点——「本次研究」的待办收件箱显示当前已关联的 MCP 运行的待确认阶段。
 - **这四个字段目前不在目录校验范围内**（`scripts/validate-catalog-lib.mjs` 只检查 `id` / `placeholders` / `prompt` 的一致性）。改动它们不会让 `npm run check` 失败，见 [ROADMAP.md](../ROADMAP.md)。
 
 约束：

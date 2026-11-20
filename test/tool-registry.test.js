@@ -60,11 +60,11 @@ test('产物映射：call-logger 与注册表一致（无本地第二份表）',
   assert.equal(artifactKindOf('research_help'), '')
 })
 
-test('UI 标签：agent-activity 从注册表取中文名（无本地副本）', () => {
-  const source = readFileSync(path.join(root, 'src/agent-activity.js'), 'utf8')
-  assert.ok(!source.includes('TOOL_LABELS'), 'agent-activity 不应再维护本地 TOOL_LABELS')
-  assert.ok(!source.includes('ARTIFACT_LABELS'), 'agent-activity 不应再维护本地 ARTIFACT_LABELS')
-  assert.ok(source.includes("from '../mcp/tool-registry.js'"), 'agent-activity 应从注册表取标签')
+test('UI 标签：科研工具卡从注册表取中文名（无本地副本）', () => {
+  const source = readFileSync(path.join(root, 'src/research-toolview.js'), 'utf8')
+  assert.ok(!source.includes('TOOL_LABELS'), '科研工具卡不应再维护本地 TOOL_LABELS')
+  assert.ok(!source.includes('ARTIFACT_LABELS'), '科研工具卡不应再维护本地 ARTIFACT_LABELS')
+  assert.ok(source.includes("from '../mcp/tool-registry.js'"), '科研工具卡应从注册表取标签')
   assert.equal(toolLabel('research_run_status'), '运行状态总览')
 })
 

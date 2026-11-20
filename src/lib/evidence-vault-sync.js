@@ -11,6 +11,7 @@
 import { C } from '../theme.js'
 import { activeResearchRun, currentResearchContext, setResearchProject } from '../research-context-store.js'
 import { createEvidenceVaultStore } from '../evidence-vault-store.js'
+import { fileEvidenceSourceIdentity } from './file-evidence-source.js'
 import { workspaceIdForProject } from './research-workspaces.js'
 
 // 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
@@ -167,7 +168,7 @@ async function fetchFileEvidenceEntries(project) {
   return payload.entries
 }
 
-async function postFileEvidenceEntries(entries, { allowExistingSources = false } = {}) {
+async function postFileEvidenceEntries(entries, { allowExistingSources = false, reconcileExisting = false } = {}) {
   const byProject = new Map()
   for (const entry of entries) {
     const project = entry.project || 'default'
@@ -197,9 +198,15 @@ async function postFileEvidenceEntries(entries, { allowExistingSources = false }
     const added = Number(result?.added)
     const skipped = Number(result?.skipped)
     if (!result?.ok || !Number.isInteger(added) || !Number.isInteger(skipped)
-      || added < 0 || skipped < 0 || added + skipped !== rows.length
-      || (!allowExistingSources && skipped)) {
-      throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+      || added < 0 || skipped < 0 || added + skipped !== rows.length) {
+      throw new Error('文件侧返回的证据同步数量与请求不符。')
+    }
+    if (skipped && !allowExistingSources) {
+      const stored = reconcileExisting ? await fetchFileEvidenceEntries(project) : []
+      const storedKeys = new Set(stored.map(fileEvidenceSourceIdentity))
+      if (!rows.every(row => storedKeys.has(fileEvidenceSourceIdentity(row)))) {
+        throw new Error('文件侧存在未能确认的重复来源。请在证据库复核相关条目。')
+      }
     }
     existingSources += skipped
   }
@@ -256,14 +263,20 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
       await updateFileEvidenceEntry(local); updated++
     }
   }
-  const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
-  const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
+  const scopedFileKey = entry => JSON.stringify([entry.project || 'default', fileEvidenceSourceIdentity(entry)])
+  const fileKeys = new Set(fileEntries.map(scopedFileKey))
+  const missing = new Map()
+  for (const local of nextLocalEntries) {
+    const entry = vaultEvidenceFileEntry(local)
+    const key = scopedFileKey(entry)
+    if (!fileKeys.has(key) && !missing.has(key)) missing.set(key, entry)
+  }
   let existingSources = 0
-  if (missing.length) {
-    existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
+  if (missing.size) {
+    existingSources = await postFileEvidenceEntries([...missing.values()], { allowExistingSources, reconcileExisting: true })
     publishEvidenceVault()
   }
-  return { skipped: false, imported, exported: missing.length - existingSources, updated, ignored, existingSources }
+  return { skipped: false, imported, exported: missing.size - existingSources, updated, ignored, existingSources }
 }
 
 export function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {

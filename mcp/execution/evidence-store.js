@@ -1,3 +1,4 @@
+import { fileEvidenceSourceIdentity } from '../../src/lib/file-evidence-source.js'
 
 import { appendFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -60,16 +61,7 @@ function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function dedupKey(entry) {
-  if (entry.identifier_type === 'doi') return `doi:${String(entry.identifier || '').toLowerCase()}`
-  if (entry.identifier_type === 'pmid') return `pmid:${String(entry.identifier || '').toLowerCase()}`
-  if (entry.identifier_type === 'pmcid') return `pmcid:${String(entry.identifier || '').toLowerCase()}`
-  if (entry.identifier_type === 'arxiv') return `arxiv:${String(entry.identifier || '').toLowerCase()}`
-  if (entry.identifier_type === 'nct') return `nct:${String(entry.identifier || '').toLowerCase()}`
-  if (entry.url) return `url:${String(entry.url).replace(/\/$/, '').toLowerCase()}`
-  if (entry.identifier_type === 'none' && entry.identifier) return `identifier:${String(entry.identifier).toLowerCase()}`
-  return `title:${String(entry.title || '').slice(0, 80).toLowerCase()}`
-}
+function dedupKey(entry) { return fileEvidenceSourceIdentity(entry) }
 
 async function readEntriesUnlocked(project) {
   const file = entriesFile(project)

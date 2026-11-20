@@ -119,10 +119,11 @@ test('源码接线：四处宿主动作守卫必须存在', async () => {
 test('草稿增强入口：内联/悬浮两种形态各自只渲染对应入口，且都不抛错', async () => {
   const { ResearchDraftEnhancerHost } = await import('../dsh/prompt-enhancer-glue.js')
   const { writeEntryMode } = await import('../src/entry-mode.js')
-  // 默认内联：触发钮由插件自绘，工件未就绪（SSR 不跑 effect）时入口依然在。
+  // 统一入口独立于 PromptKit，增强器槽位在空闲时仅提供定位锚点。
   writeEntryMode('inline')
   const inline = renderToStaticMarkup(createElement(ResearchDraftEnhancerHost, {}))
-  assert.match(inline, /data-research-kit="draft-enhancer-trigger"/)
+  assert.match(inline, /aria-hidden="true"/)
+  assert.equal(inline.includes('draft-enhancer-trigger'), false)
   assert.equal(inline.includes('draft-enhancer-fallback'), false, '内联形态不应出现悬浮兜底钮')
   // 悬浮：兜底悬浮钮顶上（工件没就绪时的可重试入口），工具条图标钮不再渲染。
   writeEntryMode('floating')

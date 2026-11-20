@@ -4,17 +4,17 @@ import { Segmented } from './ui.js'
 
 // 草稿增强的「入口形态」是本机偏好，不是插件配置：改完即时生效——不必重启 profile
 // 重载插件（插件配置要重开才生效），重装插件也不受影响。
-//   inline   输入框右侧纯图标钮（紧挨模型选择器），面板贴着按钮弹出 —— 默认，占用最小；
+//   inline   从科研辅助菜单打开，面板贴着输入框弹出 —— 默认，占用最小；
 //   floating 右下角可拖拽悬浮钮（位置自动记忆）+「沉淀最近回答」伴生圆钮 —— 与旧版一致。
 export const ENTRY_MODE_KEY = 'dsh-research-kit.entry-mode.v1'
 export const ENTRY_MODE_INLINE = 'inline'
 export const ENTRY_MODE_FLOATING = 'floating'
 export const ENTRY_MODE_OPTIONS = [
-  { value: ENTRY_MODE_INLINE, label: '输入框图标钮' },
+  { value: ENTRY_MODE_INLINE, label: '输入框内' },
   { value: ENTRY_MODE_FLOATING, label: '悬浮伴生钮' },
 ]
 export const ENTRY_MODE_HINTS = {
-  [ENTRY_MODE_INLINE]: '输入框右侧一个纯图标钮（悬停显示说明），面板贴着它弹出；不占右下角，也不再另放沉淀圆钮——手动沉淀走每条助手回答下方的操作区。',
+  [ENTRY_MODE_INLINE]: '在输入框的「科研辅助」中选择「整理当前提问」。回答下方的「回答依据」可查看和保存待核验引用。',
   [ENTRY_MODE_FLOATING]: '右下角可拖拽的悬浮钮，位置自动记忆；旁边恢复「沉淀最近回答」伴生圆钮，与本次改版前的行为一致。',
 }
 
@@ -54,7 +54,7 @@ export function useEntryMode() {
   return mode
 }
 
-/** Plugins 详情页里的设置项：悬浮伴生钮 ↔ 输入框图标钮，二选一。 */
+/** Plugins 详情页里的设置项：悬浮伴生钮 ↔ 输入框内，二选一。 */
 export function EntryModeSetting() {
   const mode = useEntryMode()
   return h('section', {

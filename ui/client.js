@@ -11,10 +11,10 @@ const resources = []
 const databaseMetadataConfig = { groups: [], accessOverrides: {} }
 const RESEARCH_KIT_BUILD_STATS = {"version":"0.3.0","workflows":351,"skills":109,"resources":129,"direct":11}
 
-// 目录数据只经三个聚合入口进入（分片见 catalog/*/index.js）；对外 API 与文件拆分解耦。
 
-// 数据库的研究用途、访问方式与引用规范。原始目录仍保留上游类别；这里提供面向
-// 研究者的六个入口组，避免把遗传、临床、化学等都笼统归入“数据分析”。
+
+
+
 const CATALOG_DATA_PATH = '/dsh-research-kit/catalog-data'
 
 let workflowEntries = workflows
@@ -59,7 +59,7 @@ function databaseMetadata(databaseOrId) {
   }
 }
 
-/** 根据本会话勾选的数据库给出可启动的工作流，不代表自动执行或结果推荐。 */
+
 function recommendedWorkflowsForResources(resourceIds = []) {
   const workflowIds = new Set()
   for (const id of resourceIds) {
@@ -75,8 +75,8 @@ function enrichItem(item) {
   return normalized.type === 'database' ? { ...normalized, databaseMeta: databaseMetadata(normalized) } : normalized
 }
 
-// 目录保留多学科能力，避免用户后续需要时丢失既有工作流；
-// 新增与默认推荐则优先服务作物遗传育种、生物信息学、基因组与论文科研链路。
+
+
 function rebuildCatalog() {
   DATABASE_GROUPS = Array.isArray(databaseConfig.groups) ? databaseConfig.groups : []
   RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides || {}))
@@ -114,8 +114,8 @@ function applyCatalogData(data = {}) {
   return catalog
 }
 
-// 源码/Node 入口直接使用静态目录；浏览器轻量产物以空数组启动，首次挂载时才拉取 JSON。
-// 同一个 Promise 被所有视图复用，避免控制台、输入框浮层和增强器并发重复请求。
+
+
 function loadBrowserCatalog(fetcher = globalThis.fetch) {
   if (catalogReady()) return Promise.resolve(catalog)
   if (catalogLoadPromise) return catalogLoadPromise
@@ -165,7 +165,7 @@ function itemById(id) {
   return catalogIndex.get(id) || null
 }
 
-/** 从当前筛选结果中恢复选中项，绝不返回已被筛掉的历史选择。 */
+
 function selectedCatalogItem(items, selectedId) {
   return items.find(item => item.id === selectedId) || items[0] || null
 }
@@ -181,7 +181,7 @@ function composeWorkflow(workflow, values = {}, { enforceRequired = true, extraS
     const field = workflow.placeholders?.find(item => item.key === key)
     return value || (field?.required ? `[${field.label}]` : '未指定（请按综合方式处理）')
   })
-  // 附加技能是可选的指导模块：勾选后把该技能的纪律片段追加到 Prompt 末尾。
+
   const attached = (extraSkillIds || [])
     .map(itemById)
     .filter(skill => skill?.type === 'skill' && skill.promptFragment)
@@ -194,8 +194,8 @@ function composeWorkflow(workflow, values = {}, { enforceRequired = true, extraS
   ].filter(Boolean)
   const guardedPrompt = `${prompt}\n\n通用科研边界：仅基于已提供材料或已核验来源；不得编造数据、图表、引用、结果、完成状态或文件路径；无法确认时明确标记为待核验。`
   const finalPrompt = additions.length ? `${guardedPrompt}\n\n${additions.join('\n\n')}` : guardedPrompt
-  // 组装回放轨迹（增量字段，消费方见 src/route-replay.js）：只记录已发生的组装事实，
-  // 每一条都必须能在 finalPrompt 文本中找到对应内容——回放与文本互证由测试强制。
+
+
   const firstSentence = text => String(text || '').split(/[。；;]/)[0].slice(0, 40)
   const trace = [
     { step: 'workflow', id: workflow.id, label: workflow.name, detail: workflow.description || '' },
@@ -221,10 +221,10 @@ function composeWorkflow(workflow, values = {}, { enforceRequired = true, extraS
 }
 
 
-// 浏览器本地偏好存储：收藏与使用历史。
-// 经 CatalogStorage 接口隔离 localStorage，不污染 catalog.js 的纯函数职责（ARCHITECTURE 8.1）。
-// 历史记录对齐 dsh-promptkit 的 pushHistory 形态：{ id, name, summary, at }，存 20 条，
-// 但按本项目隐私原则只保存 ID、名称与用户自己输入的首行摘要，不保存完整 Prompt。
+
+
+
+
 const FAVORITES_KEY = 'dsh-research-kit:favorites'
 const HISTORY_KEY = 'dsh-research-kit:history'
 const HISTORY_EVENT = 'dsh-research-kit:history-changed'
@@ -256,9 +256,9 @@ function readIds(key, storage) {
   return readStore(key, storage).filter(id => typeof id === 'string')
 }
 
-// 历史记录的合法行：{ id, name, summary, at }。localStorage 里的合法 JSON 也可能是
-// 别的东西写的（旧版本、外部脚本、手工改过）——元素级的 null / 原始值必须在读的入口剔掉，
-// 否则 research-workbench 的 `history.map(row => itemById(row.id))` 会整页崩。
+
+
+
 function readHistoryRows(storage) {
   return readStore(HISTORY_KEY, storage).filter(row => row && typeof row === 'object' && typeof row.id === 'string')
 }
@@ -266,13 +266,13 @@ function readHistoryRows(storage) {
 function createCatalogStorage({ storage } = {}) {
   const store = storage || safeStorage()
   const listeners = new Set()
-  // window 在浏览器模块中总是存在；Node 半区或测试中可能未声明，需 typeof 守卫。
+
   const hasWindow = typeof window !== 'undefined' && !!window
   const notifyHistory = rows => {
     if (hasWindow) {
       try { window.dispatchEvent(new CustomEvent(HISTORY_EVENT, { detail: { key: HISTORY_KEY } })) } catch { /* 事件不可用时忽略 */ }
     }
-    // 无 window 时直接同步通知已登记的监听者。
+
     for (const callback of listeners) { try { callback(rows) } catch { /* 单个监听者异常不阻断 */ } }
     return rows
   }
@@ -283,7 +283,7 @@ function createCatalogStorage({ storage } = {}) {
       const next = current.includes(id) ? current.filter(item => item !== id) : [...current, id]
       return writeStore(FAVORITES_KEY, next, store) ? next : current
     },
-    /** 兼容旧接口：最近使用的 ID 序列（从历史记录派生）。 */
+
     getRecents() {
       const seen = new Set()
       const ids = []
@@ -292,10 +292,10 @@ function createCatalogStorage({ storage } = {}) {
       }
       return ids
     },
-    /**
-     * 记录一次使用。entry: { id, name, summary? }；summary 只取首行且截断，
-     * 去重置顶、截断到 MAX_HISTORY，并广播 history-changed 供界面即时刷新。
-     */
+
+
+
+
     recordHistory(entry) {
       if (!entry?.id) return readHistoryRows(store)
       const summary = String(entry.summary || '').split('\n')[0].trim().slice(0, 80)
@@ -332,8 +332,8 @@ function createCatalogStorage({ storage } = {}) {
 }
 
 
-// 每个 DSH 会话共享的临时资源选择。只驻留在当前页面内存：不写入 localStorage，
-// 不跨会话泄露研究上下文；完整工作台与输入框浮层通过同一个 sessionId 读取它。
+
+
 const sessions = new Map()
 const MAX_SESSION_STORES = 100
 
@@ -343,8 +343,8 @@ function stateFor(sessionId) {
   const key = keyFor(sessionId)
   if (!sessions.has(key)) sessions.set(key, { ids: [], listeners: new Set() })
   const state = sessions.get(key)
-  // Map 无界增长会让长期运行的宿主把已关闭会话永久留在内存里。
-  // 活跃会话有监听器，不参与淘汰；未监听的最久会话可安全丢弃（本来就是会话级临时状态）。
+
+
   sessions.delete(key)
   sessions.set(key, state)
   while (sessions.size > MAX_SESSION_STORES) {
@@ -381,9 +381,9 @@ function createResearchSelectionStore(sessionId) {
 }
 
 
-// 研究上下文是各分区的最小共同语言：只保存项目名和运行元数据，绝不保存
-// Prompt、文件内容、检索词或模型输出。它不替代证据库/资产库，只负责回答
-// 「当前正在为哪个项目、通过哪一次研究运行工作」。
+
+
+
 
 const RESEARCH_CONTEXT_KEY = 'dsh-research-kit.research-context.v1'
 const RESEARCH_RUNS_KEY = 'dsh-research-kit.research-runs.v1'
@@ -465,8 +465,8 @@ function runId() {
   return `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-// 运行只在用户明确使用工作流时创建。copy/draft/active 是 UI 事实，不代表模型
-// 或工具已经执行；真正的执行证据仍来自 MCP 调用日志与 checkpoint。
+
+
 function startResearchRun({ project, sessionId = '', workflowId, workflowName, stages = [], status = 'draft', now = Date.now() } = {}) {
   const context = currentResearchContext()
   const resolvedProject = normalizeProject(project === undefined ? context.project : project)
@@ -494,8 +494,8 @@ function listResearchRuns({ project, sessionId } = {}) {
   )
 }
 
-// App 迁移只补入缺失运行；既有运行的状态和当前活跃运行都不被旧备份覆盖。
-// 恢复只切换活动记录，保留原始会话、运行 ID 与执行状态。
+
+
 function resumeResearchRun(id, project = currentResearchContext().project) {
   const scope = normalizeProject(project)
   if (currentResearchContext().project !== scope) return null
@@ -551,12 +551,12 @@ function restoreResearchRuns(snapshot, { validateOnly = false } = {}) {
 const MAX_QUERIES = 30
 const MAX_WORKFLOWS = 30
 
-// 证据索引只服务于当前页面中的同一 DSH 会话：不落 localStorage，避免研究来源
-// 在刷新或重开页面后残留。按 sessionId 共享 state，保证工作台、查询面板和图谱
-// 各自创建 store 时仍能互相实时通知。
-// 顶层符号名必须全局唯一：构建器把所有模块拼进同一作用域（strip 掉 import，
-// 符号靠拼接顺序可见）。重名 const 会让整个产物语法错误，而重名 function 更阴险——
-// 声明合法、静默覆盖，产物照样通过 node --check，直到运行到调用点才炸。
+
+
+
+
+
+
 const evidenceSessions = new Map()
 const MAX_EVIDENCE_SESSIONS = 100
 
@@ -585,15 +585,15 @@ function createEvidenceStore(sessionId) {
     return value
   }
   const save = next => {
-    // next 可能来自外部（导入/回放）：非对象一律当空集合，绝不因为调用方传了 null 而整块崩。
+
     const source = next && typeof next === 'object' ? next : {}
     state.queries = Array.isArray(source.queries) ? source.queries : []
     state.workflows = Array.isArray(source.workflows) ? source.workflows : []
     state.plans = Array.isArray(source.plans) ? source.plans : []
     return publish()
   }
-  // 外部检索结果与工作流数据不是我们生产的：数组元素可能是 null / 原始值。
-  // 这里逐处收敛成「对象数组」，保证工作台在任何上游形状下都不会拿到 null 行去取属性。
+
+
   const objectRows = value => (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
   return {
     get,
@@ -613,12 +613,12 @@ function createEvidenceStore(sessionId) {
       const { workflowId, name, stages = [] } = input && typeof input === 'object' ? input : {}
       const current = get()
       const previous = current.plans.find(plan => plan.id === workflowId)
-      // 阶段标签是外部传入的字符串数组（历史上也接受 {label} 对象）：两种都收，
-      // null / 原始值包成 {label}，绝不直接取属性。
+
+
       const rawStages = Array.isArray(stages) ? stages : []
       const row = { id: workflowId, name, stages: rawStages.map((stage, index) => {
         const label = stage && typeof stage === 'object' ? stage.label : stage
-        // 上一版阶段先取出来再比对：两个 undefined 相等时不能反手去解引用 undefined。
+
         const before = previous?.stages?.[index]
         return { label, done: before && before.label === label ? before.done : false }
       }), at: Date.now() }
@@ -637,20 +637,16 @@ function createEvidenceStore(sessionId) {
 
 const h = React.createElement
 
-// 视觉系统单一真源。色值与 dsh-promptkit「研究方法工厂对话增强器」（--pk-*）逐项对齐，
-// 仅变量名前缀改为 --rk，避免与宿主或其他插件冲突；改这里即可整体换肤。
-//
-// 对齐要点：teal #0f766e 主色、#0b5f58 主按钮底、12px 卡片圆角、8px 控件圆角、
-// 13px 正文字号、14px 面板标题、27px 页面标题、统一的三级阴影刻度。
+
 const GLOBAL_CSS = `
-:root {
-  --rk-ink: #17212b; --rk-muted: #607080; --rk-slate: #52606d;
-  --rk-line: #d8e1e8; --rk-line-strong: #b6c6d1; --rk-divide: #edf1f4;
-  --rk-canvas: #f4f7f9; --rk-surface: #fff; --rk-surface-alt: #fcfdff; --rk-track: #e8eef2;
-  --rk-teal: #0f766e; --rk-teal-strong: #0b5f58;
-  --rk-teal-line: #cce8e2; --rk-teal-line-strong: #8acbbd; --rk-teal-line-active: #67b9aa;
-  --rk-teal-tint: #f1faf8; --rk-teal-tint-deep: #effaf7;
-  --rk-on-ink: #ffffff;
+:root, body {
+  --rk-ink: var(--dsw-alias-label-primary, #17212b); --rk-muted: var(--dsw-alias-label-secondary, #607080); --rk-slate: var(--dsw-alias-label-secondary, #52606d);
+  --rk-line: var(--dsw-alias-border-l1, #d8e1e8); --rk-line-strong: var(--dsw-alias-border-l2, #b6c6d1); --rk-divide: var(--dsw-alias-border-l1, #edf1f4);
+  --rk-canvas: var(--dsw-alias-bg-layer-1, #f4f7f9); --rk-surface: var(--dsw-alias-bg-base, #fff); --rk-surface-alt: var(--dsw-alias-bg-layer-1, #fcfdff); --rk-track: var(--dsw-alias-bg-layer-2, #e8eef2);
+  --rk-teal: var(--dsw-alias-state-business-primary, #315fc4); --rk-teal-strong: var(--dsw-alias-button-info-fill, #2d58bc);
+  --rk-teal-line: #d9e4fa; --rk-teal-line-strong: #a4bcef; --rk-teal-line-active: var(--dsw-alias-state-business-primary, #4774d6);
+  --rk-teal-tint: #edf3ff; --rk-teal-tint-deep: #e5edfd;
+  --rk-on-ink: var(--dsw-alias-label-on-color, #ffffff);
   --rk-blue: #2563eb; --rk-amber: #b45309; --rk-amber-line: #f1d4a5; --rk-amber-tint: #fff7ed;
   --rk-red: #b91c1c; --rk-red-tint: #fdecec;
   --rk-status-verified: #15803d; --rk-status-inferred: #2563eb; --rk-status-toverify: #b45309;
@@ -667,10 +663,10 @@ const GLOBAL_CSS = `
   --rk-d-ink: #e8eaed; --rk-d-muted: #9aa0a6; --rk-d-slate: #8a9199;
   --rk-d-line: #3c4043; --rk-d-line-strong: #4a4f59; --rk-d-divide: #2d3139;
   --rk-d-canvas: #181a20; --rk-d-surface: #242830; --rk-d-surface-alt: #1e2127; --rk-d-track: #2d3139;
-  --rk-d-teal: #3dbdb4; --rk-d-teal-strong: #2a9d94;
-  --rk-d-teal-line: #1a3d38; --rk-d-teal-line-strong: #2a6a60; --rk-d-teal-line-active: #3a9a8a;
-  --rk-d-teal-tint: #1a2e2c; --rk-d-teal-tint-deep: #162a28;
-  --rk-d-on-ink: #f4f7f9;
+  --rk-d-teal: #8db6ff; --rk-d-teal-strong: #9cbfff;
+  --rk-d-teal-line: #2a3b58; --rk-d-teal-line-strong: #425d86; --rk-d-teal-line-active: #8db6ff;
+  --rk-d-teal-tint: #1d2b43; --rk-d-teal-tint-deep: #243652;
+  --rk-d-on-ink: #131b2a;
   --rk-d-blue: #5c9dff; --rk-d-amber: #f0a040; --rk-d-amber-line: #5a3a10; --rk-d-amber-tint: #2a1f10;
   --rk-d-red: #ff6b6b; --rk-d-red-tint: #3a1a1a;
   --rk-d-status-verified: #34d399; --rk-d-status-inferred: #5c9dff; --rk-d-status-toverify: #f0a040;
@@ -681,14 +677,14 @@ const GLOBAL_CSS = `
   --rk-d-shadow-lg: 0 20px 50px rgba(0,0,0,.55);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --rk-ink: var(--rk-d-ink); --rk-muted: var(--rk-d-muted); --rk-slate: var(--rk-d-slate);
-    --rk-line: var(--rk-d-line); --rk-line-strong: var(--rk-d-line-strong); --rk-divide: var(--rk-d-divide);
-    --rk-canvas: var(--rk-d-canvas); --rk-surface: var(--rk-d-surface); --rk-surface-alt: var(--rk-d-surface-alt); --rk-track: var(--rk-d-track);
-    --rk-teal: var(--rk-d-teal); --rk-teal-strong: var(--rk-d-teal-strong);
-    --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--rk-d-teal-line-active);
+  :root, body {
+    --rk-ink: var(--dsw-alias-label-primary, var(--rk-d-ink)); --rk-muted: var(--dsw-alias-label-secondary, var(--rk-d-muted)); --rk-slate: var(--dsw-alias-label-secondary, var(--rk-d-slate));
+    --rk-line: var(--dsw-alias-border-l1, var(--rk-d-line)); --rk-line-strong: var(--dsw-alias-border-l2, var(--rk-d-line-strong)); --rk-divide: var(--dsw-alias-border-l1, var(--rk-d-divide));
+    --rk-canvas: var(--dsw-alias-bg-layer-1, var(--rk-d-canvas)); --rk-surface: var(--dsw-alias-bg-base, var(--rk-d-surface)); --rk-surface-alt: var(--dsw-alias-bg-layer-1, var(--rk-d-surface-alt)); --rk-track: var(--dsw-alias-bg-layer-2, var(--rk-d-track));
+    --rk-teal: var(--dsw-alias-state-business-primary, var(--rk-d-teal)); --rk-teal-strong: var(--dsw-alias-button-info-fill, var(--rk-d-teal-strong));
+    --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--dsw-alias-state-business-primary, var(--rk-d-teal-line-active));
     --rk-teal-tint: var(--rk-d-teal-tint); --rk-teal-tint-deep: var(--rk-d-teal-tint-deep);
-    --rk-on-ink: var(--rk-d-on-ink);
+    --rk-on-ink: var(--dsw-alias-label-on-color, var(--rk-d-on-ink));
     --rk-blue: var(--rk-d-blue); --rk-amber: var(--rk-d-amber); --rk-amber-line: var(--rk-d-amber-line); --rk-amber-tint: var(--rk-d-amber-tint);
     --rk-red: var(--rk-d-red); --rk-red-tint: var(--rk-d-red-tint);
     --rk-status-verified: var(--rk-d-status-verified); --rk-status-inferred: var(--rk-d-status-inferred); --rk-status-toverify: var(--rk-d-status-toverify);
@@ -697,13 +693,13 @@ const GLOBAL_CSS = `
   }
 }
 body[data-ds-dark-theme] {
-  --rk-ink: var(--rk-d-ink); --rk-muted: var(--rk-d-muted); --rk-slate: var(--rk-d-slate);
-  --rk-line: var(--rk-d-line); --rk-line-strong: var(--rk-d-line-strong); --rk-divide: var(--rk-d-divide);
-  --rk-canvas: var(--rk-d-canvas); --rk-surface: var(--rk-d-surface); --rk-surface-alt: var(--rk-d-surface-alt); --rk-track: var(--rk-d-track);
-  --rk-teal: var(--rk-d-teal); --rk-teal-strong: var(--rk-d-teal-strong);
-  --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--rk-d-teal-line-active);
+  --rk-ink: var(--dsw-alias-label-primary, var(--rk-d-ink)); --rk-muted: var(--dsw-alias-label-secondary, var(--rk-d-muted)); --rk-slate: var(--dsw-alias-label-secondary, var(--rk-d-slate));
+  --rk-line: var(--dsw-alias-border-l1, var(--rk-d-line)); --rk-line-strong: var(--dsw-alias-border-l2, var(--rk-d-line-strong)); --rk-divide: var(--dsw-alias-border-l1, var(--rk-d-divide));
+  --rk-canvas: var(--dsw-alias-bg-layer-1, var(--rk-d-canvas)); --rk-surface: var(--dsw-alias-bg-base, var(--rk-d-surface)); --rk-surface-alt: var(--dsw-alias-bg-layer-1, var(--rk-d-surface-alt)); --rk-track: var(--dsw-alias-bg-layer-2, var(--rk-d-track));
+  --rk-teal: var(--dsw-alias-state-business-primary, var(--rk-d-teal)); --rk-teal-strong: var(--dsw-alias-button-info-fill, var(--rk-d-teal-strong));
+  --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--dsw-alias-state-business-primary, var(--rk-d-teal-line-active));
   --rk-teal-tint: var(--rk-d-teal-tint); --rk-teal-tint-deep: var(--rk-d-teal-tint-deep);
-  --rk-on-ink: var(--rk-d-on-ink);
+  --rk-on-ink: var(--dsw-alias-label-on-color, var(--rk-d-on-ink));
   --rk-blue: var(--rk-d-blue); --rk-amber: var(--rk-d-amber); --rk-amber-line: var(--rk-d-amber-line); --rk-amber-tint: var(--rk-d-amber-tint);
   --rk-red: var(--rk-d-red); --rk-red-tint: var(--rk-d-red-tint);
   --rk-status-verified: var(--rk-d-status-verified); --rk-status-inferred: var(--rk-d-status-inferred); --rk-status-toverify: var(--rk-d-status-toverify);
@@ -723,6 +719,93 @@ body[data-ds-dark-theme] {
    !important 时会被 author 级 !important 规则覆盖）：宽度交还给 100%（相对父容器，
    随窗口自适应，不再受 1240px 与 100vw-280px 约束），内边距改用与其他分区同一枚流式令牌。 */
 .rk-studio-host { min-width: 0; display: block }
+/* 方法库和手动整理面板共享宿主语义色。 */
+.rk-studio-host, .rk-enhancer-theme {
+  --pk-ink: var(--rk-ink); --pk-muted: var(--rk-muted); --pk-slate: var(--rk-slate);
+  --pk-line: var(--rk-line); --pk-surface: var(--rk-surface); --pk-surface-alt: var(--rk-surface-alt);
+  --pk-canvas: var(--rk-canvas); --pk-paper-warm: var(--rk-canvas);
+  --pk-teal: var(--rk-teal); --pk-teal-strong: var(--rk-teal-strong);
+  --pk-teal-line: var(--rk-teal-line); --pk-teal-line-strong: var(--rk-teal-line-strong);
+  --pk-teal-line-active: var(--rk-teal-line-active); --pk-teal-tint: var(--rk-teal-tint);
+  --pk-teal-tint-deep: var(--rk-teal-tint-deep); --pk-action-bg: var(--rk-teal-strong); --pk-action-fg: var(--rk-on-ink);
+}
+.rk-console-main, .rk-compose-actions, .rk-personal-head {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.rk-console-main, .rk-personal-head { justify-content: space-between }
+.rk-composer-picker {
+  z-index: 20010;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rk-line-strong) transparent;
+  border: 1px solid var(--rk-line);
+  border-radius: 12px;
+  background: var(--rk-surface);
+  color: var(--rk-ink);
+  box-shadow: var(--rk-shadow-lg);
+  font: 13px/1.4 var(--rk-font);
+}
+.rk-picker-header { position: sticky; top: 0; z-index: 1; background: var(--rk-surface); border-bottom: 1px solid var(--rk-line) }
+.rk-composer-picker[data-short] .rk-picker-header { position: relative }
+.rk-picker-top, .rk-picker-filters { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px }
+.rk-picker-top { padding-bottom: 0; flex-wrap: wrap }
+.rk-picker-filters { padding-bottom: 8px }
+.rk-picker-tabs, .rk-picker-actions { display: inline-flex; align-items: center; gap: 4px }
+.rk-picker-tabs { padding: 2px; border: 1px solid var(--rk-line); border-radius: 8px; background: var(--rk-surface-alt) }
+.rk-picker-actions { margin-inline-start: auto }
+.rk-picker-tabs button, .rk-picker-text-action {
+  min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--rk-muted); font: 600 12px/1.35 var(--rk-font);
+  cursor: pointer; white-space: nowrap;
+}
+.rk-picker-tabs button[aria-selected="true"], .rk-picker-done { background: var(--rk-teal-tint-deep); color: var(--rk-teal) }
+.rk-picker-tabs button:hover, .rk-picker-text-action:hover { background: var(--rk-teal-tint); color: var(--rk-teal) }
+.rk-picker-organize { min-height: 32px; border: 1px solid var(--rk-line); color: var(--rk-ink); background: var(--rk-surface-alt) }
+.rk-picker-switch {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 28px;
+  padding: 0 3px; color: var(--rk-ink); white-space: nowrap; cursor: pointer; font-size: 12px;
+}
+.rk-picker-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer }
+.rk-picker-switch-track { width: 28px; height: 16px; padding: 2px; box-sizing: border-box; border-radius: 999px; background: var(--rk-track); box-shadow: inset 0 0 0 1px var(--rk-line-strong) }
+.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted) }
+.rk-picker-switch input:checked + .rk-picker-switch-track { background: var(--rk-teal-strong); box-shadow: none }
+.rk-picker-switch input:checked + .rk-picker-switch-track::before { transform: translateX(12px); background: var(--rk-on-ink) }
+.rk-picker-switch input:focus-visible + .rk-picker-switch-track { outline: 2px solid var(--rk-teal); outline-offset: 2px }
+.rk-picker-search { position: relative; flex: 1; min-width: 0 }
+.rk-picker-filter { flex: 0 1 132px; min-width: 0; max-width: 42%; text-overflow: ellipsis }
+.rk-picker-results { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 6px 10px 10px }
+.rk-picker-row {
+  width: 100%; min-width: 0; min-height: 45px; display: flex; align-items: center; gap: 8px; box-sizing: border-box;
+  padding: 5px 9px; border: 1px solid var(--rk-line); border-radius: 8px; background: var(--rk-surface-alt);
+  color: var(--rk-ink); font: inherit; text-align: left; cursor: pointer;
+}
+.rk-picker-row:hover, .rk-picker-row[data-selected] { border-color: var(--rk-teal-line-strong); background: var(--rk-teal-tint) }
+.rk-picker-row:focus-visible { outline-offset: -2px }
+.rk-picker-row input { flex: none; margin: 0; accent-color: var(--rk-teal) }
+.rk-picker-row-text { flex: 1; min-width: 0 }
+.rk-picker-row-text strong { display: block; font-weight: 650 }
+.rk-picker-desc { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.rk-picker-desc, .rk-picker-meta, .rk-picker-selected, .rk-picker-empty { color: var(--rk-muted); font-size: 11px }
+.rk-picker-meta { max-width: 28%; padding: 2px 6px; border-radius: 6px; background: var(--rk-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rk-picker-row[data-material] .rk-picker-meta { background: var(--rk-teal-tint); color: var(--rk-teal) }
+.rk-picker-selected { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 4px 8px }
+.rk-picker-empty { margin: 0; padding: 10px 8px }
+.rk-compose-suggestion > section {
+  position: absolute; bottom: calc(100% + 8px); width: min(550px, 100%); left: 0; z-index: 20009;
+  display: grid; gap: 8px; box-sizing: border-box; padding: 11px 14px;
+  border: 1px solid var(--rk-teal-line); border-radius: 12px;
+  background: var(--rk-surface); color: var(--rk-ink); box-shadow: var(--rk-shadow-panel);
+  font: 13px/1.5 var(--rk-font);
+}
+.rk-compose-reason { color: var(--rk-muted); font-size: 12px; line-height: 1.5 }
+.rk-personal-templates { display: grid; gap: 12px; padding: 24px var(--rk-gutter) 48px; color: var(--rk-ink) }
+.rk-personal-head h2, .rk-personal-head p { margin: 0 }
+.rk-personal-head p { color: var(--rk-muted); margin-top: 6px; font-size: 13px }
+.rk-template-form { display: grid; gap: 10px }
+.rk-research-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px }
+.rk-research-home-grid > * { align-content: start }
 .rk-studio-host > main {
   width: 100% !important;
   max-width: none !important;
@@ -794,7 +877,7 @@ body[data-ds-dark-theme] {
 .rk-card { transition: transform .18s ease, box-shadow .18s ease }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
 .rk-row { transition: background .15s ease }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgba(15,118,110,.45); outline-offset: 2px }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--rk-teal-line-active); outline-offset: 2px }
 @keyframes rk-spin { to { transform: rotate(360deg) } }
 @keyframes rk-pop { from { opacity: 0; transform: translateY(6px) scale(.985) } to { opacity: 1; transform: none } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
@@ -832,8 +915,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 const GlobalStyle = () => h('style', { key: 'rk-global-css', dangerouslySetInnerHTML: { __html: GLOBAL_CSS } })
 
-// 组件样式全部走 CSS 变量；深浅主题切换只影响变量取值，不改动布局。
-// accent 系列是 teal 的语义别名，供既有代码平滑过渡，新代码直接用 teal。
+
+
 const C = {
   ink: 'var(--rk-ink)', muted: 'var(--rk-muted)', slate: 'var(--rk-slate)',
   line: 'var(--rk-line)', lineStrong: 'var(--rk-line-strong)', divide: 'var(--rk-divide)',
@@ -855,8 +938,8 @@ const C = {
 
 
 
-// 图标 path 与 dsh-promptkit「研究方法工厂对话增强器」同源（ICON_PATHS 逐项复刻），
-// 保证两处图标形状、线宽与视觉重量完全一致；不引入图标库。
+
+
 const ICON_PATHS = {
   sparkles: 'M12 3.2l1.7 4.1 4.1 1.7-4.1 1.7L12 14.8l-1.7-4.1-4.1-1.7 4.1-1.7L12 3.2zM18.8 13.5l.9 2.2 2.2.9-2.2.9-.9 2.2-.9-2.2-2.2-.9 2.2-.9.9-2.2z',
   sparkle: 'M12 3.2l1.7 4.1 4.1 1.7-4.1 1.7L12 14.8l-1.7-4.1-4.1-1.7 4.1-1.7L12 3.2z',
@@ -908,10 +991,10 @@ const Icon = ({ name, size = 14, style, strokeWidth = 1.7 }) =>
 
 
 
-// 统一基础组件层。所有科研视图（工作台 / 资源选择器 / 研究资产库 / 数据库面板 / 输入框入口）
-// 只从这里取组件，保证与 dsh-promptkit「研究方法工厂对话增强器」的视觉与交互一致：
-// 同一套 teal 主色、12px 卡片圆角 / 8px 控件圆角、13px 正文、统一阴影刻度与悬浮反馈。
-// 组件只负责外观与无障碍属性，不持有任何业务逻辑。
+
+
+
+
 
 const FONT = { fontFamily: C.font }
 
@@ -945,7 +1028,7 @@ const BUTTON_SIZES = {
 
 function Button({ variant = 'soft', size = 'md', icon, disabled = false, onClick, type = 'button', title, style, children, ...rest }) {
   const base = BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.soft
-  // 次要按钮本就比主按钮矮一档，避免「写入 / 发送 / 复制」三个出口等高时主次不分。
+
   const sizing = size === 'sm' ? (variant === 'primary' ? BUTTON_SIZES.smSoft : BUTTON_SIZES.sm) : BUTTON_SIZES.md
   return h('button', {
     type,
@@ -1138,8 +1221,8 @@ function Badge({ children, color = C.muted }) {
   }, children)
 }
 
-// 列表行：主体可点击，「行尾操作」用 trailing 传入（如收藏星标），
-// 避免每个视图各自拼一套内联行样式。
+
+
 function ListRow({ active = false, onClick, trailing, children, style, ...rest }) {
   const main = onClick ? h('button', {
     key: 'main',
@@ -1209,9 +1292,9 @@ function Notice({ tone = 'info', icon, children, style }) {
 }
 
 function Modal({ title, subtitle, onClose, footer, children, width = 660, labelledBy }) {
-  // 弹层是 position: fixed 的全屏遮罩：必须 portal 到 body。DSH 0.2.2-rc.1 起 composer seat
-  // 有 will-change: transform，会成为 fixed 后代的 containing block；composer 槽里的选择器弹窗
-  // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+
+
+
   return bodyPortal(h('div', {
     role: 'presentation',
     onMouseDown: onClose,
@@ -1261,18 +1344,18 @@ function PageHead({ kicker, title, lead, actions }) {
       h('h1', { key: 't', style: { margin: kicker ? '8px 0 0' : 0, fontSize: 27, letterSpacing: '-.035em', fontWeight: 760, lineHeight: 1.2 } }, title),
       lead ? h('p', { key: 'l', style: { margin: '8px 0 0', color: C.muted, fontSize: 14, lineHeight: 1.55 } }, lead) : null,
     ]),
-    // actions 容器必须允许收缩到视口宽（maxWidth），否则窄屏下整体被撑宽、
-    // 内部的 flexWrap 永远不触发——390px 实测曾把 8 个按钮铺到 968px。
+
+
     actions ? h('div', { key: 'a', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', flexShrink: 1, flexBasis: 'auto', maxWidth: '100%', minWidth: 0, justifyContent: 'flex-end' } }, actions) : null,
   ])
 }
 
-// sticky：把检索/筛选行吸在统一容器的分区导航之下（二级吸顶）。
-// 吸顶偏移量取容器实测写入的 --rk-console-nav-h，不写死像素。
-// 吸顶态下外边距交由 .rk-sticky-toolbar 的内边距承接：外边距区域不参与背景绘制，
-// 直接吸顶会让滚动内容从边距缝隙里透出来。
+
+
+
+
 function Toolbar({ children, style, sticky = false, innerRef }) {
-  // innerRef：供分区实测二级吸顶带高度（左列 sticky 的偏移量来源），不参与样式。
+
   return h('div', {
     ref: innerRef,
     className: sticky ? 'rk-sticky-toolbar' : undefined,
@@ -1286,10 +1369,10 @@ function Toolbar({ children, style, sticky = false, innerRef }) {
 
 const PROMPTKIT_CLIENT_PATH = '/dsh-research-kit/promptkit-client'
 
-// 宿主（尤其桌面 App 经 dsh-app:// 协议转发）对这条路由可能既不回包也不报错：
-// <script> 的 load / error 都永远不触发，入口就会无限停在「加载中」而看不见任何失败。
-// 因此两条传输各自带硬超时：<script> 挂起后换 fetch 再试一次（不同的浏览器取数路径），
-// 两条都失败才报错，且错误里带上各自的原因——便于区分「路由没通」与「传输被挂起」。
+
+
+
+
 const PROMPTKIT_LOAD_TIMEOUT_MS = 6000
 const PROMPTKIT_FETCH_TIMEOUT_MS = 6000
 
@@ -1305,7 +1388,7 @@ function getPromptKit() {
   return promptKitNamespace
 }
 
-// 传输一：同源经典脚本。宿主按需分发工件，避免首屏解析整份工坊代码。
+
 function loadViaScript() {
   return new Promise((resolve, reject) => {
     const script = document.createElement('script')
@@ -1344,11 +1427,11 @@ function loadViaScript() {
   })
 }
 
-// 传输二：fetch 取回文本后就地求值。
-// 工件是同源、我们自己的构建产物，运行期只依赖 window.__DSH_RESEARCH_REACT__；
-// 若宿主配置了禁止 eval 的 CSP，这里会失败并如实报错（不再静默停在加载中）。
-// 注意：脚本形态若在超时后才姗姗到达，工件会再执行一次并覆盖全局命名空间——
-// 组件用的是本模块已解析的那一份，因此只是多一次幂等初始化，不会错乱。
+
+
+
+
+
 function loadViaFetch() {
   return new Promise((resolve, reject) => {
     if (typeof fetch !== 'function') {
@@ -1374,7 +1457,7 @@ function loadViaFetch() {
         if (!code) throw new Error('fetch 形态返回空响应')
         window.__DSH_RESEARCH_REACT__ = React
         try {
-          // eslint-disable-next-line no-new-func
+
           new Function(code)()
         } finally {
           if (window.__DSH_RESEARCH_REACT__ === React) delete window.__DSH_RESEARCH_REACT__
@@ -1394,8 +1477,8 @@ function loadViaFetch() {
   })
 }
 
-// PromptKit 是体积最大的可选界面依赖。单例 Promise 保证控制台、输入框增强器与
-// 方法工坊接线并发挂载时只请求一次（跨传输也只走一轮）。
+
+
 function loadPromptKit() {
   if (promptKitNamespace) return Promise.resolve(promptKitNamespace)
   if (promptKitPromise) return promptKitPromise
@@ -1421,7 +1504,7 @@ function loadPromptKit() {
     promptKitNamespace = loaded
     return loaded
   }, error => {
-    // 失败必须清掉单例：用户在入口按钮上点「重试」时重新走两条传输。
+
     promptKitPromise = null
     throw error
   })
@@ -1430,25 +1513,25 @@ function loadPromptKit() {
 
 
 
-// 草稿增强的「入口形态」是本机偏好，不是插件配置：改完即时生效——不必重启 profile
-// 重载插件（插件配置要重开才生效），重装插件也不受影响。
-//   inline   输入框右侧纯图标钮（紧挨模型选择器），面板贴着按钮弹出 —— 默认，占用最小；
-//   floating 右下角可拖拽悬浮钮（位置自动记忆）+「沉淀最近回答」伴生圆钮 —— 与旧版一致。
+
+
+
+
 const ENTRY_MODE_KEY = 'dsh-research-kit.entry-mode.v1'
 const ENTRY_MODE_INLINE = 'inline'
 const ENTRY_MODE_FLOATING = 'floating'
 const ENTRY_MODE_OPTIONS = [
-  { value: ENTRY_MODE_INLINE, label: '输入框图标钮' },
+  { value: ENTRY_MODE_INLINE, label: '输入框内' },
   { value: ENTRY_MODE_FLOATING, label: '悬浮伴生钮' },
 ]
 const ENTRY_MODE_HINTS = {
-  [ENTRY_MODE_INLINE]: '输入框右侧一个纯图标钮（悬停显示说明），面板贴着它弹出；不占右下角，也不再另放沉淀圆钮——手动沉淀走每条助手回答下方的操作区。',
+  [ENTRY_MODE_INLINE]: '在输入框的「科研辅助」中选择「整理当前提问」。回答下方的「回答依据」可查看和保存待核验引用。',
   [ENTRY_MODE_FLOATING]: '右下角可拖拽的悬浮钮，位置自动记忆；旁边恢复「沉淀最近回答」伴生圆钮，与本次改版前的行为一致。',
 }
 
 const entryModeListeners = new Set()
 
-/** 只认两个合法值：任何脏数据（null / 旧值 / 手改）一律回落到默认的内联形态。 */
+
 function normalizeEntryMode(value) {
   return value === ENTRY_MODE_FLOATING ? ENTRY_MODE_FLOATING : ENTRY_MODE_INLINE
 }
@@ -1461,7 +1544,7 @@ function readEntryMode() {
   }
 }
 
-/** 写入并广播：输入框那一侧的槽位与设置区同一次渲染就换过来，无需刷新页面。 */
+
 function writeEntryMode(value) {
   const mode = normalizeEntryMode(value)
   try { window.localStorage.setItem(ENTRY_MODE_KEY, mode) } catch { /* 写不了也仍然即时生效 */ }
@@ -1482,7 +1565,7 @@ function useEntryMode() {
   return mode
 }
 
-/** Plugins 详情页里的设置项：悬浮伴生钮 ↔ 输入框图标钮，二选一。 */
+
 function EntryModeSetting() {
   const mode = useEntryMode()
   return h('section', {
@@ -1569,18 +1652,18 @@ function CatalogCategoryFilter({ type, categories, value, onChange }) {
 }
 
 
-// 模型输出协议：Node half 与浏览器端共用同一解析与展示定义，避免两端漂移。
-// 与 PromptKit 源仓库保持协议兼容（[DIAG] 行 + ===PROMPT=== 分隔符）。
-// 注：本模块是纯字符串协议解析器，不做任何 shell 执行、求值或文件系统访问。
+
+
+
 const DIAGNOSIS_LABELS = { concept_clarity: '概念清晰', hidden_premise: '隐含前提', falsifiability: '可证伪性', actionability: '可行动性', context_fit: '语境契合' }
 const DIAGNOSIS_DIMENSIONS = Object.keys(DIAGNOSIS_LABELS)
 
-// 只兼容明确的维度别名；不猜测或补写模型没有返回的诊断。
+
 const DIAGNOSIS_ALIASES = { ...Object.fromEntries(Object.entries(DIAGNOSIS_LABELS).map(([key, label]) => [label, key])), '概念澄清': 'concept_clarity', '语境契合度': 'context_fit' }
 
-// Markdown 围栏符（反引号 ×3）。以字符码构造，避免源码中出现裸反引号序列。
+
 const FENCE = String.fromCharCode(96).repeat(3)
-// 诊断行的行级协议模式：[DIAG] 维度名: 内容。行内匹配后即弃用，不进入任何执行路径。
+
 const DIAG_LINE = new RegExp('^\\s*(?:[-*]\\s*)?\\[diag\\]\\s*([^:\\uff1a]+)[:\\uff1a]\\s*(.*)$', 'i')
 const FENCE_OPEN = new RegExp('^\\s*' + FENCE + '[^\\n]*\\n\\s*(?:[-*]\\s*)?\\[diag\\]', 'i')
 const FENCE_OPEN_STRIP = new RegExp('^\\s*' + FENCE + '[^\\n]*\\n')
@@ -1588,10 +1671,10 @@ const FENCE_CLOSE_STRIP = new RegExp('\\n' + FENCE + '\\s*$')
 const PROMPT_MARKER = /^\s*={3}\s*PROMPT\s*={3}[ \t]*$/im
 const DIAG_PREFIX = /^\s*\[diag\]/i
 
-/** 保留部分诊断，隔离协议行；diagnosisMeta 只含协议状态，不记录草稿或模型原文。 */
+
 function parseEnhanceOutput(raw, { streaming = false } = {}) {
   let text = String(raw || '').replace(/\r\n?/g, '\n')
-  // 仅拆包裹协议的外层围栏，普通代码提示词原样保留。
+
   if (FENCE_OPEN.test(text)) {
     text = text.replace(FENCE_OPEN_STRIP, '').replace(FENCE_CLOSE_STRIP, '')
   }
@@ -1616,7 +1699,7 @@ function parseEnhanceOutput(raw, { streaming = false } = {}) {
       continue
     }
     if (!marker && line.trim() && !DIAG_PREFIX.test(line)) readingDiagnosis = false
-    // 不把无值或尚未传完的诊断行展示为改写正文。
+
     if (!DIAG_PREFIX.test(line)) remaining.push(line)
   }
   let prompt = marker ? text.slice(marker.index + marker[0].length) : hasLeadingDiagnosis ? remaining.join('\n') : text
@@ -1637,9 +1720,9 @@ function parseEnhanceOutput(raw, { streaming = false } = {}) {
 }
 
 
-// 研究灵感资产的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
 
-// 超长正文通常是粘贴的原始数据或完整查询结果；导入与保存时拒绝，守住隐私边界。
+
+
 const MAX_ASSET_BODY_CHARS = 8000
 
 function assertManageableBody(body) {
@@ -1648,14 +1731,14 @@ function assertManageableBody(body) {
   }
 }
 
-// 外部/持久化数据里的资产列表可能混入 null 与原始值（导入、旧版本写入、手工改过的存储）；
-// 入口先收敛为「对象数组」，筛选与计数对任何输入都保持 total。
+
+
 function vaultAssetRows(assets) {
   return (Array.isArray(assets) ? assets : []).filter(item => item && typeof item === 'object')
 }
 
-// 列表筛选：关键词命中标题/正文/备注/标签/项目；filter 为预设分组。
-//   all=全部 to_verify=待验证 favorites=收藏 derived=派生版本
+
+
 function filterAssets(assets, { query = '', filter = 'all' } = {}) {
   const text = String(query || '').trim().toLowerCase()
   return vaultAssetRows(assets).filter(item => {
@@ -1667,28 +1750,28 @@ function filterAssets(assets, { query = '', filter = 'all' } = {}) {
   })
 }
 
-// 待验证队列：验证状态 pending 或认识状态待核实的资产优先推进。
+
 function pendingVerificationCount(assets) {
   return vaultAssetRows(assets).filter(item => item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify').length
 }
 
 
-// 自动沉淀的结构化提取器（纯逻辑，无 React、无浏览器依赖、无网络请求）。
-//
-// 职责：把一条助手回答的文本解析成「知识节点 + 关系 + 引用来源」三组结构，
-// 供 knowledge-store 去重入库、knowledge-deposition 联动灵感资产/证据库、
-// 证据图谱绘制。它是规则提取器，不是理解器：
-//   - 只捕捉显式的陈述模式（X 影响 Y、A 与 B 相关、研究表明……），
-//     捕捉不到不算失败，捕捉到的一律「待核验」；
-//   - 输出必须确定：同一文本重复提取必得同一结果（回归测试钉住）；
-//   - 输出必须有界：单条消息的节点/关系/引用各设上限，防止长回答撑爆存储。
-//
-// 旗舰样例（需求原文）：“某基因可能影响水稻耐盐性” 应得到
-//   基因(某基因) —可能影响→ 性状(耐盐性) ←研究对象— 物种(水稻)。
-// 由 extractClaims + expandEntityPhrase 两级实现：先抽二元关系，
-// 再把「物种+性状」复合短语拆开并补 research-subject 关系。
 
-// ── 词表与标签 ────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const KNOWLEDGE_KINDS = ['question', 'hypothesis', 'finding', 'method', 'entity']
 const KNOWLEDGE_KIND_LABELS = {
@@ -1703,7 +1786,7 @@ const KNOWLEDGE_STATUS_LABELS = { to_verify: '待核验', verified: '已核验',
 const KNOWLEDGE_POLARITIES = ['positive', 'negative', 'uncertain', 'neutral']
 const KNOWLEDGE_POLARITY_LABELS = { positive: '正向', negative: '负向', uncertain: '不确定', neutral: '' }
 
-// 关系词表：前六种由提取器产生；about/records/supports/deposited 由入库与图谱层生成。
+
 const CLAIM_RELATIONS = ['may-affect', 'promotes', 'inhibits', 'causes', 'correlates', 'research-subject', 'about', 'records', 'supports', 'deposited']
 const CLAIM_RELATION_LABELS = {
   'may-affect': '可能影响', promotes: '促进', inhibits: '抑制', causes: '导致',
@@ -1711,7 +1794,7 @@ const CLAIM_RELATION_LABELS = {
   records: '记录自', supports: '支持', deposited: '沉淀为资产',
 }
 
-// 性状词表：显式列举 + 「X性」后缀规则（X 含 耐/抗/稳/敏 时才认，避免「可能性」这类误报）。
+
 const TRAIT_WORDS = [
   '耐盐性', '耐盐碱性', '抗旱性', '耐旱性', '耐涝性', '耐热性', '耐寒性', '抗寒性', '抗病性', '抗虫性',
   '抗倒伏性', '耐逆性', '抗逆性', '耐低氮性', '抗氧化性', '产量', '品质', '株高', '穗长', '穗数',
@@ -1723,7 +1806,7 @@ const ORGANISM_WORDS = [
   '花生', '苜蓿', '杨树', '葡萄', '柑橘', '小鼠', '大鼠', '斑马鱼', '果蝇', '线虫', '酵母', '大肠杆菌', '人类',
 ]
 
-// 英文词表：英文综述/文献回答同样要能抽出知识关系（收窄匹配，宁可漏不可错）。
+
 const EN_TRAIT_PATTERNS = [
   /salt (?:stress )?tolerance$/i, /drought (?:tolerance|resistance)$/i, /disease resistance$/i,
   /blast resistance$/i, /heat tolerance$/i, /cold tolerance$/i, /abiotic stress tolerance$/i,
@@ -1732,7 +1815,7 @@ const EN_TRAIT_PATTERNS = [
 ]
 const EN_ORGANISM_WORDS = ['rice', 'wheat', 'maize', 'barley', 'arabidopsis', 'soybean', 'cotton', 'tomato', 'potato', 'sorghum', 'mouse', 'mice', 'human', 'zebrafish', 'yeast']
 
-// ── 限额与常量 ────────────────────────────────────────────────────────────────
+
 
 const MAX_NODES_PER_MESSAGE = 24
 const MAX_CLAIMS_PER_MESSAGE = 24
@@ -1749,9 +1832,9 @@ const MARKDOWN_HEADING = /^#{1,6}\s+/gm
 const MARKDOWN_LIST = /^\s*[-*+]\s+/gm
 const MARKDOWN_LINK = /\[([^\]]{1,120})\]\((https?:\/\/[^)\s]+)\)/g
 
-// 二元关系模式（按优先级排列，逐短句只取第一个命中的模式）。
-// 主体/客体各限 24 字：科学陈述的主语通常是短语而非长句，超限多半是没抽对。
-// polarity 是模式自带的方向先验；句中含不确定词时统一收敛为 uncertain。
+
+
+
 const CLAIM_PATTERNS = [
   { relation: 'may-affect', re: /^(.{1,24}?)(?:可能|或许|也许|有望)(?:会|将|将会)?(?:显著|明显)?(?:地)?(影响|调控|调节|改变|决定)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
   { relation: 'promotes', re: /^(.{1,24}?)(?:显著|明显)?(?:地)?(促进|增强|提高|上调|提升|增加|延长|改善|激活)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
@@ -1760,8 +1843,8 @@ const CLAIM_PATTERNS = [
   { relation: 'correlates', re: /^(.{1,24}?)与(.{1,24}?)(?:之间)?(?:呈|存在)?(?:显著)?(正|负)?相关/ },
 ]
 
-// 英文二元关系模式：中文模式未命中时兜底。主体/客体放宽到 48 字符（英文短语更长），
-// 可选的「in <物种>」尾巴拆成独立的 research-subject 关系（salt tolerance in rice）。
+
+
 const EN_CLAIM_PATTERNS = [
   { relation: 'may-affect', re: /^(.{2,48}?)\s+(?:may|might|could)\s+(?:significantly\s+)?(affect|regulate|alter|influence|determine)\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
   { relation: 'promotes', re: /^(.{2,48}?)\s+(?:significantly\s+)?(promotes?|enhances?|increases?|improves?|upregulates?|boosts?)(?:\s+the)?\s+(.{2,48}?)(?:\s+in\s+(.{2,24}?))?\s*[.!?]?$/i },
@@ -1770,28 +1853,28 @@ const EN_CLAIM_PATTERNS = [
   { relation: 'correlates', re: /^(.{2,48}?)\s+(?:is|are|was|were)\s+(?:significantly\s+)?(positively|negatively)?\s*associated\s+with\s+(.{2,48}?)\s*[.!?]?$/i },
 ]
 
-// 主体/客体里不允许再出现关系动词或介词引导——出现说明切分失败，宁可丢掉这条关系。
+
 const CLAIM_SPAN_STOPWORDS = /(促进|抑制|影响|调控|导致|引起|相关|激活|通过|利用|借助|采用|使用|研究表明|可能)/
 const EN_CLAIM_SPAN_STOPWORDS = /\b(promotes?|inhibits?|affects?|causes?|associated|through|via|whereas|however|which|that|led|resulted)\b/i
-// 裸代词/泛指主语没有图谱价值。
+
 const CLAIM_SPAN_PRONOUNS = /^(我们|本研究|研究|作者|其|该|此|这|它们|他们|它|两者|二者|两者之间|二者之间)$/
 const EN_CLAIM_SPAN_PRONOUNS = /^(we|they|it|this study|our study|our results|these results|the authors?)$/i
 
-// 引导句式：剥离后得到「发现/假设/问题/方法」节点，剩余短句继续抽二元关系。
+
 const FINDING_MARKER = /^(?:研究|实验|结果|数据|分析|测序|观察|文献)(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)|^(?:表明|显示|发现|说明|证实|提示|指出|报道|证明)/
 const EN_FINDING_MARKER = /^(?:our|this|these|the)?\s*(?:results?|data|analysis|experiments?|studies?|observations?)?\s*(?:show|shows|showed|indicates?|indicated|suggests?|suggested|demonstrates?|demonstrated|reveals?|revealed|confirms?|confirmed|found)\s+(?:that\s+)?/i
 const HYPOTHESIS_MARKER = /^(?:我们|本研究|作者|团队)?(?:假设|猜想|推测|被认为可能是)/
 const EN_HYPOTHESIS_MARKER = /^(?:we|the authors?)\s+(?:hypothesise|hypothesize|hypothesized|speculate|propose|proposed)\s+(?:that\s+)?/i
 const QUESTION_MARKER = /^(?:研究问题|科学问题|核心问题|关键问题)(?:是|为)?(?:：|:|\s)?/
 const METHOD_MARKER = /^(?:采用|使用|借助|利用)[^，。；]{0,40}?(?:方法|技术|平台|流程|协议|体系)|^方法(?:是|：|:)/
-// 主语前缀（本研究/我们…）不影响句式类型，先剥掉再匹配引导词。
+
 const SUBJECT_PREFIX = /^(?:本研究|本文|我们|团队|笔者)(?=采用|使用|借助|利用|发现|表明|显示|证实|说明|假设|推测|猜想|观察到)/
 const QUESTION_HINT = /(如何|是否|为何|为什么|怎样|哪些|哪种|哪些个|什么|多少|能否|可否|哪个|\bhow\b|\bwhether\b|\bwhy\b|\bwhat\b|\bwhich\b)/i
 const UNCERTAIN_HINT = /(可能|或许|也许|有望|疑似|推测|大概)/
 
-// ── 基础工具 ──────────────────────────────────────────────────────────────────
 
-// FNV-1a 32 位哈希：给「规范化 key」生成确定性短 id（无 crypto 依赖，纯同步）。
+
+
 function hashKey(text) {
   const str = String(text || '')
   let hash = 0x811c9dc5
@@ -1815,7 +1898,7 @@ function clampKnowledgeLabel(value, max = MAX_LABEL_CHARS) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
-// 去重 key：kind（实体再带 entityKind）+ 规范化标签。拉丁文统一小写，中文不受影响。
+
 function normalizeEntityKey(label) {
   return normalizeKnowledgeLabel(label).toLowerCase()
 }
@@ -1825,12 +1908,12 @@ function knowledgeKeyFor(kind, entityKind, label) {
   return `${kind}${suffix}:${normalizeEntityKey(label)}`
 }
 
-// ── 实体识别 ──────────────────────────────────────────────────────────────────
+
 
 function isGeneLike(text) {
   if (/基因$|^基因/.test(text)) return true
   if (/^miR/i.test(text)) return true
-  // 拉丁短代号：含数字或多个大写字母（Ghd7、OsNAC3、SPL9、NRT1.1B），且不是普通英文单词。
+
   if (/^[A-Za-z][A-Za-z0-9.-]{1,11}$/.test(text) && (/\d/.test(text) || /[A-Z].*[A-Z]/.test(text))) return true
   return false
 }
@@ -1858,25 +1941,25 @@ function isEnOrganism(text) {
   return EN_ORGANISM_WORDS.some(word => lowered === word || lowered.startsWith(`${word} `))
 }
 
-// 「X的T」「物种+性状」复合短语拆分：返回实体序列与额外的 research-subject 关系。
-// 端点约定：关系的主体/客体取展开序列的**最后一个**实体（「水稻耐盐性」→ 性状），
-// 其余实体用 research-subject 串到该端点上（「水稻」→研究对象→「耐盐性」）。
+
+
+
 function expandEntityPhrase(phrase) {
   const text = normalizeKnowledgeLabel(phrase)
   if (!text) return { entities: [], endpoint: null, extras: [] }
-  // 形如「P的T」且 T 是性状：P 与 T 各自成实体。
+
   const possessive = /^(.{1,16}?)的(.{1,12})$/.exec(text)
   if (possessive && (TRAIT_WORDS.includes(possessive[2]) || /[耐抗稳敏][^性]*性$/.test(possessive[2]))) {
     return splitSubjectTrait(possessive[1], possessive[2])
   }
-  // 形如「物种+性状」连写（水稻耐盐性）。
+
   for (const word of ORGANISM_WORDS) {
     if (text.startsWith(word) && text.length > word.length) {
       const tail = text.slice(word.length)
       if (TRAIT_WORDS.includes(tail) || /[耐抗稳敏][^性]*性$/.test(tail)) return splitSubjectTrait(word, tail)
     }
   }
-  // 英文「trait in organism」（salt tolerance in rice）：性状为端点，物种补研究对象关系。
+
   const inTail = /^(.{2,48}?)\s+in\s+(.{2,24})$/i.exec(text)
   if (inTail && isEnTrait(inTail[1]) && isEnOrganism(inTail[2])) {
     const traitKey = knowledgeKeyFor('entity', 'trait', inTail[1])
@@ -1909,7 +1992,7 @@ function splitSubjectTrait(subject, trait) {
   }
 }
 
-// ── 引用来源 ──────────────────────────────────────────────────────────────────
+
 
 const CITATION_PATTERNS = [
   { kind: 'doi', regex: /\b10\.\d{4,9}\/[-._;()/:a-z0-9]+/gi, trim: /[.,;)\]}>]+$/ },
@@ -1925,7 +2008,7 @@ function sentenceAt(sentences, index) {
   return clampKnowledgeLabel(sentences[index], 100)
 }
 
-// 从原文提取引用：markdown 链接标题优先，其余用所在句做标题兜底（normalizeEvidenceEntry 需要标题）。
+
 function extractCitations(text) {
   const source = String(text || '')
   if (!source.trim()) return []
@@ -1958,8 +2041,8 @@ function extractCitations(text) {
     const at = match.index || 0
     push({ title: linkTitles.get(url) || sentenceAt(sentences, sentenceIndexAt(source, at, sentences)), url, identifier: '', identifierKind: 'none' })
   }
-  // DOI 常以 https://doi.org/<doi> 链接形式出现：同一来源会同时命中 doi 与 url 两条，
-  // 保留带稳定标识符的那条，丢弃与之重复的纯链接。
+
+
   const identifiers = results.filter(item => item.identifier).map(item => item.identifier.toLowerCase())
   return results.filter(item => item.identifier || !identifiers.some(id => item.url.toLowerCase().includes(id)))
 }
@@ -1975,7 +2058,7 @@ function sentenceIndexAt(text, index, sentences) {
   return 0
 }
 
-// ── 关系抽取 ──────────────────────────────────────────────────────────────────
+
 
 function cleanClaimSpan(span) {
   const text = normalizeKnowledgeLabel(span)
@@ -1985,7 +2068,7 @@ function cleanClaimSpan(span) {
   return text
 }
 
-// 英文跨度清洗：放宽到 48 字符；句首状语（Under salt stress, …）取最后一个逗号后的主体。
+
 function cleanClaimSpanEn(span) {
   const text = normalizeKnowledgeLabel(span)
   if (!text || text.length > 48) return ''
@@ -2005,7 +2088,7 @@ function extractClaimsFromClause(clause) {
       const match = pattern.re.exec(fragment)
       if (!match) continue
       if (pattern.re === CLAIM_PATTERNS[4].re) {
-        // correlates：A 与 B 相关；「正相关/负相关」决定极性，无修饰词时是不确定。
+
         const subject = cleanClaimSpan(match[1])
         const object = cleanClaimSpan(match[2])
         if (!subject || !object) continue // 本模式切分失败：换下一个模式再试，不放弃整句
@@ -2017,14 +2100,14 @@ function extractClaimsFromClause(clause) {
       const subject = cleanClaimSpan(match[1])
       const object = cleanClaimSpan(match[3])
       if (!subject || !object) continue // 同上：切分失败就换模式（例：「……降低」会先被 inhibits 撞上空宾语）
-      // 极性：模式自带方向先验（抑制=负向，其余=正向）；句中含不确定词（可能/或许/有望…）时收敛为 uncertain。
+
       const polarity = UNCERTAIN_HINT.test(fragment) ? 'uncertain' : pattern.re === CLAIM_PATTERNS[2].re ? 'negative' : 'positive'
       rows.push({ subjectPhrase: subject, objectPhrase: object, relation: pattern.re === CLAIM_PATTERNS[2].re ? 'inhibits' : relationOf(pattern), polarity })
       matched = true
       break
     }
     if (matched) continue
-    // 英文兜底：中文模式未命中时尝试英文模式（英文综述/文献回答同样能抽出知识关系）。
+
     for (const pattern of EN_CLAIM_PATTERNS) {
       const match = pattern.re.exec(fragment)
       if (!match) continue
@@ -2037,7 +2120,7 @@ function extractClaimsFromClause(clause) {
       } else {
         const polarity = pattern.re === EN_CLAIM_PATTERNS[2].re ? 'negative' : pattern.re === EN_CLAIM_PATTERNS[0].re ? 'uncertain' : 'positive'
         rows.push({ subjectPhrase: subject, objectPhrase: object, relation: pattern.re === EN_CLAIM_PATTERNS[2].re ? 'inhibits' : pattern.relation, polarity })
-        // 「in <物种>」尾巴拆成独立的 research-subject 关系（rice →研究对象→ salt tolerance）。
+
         if (match[4]) {
           const organism = cleanClaimSpanEn(match[4])
           if (organism) rows.push({ subjectPhrase: organism, objectPhrase: object, relation: 'research-subject', polarity: 'neutral' })
@@ -2053,14 +2136,14 @@ function relationOf(pattern) {
   return pattern.relation
 }
 
-// ── 引导句式 ──────────────────────────────────────────────────────────────────
+
 
 function stripLeadingMarker(sentence) {
   const text = sentence.trim().replace(SUBJECT_PREFIX, '')
   const attempt = (regex, kind, keepFull = false) => {
     const match = regex.exec(text)
     if (!match) return null
-    // 方法句的标记（采用…方法）本身含工具名，整句保留；其余句式剥离引导词。
+
     const clause = keepFull ? text : text.slice(match[0].length).replace(/^[，,：:、\s]+/, '')
     return clause.length >= 4 ? { kind, clause } : null
   }
@@ -2076,7 +2159,7 @@ function isQuestionSentence(sentence) {
   return /[？?]/.test(sentence) && QUESTION_HINT.test(sentence)
 }
 
-// ── 主入口 ────────────────────────────────────────────────────────────────────
+
 
 function stripMarkdownForClaims(text) {
   return String(text || '')
@@ -2089,9 +2172,9 @@ function stripMarkdownForClaims(text) {
     .replace(MARKDOWN_LINK, '$1')
 }
 
-// 从一条助手回答提取知识结构。确定性与有界性是本函数的契约：
-//   - 同一文本两次调用返回 deepEqual 的结果；
-//   - 节点 ≤ 24、关系 ≤ 24、引用 ≤ 8，超限按出现顺序截断（关系在节点截断后丢弃失端者）。
+
+
+
 function extractKnowledge(rawText) {
   const text = String(rawText || '')
   if (!text.trim()) return { nodes: [], claims: [], citations: [] }
@@ -2129,7 +2212,7 @@ function extractKnowledge(rawText) {
     }
     if (marked) {
       const key = addNode(marked.kind, '', clause, sentence)
-      // 发现/假设/问题节点与该句关系涉及的实体相连（最多 3 个），否则知识节点会悬浮成孤岛。
+
       for (const entityKey of [...new Set(claimEntityKeys)].slice(0, 3)) addClaim({ fromKey: key, toKey: entityKey, relation: 'about', polarity: 'neutral', excerpt: sentence })
     } else if (isQuestionSentence(sentence)) {
       addNode('question', '', sentence, sentence)
@@ -2150,7 +2233,7 @@ function clampExcerpt(value) {
   return text.length > MAX_EXCERPT_CHARS ? `${text.slice(0, MAX_EXCERPT_CHARS - 1)}…` : text
 }
 
-// 入库前的节点/关系规范化（knowledge-store 复用）：非法条目由调用方跳过并计数。
+
 function normalizeKnowledgeNodeDraft(input = {}) {
   const kind = KNOWLEDGE_KINDS.includes(input.kind) ? input.kind : ''
   const label = clampKnowledgeLabel(input.label)
@@ -2172,7 +2255,7 @@ function normalizeKnowledgeClaimDraft(input = {}) {
 }
 
 
-// 受控二级主题与检索维度。规则命中是内容索引建议，不是来源或结论核验。
+
 const RESEARCH_TOPIC_RULES = [
   { primary: '作物遗传育种', secondary: '雄性不育', pattern: /雄性不育|不育系|male.steril|pollen.steril|NP1|IPE1/i },
   { primary: '作物遗传育种', secondary: '抗逆性状', pattern: /耐盐|抗旱|盐胁迫|抗病|stress.toleran|salt.toleran|drought/i },
@@ -2229,14 +2312,14 @@ function normalizeResearchClassification(value, text = '') {
 }
 
 
-// projectKey 是兼容旧文件和 MCP project 参数的不可变存储键；name 只是可改的显示名。
-// 可逆编码避免把不同 Unicode 项目名压成同一短 hash。
+
+
 function workspaceIdForProject(projectKey) {
   const key = String(projectKey || '').trim()
   if (!key) return 'workspace:unassigned'
   try { return `workspace:${encodeURIComponent(key)}` }
   catch {
-    // 旧数据可能含孤立 surrogate；UTF-16 逐码元编码仍可无损区分不同项目键。
+
     let hex = ''
     for (let index = 0; index < key.length; index++) hex += key.charCodeAt(index).toString(16).padStart(4, '0')
     return `workspace:u16:${hex}`
@@ -2263,7 +2346,7 @@ function workspaceForProject(projectKey, record = null) {
 }
 
 
-// 只读质量审计：提示人工复核，不自动合并、删除或宣称来源失效。
+
 const sourceKey = item => {
   const kind = String(item?.identifierKind || '').toLowerCase()
   const identifier = String(item?.identifier || '').trim().toLowerCase()
@@ -2300,8 +2383,8 @@ function auditResearchDataQuality({ evidence = [], links = [], assetIds = null }
 }
 
 
-// 只用本地、可解释的词表归类；不调用模型，不把原始回答交给外部服务。
-// 分类不是事实核验，多个主题可并存，未命中时明确留在「待归类」。
+
+
 const DEPOSITION_TOPIC_RULES = [
   { topic: '植物科学', pattern: /水稻|小麦|玉米|拟南芥|作物|植物|盐胁迫|耐盐|抗旱|产量|rice|wheat|maize|arabidopsis|crop|plant\b/i },
   { topic: '基因与分子', pattern: /基因|蛋白|转录因子|表达量|突变|变异|基因组|转录组|gene\b|protein|genom|transcript|mutation|variant/i },
@@ -2327,7 +2410,7 @@ function autoDepositionTags({ text = '', kind = '', identifierKind = '' } = {}) 
   return [...new Set(tags)].slice(0, 10)
 }
 
-// 新条目读已保存的主题标签；旧条目仅在视图中推导，不修改其人工标签或备份。
+
 function topicForDepositedItem(item) {
   const tags = Array.isArray(item?.tags) ? item.tags : []
   const saved = tags.find(tag => String(tag).startsWith(TOPIC_PREFIX))
@@ -2335,8 +2418,8 @@ function topicForDepositedItem(item) {
   return inferDepositionTopics(`${item?.title || ''} ${item?.body || ''} ${item?.reason || ''} ${item?.note || ''}`)[0] || UNCLASSIFIED_TOPIC
 }
 
-// 主列表分组使用全部命中的主题，而不是只取首个主题：例如「水稻基因表达的单细胞测序」
-// 同时属于植物科学、基因与分子和生物信息。返回空数组时才归入「待归类」。
+
+
 function topicsForDepositedItem(item) {
   const structured = (Array.isArray(item?.classification?.topics) ? item.classification.topics : [])
     .map(topic => `${topic.primary || ''} / ${topic.secondary || ''}`).filter(topic => !topic.startsWith(' / ') && !topic.endsWith(' / '))
@@ -2377,8 +2460,8 @@ function groupDepositedItems(items) {
 }
 
 
-// 旧任务型项目归类只产生建议；应用前必须把映射和影响数量交给用户预览。
-// 不根据项目名删除数据，也不把测试数据冒充为已核验科研证据。
+
+
 const TEST_PROJECT = /^(?:concurrency-test(?:[-_].*)?|dedup-probe(?:[-_].*)?|list-order(?:[-_].*)?)$/i
 const DEMO_PROJECT = /^demo-crispr(?:[-_].*)?$/i
 const BARLEY_PROJECT = /^barley-NP1-IPE1-family$/i
@@ -2420,7 +2503,7 @@ function buildProjectOrganizationPlan({ evidence = [], assets = [], nodes = [], 
 }
 
 
-// 论断与来源之间是逐边评估：同一论文可支持一个论断、反驳另一个论断。
+
 const RESEARCH_EVIDENCE_STANCES = ['unassessed', 'supports', 'refutes', 'insufficient']
 
 const short = (value, max) => String(value || '').trim().slice(0, max)
@@ -2498,7 +2581,7 @@ function normalizeResearchLedgerEvent(input = {}) {
   }
   const title = clean(input.title, 300)
   if (!title) throw new Error('研究产出须填写名称。')
-  // 用户手填执行引用只能说明「声称有执行记录」；不能冒充已由系统核验的工具结果。
+
   return { ...base, title, state: input.state === 'verified-execution' && input.executionVerified === true ? 'verified-execution' : 'draft',
     datasetId: clean(input.datasetId, 300), codeVersion: clean(input.codeVersion, 300),
     parameters: clean(input.parameters, 2000), environment: clean(input.environment, 1000),
@@ -2531,7 +2614,7 @@ function summarizeSearchSnapshot({ databaseId = '', query = '', sources = [] } =
   const ids = rows.map(item => String(item?.id || item?.url || item?.title || '').trim()).filter(Boolean)
   const uniqueIds = [...new Set(ids)]
   const payload = JSON.stringify([String(databaseId), String(query), [...uniqueIds].sort()])
-  // 非加密的本地快照标识，仅用于发现同一次有限候选列表；不宣称是数据库完整结果集。
+
   let hash = 2166136261
   for (let index = 0; index < payload.length; index++) hash = Math.imul(hash ^ payload.charCodeAt(index), 16777619) >>> 0
   return { sourceIds: uniqueIds, resultCount: rows.length,
@@ -2540,22 +2623,22 @@ function summarizeSearchSnapshot({ databaseId = '', query = '', sources = [] } =
 }
 
 
-// 资产-证据互链（ROADMAP §11 动线整合第一切片 / P5）：纯逻辑层。
-//
-// link 是「用户显式确认」的支撑关系（灵感资产 ↔ 证据条目），与自动沉淀的机器链
-// （knowledge-store 节点上的 assetId / evidenceIds）语义分层：机器链是提取事实，
-// 这里的 link 是用户所有的持久关联。数据落证据库侧的 IndexedDB link 表
-// （见 evidence-vault-store），不扩展 vendored asset provider 契约。
-//
-// 硬纪律：候选只推导、不自动建边——所有建立动作都由用户勾选确认。
 
-// 稳定 id：同一对端点天然去重（重复建立返回既有记录而不是第二行）。
+
+
+
+
+
+
+
+
+
 function assetEvidenceLinkId(assetId, evidenceId) {
   return `asset-evidence:${String(assetId || '')}::${String(evidenceId || '')}`
 }
 
-// 规范化 + 校验：端点缺失直接抛错（调用方不得入库悬空 link）。
-// 有意不存标题：标题随两端数据源实时解析，避免改名后的陈旧副本。
+
+
 function normalizeAssetEvidenceLink({ assetId, evidenceId, project = '', createdAt = 0 } = {}) {
   const aid = String(assetId || '').trim()
   const eid = String(evidenceId || '').trim()
@@ -2570,8 +2653,8 @@ function normalizeAssetEvidenceLink({ assetId, evidenceId, project = '', created
   }
 }
 
-// 图谱边：只输出形状合法的 link；端点不存在的边由 buildEvidenceGraph 末尾的
-// 边过滤自然剔除（两处各自兜底，语义一致）。属性名随图谱核心约定为 kind。
+
+
 function assetEvidenceGraphEdges(links = []) {
   const rows = Array.isArray(links) ? links : []
   const edges = []
@@ -2582,13 +2665,13 @@ function assetEvidenceGraphEdges(links = []) {
   return edges
 }
 
-// 候选推导（入口 A 的数据源）：三个信号源，分数排序、确定性输出、有界截断。
-//   A. 知识链种子（分数 6）：自动沉淀把同一条知识同时关联了本资产与某证据——
-//      同节点上的 (assetId, evidenceId) 配对是最强信号，权重压过同项目+标签的叠加
-//      （2+2+共享数），跨项目也成立（研究跨项目）；
-//   B. 同项目（分数 2）：证据与资产同属当前项目；
-//   C. 标签重合（分数 2 + 每个共同标签 +1）：仅同项目内参与。
-// 已建立关联的端点、无 id 的条目一律排除。
+
+
+
+
+
+
+
 function deriveAssetEvidenceCandidates({ asset, evidenceEntries = [], knowledgeNodes = [], existingLinks = [], limit = 8 } = {}) {
   const aid = String(asset?.id || '').trim()
   if (!aid) return []
@@ -2598,7 +2681,7 @@ function deriveAssetEvidenceCandidates({ asset, evidenceEntries = [], knowledgeN
       .filter(row => row?.assetId === aid)
       .map(row => String(row.evidenceId)),
   )
-  // 知识链种子：node.assetId 指向本资产的节点上，全部 evidenceIds。
+
   const seededEvidenceIds = new Set()
   for (const node of Array.isArray(knowledgeNodes) ? knowledgeNodes : []) {
     if (String(node?.assetId || '') !== aid) continue
@@ -2633,12 +2716,12 @@ function deriveAssetEvidenceCandidates({ asset, evidenceEntries = [], knowledgeN
 }
 
 
-// 研究证据图谱纯逻辑：只保留稳定标识符、公开来源链接和资产关系，
-// 不保存检索词、原始文件、Prompt 正文或完整查询结果。
 
-// 图谱的输入全部来自外部（索引库、持久化会话、导入物）：数组可能是 null，
-// 也可能混入 null / 原始值。先统一收敛成「对象数组」，让建图对任何输入都 total——
-// 一条坏记录最多少一个节点，绝不让整个图谱面板抛异常。
+
+
+
+
+
 function evidenceGraphList(value) {
   return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
 }
@@ -2720,7 +2803,7 @@ function buildEvidenceGraph(params) {
     ])
     for (const sourceId of [...matched].sort((a, b) => sourceOrdinal.get(a) - sourceOrdinal.get(b))) link(evidenceId, sourceId, 'saved-copy')
   }
-  // 研究问题／论断与每条证据的方向由研究者显式给出；普通关联绝不冒充支持。
+
   for (const claim of researchClaims) {
     if (!claim?.id || !claim.statement) continue
     const claimId = `research-claim:${claim.id}`
@@ -2735,9 +2818,9 @@ function buildEvidenceGraph(params) {
       link(claimId, `evidence:${evidence.evidenceId}`, kind)
     }
   }
-  // ── 自动沉淀知识（全部「待核验」起步）────────────────────────────────────────
-  // 隐私边界与证据笔记一致：detail 只含类型与核验状态，**不含来源摘录**——
-  // 摘录只在图谱详情弹层里由 knowledge-store 直读，绝不进入图数据（导出物因此天然脱敏）。
+
+
+
   const knowledgeNodes = evidenceGraphList(knowledge.nodes)
   const knowledgeClaims = evidenceGraphList(knowledge.claims)
   for (const record of knowledgeNodes) {
@@ -2754,27 +2837,27 @@ function buildEvidenceGraph(params) {
     for (const evidenceId of record.evidenceIds || []) link(`evidence:${evidenceId}`, record.id, 'linked')
     if (record.assetId) link(record.id, `asset:${record.assetId}`, 'deposited')
   }
-  // 关系端点指向不存在（或被删除）的节点时，由末尾的边过滤自然剔除，不悬挂。
+
   for (const claim of knowledgeClaims) {
     if (!claim?.from || !claim?.to) continue
     link(claim.from, claim.to, claim.relation || 'relates')
   }
-  // ── 资产-证据互链（ROADMAP §11 P5）：用户显式确认的「资产 → 支撑证据」边。
-  // 端点不存在的 link（资产/证据已被删）由末尾的边过滤自然剔除，不悬挂。
+
+
   for (const edge of assetEvidenceGraphEdges(assetEvidenceLinks)) link(edge.from, edge.to, edge.kind)
   return { nodes: [...nodes.values()], edges: edges.filter(edge => nodes.has(edge.from) && nodes.has(edge.to)) }
 }
 
-/**
- * 按「是否出现在任何一条关系里」把图拆成有关系与孤立两部分。
- *
- * 为什么要有它：已保存证据只有在能连到同库资源、本会话查询来源或沉淀知识时才有边；
- * 一批只保存、未关联的证据会形成「零关系」的图。把这类节点当成关系图铺成网格，
- * 读者看到的是几百张互不相连的卡片，既不是图谱也读不完。图组件据此默认只绘制
- * 有关系的内容，并把孤立节点计数交给调用方汇总展示。
- * @param {object} graph - 可能为 null / 半成品；输入一律收敛成对象数组。
- * @returns {{edges: object[], connected: object[], isolated: object[], connectedIds: Set<string>}}
- */
+
+
+
+
+
+
+
+
+
+
 function splitEvidenceGraphByConnectivity(graph = {}) {
   const nodes = evidenceGraphList(graph?.nodes)
   const edges = evidenceGraphList(graph?.edges)
@@ -2791,15 +2874,15 @@ function splitEvidenceGraphByConnectivity(graph = {}) {
   }
 }
 
-/**
- * 把「没有关系、只剩清单」的证据按项目汇总，供图谱页在零关系时展示可读的概览。
- *
- * 为什么不在图里塞清单：节点图回答的是「谁连到谁」，当 170 条证据之间没有一条边时，
- * 继续画点只会得到卡片墙。概览只给项目、条数、标识符构成与最近保存时间，
- * 完整条目浏览仍交给「研究资产库」——两个视图各回答一个问题。
- * @param {object[]} entries - 已保存证据（可含 null / 半成品；输入先收敛）。
- * @returns {{project: string, count: number, identifiers: {kind: string, count: number}[], latestSavedAt: number}[]}
- */
+
+
+
+
+
+
+
+
+
 function summarizeEvidenceProjects(entries = []) {
   const projects = new Map()
   for (const entry of evidenceGraphList(entries)) {
@@ -2830,10 +2913,10 @@ const EVIDENCE_NODE_COLORS = {
   'research-question': '#8b5cf6', 'research-claim': '#d97706',
 }
 
-// ── 布局 ──────────────────────────────────────────────────────────────────────
-// 分列语义：来源消息在最左（0），已保存证据在最右（4）。kind → 列号是固定映射，
-// 不随图的形状变化，否则同一批节点会因新边出现而整体换列。
-// 自动沉淀知识的流向：消息(0) → 问题/实体(1) → 发现/假设/方法(2) → 证据(4)。
+
+
+
+
 const GRAPH_NODE_WIDTH = 136
 const GRAPH_NODE_HEIGHT = 54
 const GRAPH_COLUMN_OF_KIND = { database: 0, skill: 0, message: 0, question: 1, entity: 1, workflow: 1, plan: 2, stage: 3, 'agent-query': 2, query: 2, source: 3, asset: 3, evidence: 4, hypothesis: 2, finding: 2, method: 2, 'research-question': 1, 'research-claim': 2 }
@@ -2843,25 +2926,25 @@ const GRAPH_ORIGIN_X = 70
 const GRAPH_ORIGIN_Y = 58
 const GRAPH_MARGIN = 24
 
-// 确定性分列布局。同一列内按 **id 字典序** 排列，而不是沿用输入数组顺序——
-// 这是本函数与「按遍历顺序填行」的关键区别：新增一个节点只让同列中排在它后面的
-// 节点顺延，不会让已有节点整体跳位（节点重排）；且同一份图重复布局必得完全相同
-// 的结果（有回归测试钉住这两个性质）。
+
+
+
+
 function layoutEvidenceGraph(graph, options = {}) {
-  // 布局是建图的下游：任何输入（含 null / 半成品图）都要能算出结果，而不是把面板打空。
+
   const source = graph && typeof graph === 'object' ? graph : {}
   const nodes = evidenceGraphList(source.nodes)
   const edges = evidenceGraphList(source.edges)
   const edgeRatio = nodes.length > 0 ? edges.length / nodes.length : 0
 
-  // 稀疏图检测：节点 > 50 或边/节点比 < 10% 时用网格布局。
-  // 分列布局在单列 > 50 个节点时变成一堵墙（高 4000+ px），网格布局更紧凑可读。
+
+
   if (nodes.length > 50 || (nodes.length > 10 && edgeRatio < 0.1)) {
     return layoutSparseGrid(nodes)
   }
 
-  // 传收敛后的 { nodes, edges }，而不是原始 graph：原始值可能是 null / 半成品，
-  // 让下游再取一次属性等于把守卫白写。
+
+
   return layoutByColumn({ nodes, edges }, options)
 }
 
@@ -2896,8 +2979,8 @@ function layoutByColumn(graph, options) {
   }
 }
 
-// 稀疏图网格布局：按 kind 分组排序，填充到紧凑方形网格。
-// 每个 kind 形成一个视觉区块，同类节点相邻。不做路由（无关系时不需要边）。
+
+
 function layoutSparseGrid(nodes) {
   const sorted = [...nodes].sort((a, b) => {
     const kindA = GRAPH_COLUMN_OF_KIND[a.kind] ?? 3
@@ -2927,9 +3010,9 @@ function layoutSparseGrid(nodes) {
   }
 }
 
-// ── 端口路由 ──────────────────────────────────────────────────────────────────
-// 同一节点上的多条边平分节点高度取不同出口 y。若都从节点中点出发，同源边会先
-// 重叠成一条再散开——表现为「边穿过节点」与「看不出谁连谁」。
+
+
+
 function graphPortY(node, index, total) {
   const center = node.y + GRAPH_NODE_HEIGHT / 2
   if (total <= 1) return center
@@ -2943,10 +3026,10 @@ const graphEdgeOrder = (a, b) => {
   return left < right ? -1 : left > right ? 1 : 0
 }
 
-// 把每条边解析成带端点坐标与三次贝塞尔路径的「路线」。端口分配依赖边的稳定排序，
-// 所以同一份图重复调用必得相同路线（确定性同样是回归断言的对象）。
+
+
 function routeEvidenceEdges(graph = {}, layout = {}) {
-  // 连线是渲染的入口：layout/graph 可能是 null 或半成品，边数组里可能有坏行。
+
   const edges = evidenceGraphList(graph?.edges)
   const byId = new Map(evidenceGraphList(layout?.nodes).map(node => [node.id, node]))
   const outgoing = new Map()
@@ -2987,8 +3070,8 @@ function routeEvidenceEdges(graph = {}, layout = {}) {
   return routes
 }
 
-// ── 邻域与路径 ────────────────────────────────────────────────────────────────
-// 上游 = 顺着箭头回溯（谁指向我）；下游 = 顺着箭头前进。返回含起点自身的 id 集合。
+
+
 function evidenceNeighborhood(graph = {}, nodeId, direction = 'downstream') {
   const adjacency = new Map()
   const push = (key, value) => {
@@ -3013,8 +3096,8 @@ function evidenceNeighborhood(graph = {}, nodeId, direction = 'downstream') {
   return seen
 }
 
-// 两点路径：**忽略箭头方向**做最短路径。用户问的是「这两个东西怎么连上的」，
-// 逆着箭头回溯是合法答案；若只沿箭头走，多数两点之间会「无路径」。
+
+
 function findEvidencePath(graph = {}, fromId, toId) {
   if (!fromId || !toId) return []
   if (fromId === toId) return [fromId]
@@ -3042,9 +3125,9 @@ function findEvidencePath(graph = {}, fromId, toId) {
   return path
 }
 
-// ── URL 视图状态 ──────────────────────────────────────────────────────────────
-// 只编码「看什么」：焦点、范围模式、路径两端、缩放。**绝不编码任何证据内容**——
-// 链接会被分享，标题与标识符都不该进去。
+
+
+
 const GRAPH_SCALE_RANGE = { min: 0.4, max: 2.5 }
 const GRAPH_MODES = ['all', 'upstream', 'downstream', 'path']
 
@@ -3085,13 +3168,13 @@ function decodeGraphView(hash = '') {
 }
 
 
-// 保守识别「明显是测试 / 演示 / 探针」的课题名。
-//
-// 为什么需要：测试与演示曾经直接写进真实数据目录（本机 2026-09-18 留下
-// mcp-test、dedup-probe、list-order-* 等），它们会以「已保存证据」出现在证据图谱里。
-// 清理动作只接受显式确认，并且只匹配下面这些结构——真实课题名（例如大麦候选基因）
-// 不会命中。default 只有在全部条目都像调试/测试内容时才纳入，避免把「未命名项目」
-// 里真实保存、只是忘了填项目的证据误删。
+
+
+
+
+
+
+
 const TEST_ENTRY_PATTERN = /(?:test|debug|smoke|probe|demo|sample|fixture|测试|演示|示例)/i
 const TEST_PROJECT_PATTERNS = [
   /^test[-_]/i,
@@ -3110,7 +3193,7 @@ function isTestProjectName(name) {
   return TEST_PROJECT_PATTERNS.some(pattern => pattern.test(value))
 }
 
-/** 从证据条目里汇总测试课题与条数（按项目名排序，结果稳定）。 */
+
 function selectTestProjects(entries = []) {
   const counts = new Map()
   const defaultEntries = []
@@ -3120,7 +3203,7 @@ function selectTestProjects(entries = []) {
     if (!project || !isTestProjectName(project)) continue
     counts.set(project, (counts.get(project) || 0) + 1)
   }
-  // default 是「没填项目」的兜底桶，不能按名字判断；只有整桶条目都像调试/测试时才纳入。
+
   if (defaultEntries.length && defaultEntries.every(entry => TEST_ENTRY_PATTERN.test(`${entry?.title || ''} ${entry?.note || ''}`))) {
     counts.set('default', defaultEntries.length)
   }
@@ -3130,7 +3213,7 @@ function selectTestProjects(entries = []) {
 }
 
 
-// 文献互操作只处理引用元数据；不导入摘要、附件或全文。
+
 function normalizeBibliography(input = {}) {
   const trim = (value, max = 200) => String(value || '').trim().slice(0, max)
   return { authors: (Array.isArray(input.authors) ? input.authors : []).map(value => trim(value, 120)).filter(Boolean).slice(0, 100),
@@ -3191,7 +3274,7 @@ function parseBibtexRecords(text) {
           if (char === '\\' && at < text.length) { value += char + text[at++]; continue }
           if (open === '{' && char === '{') depth++
           if (open === '{' && char === '}') { depth--; if (depth === 0) { closed = true; break } }
-          // 非闭括号不得减少深度。
+
           if (open === '"' && char === '"') { closed = true; break }
           value += char
         }
@@ -3268,12 +3351,12 @@ function serializeBibliography(entries = [], format = 'bibtex') {
 }
 
 
-// 研究证据库的纯逻辑（无 React / 无浏览器依赖），供视图与测试共用。
-//
-// 与灵感资产（vault-core.js）的分工：灵感库存「想过什么」，证据库存「依据什么」。
-// 证据条目必须可追溯——有稳定标识符或原始链接，否则后续无法核验，也就失去了保存意义。
 
-// 核验状态：保存不等于认可，新条目一律落到 unverified，由用户逐条核验后推进。
+
+
+
+
+
 const EVIDENCE_STATUSES = ['unverified', 'verified', 'disputed', 'stale']
 const EVIDENCE_STATUS_LABELS = {
   unverified: '未核验',
@@ -3303,12 +3386,12 @@ const EVIDENCE_IDENTIFIER_LABELS = {
   none: '未提供',
 }
 
-// 文本长度上限：证据库只存元数据与用户主动写下的笔记，不收全文、不收 API 原始响应。
+
 const MAX_EVIDENCE_TITLE_CHARS = 300
 
-// 证据条目列表来自索引库 / 备份文件 / 视图状态：可能整体不是数组，也可能混入
-// null 与原始值（旧版本写入、手工改过的备份）。筛选、计数、合并都从入口剔掉它们，
-// 保证「一条坏记录」不会把整个证据库面板或恢复流程打崩。
+
+
+
 function evidenceRows(value) {
   return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
 }
@@ -3325,8 +3408,8 @@ const IDENTIFIER_PATTERNS = [
   { kind: 'pmid', regex: /pubmed\.ncbi\.nlm\.nih\.gov\/(?:(\d{5,8})\/|\w+\?[^#]*?term=(\d{5,8})|(\d{5,8}))/gi, group: 1 },
 ]
 
-// 从标题、链接或元数据里认稳定标识符。识别不出来不算失败——条目仍可保存，
-// 只是 identifierKind 为 none，UI 需要显式提示「缺少可追溯标识符」。
+
+
 function detectIdentifier(...parts) {
   const text = parts.map(part => String(part || '')).join(' ')
   if (!text.trim()) return { kind: 'none', value: '' }
@@ -3357,7 +3440,7 @@ function normalizeRunId(value) {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(id) ? id : ''
 }
 
-// 只接受 http(s) 与协议相对链接。宿主页面里渲染 <a href>，必须挡掉 javascript: 等注入。
+
 function safeUrl(value) {
   const text = String(value || '').trim()
   if (!text) return ''
@@ -3396,10 +3479,10 @@ function normalizeSourceCheck(value) {
   }
 }
 
-// 把用户输入（或查询结果来源）落成规范条目。缺标题或缺可追溯来源时抛错：
-// 这类条目存下来也无法核验，只会污染证据库。
-// 入参先收敛为对象：null / 原始值走「缺标题」这条领域错误，而不是 TypeError——
-// 调用方（如 importMany、save）拿到的是可判断的校验失败，不是崩溃。
+
+
+
+
 function normalizeEvidenceEntry(value) {
   const input = value && typeof value === 'object' ? value : {}
   const title = clampText(input.title, MAX_EVIDENCE_TITLE_CHARS)
@@ -3461,7 +3544,7 @@ function statusCounts(entries) {
   return counts
 }
 
-// 列表筛选：关键词命中标题/来源/标识符/项目/标签/原因/笔记；filter 为核验状态分组。
+
 function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
   const text = String(query || '').trim().toLowerCase()
   return evidenceRows(entries)
@@ -3473,15 +3556,15 @@ function filterEvidence(entries, { query = '', filter = 'all' } = {}) {
     .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
 }
 
-// ── 去重（4b）──────────────────────────────────────────────────
-// 判据：**同一项目内**去重，跨项目不去重。项目隔离优先——同一篇文献在两个
-// 课题里各有各的保存原因与笔记，强行全局唯一会让「按项目隔离」名存实亡。
+
+
+
 
 const EVIDENCE_BACKUP_KIND = 'dsh-research-kit-evidence'
 const EVIDENCE_BACKUP_VERSION = 3
 
-// URL 归一：DOI 之类已有独立键，这里只处理「没有标识符、只能靠链接识别」的条目。
-// 去掉协议、www. 前缀与 #片段，保留查询串——不同查询参数可能是不同记录。
+
+
 function normalizeUrlForDedupe(url) {
   return String(url || '')
     .trim()
@@ -3492,7 +3575,7 @@ function normalizeUrlForDedupe(url) {
     .replace(/\/+$/, '')
 }
 
-// 返回 '' 表示「无法识别，不参与去重」——这类条目允许重复保存，由用户自己判断。
+
 function dedupeKey(entry) {
   if (!entry) return ''
   const project = String(entry.project || '').trim().toLowerCase()
@@ -3510,9 +3593,9 @@ function findDuplicate(entries, candidate) {
   return rows.find(item => item.id !== candidate.id && dedupeKey(item) === key) || null
 }
 
-// ── 导出 / 导入（4b）───────────────────────────────────────────
-// 备份是给用户自己搬运与归档的，所以带 kind 与 version：将来字段变了能识别并拒绝，
-// 而不是把旧格式静默解析成残缺条目。
+
+
+
 
 function serializeEvidenceBackup({ entries = [], project = '', claims = [], links = [], ledger = [], workspaces = [] } = {}) {
   return JSON.stringify({
@@ -3528,7 +3611,7 @@ function serializeEvidenceBackup({ entries = [], project = '', claims = [], link
   }, null, 2)
 }
 
-// 解析失败一律抛错：半份备份比没有备份更危险，用户会以为恢复了完整数据。
+
 function parseEvidenceBackup(text) {
   const raw = String(text || '').trim()
   if (!raw) throw new Error('备份内容为空。')
@@ -3548,8 +3631,8 @@ function parseEvidenceBackup(text) {
   return { project: String(parsed.project || ''), entries: rows, ...optional }
 }
 
-// 增量合并：已存在（同项目同标识符，或同 id）的跳过，非法条目单独计数。
-// 刻意不做覆盖——恢复备份应该是补齐，不是回滚，否则会静默抹掉恢复之后的新笔记。
+
+
 function mergeEntries(existing = [], incoming = []) {
   const rows = evidenceRows(existing)
   const seen = new Set(rows.map(item => dedupeKey(item)).filter(Boolean))
@@ -3569,8 +3652,8 @@ function mergeEntries(existing = [], incoming = []) {
   return { rows, added, skipped, invalid }
 }
 
-// 写入 Prompt 的引用块：保留来源链接与人工核验责任，绝不写成已证实结论。
-// 文案集中在此处，视图只负责渲染与调用，避免内联拼接导致两处漂移。
+
+
 function formatEvidenceCitations(entries) {
   const rows = Array.isArray(entries) ? entries : []
   if (!rows.length) return ''
@@ -3585,10 +3668,10 @@ function formatEvidenceCitations(entries) {
   ].join('\n')
 }
 
-// 4c 的写入决策：把「要不要注入、注入什么」做成纯逻辑。
-// 「未选择不注入」是 ROADMAP §4c 的验收条件，只有把决策变成可断言的返回值，
-// 才能真的测到「什么都没被注入」——否则它只是渲染层里的一个副作用。
-// action 的取值即契约：只有 'write' 允许调用宿主 setDraft。
+
+
+
+
 function planCitationWrite({ entries, canWrite } = {}) {
   const rows = Array.isArray(entries) ? entries : []
   if (!rows.length) {
@@ -3596,15 +3679,15 @@ function planCitationWrite({ entries, canWrite } = {}) {
   }
   const text = formatEvidenceCitations(rows)
   if (!canWrite) {
-    // 降级不是静默丢弃：引用块照常给出来，由用户复制粘贴。
+
     return { action: 'unsupported', text, notice: '当前 DSH 会话未提供输入框操作；可复制引用块后手动粘贴。' }
   }
   return { action: 'write', text, notice: `已将 ${rows.length} 条已勾选证据写入当前会话输入框。` }
 }
 
-// ── 证据库 → 解释图（研究路线可视化）的素材包 ──────────────────────────────────
-// 把（通常已核验的）证据条目转成 render-diagrams --evidence 可消费的卡片数据。
-// 与图谱同一隐私边界：只携带稳定标识符与公开链接，不携带检索词、Prompt 正文或全文。
+
+
+
 const EXPLAIN_PACK_FORMAT = 'dsh-research-kit/evidence-explain-pack'
 
 function buildEvidenceExplainPack(entries, project = '') {
@@ -3626,8 +3709,8 @@ function buildEvidenceExplainPack(entries, project = '') {
   }
 }
 
-// 解释图「证据库来源」卡片：按标识符去重、逐条标注核验状态；
-// 全部已核验时卡片标题升级为「已核验证据 · 证据库」，否则如实显示混合状态。
+
+
 function evidenceExplainCard(entries) {
   const seen = new Set()
   const rows = []
@@ -3660,7 +3743,7 @@ function evidenceExplainCard(entries) {
 const AGENT_MARKER = /^(agent|model)(?::|\/|$)/i
 const AGENT_ASSESSMENT_BATCH_SIZE = 6
 
-// 人工核验与 Agent 判断是两条独立记录；旧数据若缺 assessedBy，也按状态和时间保守识别。
+
 function isHumanAssessedEvidence(entry) {
   if (!entry || typeof entry !== 'object') return false
   if (entry.status && entry.status !== 'unverified') return true
@@ -3680,7 +3763,7 @@ function planAgentEvidenceBatch(entries, { includeHuman = false } = {}) {
   }
 }
 
-// 从发起请求到落库期间，人工/其他标签页可能更新条目。只接受仍等于当时快照的结果。
+
 function evidenceAssessmentFingerprint(entry) {
   return JSON.stringify([
     entry?.title, entry?.identifier, entry?.url, entry?.reason, entry?.note,
@@ -3715,18 +3798,18 @@ function normalizeAgentEvidenceResult(input, expectedIds, { model = '', at = Dat
 }
 
 
-// 统一容器「科研工作台」的分区契约（纯数据 + 纯函数，不依赖 React，供容器与测试共用）。
-//
-// 三个并列的 conversation.view 标签合并为一个容器视图后，内部分区按科研闭环排序
-// （「研究证据图谱」是本仓库在合并之后新增的第四分区）：
-// 发现（找得到）→ 构造（想得清）→ 沉淀（存得住）→ 证据（说得清）。
-//
-// 每个分区都必须显式声明五件事，避免合并后出现功能重叠或遗漏：
-//   label       分区显示名（二级导航文案）
-//   position    在科研闭环中的定位（一句话）
-//   purpose     核心用途：这个分区负责产出什么
-//   boundary    职责边界：明确不做什么、以及不会去碰别人的哪些数据
-//   ownership   该分区独占的数据归属，用于约束「互不写对方存储」
+
+
+
+
+
+
+
+
+
+
+
+
 const RESEARCH_CONSOLE_SECTIONS = [
   {
     id: 'home', label: '项目首页', position: '任务入口 · 查看当前项目进度与待办',
@@ -3768,10 +3851,10 @@ const RESEARCH_CONSOLE_SECTIONS = [
   },
 ]
 
-// 默认分区：合并前用户最常用的入口，保证合并后落点不陌生。
+
 const DEFAULT_CONSOLE_SECTION = 'home'
 
-// 深链/持久化读回的取值容错：未知值一律回落到默认分区，不抛错。
+
 function normalizeConsoleSection(value, sections = RESEARCH_CONSOLE_SECTIONS) {
   return sections.some(section => section.id === value) ? value : DEFAULT_CONSOLE_SECTION
 }
@@ -3781,37 +3864,37 @@ function findConsoleSection(id, sections = RESEARCH_CONSOLE_SECTIONS) {
 }
 
 
-// 输入卡片浮层的锚定与可用高度解算。
-//
-// 宿主把 conversation.input.overlay 槽位渲染进输入卡片顶边的一条零高锚点里
-// （宿主自身的光标菜单 MenuView 用的是同一个锚点，其定位为
-//  position:absolute; bottom:calc(100% + 4px); left:0; max-width:min(537px,100%)）。
-// 槽位包装元素是 display:contents，不参与布局，所以浮层用绝对定位即可贴合卡片上沿；
-// 写死视口坐标（left/bottom 的像素值）会让浮层脱离触发按钮，并在输入框行数变化时错位。
-//
-// 高度上限来自会话滚动区的裁剪：滚动区 overflow-y 为 auto，超出上沿的部分不可达，
-// 故可用高度取「锚点顶边 → 滚动区顶边」，再扣掉与卡片的间隙和顶部留白。
+
+
+
+
+
+
+
+
+
+
 
 
 const POPOVER_GAP = 8           // 浮层底边与输入卡片顶边的间隙
 const POPOVER_TOP_CLEARANCE = 8 // 浮层顶边与滚动区顶边的最小留白
 const POPOVER_MAX_HEIGHT = 620  // 上限，避免大屏下浮层过长
 
-/**
- * 由锚点与裁剪边界的位置解算浮层最大高度。
- * 两个入参都是视口坐标（`getBoundingClientRect().top`），与具体 DOM 结构无关，便于单测。
- *
- * 裁剪边界是硬约束：越过它，宿主滚动区会把浮层顶部（标题与关闭按钮）直接裁掉。
- * 所以边界优先于 620px 上限偏好——空间不足时浮层就变矮（内部列表仍可滚动），
- * 而不是顶着上限被裁掉标题。
- */
+
+
+
+
+
+
+
+
 function overlayMaxHeight(anchorTop, boundaryTop) {
   const available = Math.round(Number(anchorTop) - Number(boundaryTop) - POPOVER_GAP - POPOVER_TOP_CLEARANCE)
   if (!Number.isFinite(available)) return POPOVER_MAX_HEIGHT
   return Math.max(0, Math.min(POPOVER_MAX_HEIGHT, available))
 }
 
-/** 自锚点向上找到最近的滚动裁剪祖先（即宿主的会话滚动区），作为浮层高度边界。 */
+
 function findScrollport(node) {
   let element = node?.parentElement ?? null
   while (element && element !== document.documentElement) {
@@ -3822,21 +3905,21 @@ function findScrollport(node) {
   return null
 }
 
-/**
- * 把 `position: fixed` 的浮层挂到 `document.body` 上。
- *
- * 为什么需要：DSH 0.2.2-rc.1 给 docked composer 的 seat 加了 `will-change: transform`，
- * 使 seat 成为 fixed 后代的 containing block——挂在 composer 槽里的 fixed 浮层会相对 seat
- * 偏移并被裁（宿主文档也要求 composer 内的固定浮层 portal 到 body）。绝对定位的锚定浮层
- * （本文件上半）不受影响。
- *
- * SSR（react-dom/server）不支持 portal，会直接抛错；没有可 portal 的 body 时原样返回节点，
- * 让服务端渲染与纯逻辑测试保持可用。
- *
- * @param {unknown} node 要挂到 body 的 React 节点
- * @param {string} [key] 数组子节点里的 React key（portal 本身不接受元素上的 key）
- * @returns {unknown} portal，或原节点（SSR / 无 body）
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function bodyPortal(node, key) {
   if (node == null) return null
   const container = typeof document === 'undefined' ? undefined : document.body
@@ -3845,24 +3928,24 @@ function bodyPortal(node, key) {
 }
 
 
-/** Helpers for DSH composer writes without losing concurrent user edits. */
 
-/** Whether the host can insert text while preserving the rest of the draft. */
+
+
 function supportsSafeInsert(inputActions) {
   return typeof inputActions?.captureInsertion === 'function'
     && typeof inputActions?.insertText === 'function'
 }
 
-/** Whether any composer write is possible. */
+
 function canWriteDraft(inputActions) {
   return supportsSafeInsert(inputActions) || typeof inputActions?.setDraft === 'function'
 }
 
-/**
- * Insert at the captured caret when the host supports it; otherwise replace the
- * whole draft. `stale` means the async result should not silently overwrite the
- * user's newer draft.
- */
+
+
+
+
+
 function writeDraftText(inputActions, text, { mode = 'insert' } = {}) {
   const value = String(text ?? '')
   if (mode !== 'replace' && supportsSafeInsert(inputActions)) {
@@ -3876,8 +3959,8 @@ function writeDraftText(inputActions, text, { mode = 'insert' } = {}) {
 }
 
 
-// 回到会话使用宿主公开导航。视图标签由会话选择状态恢复，activate 只激活数据源。
-/** 在会话列表快照里找主区当前持有的会话；宿主内置客户端也这样取（DocumentTitle / ui-open-in-app）。 */
+
+
 function currentMainSessionId(sessions) {
   try {
     const state = sessions?.list?.getSnapshot?.()
@@ -3889,14 +3972,14 @@ function currentMainSessionId(sessions) {
   return ''
 }
 
-/**
- * 把主区切回当前会话，并尽力把科研工作台视图标记为活跃目标。
- *
- * 顺序不能反：`openSession` 同步 retain 目标会话并把主区切回 Conversation，之后
- * `binding(id)` 才是「当前代」；先 binding 会抛 `inactive session`。
- *
- * @returns 是否已把主区切回会话；通道缺失或没有当前会话时为 false（调用方据此提示降级）。
- */
+
+
+
+
+
+
+
+
 function returnToConversation({ uiWorkspace, uiConversation, sessions, view } = {}) {
   if (typeof uiWorkspace?.openSession !== 'function') return false
   const sessionId = currentMainSessionId(sessions)
@@ -3904,7 +3987,7 @@ function returnToConversation({ uiWorkspace, uiConversation, sessions, view } = 
   try {
     uiWorkspace.openSession(sessionId)
   } catch { return false }
-  // 视图激活是加分项：宿主没有绑定服务、或该视图尚未注册时不得把「已切回会话」判成失败。
+
   try {
     const binding = typeof uiConversation?.binding === 'function' ? uiConversation.binding(sessionId) : null
     if (typeof binding?.activate === 'function') binding.activate(String(view ?? ''))
@@ -3912,27 +3995,27 @@ function returnToConversation({ uiWorkspace, uiConversation, sessions, view } = 
   return true
 }
 
-/**
- * 宿主是否支持「开新会话并把内容预填成草稿」。
- *
- * 探测两条：`uiWorkspace.startSession`（承载 `prompt`）与 **`conversation` 服务**的
- * `input.requestDraftInitialization`（真正写草稿的通道；注意不是 `uiConversation`——它没有 `input`）。
- * 两者都自 DSH 0.2.1-rc.1 起存在；0.1.7 / 0.2.0 线缺失，因此这两条线不显示该入口。
- * `whenDraftExists` 语义需 0.2.1-rc.3+：更早宿主会保留已有草稿（本入口新开会话、草稿为空，照常预填）。
- */
+
+
+
+
+
+
+
+
 function supportsSessionLaunch({ uiWorkspace, conversation } = {}) {
   return typeof uiWorkspace?.startSession === 'function'
     && typeof conversation?.input?.requestDraftInitialization === 'function'
 }
 
-/**
- * 开一个新会话并预填研究提示词（不自动发送）。
- *
- * `whenDraftExists` 默认 `append`：0.2.1-rc.3+ 上已有文字/内联引用保留原文并另起段落追加，附件始终保留；
- * 更早宿主不识别该字段，按「已有草稿则保留」处理。
- *
- * @returns 是否已发出导航请求；提示词为空或通道缺失时为 false，调用方据此提示降级。
- */
+
+
+
+
+
+
+
+
 function launchResearchSession({ uiWorkspace, conversation } = {}, { prompt, whenDraftExists = 'append' } = {}) {
   const text = String(prompt ?? '')
   if (!text.trim()) return false
@@ -3943,7 +4026,7 @@ function launchResearchSession({ uiWorkspace, conversation } = {}, { prompt, whe
   } catch { return false }
 }
 
-/** 宿主只有在已绑定的会话且编辑器允许时才会接收原生文件引用。 */
+
 function researchMaterialInput({ sessions, conversation }, sessionId) {
   try {
     if (!sessionId) return null
@@ -3968,16 +4051,16 @@ function insertResearchMaterial(host, sessionId, value) {
 }
 
 
-// 浏览器侧文件导出：<a download> + Blob URL。
-//
-// 集中一处的原因：这条链原先在 6 个模块里各自重写了一遍，其中两处在 click() 之后
-// **同步** revokeObjectURL —— 部分浏览器此时还没把 Blob 读完，会直接取消这次下载
-// （表现为"点了导出，什么都没发生"）。统一改为延迟回收，并且只在这里调用
-// createObjectURL / revokeObjectURL，便于复查（test/download.test.js 钉住这一点）。
+
+
+
+
+
+
 
 const DOWNLOAD_REVOKE_DELAY_MS = 1_000
 
-// 服务端渲染、无 DOM 的测试环境、以及宿主未提供 Blob/URL 时，导出必须安静降级。
+
 function canDownload() {
   return typeof document !== 'undefined' && typeof URL !== 'undefined' && typeof Blob !== 'undefined'
 }
@@ -3989,7 +4072,7 @@ function downloadBlob(blob, filename, { revokeDelayMs = DOWNLOAD_REVOKE_DELAY_MS
   link.href = url
   if (filename) link.download = filename
   link.click()
-  // 关键：不要紧接着同步 revoke——下载还在读 Blob，回收早了会被取消。
+
   const revoke = () => URL.revokeObjectURL(url)
   if (revokeDelayMs > 0) setTimeout(revoke, revokeDelayMs)
   else setTimeout(revoke, 0)
@@ -4006,11 +4089,11 @@ function downloadJsonFile(text, filename, options) {
 }
 
 
-// IndexedDB 小工具：工厂探测、请求转 Promise、事务壳。
-//
-// 原先这两个 store 各写一份事务壳，且知识库要反向 import 证据库模块才能拿到工厂与
-// 请求转换函数。集中到这里之后：两个 store 只保留各自的 schema 与业务语义，
-// 「事务何时算成功」只有一处实现 —— 事务未提交就 resolve，调用方会误以为写入已落盘。
+
+
+
+
+
 
 function indexedDbFactory() {
   try {
@@ -4027,15 +4110,15 @@ function requestToPromise(request) {
   })
 }
 
-// run 收到的是事务本身（多 store 写入需要），返回值原样透出；等 oncomplete 才 resolve。
-// errorMessage / abortMessage 可覆盖：迁移类操作要给出比「事务失败」更有指向的文案。
+
+
 async function withTransaction(db, storeNames, mode, run, {
   errorMessage = 'IndexedDB 事务失败',
   abortMessage = 'IndexedDB 事务被中止',
 } = {}) {
   const tx = db.transaction(storeNames, mode)
-  // 先挂完成回调再执行 run：run 自己抛错时事务同样会中止，
-  // 那时才挂回调就会漏掉这次中止（IndexedDB 的回调是异步的，正常路径看不出差别）。
+
+
   const settled = new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve()
     tx.onerror = () => reject(tx.error || new Error(errorMessage))
@@ -4052,16 +4135,16 @@ function withObjectStore(db, storeName, mode, run) {
 }
 
 
-// 宿主能力探测的浏览器端消费：拉取 Node half 的 /dsh-research-kit/host-capabilities，
-// 把探测结果汇总成一行事实摘要（装配了哪些服务、连了哪些 MCP 服务器）。
-//
-// 边界（ROADMAP §6）：摘要只陈述部署级事实，绝不推断「某个数据库可用」；
-// 目录条目的可用性标注（requires-mcp 等）不由本模块改写。
+
+
+
+
+
 
 const CACHE_TTL_MS = 5 * 60_000
 const MAX_LISTED_SERVERS = 4
 
-// 纯摘要（单测覆盖）：探测成功 → 事实行；探测失败/缺数据 → 空串（视图不渲染该行）。
+
 function summarizeHostCapabilities(capabilities) {
   if (!capabilities || typeof capabilities !== 'object') return ''
   const parts = []
@@ -4082,7 +4165,7 @@ function summarizeHostCapabilities(capabilities) {
   return parts.join('；')
 }
 
-// 进程级缓存：工作台与查询面板共享同一探测结果，5 分钟内不重复请求。
+
 let cache = { at: 0, summary: '', promise: null }
 
 function resetHostCapabilitiesCache() {
@@ -4122,10 +4205,10 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ESCAPE_MAP[character]);
 }
 
-// One catalog feeds renderer-time SVG/HTML copy and the selected runtime
-// catalog embedded in each standalone artifact. Keeping every locale in one
-// tuple makes missing translations impossible to hide behind an English
-// fallback during development.
+
+
+
+
 const MESSAGE_PAIRS = {
   'page.title': ['{title} Diagram', '{title}'],
   'diagram.description.architecture': ['An architecture diagram generated by Archify.', '由 Archify 生成的架构图。'],
@@ -4710,14 +4793,14 @@ function catalogKeys() {
 }
 
 
-// archify viewer 适配层 —— 把本仓库的 diagram IR / 组装 trace 转换为 vendored archify viewer
-// （vendor/archify/template.html，MIT，契约见 NOTICE）所需的 SVG data-* 约定与模板槽位。
-// 纯字符串与几何运算，浏览器与 Node 通用；i18n 目录来自 vendor/archify/i18n.mjs
-// （bundle 中由 build-client 前置拼接，Node 下原生 ESM 解析）。
-// 诚实边界：本适配层只做格式转换，不新增事实；图上每个节点都来自 IR/trace 的真实声明。
 
 
-// 我们的 kind → archify 架构语义角色（模板 CSS 按角色配色：c-backend/c-frontend/…）。
+
+
+
+
+
+
 const KIND_ROLE = {
   workflow: 'backend', finding: 'frontend', file: 'cloud',
   skill: 'messagebus', database: 'database',
@@ -4746,7 +4829,7 @@ function scriptJson(value) {
   return JSON.stringify(value).replaceAll('<', '\\u003c').replaceAll('>', '\\u003e').replaceAll('&', '\\u0026')
 }
 
-// 宽字符（CJK/全角）按约 2 倍字宽估算——节点据此自适应尺寸，避免文字挤出盒子或相互重叠。
+
 function charWidth(ch, fontSize) {
   const wide = /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(ch)
   return (wide ? 1.0 : 0.56) * fontSize
@@ -4758,7 +4841,7 @@ function textWidth(text, fontSize) {
   return width
 }
 
-// 按像素宽度换行；超出 maxLines 时末行加省略号（原文仍在 title 与说明卡片里，不静默丢失）。
+
 function wrapByWidth(text, fontSize, maxWidth, maxLines) {
   const source = String(text ?? '')
   if (!source) return []
@@ -4783,7 +4866,7 @@ function wrapByWidth(text, fontSize, maxWidth, maxLines) {
   return lines
 }
 
-// 节点自适应尺寸：先按内容排版，再决定盒子大小（标签与说明分行，永不重叠）。
+
 function archifyNodeSize(node) {
   const maxTextWidth = 132
   const labelLines = wrapByWidth(node.label, LABEL_FONT, maxTextWidth, 2)
@@ -4802,7 +4885,7 @@ function archifyNodeSize(node) {
   return { w: width, h: height, labelLines, noteLines }
 }
 
-// 行布局：按实际宽度顺序排布（弹窗自动布局用），返回带 x/y 的节点。
+
 function archifyLayoutRow(nodes, { y = 60, gap = 46, x = 40 } = {}) {
   let cursor = x
   return (nodes || []).map(node => {
@@ -4812,7 +4895,7 @@ function archifyLayoutRow(nodes, { y = 60, gap = 46, x = 40 } = {}) {
   })
 }
 
-// 贝塞尔连线几何：边界锚点收缩 + 平滑曲线。
+
 function archifyEdgeGeometry(nodes, edges) {
   const byId = new Map(nodes.map(n => [n.id, n]))
   const sizeOf = n => {
@@ -4841,8 +4924,8 @@ function archifyEdgeGeometry(nodes, edges) {
   }).filter(Boolean)
 }
 
-// 生成符合 archify viewer 契约的 SVG：
-// svg[data-animation][data-preset] + title/desc + path[data-edge-*][data-animate="edge"] + g[data-node-id][data-animate="node"]
+
+
 function buildArchifySvg({ nodes, edges, title, subtitle = '', locale = 'zh-CN', preset = 'classic', animation = 'trace', metrics = {} }) {
   const metricName = { workflows: '工作流', skills: '技能', databases: '数据源', families: '流程族' }
   const sized = nodes.map(n => {
@@ -4902,7 +4985,7 @@ function buildArchifySvg({ nodes, edges, title, subtitle = '', locale = 'zh-CN',
   return `<svg ${svgAttrs} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Math.round(canvasW)} ${Math.round(canvasH)}">\n        ${parts.join('\n        ')}\n      </svg>`
 }
 
-// routes（边序列）→ archify guidedViews（章节故事，≤5 章，viewer 按 focus 顺序推导节拍）。
+
 function archifyGuidedViews(routes, edges) {
   const byId = new Map((edges || []).map(e => [e.id, e]))
   return (Array.isArray(routes) ? routes : []).slice(0, 5).map(route => {
@@ -4919,7 +5002,7 @@ function archifyGuidedViews(routes, edges) {
   }).filter(view => view.focus.length >= 1)
 }
 
-// 槽位替换（镜像 vendored 模板的哨兵契约，见 archify/renderers/shared/utils.mjs applyTemplate）。
+
 const SVG_SLOT_RE = /      <!-- ARCHIFY:SVG_SLOT_START -->[\s\S]*?      <!-- ARCHIFY:SVG_SLOT_END -->/
 const CARDS_SLOT_RE = /    <!-- ARCHIFY:CARDS_SLOT_START -->[\s\S]*?    <!-- ARCHIFY:CARDS_SLOT_END -->/
 const SUBTITLE_SLOT_RE = /^([ \t]*)<p class="subtitle">\[Subtitle description\]<\/p>[ \t]*(\r?\n)?/m
@@ -4931,8 +5014,8 @@ function archifyApplyTemplate({ template, title, subtitle, svg, cards, locale = 
   if (!CARDS_SLOT_RE.test(template)) throw new Error('archify-adapter: 模板缺少 CARDS_SLOT 哨兵')
   const resolvedLocale = resolveLocale(locale)
   const localized = localizeTemplate(template, resolvedLocale)
-  // 运行时文案（工具栏/章节/透镜/雷达）由 viewer 从 #archify-i18n-data 读取；
-  // 缺 messages 时它会原样显示 key（实测：viewer.theme.dark），故必须完整注入目录。
+
+
   const i18nData = `    <script id="archify-i18n-data" type="application/json">${scriptJson({ locale: resolvedLocale, messages: viewerCatalog(resolvedLocale) })}</script>`
   const withI18n = localized.includes(I18N_PLACEHOLDER)
     ? localized.replace(I18N_PLACEHOLDER, () => i18nData)
@@ -4965,19 +5048,19 @@ ${card.items.map(item => `          <li>&bull; ${esc(item)}</li>`).join('\n')}
 
 
 
-// 证据库持久化：IndexedDB 最小 schema。
-//
-// 为什么不用 localStorage：灵感资产已经占用 localStorage，且证据条目会持续增长，
-// 无上限扩张的 localStorage 会挤占宿主页面配额。IndexedDB 是 ROADMAP §4 隐私边界里的硬要求。
-//
-// 降级策略：宿主沙箱（iframe / 隐私模式 / 插件受限环境）可能不提供 indexedDB，
-// 也可能 open 被拒。此时一律退化为进程内内存存储，接口保持 Promise 不变——
-// 视图照常可用，只是刷新后清空，并通过 isDegraded() 显式告知用户，绝不静默伪装成已持久化。
+
+
+
+
+
+
+
+
 
 const DB_NAME = 'dsh-research-kit-evidence'
-// v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
-// 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
-// v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
+
+
+
 const DB_VERSION = 7
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
@@ -4985,12 +5068,12 @@ const ORGANIZER_STORE = 'projectOrganizer'
 const CLAIMS_STORE = 'researchClaims'
 const LEDGER_STORE = 'researchLedger'
 const WORKSPACES_STORE = 'researchWorkspaces'
-// link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
+
 const MAX_LINKS = 500
 const PROJECT_KEY = 'dsh-research-kit.evidence.project'
 
-// 「当前项目」是工作上下文而非证据数据，体积恒定，放 localStorage 更合适：
-// 视图初始化时可同步读取，不必等 IndexedDB 打开。localStorage 不可用时退回进程内变量。
+
+
 function readStoredProject() {
   try { return globalThis.localStorage?.getItem(PROJECT_KEY) || '' } catch { return '' }
 }
@@ -4999,9 +5082,9 @@ function writeStoredProject(value) {
   try { globalThis.localStorage?.setItem(PROJECT_KEY, value) } catch { /* 不可用则仅进程内生效 */ }
 }
 
-// 索引库的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：所有读取路径都
-// 经过 sortBySavedAt / withWorkspaceIdentity，在这两处统一剔掉非对象行——
-// 一条坏行最多少一条证据，绝不让整个证据库列表或项目下拉崩掉。
+
+
+
 function evidenceVaultRows(value) {
   return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
 }
@@ -5035,7 +5118,7 @@ function createEvidenceVaultStore() {
       try { request = factory.open(DB_NAME, DB_VERSION) } catch { degraded = true; resolve(null); return }
       request.onupgradeneeded = () => {
         const db = request.result
-        // 两个 store 都按 contains 守卫：v1 老库升 v2 时 evidence 已存在，只补建 links。
+
         if (!db.objectStoreNames.contains(STORE)) {
           const store = db.createObjectStore(STORE, { keyPath: 'id' })
           store.createIndex('savedAt', 'savedAt')
@@ -5069,14 +5152,14 @@ function createEvidenceVaultStore() {
     return dbPromise
   }
 
-  // 返回 undefined 表示「没有可用的 IndexedDB」，调用方据此走内存分支。
+
   const withStore = async (mode, run, storeName = STORE) => {
     const db = await connect()
     if (!db) return undefined
     return withObjectStore(db, storeName, mode, run)
   }
 
-  // 内存降级路径的 link 存储：与 IndexedDB 路径行为一致（去重按稳定 id）。
+
   let memoryLinks = []
 
   const readAll = async () => {
@@ -5084,8 +5167,8 @@ function createEvidenceVaultStore() {
     return sortBySavedAt(withWorkspaceIdentity(Array.isArray(rows) ? rows : memory))
   }
 
-  // 项目是最常用的列表边界；不要在 IndexedDB 已建索引的情况下把整库搬到 JS 再过滤。
-  // 降级内存路径仍复用同一契约，便于保持两条路径行为一致。
+
+
   const readProject = async project => {
     if (typeof project !== 'string') return readAll()
     const rows = await withStore('readonly', store => requestToPromise(store.index('project').getAll(project)))
@@ -5117,7 +5200,7 @@ function createEvidenceVaultStore() {
     }
   }
 
-  // project 为 undefined/null 时返回全部；为字符串时精确匹配（'' 表示未归类）。
+
   const inProject = (rows, project) =>
     (typeof project === 'string' ? rows.filter(item => (item.project || '') === project) : rows)
 
@@ -5135,7 +5218,7 @@ function createEvidenceVaultStore() {
       return row
     },
 
-    // 台账投影只用于离线展示与迁移备份；写入最终审核始终经文件台账 API。
+
     async cacheResearchClaims(rows) {
       const result = await withStore('readwrite', store => Promise.all(rows.map(row => requestToPromise(store.put(row)))), CLAIMS_STORE)
       if (result === undefined) {
@@ -5176,8 +5259,8 @@ function createEvidenceVaultStore() {
       return event
     },
 
-    // 旧 project 仍是文件/MCP 兼容键；课题空间拥有稳定 ID 和可独立修改的显示名。
-    // 仅从已有证据派生虚拟 legacy 课题，不从临时任务或研究运行自动创建课题。
+
+
     async listWorkspaces({ includeArchived = false } = {}) {
       const persisted = await withStore('readonly', store => requestToPromise(store.getAll()), WORKSPACES_STORE)
       const records = Array.isArray(persisted) ? persisted : memoryWorkspaces
@@ -5248,7 +5331,7 @@ function createEvidenceVaultStore() {
       return rows.length
     },
 
-    // ── 项目上下文 ──────────────────────────────────────────
+
     getActiveProject() {
       if (activeProject === null) activeProject = readStoredProject()
       return activeProject
@@ -5288,7 +5371,7 @@ function createEvidenceVaultStore() {
       return readProject(project)
     },
 
-    // 项目名来自用户手填，保留原始大小写，按去重后排序；只用于下拉与筛选。
+
     async listProjects() {
       const db = await connect()
       if (db && typeof globalThis.IDBKeyRange !== 'undefined') {
@@ -5303,9 +5386,9 @@ function createEvidenceVaultStore() {
       return [...new Set(rows.map(item => item.project).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'))
     },
 
-    // onDuplicate: 'reject'（默认，抛错交给 UI 询问）| 'update'（覆盖已有）| 'new'（强制另存）
+
     async save(input, { onDuplicate = 'reject' } = {}) {
-      // 校验先于持久化：非法条目即使在降级模式下也不入库，避免两条路径行为不一致。
+
       const entry = normalizeEvidenceEntry(input)
       const existing = await readProject(entry.project)
       const duplicate = findDuplicate(existing, entry)
@@ -5315,7 +5398,7 @@ function createEvidenceVaultStore() {
         error.duplicate = duplicate
         throw error
       }
-      // 覆盖时沿用原 id 与首次保存时间：更新笔记不该让条目在列表里跳到最前。
+
       const finalEntry = duplicate && onDuplicate === 'update'
         ? { ...entry, id: duplicate.id, savedAt: duplicate.savedAt }
         : entry
@@ -5334,12 +5417,12 @@ function createEvidenceVaultStore() {
         return true
       })
       if (!touched) memory = memory.filter(item => item.id !== key)
-      // 证据端点消失：同步清理以其为一端的 link（资产端悬空由视图优雅兜底，见 assetEvidenceGraphEdges）。
+
       await this.removeAssetEvidenceLinks({ evidenceId: key })
       return true
     },
 
-    // 按项目彻底删除：只删该项目的条目，其余项目不受影响。
+
     async removeByProject(project) {
       const doomed = (await readProject(project)).map(item => item.id)
       const touched = await withStore('readwrite', async store => {
@@ -5361,8 +5444,8 @@ function createEvidenceVaultStore() {
       return true
     },
 
-    // ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────
-    // link 是用户显式确认的支撑关系；建立走 normalize 校验，同一对端点按稳定 id 去重。
+
+
 
     async linkAssetEvidence({ assetId, evidenceId, project = '', createdAt = Date.now() } = {}) {
       const link = normalizeAssetEvidenceLink({ assetId, evidenceId, project, createdAt })
@@ -5382,7 +5465,7 @@ function createEvidenceVaultStore() {
       return { link, created: true }
     },
 
-    // 过滤参数全部可选：不传返回全部（有界，见 MAX_LINKS）。
+
     async listAssetEvidenceLinks({ assetId, evidenceId, project } = {}) {
       const rows = await withStore('readonly', store => requestToPromise(store.getAll()), LINKS_STORE)
       const list = Array.isArray(rows) ? rows : memoryLinks
@@ -5403,7 +5486,7 @@ function createEvidenceVaultStore() {
       return true
     },
 
-    // 批量解除：按任一端点过滤（证据删除 / 资产删除 / 清空时的联动清理）。
+
     async removeAssetEvidenceLinks({ assetId, evidenceId } = {}) {
       const doomed = (await this.listAssetEvidenceLinks({ assetId, evidenceId })).map(row => row.id)
       if (!doomed.length) return 0
@@ -5415,7 +5498,7 @@ function createEvidenceVaultStore() {
       return doomed.length
     },
 
-    // 批量写回（导入用）：一次事务写完，避免逐条 put 之间被中断留下半份数据。
+
     async importMany(entries) {
       const rows = Array.isArray(entries) ? entries : []
       if (!rows.length) return 0
@@ -5427,8 +5510,8 @@ function createEvidenceVaultStore() {
       return rows.length
     },
 
-    // 项目整理只改归属，不改证据 ID、人工结论、Agent 历史或关联端点。
-    // 证据与关联共用一个 IndexedDB 事务，防止刷新时只搬了一半。
+
+
     async remapProjects(mappings, { dryRun = false, now = Date.now(), expectedSnapshot = null, claimProjections = [] } = {}) {
       const map = new Map(mappings.map(item => [item.from, item.to]))
       const evidenceBefore = (await readAll()).filter(item => map.has(item.project))
@@ -5528,7 +5611,7 @@ function createEvidenceVaultStore() {
 }
 
 
-// 文件 Claim 台账是审核状态的唯一来源；IndexedDB 只保留可离线读取的投影。
+
 const UNIFIED_CLAIM_API = '/dsh-research-kit/claim-review'
 const unifiedClaimInFlight = new Map()
 
@@ -5598,20 +5681,20 @@ async function synchronizeClaimScopes(store, project) {
 
 
 
-// 自动沉淀知识库持久化：IndexedDB 双 store（nodes / claims）。
-//
-// 与证据库（dsh-research-kit-evidence）同一套取舍：
-//   - IndexedDB 而非 localStorage：知识节点与关系会随对话持续增长，不能挤占配额；
-//   - 沙箱/隐私模式下降级为进程内内存存储，接口不变，isDegraded() 显式告知；
-//   - 顶层符号名全局唯一：构建器把所有模块拼进同一作用域（见 evidence-store.js 注释），
-//     因此 IndexedDB 工具从 evidence-vault-store 导入复用，绝不重名声明。
-//
-// 去重与合并语义（对应需求「相同内容合并，保留来源消息；冲突结论并列保留」）：
-//   - 节点 id = hash(kind + entityKind + 规范化标签) → 同一内容天然合并；
-//     合并时**追加**来源消息（同一 sessionId+seq 只记一次，最多保留前 5 条）；
-//   - 关系 id = hash(主语key | 关系 | 宾语key | 极性) → 「A 可能影响 B」与
-//     「A 促进 B」是两条关系记录，**并列保留**，谁也不覆盖谁；
-//   - 用户推进过的核验状态（verified/disputed）不会被自动沉淀降回 to_verify。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const KNOWLEDGE_DB_NAME = 'dsh-research-kit-knowledge'
 const KNOWLEDGE_DB_VERSION = 1
@@ -5620,7 +5703,7 @@ const KNOWLEDGE_CLAIM_STORE = 'claims'
 const KNOWLEDGE_NODE_ID_PREFIX = 'kn-'
 const KNOWLEDGE_CLAIM_ID_PREFIX = 'kc-'
 
-// 来源消息是追溯线索不是全文存档：每条知识最多记 5 条来源，每条摘录 200 字。
+
 const MAX_SOURCES_PER_RECORD = 5
 const MAX_SOURCE_EXCERPT_CHARS = 200
 const MAX_EVIDENCE_LINKS_PER_NODE = 12
@@ -5645,7 +5728,7 @@ function normalizeKnowledgeSource(input = {}) {
   }
 }
 
-// 追加来源消息：同一 sessionId+seq 只记一次；超过上限时保留最早的（首次出处最可追溯）。
+
 function mergeKnowledgeSources(existing = [], incoming = []) {
   const rows = Array.isArray(existing) ? [...existing] : []
   const seen = new Set(rows.map(knowledgeSourceId))
@@ -5664,8 +5747,8 @@ function knowledgeNodeIdFor(key) {
   return `${KNOWLEDGE_NODE_ID_PREFIX}${hashKey(key)}`
 }
 
-// 关系的稳定身份：主语 key | 关系 | 宾语 key | 极性。极性参与身份是刻意的——
-// 「A 可能影响 B」（不确定）与「A 促进 B」（正向）语义不同，应并列保留供人工裁决。
+
+
 function knowledgeClaimKeyFor({ fromKey, relation, toKey, polarity }) {
   return `${fromKey}|${relation}|${toKey}|${polarity}`
 }
@@ -5674,9 +5757,9 @@ function knowledgeClaimIdFor(identity) {
   return `${KNOWLEDGE_CLAIM_ID_PREFIX}${hashKey(identity)}`
 }
 
-// 索引库里的行可能被外部写坏（旧版本、手工改过的备份、导入通道）：
-// 排序是每条读取路径的必经之地，因此在这里把非对象行一并剔掉——
-// 一条坏行最多少一条知识，绝不让整个知识面板在比较器里抛 TypeError。
+
+
+
 function knowledgeRows(value) {
   return (Array.isArray(value) ? value : []).filter(row => row && typeof row === 'object')
 }
@@ -5689,9 +5772,9 @@ function sortKnowledgeClaims(rows) {
   return knowledgeRows(rows).sort((a, b) => ((a.id ?? '') < (b.id ?? '') ? -1 : (a.id ?? '') > (b.id ?? '') ? 1 : 0))
 }
 
-// ── 备份导出 / 恢复（对齐证据库的备份语义）────────────────────────────────────
-// 知识沉淀随对话持续积累，必须有脱离站点的搬运通道：格式带 kind 与 version，
-// 恢复按 key 身份增量合并（已存在跳过，不覆盖现有核验状态），端点缺失的关系拒收。
+
+
+
 
 const KNOWLEDGE_BACKUP_KIND = 'dsh-research-kit-knowledge'
 const KNOWLEDGE_BACKUP_VERSION = 1
@@ -5706,7 +5789,7 @@ function serializeKnowledgeBackup({ nodes = [], claims = [] } = {}) {
   }, null, 2)
 }
 
-// 解析失败一律抛错：半份备份比没有备份更危险（与证据库备份同一原则）。
+
 function parseKnowledgeBackup(text) {
   const raw = String(text || '').trim()
   if (!raw) throw new Error('备份内容为空。')
@@ -5718,8 +5801,8 @@ function parseKnowledgeBackup(text) {
   return { nodes: parsed.nodes, claims: parsed.claims }
 }
 
-// 增量合并：节点按 key（关系按四元组身份）识别已存在；字段逐项收紧；
-// 端点在「现有 ∪ 恢复集」里都找不到的关系按无效计数拒收，绝不悬挂。
+
+
 function mergeKnowledgeBackup(existingNodes = [], existingClaims = [], incomingNodes = [], incomingClaims = [], now = Date.now()) {
   const knownNodes = new Map(Array.isArray(existingNodes) ? existingNodes.map(row => [row.key, row]) : [])
   const outNodes = []
@@ -5751,7 +5834,7 @@ function mergeKnowledgeBackup(existingNodes = [], existingClaims = [], incomingN
     outNodes.push(row)
     addedNodes++
   }
-  // 关系端点解析：备份里的 from/to 是节点 id，id=hash(key) 确定性可逆；按 id 找回 key 后重算身份。
+
   const keyOfNodeId = new Map()
   for (const row of knownNodes.values()) keyOfNodeId.set(row.id, row.key)
   const knownClaims = new Map(Array.isArray(existingClaims) ? existingClaims.map(row => [row.id, row]) : [])
@@ -5864,7 +5947,7 @@ function createKnowledgeStore() {
   }
 
   return {
-    // 主动探测：宿主根本没有 indexedDB 时，不必等第一次读写就如实报告降级。
+
     isDegraded: () => degraded || indexedDbFactory() === null,
 
     async listNodes({ kind } = {}) {
@@ -5919,9 +6002,9 @@ function createKnowledgeStore() {
       return true
     },
 
-    // 把一条提取结果合并入库。nodes/claims 是提取器输出的 draft（带 key），
-    // source 是来源消息（{ sessionId, seq, turn, at, excerpt }），可为空（手动提取）。
-    // project 记录沉淀时的当前项目（图谱按项目筛选的数据基础）；已有 project 的记录不被覆盖。
+
+
+
     async applyExtraction({ nodes = [], claims = [], source = {}, project = '', now = Date.now() } = {}) {
       const projectKey = clampKnowledgeText(project, 120)
       const origin = normalizeKnowledgeSource(source)
@@ -5953,7 +6036,7 @@ function createKnowledgeStore() {
             entityKind: clean.kind === 'entity' ? (clean.entityKind || previous.entityKind) : previous.entityKind,
             project: previous.project || projectKey,
             sources: mergeKnowledgeSources(previous.sources, incoming),
-            // 用户推进过的核验状态不回退：自动沉淀只填写「待核验」，不改写人工结论。
+
             status: previous.status === 'to_verify' ? 'to_verify' : previous.status,
             updatedAt: now,
           }
@@ -5982,7 +6065,7 @@ function createKnowledgeStore() {
         }
       }
 
-      // 关系端点解析失败（实体被限额截断）就丢弃该关系，绝不悬挂。
+
       for (const draft of Array.isArray(claims) ? claims : []) {
         let clean
         try { clean = normalizeKnowledgeClaimDraft(draft) } catch { skippedClaims++; continue }
@@ -6066,7 +6149,7 @@ function createKnowledgeStore() {
       return next
     },
 
-    // 恢复备份：合并判定在纯函数 mergeKnowledgeBackup 里（可测），这里只负责读写与事务。
+
     async importBackup({ nodes = [], claims = [], now = Date.now() } = {}) {
       const merged = mergeKnowledgeBackup(await readNodes(), await readClaims(), nodes, claims, now)
       await putRows(KNOWLEDGE_NODE_STORE, merged.nodes)
@@ -6074,8 +6157,8 @@ function createKnowledgeStore() {
       return { ...merged, nodes: await readNodes(), claims: await readClaims() }
     },
 
-    // 删除一个知识节点，同时删除指向它的全部关系（图谱不允许悬挂端点）。
-    // 关系与节点在不同 store，无法共享一个事务：先删关系再删节点，中断也只是多留一条孤儿关系。
+
+
     async removeNode(nodeId) {
       const claims = await readClaims()
       const doomed = claims.filter(row => row.from === nodeId || row.to === nodeId)
@@ -6084,7 +6167,7 @@ function createKnowledgeStore() {
       return true
     },
 
-    // 只清空知识图谱沉淀；证据库与灵感资产不受影响（与「清空本会话临时记录」的边界互补）。
+
     async clear() {
       const clearedNodes = await withStore(KNOWLEDGE_NODE_STORE, 'readwrite', store => requestToPromise(store.clear()))
       const clearedClaims = await withStore(KNOWLEDGE_CLAIM_STORE, 'readwrite', store => requestToPromise(store.clear()))
@@ -6094,9 +6177,9 @@ function createKnowledgeStore() {
   }
 }
 
-// ── 单例 + 订阅 ───────────────────────────────────────────────────────────────
-// 与证据库同样的理由：沉淀入口（会话事件监听）与展示入口（证据图谱）不在同一棵
-// 子树里，靠模块级单例与监听保持同步。
+
+
+
 let sharedKnowledgeStore = null
 const knowledgeListeners = new Set()
 
@@ -6228,7 +6311,7 @@ async function undoProjectOrganization({ store, assetProvider, onProgress = () =
   if (!journal || !journal.fileId || !['applied', 'file', 'evidence', 'knowledge', 'assets', 'runs', 'recovering'].includes(journal.status)) {
     throw new Error('当前没有可撤销的项目整理。')
   }
-  // 文件侧撤销会写盘；先核对所有浏览器侧快照，避免文件已回滚而本地因新编辑拒绝恢复。
+
   if (journal.runSnapshot) restoreResearchRuns(journal.runSnapshot, { validateOnly: true })
   if (journal.knowledgeSnapshot) await knowledgeStore().restoreProjectOrganization(journal.knowledgeSnapshot, { validateOnly: true })
   if (journal.evidenceSnapshot) await store.restoreProjectOrganization(journal.evidenceSnapshot, { validateOnly: true })
@@ -6313,27 +6396,40 @@ async function applyProjectOrganization({ store, assetProvider, mappings, onProg
 }
 
 
-// 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
-//
-// 与灵感资产的边界：灵感资产回答「想过什么」，证据库回答「依据什么」。
-// 隐私边界（不可协商，与 ROADMAP §4 一致）：
-//   - 只入库用户逐条确认的元数据与主动写下的笔记；禁止自动入库；
-//   - 不保存 API 原始响应、全文或附件；检索词仅在用户点击“记录本次检索”后写入账本；
-//   - 保存不等于认可，新条目一律落到「未核验」。
-//
-// 本文件是存取层（状态与订阅 / 文件同步 / 保存删除 / 互链 / 当前项目）；界面层在
-// src/research-evidence-vault.js，保存表单与面板只调用本模块的导出。
 
-// 研究证据库（ROADMAP §4）：把用户明确保存、可追溯的外部来源沉淀下来。
-//
-// 与灵感资产的边界：灵感资产回答「想过什么」，证据库回答「依据什么」。
-// 隐私边界（不可协商，与 ROADMAP §4 一致）：
-//   - 只入库用户逐条确认的元数据与主动写下的笔记；禁止自动入库；
-//   - 不保存 API 原始响应、全文或附件；检索词仅在用户点击“记录本次检索”后写入账本；
-//   - 保存不等于认可，新条目一律落到「未核验」。
+function fileEvidenceSourceIdentity(entry) {
+  if (entry.identifier_type === 'doi') return `doi:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.identifier_type === 'pmid') return `pmid:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.identifier_type === 'pmcid') return `pmcid:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.identifier_type === 'arxiv') return `arxiv:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.identifier_type === 'nct') return `nct:${String(entry.identifier || '').toLowerCase()}`
+  if (entry.url) return `url:${String(entry.url).replace(/\/$/, '').toLowerCase()}`
+  if (entry.identifier_type === 'none' && entry.identifier) return `identifier:${String(entry.identifier).toLowerCase()}`
+  return `title:${String(entry.title || '').slice(0, 80).toLowerCase()}`
+}
 
-// 单例 + 订阅：保存入口在查询面板（分区①），列表在本面板（沉淀层），
-// 两者不在同一棵子树里，靠模块级 store 与监听保持同步。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 let sharedStore = null
 const listeners = new Set()
 
@@ -6376,7 +6472,7 @@ function invalidateEvidenceSync(project) {
     evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:pull`)
     evidenceSyncFreshUntil.delete(`${evidenceSyncScope(project)}:allow-existing`)
   }
-  // 全量读取覆盖任意项目；任一项目写入后都必须让全量缓存失效。
+
   evidenceSyncFreshUntil.delete('*')
   evidenceSyncFreshUntil.delete('*:pull')
   evidenceSyncFreshUntil.delete('*:allow-existing')
@@ -6478,7 +6574,7 @@ async function fetchFileEvidenceEntries(project) {
   return payload.entries
 }
 
-async function postFileEvidenceEntries(entries, { allowExistingSources = false } = {}) {
+async function postFileEvidenceEntries(entries, { allowExistingSources = false, reconcileExisting = false } = {}) {
   const byProject = new Map()
   for (const entry of entries) {
     const project = entry.project || 'default'
@@ -6508,9 +6604,15 @@ async function postFileEvidenceEntries(entries, { allowExistingSources = false }
     const added = Number(result?.added)
     const skipped = Number(result?.skipped)
     if (!result?.ok || !Number.isInteger(added) || !Number.isInteger(skipped)
-      || added < 0 || skipped < 0 || added + skipped !== rows.length
-      || (!allowExistingSources && skipped)) {
-      throw new Error('文件侧存在重复来源，未完成同步；请先检查项目内条目。')
+      || added < 0 || skipped < 0 || added + skipped !== rows.length) {
+      throw new Error('文件侧返回的证据同步数量与请求不符。')
+    }
+    if (skipped && !allowExistingSources) {
+      const stored = reconcileExisting ? await fetchFileEvidenceEntries(project) : []
+      const storedKeys = new Set(stored.map(fileEvidenceSourceIdentity))
+      if (!rows.every(row => storedKeys.has(fileEvidenceSourceIdentity(row)))) {
+        throw new Error('文件侧存在未能确认的重复来源。请在证据库复核相关条目。')
+      }
     }
     existingSources += skipped
   }
@@ -6551,11 +6653,11 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
       imported++
     } catch {
       ignored++
-      // 非法或无法追溯的文件条目不入库；文件侧保留原样，UI 不伪造条目。
+
     }
   }
 
-  // 迁移备份只需收齐文件侧证据，不应因反向回写时的不同去重规则而拒绝导出。
+
   if (pullOnly) return { skipped: false, imported, exported: 0, ignored }
 
   const nextLocalEntries = await store.list(project ? { project } : {})
@@ -6567,14 +6669,20 @@ async function performEvidenceVaultSync(project, { pullOnly = false, allowExisti
       await updateFileEvidenceEntry(local); updated++
     }
   }
-  const fileKeys = new Set(fileEntries.map(evidenceSyncKey))
-  const missing = nextLocalEntries.filter(entry => !fileKeys.has(evidenceSyncKey(entry)))
+  const scopedFileKey = entry => JSON.stringify([entry.project || 'default', fileEvidenceSourceIdentity(entry)])
+  const fileKeys = new Set(fileEntries.map(scopedFileKey))
+  const missing = new Map()
+  for (const local of nextLocalEntries) {
+    const entry = vaultEvidenceFileEntry(local)
+    const key = scopedFileKey(entry)
+    if (!fileKeys.has(key) && !missing.has(key)) missing.set(key, entry)
+  }
   let existingSources = 0
-  if (missing.length) {
-    existingSources = await postFileEvidenceEntries(missing.map(vaultEvidenceFileEntry), { allowExistingSources })
+  if (missing.size) {
+    existingSources = await postFileEvidenceEntries([...missing.values()], { allowExistingSources, reconcileExisting: true })
     publishEvidenceVault()
   }
-  return { skipped: false, imported, exported: missing.length - existingSources, updated, ignored, existingSources }
+  return { skipped: false, imported, exported: missing.size - existingSources, updated, ignored, existingSources }
 }
 
 function syncEvidenceVaultWithFiles(project, { force = false, pullOnly = false, allowExistingSources = false } = {}) {
@@ -6612,7 +6720,7 @@ async function saveEvidenceEntry(input, options) {
   const result = await evidenceVaultStore().save({
     ...input,
     updatedAt: Date.now(),
-    // UI 保存默认归入当前运行；没有运行时保持空值，兼容既有项目级证据。
+
     runId: input?.runId || activeResearchRun()?.id || '',
   }, options)
   result.fileSynced = await persistEvidenceEntryToFile(result.entry)
@@ -6639,8 +6747,8 @@ async function clearEvidenceEntriesFromFile(project) {
   return true
 }
 
-// ── 资产-证据互链（ROADMAP §11 P5）────────────────────────────────────────────
-// 建立与解除都经这里发布变更，工作台资产卡、图谱各自订阅刷新。
+
+
 async function linkAssetToEvidence({ assetId, evidenceId, project } = {}) {
   const result = await evidenceVaultStore().linkAssetEvidence({ assetId, evidenceId, project })
   publishEvidenceVault()
@@ -6657,13 +6765,13 @@ function listAssetEvidenceLinks(filter) {
   return evidenceVaultStore().listAssetEvidenceLinks(filter)
 }
 
-// 当前项目：工作上下文，跨会话保留。保存表单与列表各自读它，
-// 保证「在查询结果里保存」落到用户此刻正在看的那个项目。
+
+
 function getActiveProject() {
   const store = evidenceVaultStore()
   const stored = store.getActiveProject()
   const project = currentResearchContext().project
-  // 首次升级时保留旧证据库的项目选择；之后研究上下文成为跨分区共享入口。
+
   if (!project && stored) { setResearchProject(stored); return stored }
   if (project && project !== stored) store.setActiveProject(project)
   return project || stored
@@ -6693,16 +6801,16 @@ const STATUS_COLORS = {
   stale: C.muted,
 }
 
-// 保存确认表单：嵌在查询结果条目下方。必须经过这一步才入库——
 
 
-// 证据库界面层：保存表单（EvidenceSaveForm）与证据库面板（EvidenceVaultPane：
-// 列表/筛选/导入导出/Agent 批量初判/互链反查/项目整理）。
-//
-// 持久化、文件同步与互链写入在 src/lib/evidence-vault-sync.js —— 面板只调用它的导出，
-// 不再把 IndexedDB / fetch 细节和 800 行组件混在同一个文件里（拆分前合计 1248 行）。
 
-// 用户要看到并确认将要保存的内容，这是「不静默持久化」的具体落点。
+
+
+
+
+
+
+
 function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved }) {
   const detected = React.useMemo(
     () => detectIdentifier(source.identifier, source.title, source.url, source.meta),
@@ -6718,7 +6826,7 @@ function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved })
   })
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
-  // 重复不是错误而是需要用户裁决的状态：覆盖已有，还是刻意另存一份。
+
   const [conflict, setConflict] = React.useState(null)
   const update = (key, value) => setForm(current => ({ ...current, [key]: value }))
   const payload = onDuplicate => ({
@@ -6773,9 +6881,9 @@ function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved })
   ])
 }
 
-// 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
-// assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
-// 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
+
+
+
 function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
@@ -6846,11 +6954,11 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   const [classificationEditId, setClassificationEditId] = React.useState('')
   const [classificationDraft, setClassificationDraft] = React.useState('')
   const agentAbort = React.useRef(null)
-  // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
+
   const [links, setLinks] = React.useState([])
-  // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
+
   const [confirmClear, setConfirmClear] = React.useState(false)
-  // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式。
+
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const refreshVersion = React.useRef(0)
   React.useEffect(() => {
@@ -6908,7 +7016,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
     : filtered, [filtered, groupByTopic])
   const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
-  // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
+
   const citedByIndex = React.useMemo(() => {
     const index = new Map()
     for (const link of links) {
@@ -6918,8 +7026,8 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     }
     return index
   }, [links, assetTitlesById])
-  // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
-  // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
+
+
   const selectedEntries = React.useMemo(() => [...new Map([...selectedRows, ...entries].filter(item => selectedIdSet.has(item.id)).map(item => [item.id, item])).values()], [entries, selectedRows, selectedIdSet])
   React.useEffect(() => {
     let alive = true
@@ -6927,8 +7035,8 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     return () => { alive = false }
   }, [store, selectedIds])
   const canWrite = canWriteDraft(inputActions)
-  // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
-  // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
+
+
   const writePlan = React.useMemo(() => planCitationWrite({ entries: selectedEntries, canWrite }), [selectedEntries, canWrite])
   const citationPreview = writePlan.text
   const degraded = store.isDegraded()
@@ -7160,7 +7268,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
-  // 解释图素材包：按当前筛选范围导出（通常先筛「已核验」），供 render-diagrams --evidence 并入「证据库来源」卡片。
+
   const exportExplainPack = async () => {
     try {
       const entries = await readScope()
@@ -7383,7 +7491,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     }
   }
 
-  // 当前项目为空时这里是「清空全部项目」，文案必须说清范围，不能只写「清空」。
+
   const clearScope = async () => {
     try {
       await clearEvidenceEntriesFromFile(project || undefined)
@@ -7420,7 +7528,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     notice ? h(Notice, { key: 'notice', tone: notice.startsWith('⚠️') ? 'warn' : 'info', icon: notice.startsWith('⚠️') ? 'shield' : 'check' },
       notice.replace(/^⚠️\s*/, '')) : null,
 
-    // 项目与维护动作：一次性操作，不随滚动吸顶（分层原则见 docs/ARCHITECTURE.md §2.3）。
+
     h(Card, { key: 'project-bar', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h('strong', { key: 'label', style: { fontSize: 13 } }, '当前课题'),
@@ -7531,7 +7639,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
       ]) : null,
       h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !citationPicked.length || citationBusy, onClick: importCitations }, `确认保存所选 ${citationPicked.length} 条（待核验）`),
     ]) : null,
-    // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
+
     h(Toolbar, { key: 'filters', sticky: true }, [
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
         h(Input, { key: 'i', value: query, onChange: value => { resetPages(); setQuery(value) }, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
@@ -7663,7 +7771,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         ]) : null,
         classificationEditId === item.id ? h('span', { key: 'options', style: { fontSize: 11, color: C.muted } }, `可选：${RESEARCH_TOPIC_OPTIONS.map(topic => `${topic.primary}/${topic.secondary}`).join('；')}`) : null,
       ]),
-      // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
+
       citedByIndex.get(item.id)?.length
         ? h('div', { key: 'cited-by', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } }, [
           h('span', { key: 'l', style: { color: C.teal, fontWeight: 650 } }, '被引用于：'),
@@ -7736,7 +7844,7 @@ function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }
   const [query, setQuery] = React.useState('')
   const [englishQuery, setEnglishQuery] = React.useState('')
   const [state, setState] = React.useState({ status: 'idle', result: null, message: '' })
-  // 保存证据是逐条显式动作：展开哪一条的表单、哪些已落库，都由用户点击驱动，绝不自动入库。
+
   const [saveTarget, setSaveTarget] = React.useState('')
   const [savedKeys, setSavedKeys] = React.useState([])
   const [recordedQuery, setRecordedQuery] = React.useState(false)
@@ -7762,8 +7870,8 @@ function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }
     setRecordedQuery(false)
     setState({ status: 'loading', result: null, message: '正在查询公开数据源…' })
     try {
-      // 以 location.href 而非 location.origin 作为基准：同一份客户端在 Web（http://…:3080）与
-      // Desktop App（dsh-app://app/）下都要能解析出本插件的相对路由，origin 是「宿主形态」相关的。
+
+
       const url = new URL(QUERY_PATH, window.location.href)
       url.searchParams.set('database_id', database.id)
       url.searchParams.set('q', text)
@@ -7900,54 +8008,39 @@ function DatabaseQueryPanel({ database, sessionId, inputActions, evidenceStore }
 const RESEARCH_COMPOSER_EVENT = 'dsh-research-kit:composer-open'
 const RESEARCH_RESOURCE_SELECTION_EVENT = 'dsh-research-kit:resource-selection-changed'
 
-function openResearchComposer(mode) {
-  window.dispatchEvent(new CustomEvent(RESEARCH_COMPOSER_EVENT, { detail: { mode } }))
+const RESEARCH_ORGANIZE_EVENT = 'dsh-research-kit:organize-draft'
+
+function openResearchComposer(mode, sessionId) {
+  window.dispatchEvent(new CustomEvent(RESEARCH_COMPOSER_EVENT, { detail: { mode, sessionId } }))
 }
 
-/** 输入框工具栏的紧凑入口；弹层本体由 conversation.input.overlay 承载。 */
-function ResearchComposerLauncher() {
-  const [resourceCount, setResourceCount] = React.useState(0)
+
+function ResearchComposerLauncher({ sessionId }) {
+  const [status, setStatus] = React.useState(null)
   React.useEffect(() => {
-    const onSelectionChange = event => setResourceCount(Number(event.detail?.count) || 0)
+    const onSelectionChange = event => {
+      if (event.detail?.sessionId === sessionId) setStatus(event.detail)
+    }
     window.addEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onSelectionChange)
     return () => window.removeEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onSelectionChange)
-  }, [])
-  const open = mode => event => {
-    event.preventDefault()
-    event.stopPropagation()
-    openResearchComposer(mode)
-  }
-  // 与增强器一致的紧凑按钮：8px 圆角、13px 字号、teal 描边淡底，选中态用 teal 文字强化。
-  const launcherStyle = active => ({
-    padding: '6px 11px',
-    border: `1px solid ${active ? C.tealLineStrong : C.line}`,
-    background: active ? C.tealTint : C.surface,
-    color: active ? C.teal : C.ink,
-    fontSize: 13,
-    fontWeight: 600,
-  })
-  return h('div', { style: { display: 'flex', gap: 7, alignItems: 'center' } }, [
+  }, [sessionId])
+  const { count, enabled } = status?.sessionId === sessionId ? status || {} : {}
+  return h(React.Fragment, null, [
     h(GlobalStyle, { key: 'style' }),
     h(Button, {
-      key: 'resources',
-      size: 'sm',
-      variant: 'ghost',
-      icon: 'layers',
-      onClick: open('resources'),
+      key: 'research',
+      size: 'sm', variant: 'ghost', icon: 'wand',
+      onClick: event => {
+        event.preventDefault()
+        event.stopPropagation()
+        openResearchComposer('workflows', sessionId)
+      },
       onPointerDown: event => event.stopPropagation(),
       'aria-haspopup': 'dialog',
-      style: launcherStyle(resourceCount > 0),
-    }, resourceCount ? `资源 · ${resourceCount}` : '资源'),
-    h(Button, {
-      key: 'workflows',
-      size: 'sm',
-      variant: 'ghost',
-      icon: 'wand',
-      onClick: open('workflows'),
-      onPointerDown: event => event.stopPropagation(),
-      'aria-haspopup': 'dialog',
-      style: launcherStyle(false),
-    }, '工作流程'),
+      'aria-label': '科研辅助',
+      title: enabled ? '自动建议已开启' : '打开科研辅助',
+      style: { color: enabled ? C.teal : C.ink, background: enabled ? C.tealTint : C.surface },
+    }, ['科研辅助', count ? ` · ${count}` : '', enabled ? ' · 自动' : ''].join('')),
   ])
 }
 
@@ -7958,17 +8051,17 @@ const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '
 function unique(ids) { return [...new Set(ids)] }
 
 function SearchInput({ value, onChange, placeholder, ariaLabel }) {
-  return h('div', { style: { position: 'relative' } }, [
+  return h('div', { className: 'rk-picker-search' }, [
     h('span', {
       key: 'icon',
       'aria-hidden': 'true',
       style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' },
     }, h(Icon, { name: 'search', size: 14 })),
-    h(Input, { key: 'input', value, onChange, placeholder, ariaLabel, style: { paddingLeft: 32 } }),
+    h(Input, { key: 'input', value, onChange, placeholder, ariaLabel, style: { padding: '6px 8px 6px 30px', height: 32 } }),
   ])
 }
 
-function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, onClose }) {
+function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, originalDraft, originalRevision, onClose }) {
   const [values, setValues] = React.useState({})
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [missing, setMissing] = React.useState([])
@@ -7977,10 +8070,10 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   const suggestedSkills = (workflow.suggestedSkillIds || []).map(itemById).filter(Boolean)
   const skillIds = unique([...resourceItems.filter(item => item.type === 'skill').map(item => item.id), ...suggestedSkills.filter(item => item.type === 'skill').map(item => item.id)])
   const databaseIds = resourceItems.filter(item => item.type === 'database').map(item => item.id)
-  // 与工作台 recordUse 同一口径：使用/复制即同时记「使用历史」与「本会话工作流轨迹」，
-  // 保证图谱「本会话」范围不因入口不同而漏记。历史只记录工作流身份和时间，
-  // 绝不从最终 Prompt 中提取用户参数或材料摘要；计划记录不在这里代写——
-  // 阶段勾选界面只在工作台存在，弹层不静默标记用户看不到的计划状态。
+
+
+
+
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const recordUse = () => {
     catalogStorage?.recordHistory?.({ id: workflow.id, name: workflow.name })
@@ -7996,8 +8089,18 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法使用。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
-      const written = writeDraftText(inputActions, finalPrompt)
-      if (!written.ok) return setNotice('草稿已变化，未自动写入；请复制提示词后手动粘贴。')
+      if (supportsSafeInsert(inputActions)) {
+        const span = inputActions.captureInsertion()
+        const text = originalDraft ? `\n\n${finalPrompt}\n\n` : finalPrompt
+        if (!span || (Number.isInteger(originalRevision) && span.draftRev !== originalRevision)
+            || !inputActions.insertText(text, { ...span, start: span.end })) {
+          return setNotice('草稿已变化。请重新打开流程，或复制提示词后手动粘贴。')
+        }
+      } else {
+        if (originalDraft) return setNotice('当前客户端只能替换整份草稿，请复制提示词后手动粘贴。')
+        const written = writeDraftText(inputActions, finalPrompt)
+        if (!written.ok) return setNotice('草稿暂时无法写入，请复制后手动粘贴。')
+      }
       recordUse()
       onClose()
     } catch (error) { setMissing([]); setNotice(error.message) }
@@ -8010,7 +8113,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
       setNotice('已复制提示词到剪贴板；可粘贴到任意会话使用。')
     } catch (error) { setNotice(`复制失败：${error?.message || error}；可手动全选预览框文本复制。`) }
   }
-  // 点按即校验：必填缺失时在弹窗内给出字段级错误，不依赖静默 notice。
+
   const validateThenUse = () => {
     const missingFields = (workflow.placeholders || [])
       .filter(field => field.required && !String(values[field.key] || '').trim())
@@ -8068,8 +8171,36 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   ])
 }
 
-/** 由 conversation.input.overlay 承载，锚定在输入卡片上方。 */
-function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
+const researchAutoSessions = new Map()
+
+function matchResearchDraft(draft, materialCount) {
+  const text = draft.trim()
+  if (!text || text.length > 2500 || /^[/@]/.test(text) && !materialCount
+      || /^(什么是|啥是|如何理解|请解释|解释一下|为什么|what is|what are|explain)/i.test(text)
+      || text.includes('科研执行步骤')) return null
+  if (materialCount >= 2 && /(?:比较|对比).{0,20}(?:论文|文献|证据|研究)|compare.{0,40}(?:papers|studies|evidence)/i.test(text)) {
+    return { id: 'compare-papers', values: {}, reason: '当前问题涉及对比多份材料的发现和证据强度。' }
+  }
+  if (materialCount && /(?:审阅|评审|审查).{0,20}(?:论文|稿件)|(?:peer.review|review).{0,40}(?:paper|manuscript)/i.test(text)) {
+    return { id: 'review-paper', values: {}, reason: '当前问题适合按方法、统计和局限逐项审阅。' }
+  }
+  if (/(?:做|写|整理|开展|完成|制定).{0,30}(?:文献综述|证据综述)|(?:conduct|write|prepare).{0,35}(?:literature review|evidence review)/i.test(text)) {
+    return { id: 'literature-review', values: { question: text }, reason: '当前问题适合先明确检索范围，再综合已有证据。' }
+  }
+  return null
+}
+
+function recentResearchRequest(sessions, sessionId) {
+  try {
+    const entries = sessions?.binding?.(sessionId)?.eventSource?.getSnapshot?.()?.entries
+    const recent = entries?.slice(-24).findLast(event => event.type === 'user/message')
+    const message = recent?.data?.message ?? recent?.data
+    return message?.content?.find(block => block.type === 'text')?.text?.slice(0, 600) || ''
+  } catch { return '' }
+}
+
+
+function ResearchComposerOverlay({ sessionId, input, useInput, inputActions, catalogStorage, sessions }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const [mode, setMode] = React.useState(null)
@@ -8082,19 +8213,112 @@ function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
   const popoverRef = React.useRef(null)
   const [popoverHeight, setPopoverHeight] = React.useState(null)
   const [catalogVersion, setCatalogVersion] = React.useState(0)
-  // 目录可能由默认工作台先加载完成；浮层关闭时也要订阅版本变化，否则首次打开时
-  // useMemo 仍会保留挂载阶段基于空目录算出的分类与计数。
-  React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
+  const hookedInput = useInput ? useInput(value => value) : undefined
+  const draftState = hookedInput?.draftRev !== undefined ? hookedInput : input
+  const draft = draftState?.draft
+  const revision = draftState?.draftRev
+  const fileReferences = draftState?.occurrences?.filter(item => !item.invalid && item.appearance === 'file').length || 0
+  const materialCount = (draftState?.attachmentIds?.length || 0) + fileReferences
+  const available = Boolean(sessionId) && typeof draft === 'string' && Number.isInteger(revision)
+    && typeof draftState?.phase === 'string' && supportsSafeInsert(inputActions)
+  const [autoSession, setAutoSession] = React.useState(() => researchAutoSessions.has(sessionId) ? sessionId : '')
+  const [suggestion, setSuggestion] = React.useState(null)
+  const [preview, setPreview] = React.useState(false)
+  const [composing, setComposing] = React.useState(false)
+  const [assistNotice, setAssistNotice] = React.useState('')
+  const assistRef = React.useRef(null)
+  const enabled = available && autoSession === sessionId
   React.useEffect(() => {
-    if (mode) loadBrowserCatalog().catch(() => {})
-  }, [mode])
-  // 浮层贴住输入卡片上沿，而不是钉在视口左下角：
-  // 槽位锚点是卡片顶边的零高条，绝对定位即与触发按钮同宽同轴；
-  // 可用高度按「卡片顶边 → 滚动区顶边」实测，随输入框行数、附件栏与窗口尺寸自适应。
+    setAutoSession(researchAutoSessions.has(sessionId) ? sessionId : '')
+    setMode(null)
+    setLaunchWorkflow(null)
+    setSuggestion(null)
+    setPreview(false)
+    setAssistNotice('')
+    setComposing(false)
+  }, [sessionId])
+  React.useEffect(() => {
+    if (!enabled) {
+      setComposing(false)
+      return undefined
+    }
+    const onComposition = event => {
+      if (event.target?.closest?.('[data-composer-card]') === assistRef.current?.closest('[data-composer-card]')) {
+        const starting = event.type === 'compositionstart'
+        if (starting) setSuggestion(null)
+        setComposing(starting)
+      }
+    }
+    document.addEventListener('compositionstart', onComposition)
+    document.addEventListener('compositionend', onComposition)
+    return () => {
+      document.removeEventListener('compositionstart', onComposition)
+      document.removeEventListener('compositionend', onComposition)
+    }
+  }, [enabled])
+  const eligible = enabled && !composing && draftState?.phase === 'plain'
+  const ignored = enabled ? researchAutoSessions.get(sessionId) : undefined
+  React.useEffect(() => {
+    setPreview(false)
+    setAssistNotice('')
+    if (!eligible || !draft.trim() || ignored?.has(draft.trim())) return undefined
+    const handle = setTimeout(() => {
+      const direct = matchResearchDraft(draft, materialCount)
+      const followUp = !direct && /^(请)?(继续|接着|按刚才的|continue\b)/i.test(draft.trim())
+      const previous = followUp ? recentResearchRequest(sessions, sessionId) : ''
+      const inherited = previous && matchResearchDraft(previous, materialCount)
+      const match = direct || (inherited && { ...inherited, reason: '当前提问在延续本会话最近一次明确的研究任务。' })
+      if (match) setSuggestion({ ...match, sessionId, revision, draft, materialCount })
+    }, 650)
+    return () => clearTimeout(handle)
+  }, [eligible, sessionId, revision, draft, materialCount, sessions, ignored])
+  const currentSuggestion = eligible && suggestion?.sessionId === sessionId && suggestion.revision === revision
+    && suggestion.draft === draft && suggestion.materialCount === materialCount && !ignored?.has(draft.trim()) ? suggestion : null
+  React.useEffect(() => {
+    if (mode || currentSuggestion) loadBrowserCatalog().catch(() => {})
+  }, [mode, currentSuggestion])
+  const suggestionWorkflow = currentSuggestion && itemById(currentSuggestion.id)
+  const toggleAuto = () => {
+    if (enabled) researchAutoSessions.delete(sessionId)
+    else researchAutoSessions.set(sessionId, new Set())
+    setSuggestion(null)
+    setAutoSession(enabled ? '' : sessionId)
+  }
+  const suggestedText = suggestionWorkflow && `科研执行步骤\n${composeWorkflow(suggestionWorkflow, currentSuggestion.values, {
+    extraSkillIds: unique([...(suggestionWorkflow.suggestedSkillIds || []), ...resourceIds.filter(id => itemById(id)?.type === 'skill')]),
+    extraDatabaseIds: resourceIds.filter(id => itemById(id)?.type === 'database'),
+  }).prompt}`
+  const dismissSuggestion = () => {
+    if (ignored?.size >= 25) ignored.delete(ignored.values().next().value)
+    ignored?.add(draft.trim())
+    setSuggestion(null)
+    setPreview(false)
+    setAssistNotice('')
+  }
+  const adoptSuggestion = () => {
+    if (!currentSuggestion || !suggestedText) return
+    const span = inputActions.captureInsertion()
+    if (span?.draftRev !== currentSuggestion.revision || !inputActions.insertText(`\n\n${suggestedText}\n\n`, { ...span, start: span.end })) {
+      setAssistNotice('草稿暂时无法写入，请检查当前输入后重试。')
+      return
+    }
+    storage.recordHistory?.({ id: suggestionWorkflow.id, name: suggestionWorkflow.name })
+    createEvidenceStore(sessionId).recordWorkflow({
+      id: suggestionWorkflow.id, name: suggestionWorkflow.name,
+      resourceIds: unique([...resourceIds, ...(suggestionWorkflow.suggestedSkillIds || [])]),
+    })
+    dismissSuggestion()
+  }
+
+
+  React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
+
+
+
   React.useLayoutEffect(() => {
     if (!mode) { setPopoverHeight(null); return }
     const node = popoverRef.current
-    // 锚点缺失时放弃测量：绝不以浮层自身的矩形当锚点，否则高度会自反馈抖动。
+
     const anchor = node?.closest('[data-composer-card]')
     if (!anchor) return
     const measure = () => {
@@ -8105,8 +8329,8 @@ function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
       ))
       return scrollport
     }
-    // 卡片与滚动区都要观察：输入框变高会移动卡片顶边，滚动区变矮会压缩可用空间，
-    // 这两种布局变化都不触发 window resize，只靠 resize 事件会残留过期高度。
+
+
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
     observer?.observe(anchor)
     const scrollport = measure()
@@ -8116,6 +8340,7 @@ function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
   }, [mode])
   React.useEffect(() => {
     const onOpen = event => {
+      if (event.detail?.sessionId !== sessionId) return
       const nextMode = event.detail?.mode === 'resources' ? 'resources' : 'workflows'
       setMode(nextMode)
       setQuery('')
@@ -8124,24 +8349,25 @@ function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
     }
     window.addEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
     return () => window.removeEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
-  }, [])
+  }, [sessionId])
   React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
   React.useEffect(() => {
-    window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { count: resourceIds.length } }))
-  }, [resourceIds])
-  // Escape 关闭最上层的弹层：先关预览弹窗，再关选择器。
+    window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { sessionId, count: resourceIds.length, enabled } }))
+  }, [sessionId, resourceIds, enabled])
+
   React.useEffect(() => {
-    if (!mode && !launchWorkflow) return
+    if (!mode && !launchWorkflow && !preview) return
     const onKeyDown = event => {
       if (event.key !== 'Escape') return
-      if (launchWorkflow) setLaunchWorkflow(null)
+      if (preview) setPreview(false)
+      else if (launchWorkflow) setLaunchWorkflow(null)
       else setMode(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [mode, launchWorkflow])
-  // 浮层不是 Modal，没有遮罩层；因此要在文档层判定“点击是否落在整张浮层卡片内”。
-  // 不能绑在内容滚动区，否则标题、筛选栏或卡片边框都会被误判为外部点击。
+  }, [mode, launchWorkflow, preview])
+
+
   React.useEffect(() => {
     if (!mode || launchWorkflow) return undefined
     const onPointerDown = event => {
@@ -8151,160 +8377,154 @@ function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [mode, launchWorkflow])
-  const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
-  const rows = React.useMemo(() => searchCatalog({ query: deferredQuery, type: listType })
+  const selectedOnly = mode === 'resources' && resourceType === 'selected' ? resourceIds : null
+  const listType = mode === 'workflows' ? 'workflow' : selectedOnly ? 'all' : resourceType
+  const rows = React.useMemo(() => mode ? searchCatalog({ query: deferredQuery, type: listType })
     .filter(item => mode !== 'resources' || item.type !== 'workflow')
-    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory),
-  [deferredQuery, listType, mode, workflowCategory, catalogVersion])
-  const toggle = id => selection.toggle(id)
+    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory)
+    .filter(item => !selectedOnly || selectedOnly.includes(item.id)) : [],
+  [deferredQuery, listType, mode, workflowCategory, catalogVersion, selectedOnly])
   const close = () => setMode(null)
-  const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
+  const selectWorkflow = workflow => { setLaunchWorkflow({ workflow, draft, revision, sessionId }); setMode(null) }
   const recommendedWorkflows = React.useMemo(
-    () => recommendedWorkflowsForResources(resourceIds).slice(0, 4),
-    [resourceIds, catalogVersion],
+    () => selectedOnly && !deferredQuery.trim() ? recommendedWorkflowsForResources(selectedOnly).slice(0, 4) : [],
+    [selectedOnly, deferredQuery, catalogVersion],
   )
-  const catalogMeta = React.useMemo(() => {
-    const workflowCategories = new Set()
-    const counts = { resource: 0, database: 0, skill: 0 }
-    for (const item of catalog) {
-      if (item.type === 'workflow') workflowCategories.add(item.category)
-      else counts.resource++
-      if (item.type === 'database') counts.database++
-      if (item.type === 'skill') counts.skill++
-    }
-    return { workflowCategories: [...workflowCategories], counts }
-  }, [catalogVersion])
-  const resourceTabs = [
-    { value: 'all', label: `全部（${catalogMeta.counts.resource}）` },
-    { value: 'database', label: `数据库（${catalogMeta.counts.database}）` },
-    { value: 'skill', label: `技能（${catalogMeta.counts.skill}）` },
+  const workflowCategories = React.useMemo(
+    () => [...new Set(catalog.filter(item => item.type === 'workflow' && item.category).map(item => item.category))],
+    [catalogVersion],
+  )
+  const resourceFilters = [
+    { value: 'all', label: '全部资源' },
+    { value: 'database', label: '数据库' },
+    { value: 'skill', label: '技能' },
+    ...(resourceIds.length || selectedOnly ? [{ value: 'selected', label: `已选 ${resourceIds.length} 项` }] : []),
   ]
-  if (!mode && !launchWorkflow) return null
-  const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
+  const pickerHeight = popoverHeight ?? POPOVER_MAX_HEIGHT
+  const autoScopeId = React.useId()
+  if (!mode && !launchWorkflow && !enabled) return null
   return h(React.Fragment, null, [
+    h('div', { key: 'assist', ref: assistRef, className: 'rk-compose-suggestion' },
+      !mode && !launchWorkflow && suggestionWorkflow ? h('section', { 'aria-label': '科研建议' }, [
+        h('div', { key: 'text', role: 'status' }, [
+          h('strong', { key: 'name' }, suggestionWorkflow.name),
+          h('div', { key: 'why', className: 'rk-compose-reason' }, currentSuggestion.reason),
+        ]),
+        h('div', { key: 'actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'adopt', variant: 'primary', size: 'sm', onClick: adoptSuggestion, title: '在光标处插入科研步骤，保留原文与引用' }, '采用'),
+          h(Button, { key: 'preview', variant: 'ghost', size: 'sm', onClick: () => setPreview(true) }, '预览改动'),
+          h(Button, { key: 'skip', variant: 'ghost', size: 'sm', onClick: dismissSuggestion }, '略过'),
+        ]),
+        assistNotice ? h('div', { key: 'notice', role: 'status' }, assistNotice) : null,
+      ]) : null),
+    preview && !mode && suggestedText ? h(Modal, { key: 'preview', title: '预览科研建议', onClose: () => setPreview(false) }, [
+      h('p', { key: 'description', style: { color: C.muted } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),
+      h(Textarea, { key: 'text', value: suggestedText, readOnly: true, ariaLabel: '将插入的科研步骤', rows: 9 }),
+      h(Button, { key: 'apply', variant: 'primary', onClick: adoptSuggestion }, '采用并插入'),
+      assistNotice ? h(Notice, { key: 'notice', tone: 'warn' }, assistNotice) : null,
+    ]) : null,
     mode ? h('section', {
       key: 'popover',
       ref: popoverRef,
       role: 'dialog',
       'aria-label': mode === 'workflows' ? '选择科研工作流程' : '选择科研资源',
-      className: 'rk-pop',
+      className: 'rk-pop rk-composer-picker',
+      'data-short': pickerHeight < 230 ? '' : undefined,
       style: {
-        // 锚定在输入卡片顶边（宿主槽位锚点）：水平贴合卡片左缘，垂直顶在卡片上方间隙处。
-        // 不写死 left/bottom 像素坐标，也不写死 100vw 宽度——全部相对锚点解算。
-        position: 'absolute', left: 0, bottom: `calc(100% + ${POPOVER_GAP}px)`, zIndex: 20010,
-        boxSizing: 'border-box', width: 'min(560px, 100%)',
+        position: 'absolute', left: 0, width: 'min(460px, 100%)',
+        bottom: `calc(100% + ${POPOVER_GAP}px)`,
         maxHeight: popoverHeight == null ? POPOVER_MAX_HEIGHT : popoverHeight,
-        overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        border: `1px solid ${C.tealLine}`, borderRadius: 16,
-        background: C.surface, color: C.ink, boxShadow: C.shadowLg,
       },
     }, [
       h(GlobalStyle, { key: 'style' }),
-      h('div', { key: 'head', style: { padding: '13px 14px 10px', borderBottom: `1px solid ${C.line}`, display: 'grid', gap: 10 } }, [
-        h('div', { key: 'top', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } }, [
-          h('span', { key: 'title', style: { fontSize: 13, fontWeight: 750, color: C.ink } }, mode === 'workflows' ? '科研工作流程' : '科研资源'),
-          h(IconButton, { key: 'close', name: 'close', size: 16, label: '关闭', onClick: close }),
+      h('header', { key: 'head', className: 'rk-picker-header' }, [
+        h('div', { key: 'top', className: 'rk-picker-top' }, [
+          h('div', { key: 'tabs', role: 'tablist', 'aria-label': '科研辅助功能', className: 'rk-picker-tabs' },
+            [['workflows', '选流程'], ['resources', '加资源']].map(([value, label]) => h('button', {
+              key: value, type: 'button', role: 'tab', 'aria-selected': mode === value,
+              onClick: () => { setMode(value); setQuery(''); popoverRef.current?.scrollTo(0, 0) },
+            }, label)),
+          ),
+          h('div', { key: 'actions', className: 'rk-picker-actions' }, [
+            available ? h('label', {
+              key: 'auto', className: 'rk-picker-switch',
+              title: '仅在当前会话提供本地建议，确认后插入草稿。',
+            }, [
+              h('span', { key: 'label' }, '自动科研辅助'),
+              h('input', { key: 'check', type: 'checkbox', role: 'switch', checked: enabled, onChange: toggleAuto, 'aria-describedby': autoScopeId }),
+              h('span', { key: 'track', className: 'rk-picker-switch-track', 'aria-hidden': true }),
+              h('span', { key: 'scope', id: autoScopeId, hidden: true }, '仅在当前会话提供本地建议，确认后插入草稿。'),
+            ]) : null,
+            h(IconButton, { key: 'close', name: 'close', size: 14, label: '关闭', onClick: close, style: { border: 0, background: 'transparent', borderRadius: 6 } }),
+          ]),
         ]),
-        h(SearchInput, {
-          key: 'search',
-          value: query,
-          onChange: setQuery,
-          placeholder: mode === 'workflows' ? '搜索工作流程……' : '输入搜索内容…',
-          ariaLabel: '搜索',
-        }),
-        mode === 'resources'
-          ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-          : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: catalogMeta.workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
-      ]),
-      h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
-        mode === 'workflows' && rows.length ? h('div', {
-          key: 'label',
-          style: { padding: '2px 15px 7px', color: categoryStyle, fontSize: 12, fontWeight: 750 },
-        }, `${workflowCategory === 'all' ? '全部工作流程' : workflowCategory}（${rows.length}）`) : null,
-        rows.length ? rows.map(item => mode === 'workflows' ? (() => {
-          const color = WORKBENCH_CATEGORY_COLORS[item.category] || workbenchFallbackCategoryColor
-          return h('button', {
-            key: item.id,
-            type: 'button',
-            onClick: () => selectWorkflow(item),
-            className: 'rk-card',
-            style: {
-              width: 'calc(100% - 28px)', margin: '0 14px 10px', display: 'grid', gap: 5,
-              textAlign: 'left', padding: '13px 15px', cursor: 'pointer',
-              border: `1px solid ${C.line}`, borderLeft: `3px solid ${color}`, borderRadius: 12,
-              background: C.surface, color: C.ink, boxShadow: C.shadowCard,
+        h('div', { key: 'filters', className: 'rk-picker-filters' }, [
+          h(SearchInput, {
+            key: 'search', value: query, onChange: setQuery, ariaLabel: '搜索',
+            placeholder: mode === 'workflows' ? '搜索工作流程' : '搜索技能或数据库',
+          }),
+          h(Select, {
+            key: 'filter', className: 'rk-picker-filter',
+            ariaLabel: mode === 'workflows' ? '工作流程分类' : '资源类型',
+            value: mode === 'workflows' ? workflowCategory : resourceType,
+            onChange: value => {
+              if (mode === 'workflows') setWorkflowCategory(value)
+              else setResourceType(value)
+              popoverRef.current?.scrollTo(0, 0)
             },
-          }, [
-            h('div', { key: 'row', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-              h('strong', { key: 'name', style: { fontSize: 13, fontWeight: 700 } }, item.name),
-              item.requiresFiles ? h(Badge, { key: 'file', color: C.amber }, '需要材料') : null,
-            ]),
-            h('span', { key: 'desc', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.description),
-          ])
-        })() : h('label', {
-          key: item.id,
-          className: 'rk-row',
-          style: {
-            display: 'grid', gridTemplateColumns: '18px 1fr', gap: 10, alignItems: 'start',
-            padding: '13px 15px', borderBottom: `1px solid ${C.divide}`, cursor: 'pointer',
-            background: resourceIds.includes(item.id) ? C.tealTint : 'transparent',
-          },
-        }, [
-          h('input', { type: 'checkbox', checked: resourceIds.includes(item.id), onChange: () => toggle(item.id), style: { marginTop: 3, accentColor: C.teal } }),
-          h('span', { key: 'text' }, [
-            h('span', { key: 'top', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-              h('strong', { key: 'name', style: { fontSize: 13, fontWeight: 650 } }, item.name),
-              h(Badge, { key: 'type', color: C.teal }, COMPOSER_TYPE_LABELS[item.type]),
-            ]),
-            h('span', { key: 'desc', style: { display: 'block', marginTop: 3, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.description),
-          ]),
-        ])) : h(EmptyState, {
-          key: 'empty',
-          icon: 'search',
-          text: mode === 'workflows' ? '没有匹配的工作流程。' : '没有匹配的资源。',
-          hint: '换个关键词，或切换上方的分类筛选。',
-        }),
+            options: mode === 'workflows'
+              ? [{ value: 'all', label: '全部分类' }, ...workflowCategories.map(value => ({ value, label: value }))]
+              : resourceFilters,
+            style: { height: 32, padding: '4px 20px 4px 8px', fontSize: 12 },
+          }),
+          mode === 'workflows' ? h('button', {
+            key: 'organize', type: 'button', className: 'rk-picker-text-action rk-picker-organize',
+            'aria-label': '整理当前提问', title: '整理当前提问',
+            onClick: () => {
+              close()
+              window.dispatchEvent(new CustomEvent(RESEARCH_ORGANIZE_EVENT, { detail: { sessionId } }))
+            },
+          }, '整理提问') : resourceIds.length ? h('button', {
+            key: 'add', type: 'button', className: 'rk-picker-text-action rk-picker-done', onClick: close,
+          }, `完成 · ${resourceIds.length}`) : null,
+        ]),
       ]),
-      h('div', { key: 'footer', style: { padding: '10px 14px', borderTop: `1px solid ${C.line}`, display: 'grid', gap: 8, fontSize: 12, color: C.muted, background: C.surfaceAlt } }, mode === 'resources'
-        ? [
-          h('div', { key: 'picked', style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
-            resourceIds.length
-              ? resourceIds.map(id => {
-                const item = itemById(id)
-                if (!item) return null
-                return h(Chip, {
-                  key: id,
-                  color: C.teal,
-                  onRemove: () => toggle(id),
-                  removeLabel: `移除 ${item.name}`,
-                }, `${COMPOSER_TYPE_LABELS[item.type]} · ${item.name}`)
-              })
-              : '尚未选择资源；勾选技能或数据库后，将在启动工作流时并入提示词。'),
-          recommendedWorkflows.length ? h('div', { key: 'rec', style: { display: 'grid', gap: 5 } }, [
-            h('span', { key: 'l', style: { fontSize: 12, color: C.muted } }, '推荐下一步工作流程'),
-            h('div', { key: 'items', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, recommendedWorkflows.map(workflow => h('button', {
-              key: workflow.id,
-              type: 'button',
-              onClick: () => selectWorkflow(workflow),
-              className: 'rk-btn',
-              style: {
-                padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${C.tealLineStrong}`, background: C.tealTint, color: C.teal,
-                fontSize: 12, fontWeight: 650,
-              },
-            }, workflow.name))),
-          ]) : null,
-          h('div', { key: 'actions', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-            h('span', { key: 'hint' }, resourceIds.length ? `已选 ${resourceIds.length} 项：技能作为附加指导、数据库作为研究提示并入提示词` : '输入筛选条件，点击条目前的选择框'),
-            h('div', { key: 'right', style: { display: 'flex', gap: 6, flexShrink: 0 } }, [
-              resourceIds.length ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', onClick: () => selection.clear() }, '清空全部') : null,
-              h(Button, { key: 'add', variant: 'primary', size: 'sm', onClick: close }, '添加'),
+      h('div', { key: 'rows', className: 'rk-picker-results', 'aria-label': '科研选择结果' }, [
+        selectedOnly?.length ? h('div', { key: 'selected', className: 'rk-picker-selected' }, [
+          h('span', { key: 'count' }, `已选 ${resourceIds.length} 项`),
+          h('button', { key: 'clear', type: 'button', className: 'rk-picker-text-action', onClick: () => selection.clear() }, '清空'),
+        ]) : null,
+        rows.length ? rows.map(item => {
+          const workflow = mode === 'workflows'
+          const checked = !workflow && resourceIds.includes(item.id)
+          return h(workflow ? 'button' : 'label', {
+            key: item.id,
+            className: 'rk-picker-row',
+            'data-selected': checked ? '' : undefined,
+            'data-material': workflow && item.requiresFiles ? '' : undefined,
+            ...(workflow ? { type: 'button', onClick: () => selectWorkflow(item) } : {}),
+          }, [
+            workflow ? null : h('input', { key: 'select', type: 'checkbox', checked, onChange: () => selection.toggle(item.id) }),
+            h('span', { key: 'text', className: 'rk-picker-row-text' }, [
+              h('strong', { key: 'name' }, item.name),
+              h('span', { key: 'desc', className: 'rk-picker-desc', title: item.description }, item.description),
             ]),
-          ]),
-        ]
-        : [h('span', { key: 'c' }, `${catalog.filter(item => item.type === 'workflow').length} 个工作流程中的 ${rows.length} 个`), h('span', { key: 't' }, '点击使用')]),
+            h('span', { key: 'meta', className: 'rk-picker-meta' }, workflow
+              ? (item.requiresFiles ? '需材料' : item.category)
+              : COMPOSER_TYPE_LABELS[item.type]),
+          ])
+        }) : h('p', { key: 'empty', className: 'rk-picker-empty' }, selectedOnly && !selectedOnly.length
+          ? '还没有选择资源。'
+          : catalog.length ? '没有匹配结果，试试其他关键词或分类。' : '正在读取科研目录…'),
+        recommendedWorkflows.length ? h('div', { key: 'recommended', className: 'rk-picker-selected' }, [
+          h('span', { key: 'label' }, '推荐流程'),
+          ...recommendedWorkflows.map(workflow => h('button', {
+            key: workflow.id, type: 'button', className: 'rk-picker-text-action', onClick: () => selectWorkflow(workflow),
+          }, workflow.name)),
+        ]) : null,
+      ]),
     ]) : null,
-    launchWorkflow ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
+    launchWorkflow && launchWorkflow.sessionId === sessionId ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow.workflow, originalDraft: launchWorkflow.draft, originalRevision: launchWorkflow.revision, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
   ])
 }
 
@@ -8647,14 +8867,14 @@ function ResearchClaimReview({ sessionId = '' }) {
 
 
 
-// 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
-// StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
-// 本视图补齐 QuickEnhancer 抽屉之外的完整管理能力：搜索、编辑、派生、
-// 版本对比、导出/恢复、验证状态跟进。
-//
-// 隐私边界（与迁移文档 Phase D 一致）：
-//   - 只保存可复用 Prompt、研究问题、待验证假设等轻量文本资产；
-//   - 不保存原始附件、患者数据、完整查询结果（表单明示，导入时过滤超长正文）。
+
+
+
+
+
+
+
+
 
 const THINKING_LABELS = { question: '研究问题', fact: '事实', assumption: '假设', decision: '决策', method: '方法', conclusion: '结论', action: '行动' }
 const EPISTEMIC_LABELS = { verified: '已证实', inferred: '推断', to_verify: '待核实', preference: '个人偏好' }
@@ -8663,8 +8883,8 @@ const VERIFICATION_LABELS = { confirmed: '已证实', pending: '待验证', refu
 const VERIFICATION_COLORS = { confirmed: C.statusVerified, pending: C.statusToVerify, refuted: C.statusRefuted, inconclusive: C.muted }
 const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '研究见解' }
 
-// 沉淀层的三个子模块：灵感资产回答「想过什么」，证据库回答「依据什么」，
-// Claim 审阅回答「研究者如何判断这条结论」。
+
+
 const VAULT_TABS = [
   { value: 'assets', label: '灵感资产' },
   { value: 'evidence', label: '证据库' },
@@ -8701,11 +8921,11 @@ function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'a
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [notice, setNotice] = React.useState('')
   const [tab, setTab] = React.useState(initialTab)
-  // 删除是不可逆的：与「清空项目」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）。
+
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   const setError = message => setNotice(`⚠️ ${message}`)
-  // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
-  // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
+
+
   const [linkAssetId, setLinkAssetId] = React.useState('')
   const [evidenceEntries, setEvidenceEntries] = React.useState([])
   const [assetLinks, setAssetLinks] = React.useState([])
@@ -8803,16 +9023,16 @@ function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'a
     if (!assetProvider?.remove) return
     try {
       await assetProvider.remove(item.id)
-      // 本视图能钩到的资产删除：联动解除以其为一端的 link。
-      // vendored 面板（增强器知识区等）的删除钩不到——图谱与列表对悬空端点优雅兜底。
+
+
       await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
       setNotice(`已删除「${item.title}」，其证据关联已一并解除。`)
     } catch (error) { setError(error?.message || error) } finally { setConfirmDeleteId('') }
   }
-  // 两段式的第一步：只点亮确认态，不删任何东西；第二步由按钮渲染层接 remove(item)。
+
   const requestRemove = item => setConfirmDeleteId(current => current === item.id ? '' : item.id)
 
-  // ── 关联证据（入口 A）─────────────────────────────────────────────────────
+
   const linksForAsset = React.useCallback(
     assetId => assetLinks.filter(row => row.assetId === assetId),
     [assetLinks],
@@ -8953,9 +9173,9 @@ function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'a
         h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { setFormOpen(false); setCompareId('') } }, '取消'),
       ]),
     ]) : null,
-    // 二级吸顶带 = 该分区「随时要用的操作」：检索、状态筛选、项目筛选、新建资产。
-    // 「新建资产」是最高频的主操作，随页面滚走后每次都要先滚回顶部；导出/恢复是一次性
-    // 维护动作，留在封面即可。分层原则见 docs/ARCHITECTURE.md §2.3。
+
+
+
     tab === 'assets' ? h(Toolbar, { key: 'filters', sticky: true }, [
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
         h('span', { key: 'icon', 'aria-hidden': 'true', style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' } }, h(Icon, { name: 'search', size: 14 })),
@@ -9044,8 +9264,8 @@ function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'a
           h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 9, background: C.tealTint, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, item.body),
         ]),
       ]) : null,
-      // 入口 A（主）：关联证据。候选按项目/标签/知识链种子推导，用户勾选确认后建立——
-      // 推导≠建边，绝不自动建立（全仓库「检索 → 预览 → 确认」纪律的落点）。
+
+
       linkAssetId === item.id ? h('div', { key: 'asset-links', style: { display: 'grid', gap: 10, padding: 12, border: `1px solid ${C.tealLine}`, borderRadius: 10, background: C.surfaceAlt } }, (() => {
         const current = linksForAsset(item.id)
         const candidates = candidatesForAsset(item)
@@ -9103,13 +9323,13 @@ function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'a
       style: { marginTop: 16 },
     }, notice.replace(/^⚠️\s*/, '')) : null,
   ]
-  // embedded：由统一容器提供页面外壳与全局样式；独立挂载时保留 Page。
+
   return embedded
     ? h('div', { key: 'embedded', className: 'rk-page', style: { boxSizing: 'border-box', padding: '20px var(--rk-gutter) 48px', background: 'transparent', color: C.ink, fontFamily: C.font } }, content)
     : h(Page, null, [h(GlobalStyle, { key: 'global-style' }), ...content])
 }
 
-// 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
+
 function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
   return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange })
 }
@@ -9165,8 +9385,8 @@ function graphLabel(value, max = 18) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
-// 导出到独立文件后 CSS 变量不再有定义，必须先把当前主题解析成真实色值，
-// 否则导出物里的 fill="var(--rk-surface)" 会退化成黑块。
+
+
 function readGraphTheme() {
   const fallback = { surface: '#ffffff', ink: '#17212b', line: '#b6c6d1', canvas: '#f4f7f9' }
   if (typeof window === 'undefined' || typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback
@@ -9310,14 +9530,14 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
   React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
   React.useEffect(() => onAutoDepositChange(value => setAutoDeposit(value)), [])
 
-  // 视图状态写回链接：只写焦点、范围模式、路径两端与缩放，不写任何证据内容。
+
   React.useEffect(() => {
     if (typeof window !== 'undefined') window.history.replaceState(null, '', encodeGraphView(view))
   }, [view])
 
   const applyView = React.useCallback(patch => setView(previous => ({ ...previous, ...patch })), [])
   const resources = React.useMemo(() => resourceIds.map(itemById).filter(Boolean), [resourceIds])
-  // 项目筛选只作用于持久数据（证据/资产/知识都带 project）；会话记录本就属于当前会话，不参与。
+
   const visibleSavedEvidence = React.useMemo(
     () => (projectFilter ? savedEvidence.filter(item => (item.project || '') === projectFilter) : savedEvidence),
     [savedEvidence, projectFilter],
@@ -9345,7 +9565,7 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     [knowledgeNodes, projectFilter],
   )
   const visibleKnowledgeNodeIdSet = React.useMemo(() => new Set(visibleKnowledgeNodes.map(item => item.id)), [visibleKnowledgeNodes])
-  // 关系只在两端都可见时保留（与 buildEvidenceGraph 末尾的边过滤同一规则，这里先收敛输入）。
+
   const visibleKnowledgeClaims = React.useMemo(() => (
     projectFilter
       ? knowledgeClaims.filter(item => visibleKnowledgeNodeIdSet.has(item.from) && visibleKnowledgeNodeIdSet.has(item.to))
@@ -9379,16 +9599,16 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     savedEvidence: includePersistent ? graphEvidence : [],
     researchClaims: includePersistent ? visibleResearchClaims : [],
     knowledge: includePersistent ? knowledgeInput : { nodes: [], claims: [] },
-    // 互链属于持久层事实：只在「持久沉淀」范围显示，随筛选收敛（两端不可见自然剔除）。
+
     assetEvidenceLinks: includePersistent ? assetEvidenceLinks : [],
   }), [graphResources, records, includeSession, includePersistent, visibleAssets, graphEvidence, knowledgeInput, assetEvidenceLinks, visibleResearchClaims])
-  // 连通性拆分基于完整图：默认只把「出现在关系里」的节点交给布局，
-  // 孤立节点（典型是只保存、尚未关联到查询来源/知识/论断的证据）单独汇总。
+
+
   const connectivity = React.useMemo(() => splitEvidenceGraphByConnectivity(graph), [graph])
   const displayGraph = React.useMemo(() => {
     if (showIsolated) return graph
     const keep = new Set(connectivity.connected.map(node => node.id))
-    // 从链接/点击定位到的节点即使孤立也必须显示，否则「聚焦某个未关联证据」会空白。
+
     for (const id of [
       view.focus, view.from, view.to, selectedKnowledgeId,
       selectedEvidenceNodeId ? `evidence:${selectedEvidenceNodeId}` : '',
@@ -9403,15 +9623,15 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => `${label} ${count}`).join('、')
   }, [connectivity])
-  // 高亮计算仍基于完整图，保证邻域/路径语义不因画布性能裁剪而改变。
+
   const highlighted = React.useMemo(() => {
     if (view.mode === 'all') return null
     if (view.mode === 'path') return view.from && view.to ? new Set(findEvidencePath(graph, view.from, view.to)) : null
     if (!view.focus) return null
     return evidenceNeighborhood(graph, view.focus, view.mode)
   }, [view, graph])
-  // 性能裁剪必须发生在布局和路由之前；否则虽然 DOM 只有 300 个节点，CPU 仍会计算全图。
-  // 完整图保留在 graph 中，仅在用户导出时按需布局。
+
+
   const interactiveGraph = React.useMemo(() => {
     if (displayGraph.nodes.length <= GRAPH_RENDER_NODE_LIMIT) return displayGraph
     const priority = new Set([
@@ -9427,10 +9647,10 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
   }, [displayGraph, highlighted, view.focus, view.from, view.to, selectedKnowledgeId, selectedEvidenceNodeId])
   const layout = React.useMemo(() => layoutEvidenceGraph(interactiveGraph), [interactiveGraph])
   const routes = React.useMemo(() => routeEvidenceEdges(interactiveGraph, layout), [interactiveGraph, layout])
-  // 两种「没画」不能共用一条文案：未关联节点是设计取舍（可开关），渲染上限是性能取舍。
+
   const hiddenIsolatedCount = graph.nodes.length - displayGraph.nodes.length
   const renderLimitedCount = displayGraph.nodes.length - interactiveGraph.nodes.length
-  // 显式聚焦/路径端点即使孤立也要出画布：用户是在「定位到某个证据」，不是在浏览整图。
+
   const hasExplicitFocus = Boolean(view.focus || view.from || view.to)
   const hasCanvas = graph.nodes.length > 0 && displayGraph.nodes.length > 0 && (graph.edges.length > 0 || showIsolated || hasExplicitFocus)
 
@@ -9438,8 +9658,8 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
   const viewWidth = layout.width / scale
   const viewHeight = layout.height / scale
 
-  // 平移边界：不允许把图拖出视口后找不回来。缩放系数 ≤1 时 viewBox 大于画布，
-  // 上限自然收敛为 0，图居中显示。
+
+
   const clampPanFor = (next, at) => {
     const width = layout.width / at
     const height = layout.height / at
@@ -9531,8 +9751,8 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     id => knowledgeNodes.find(node => node.id === id)?.label || id,
     [knowledgeNodes],
   )
-  // 冲突结论并列提示：同一对端点存在极性不一致的多条关系（如「促进」与「抑制」并存）时，
-  // 自动沉淀不裁决冲突——如实计数并提示人工核验（需求：冲突结论并列保留）。
+
+
   const knowledgeConflictCount = React.useMemo(() => {
     if (!selectedKnowledgeId) return 0
     const groups = new Map()
@@ -9554,8 +9774,8 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
   const minimapHeight = Math.min(180, Math.max(70, Math.round((minimapWidth * layout.height) / Math.max(1, layout.width))))
   const frameHeight = Math.min(GRAPH_FRAME_HEIGHT, Math.max(320, layout.height))
 
-  // 迷你地图密度模式：节点 > 50 时用聚合色块代替逐节点矩形，
-  // 避免 193 个节点挤在一起变成无信息量的实心色墙。
+
+
   const nodeCount = layout.nodes.length
   const useDensityMode = nodeCount > 50
   const densityGridSize = 12
@@ -9682,7 +9902,7 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
 
   const exportGraph = format => {
     const theme = readGraphTheme()
-    // 导出与当前视图一致：默认不含未关联节点；若因渲染上限少画了节点，导出仍给出全部有关联部分。
+
     const exportSource = renderLimitedCount ? displayGraph : interactiveGraph
     const exportLayout = layoutEvidenceGraph(exportSource)
     const exportRoutes = routeEvidenceEdges(exportSource, exportLayout)
@@ -9741,9 +9961,9 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
-  // 只清理「文件名与数据两侧都在」的测试证据：先删文件再删本地 IndexedDB，
-  // 两步都成功才算删掉一条；顺序不能反——先删本地会让下一次同步把文件里的旧条目
-  // 当成「本地缺失、文件有」重新导回。
+
+
+
   const cleanupTestProjects = async () => {
     if (cleaning || !testProjects.length) return
     setCleaning(true)
@@ -9819,7 +10039,7 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
           : h(Button, { key: 'clear', variant: 'ghost', onClick: () => setConfirmClear(true), title: '只清除本会话的查询、工作流与计划记录，不影响持久化数据' }, '清空本会话临时记录'),
       ]
     }),
-    // 筛选生效时即使图为空也要保留工具栏，否则用户会被困在筛选状态里出不来。
+
     (graph.nodes.length || scope !== 'all' || projectFilter) ? h(Toolbar, { key: 'summary', sticky: true }, [
       h(Segmented, { key: 'modes', value: view.mode, options: GRAPH_VIEW_MODES, onChange: mode => applyView({ mode }), ariaLabel: '图谱范围模式' }),
       h(Segmented, { key: 'scope', value: scope, options: GRAPH_SCOPE_MODES, onChange: setScope, ariaLabel: '节点生命周期范围' }),
@@ -10083,35 +10303,35 @@ function ResearchEvidenceGraphHost({ sessionId, embedded = false, onNavigate }) 
 
 
 
-// 自动沉淀编排：接入 DSH「回答完成」事件，把助手回答自动转成知识结构并联动三个库。
-//
-// 数据流（需求原文的对应关系）：
-//   1. 回答完成   → sessions.binding(sessionId).eventSource 里的 assistant/message 事件；
-//   2. 结构化提取 → extractKnowledge（问题/实体/发现/假设/方法/关系/引用来源）；
-//   3. 自动入库   → 发现/假设/问题/方法 → 灵感资产（待验证）；引用来源 → 证据库（未核验）；
-//                    知识节点与关系 → knowledge-store（待核验），同时生成图谱节点与连线；
-//   4. 合并去重   → 相同内容按稳定 id 合并，追加来源消息；冲突结论（同端点不同极性）并列保留；
-//   5. 追溯       → 节点携带来源消息摘录与证据/资产关联，图谱点开结论即可回看。
-//
-// 隐私与安全边界：
-//   - 默认关闭，必须在图谱页显式开启（显式 opt-in，不静默读取会话内容）；
-//   - 提取在浏览器本地完成，无任何网络请求；只有用户手动核验后内容才可信；
-//   - 只保留有界摘录（每条来源 ≤200 字、每条知识 ≤5 条来源），不存整段回答。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const AUTO_DEPOSIT_STORAGE_KEY = 'dsh-research-kit.auto-deposit.enabled'
 const AUTO_DEPOSIT_EVENT = 'dsh-research-kit:auto-deposit-changed'
 const DEPOSITION_TAG = '自动沉淀'
-// 证据条目的来源库标注：不是目录里的数据库，图谱里不会连到资源节点，靠 supports 边连知识节点。
+
 const DEPOSITION_SOURCE_DATABASE = '会话回答'
-// 开关关闭期间的事件水位线照常前进：开启后只处理新回答，不回溯补提取历史会话。
-// 长度门槛只拦纯寒暄（「好的，谢谢」）；真正的过滤者是提取器——无研究内容自然返回空结构，
-// 门槛定得过高会误伤「Ghd7 促进水稻耐盐性。」这类短而真实的回答。
+
+
+
 const MIN_DEPOSITION_MESSAGE_CHARS = 12
-// 只有这四类知识进入灵感资产；实体（基因/性状/物种…）只在图谱里作为关系端点。
+
 const DEPOSIT_ASSET_KINDS = ['question', 'hypothesis', 'finding', 'method']
 const DEPOSIT_ASSET_THINKING_KIND = { question: 'question', hypothesis: 'assumption', finding: 'conclusion', method: 'method' }
 
-// ── 开关 ──────────────────────────────────────────────────────────────────────
+
 
 function isAutoDepositEnabled() {
   try { return globalThis.localStorage?.getItem(AUTO_DEPOSIT_STORAGE_KEY) === '1' } catch { return false }
@@ -10134,9 +10354,9 @@ function onAutoDepositChange(listener) {
   return () => window.removeEventListener(AUTO_DEPOSIT_EVENT, handler)
 }
 
-// ── 处理水位线（按会话记录已提取到的 seq）──────────────────────────────────────
-// localStorage 足够：每会话只存一个数字。刷新页面后事件源会重放全部历史事件，
-// 靠水位线避免重复沉淀；没有它，每次刷新都会把旧回答再入库一遍。
+
+
+
 
 function depositionCursorKey(sessionId) {
   return `dsh-research-kit.deposition.cursor.${String(sessionId || 'local')}`
@@ -10150,7 +10370,7 @@ function writeDepositionCursor(sessionId, seq) {
   try { globalThis.localStorage?.setItem(depositionCursorKey(sessionId), String(Number(seq) || 0)) } catch { /* 不可用时重启后会重复提取一次，可接受 */ }
 }
 
-// ── 单条消息沉淀 ──────────────────────────────────────────────────────────────
+
 
 function normalizeTitleForDedupe(title) {
   return normalizeKnowledgeLabel(title).toLowerCase()
@@ -10158,23 +10378,23 @@ function normalizeTitleForDedupe(title) {
 
 const EMPTY_SUMMARY = { extracted: false, addedNodes: 0, mergedNodes: 0, addedClaims: 0, mergedClaims: 0, citations: 0, savedEvidence: 0, duplicateEvidence: 0, failedEvidence: 0, savedAssets: 0, skippedAssets: 0 }
 
-// 最近一次成功沉淀的摘要（含 at 时间戳），供图谱页展示「最近沉淀」反馈。
-// 模块级单变量：只有最后一次有意义，无需历史。
+
+
 let latestDepositionSummary = null
 
 function lastDepositionSummary() {
   return latestDepositionSummary
 }
 
-// 灵感资产去重键：标题 + 项目。证据库按项目隔离去重，资产侧必须同口径——
-// 否则项目 A 沉淀过的结论会在项目 B 被误跳过（资产正文可能按项目有不同的 nextAction）。
+
+
 function assetDedupeKey(title, project) {
   return `${normalizeTitleForDedupe(title)}::${String(project || '').trim()}`
 }
 
-// 把一条助手回答沉淀入库。所有依赖可注入（store/assetProvider/saveEvidence/activeProject），
-// 便于在 Node 测试里用内存存储与桩复现完整链路；浏览器侧使用默认单例。
-// 返回摘要供测试与 UI 提示使用；任何单步失败都被计数吞掉——自动流程不允许打断宿主。
+
+
+
 async function depositAssistantMessage({
   text,
   selection,
@@ -10214,7 +10434,7 @@ async function depositAssistantMessage({
 
   const touchedByThisMessage = row => (row.sources || []).some(item => item.sessionId === summary.sessionId && item.seq === summary.seq)
 
-  // 引用来源 → 证据库：状态保持「未核验」，重复（同项目同标识符）直接跳过，绝不覆盖已有条目。
+
   const evidenceIds = []
   for (const citation of extraction.citations) {
     try {
@@ -10243,7 +10463,7 @@ async function depositAssistantMessage({
     }
   }
 
-  // 发现/假设/问题/方法 → 灵感资产：按（标题 + 项目）去重（同一结论不重复建卡），全部为「待验证」。
+
   let knownAssetKeys = new Set()
   if (typeof assetProvider?.list === 'function') {
     try {
@@ -10284,24 +10504,24 @@ async function depositAssistantMessage({
   return summary
 }
 
-// ── DSH 事件接线 ──────────────────────────────────────────────────────────────
 
-// assistant/message 的 data.message.content 是内容块数组；只取可见文本块。
+
+
 function depositionTextOf(data) {
   const content = data?.message?.content
   if (!Array.isArray(content)) return ''
   return content.filter(block => block?.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
 }
 
-// 挂到 DSH 会话服务上：
-//   - 跟随 sessions.list 的当前会话切换，逐会话订阅事件流（eventSource）；
-//   - 事件窗口是追加式的（seq 单调递增），每次通知只从尾部增量扫描上次扫过之后的新增段，
-//     不再全量重扫整段历史（长会话下每次事件通知都是 O(窗口全长) 的纯浪费）；
-//     重复入库的正确性不依赖这条优化——始终由 localStorage 水位线兜底；
-//   - 命中的回答串行排队沉淀，失败不重试、不打断宿主；
-//   - 宿主未提供 sessions 服务（单测/独立页）时返回空操作，绝不抛错；
-//   - 挂接期间把 sessions 服务登记给「手动沉淀入口」（见 depositLatestAssistantMessage）。
-// 返回卸载函数：插件卸载时解除全部订阅。
+
+
+
+
+
+
+
+
+
 function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
   const sessions = ctx?.sessions
   if (!sessions?.list || typeof sessions?.binding !== 'function') return () => {}
@@ -10309,18 +10529,18 @@ function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
   let disposeFeed = () => {}
   let boundSessionId = ''
   let queue = Promise.resolve()
-  // 本侧已扫过的事件 seq 高位（内存内，随会话绑定重置）：增量扫描的起点。
-  // 它只是省扫描的性能水位，不是去重依据——去重唯一依据是 localStorage 处理水位线。
+
+
   let scannedSeq = 0
 
   const drain = eventSource => {
     const windowArg = eventSource.getSnapshot()
     const entries = Array.isArray(windowArg?.entries) ? windowArg.entries : []
     if (!entries.length) return
-    // 从尾部向前收集 seq 大于已扫高位的条目，碰到已扫过的就停：
-    // 稳定追加流下常见成本是 O(新增条数)，而不是 O(窗口全长)。
-    // 若宿主窗口违反「追加且 seq 单调」的约定（整体重放/替换），最坏结果是本侧少扫一段，
-    // 而水位线语义与旧的全量扫描完全一致，不会重复入库。
+
+
+
+
     const fresh = []
     for (let index = entries.length - 1; index >= 0; index--) {
       const seq = Number(entries[index]?.seq)
@@ -10341,7 +10561,7 @@ function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
       cursor = seq
       const data = event.data || {}
       const text = depositionTextOf(data)
-      // interrupted 是被取消的半截回答：不完整，不做提取（需求只提「回答完成」）。
+
       if (isAutoDepositEnabled() && !data.interrupted && text.length >= MIN_DEPOSITION_MESSAGE_CHARS) {
         const payload = { text, sessionId: boundSessionId, seq, turn: Number(data.turn) || null, at: Number(event.time) || Date.now(), assetProvider }
         queue = queue.then(() => depositAssistantMessage(payload)).catch(() => { /* 单条失败不阻断后续消息 */ })
@@ -10355,8 +10575,8 @@ function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
     try { disposeFeed() } catch { /* 旧订阅已失效也继续 */ }
     disposeFeed = () => {}
     boundSessionId = sessionId ? String(sessionId) : ''
-    // 换会话后扫描高位从该会话的处理水位线起步：窗口里 seq ≤ 水位线的段落本就不会处理，
-    // 不值得为它们付一次全量扫描。
+
+
     scannedSeq = readDepositionCursor(boundSessionId)
     if (!boundSessionId) return
     let binding = null
@@ -10384,10 +10604,10 @@ function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
   }
 }
 
-// ── 手动沉淀入口 ──────────────────────────────────────────────────────────────
-// 图谱页的「沉淀最近回答」：不开自动开关，也能把当前会话最近一条助手回答显式入库。
-// attachKnowledgeDeposition 挂接期间登记 sessions 服务、卸载时清除；测试与独立页
-// 可通过参数直接注入 sessions 或 entries，不依赖模块状态。
+
+
+
+
 
 let depositionSessions = null
 
@@ -10395,9 +10615,9 @@ function registerDepositionSessions(sessions) {
   depositionSessions = sessions?.list && typeof sessions?.binding === 'function' ? sessions : null
 }
 
-// 从事件窗口挑出最近一条有正文的助手回答。手动入口不做长度与 interrupted 过滤：
-// 用户点名要这条就原样提取（被中断的半截回答由调用方在结果里如实标注）。
-// 返回 { text, seq, turn, at, interrupted } 或 null（窗口里没有可沉淀的回答）。
+
+
+
 function latestDepositableMessage(entries) {
   const list = Array.isArray(entries) ? entries : []
   for (let index = list.length - 1; index >= 0; index--) {
@@ -10418,10 +10638,10 @@ function latestDepositableMessage(entries) {
   return null
 }
 
-// 沉淀最近一条助手回答。返回：
-//   { error: 'no-sessions' | 'no-session' | 'empty' } — 无法沉淀，视图据此给出提示；
-//   { summary, seq, interrupted }                     — 已提交沉淀（summary 见 depositAssistantMessage）。
-// 重复点击是安全的：相同内容按稳定 id 走合并路径，来源消息按（会话 + seq）去重，不会翻倍。
+
+
+
+
 async function depositLatestAssistantMessage({
   entries = null,
   sessions,
@@ -10461,7 +10681,7 @@ async function depositLatestAssistantMessage({
   return { summary, seq: found.seq, interrupted: found.interrupted }
 }
 
-// 只在用户主动操作时读取当前事件窗口；不持久化回答正文。
+
 function readLatestResearchAnswer(sessionId = '') {
   try {
     const sid = String(sessionId || depositionSessions?.list?.getSnapshot()?.current || '')
@@ -10503,11 +10723,71 @@ function depositPopoverPosition(anchor, viewport, width = 360) {
     : { position: 'fixed', left, top: anchor.bottom + 8 }
 }
 
+function researchCitationHref(citation) {
+  if (citation.identifierKind === 'doi') return `https://doi.org/${citation.identifier.split('/').map(encodeURIComponent).join('/')}`
+  if (citation.identifierKind === 'pmid') return `https://pubmed.ncbi.nlm.nih.gov/${citation.identifier}/`
+  if (citation.identifierKind === 'pmcid') return `https://pmc.ncbi.nlm.nih.gov/articles/${citation.identifier}/`
+  if (citation.identifierKind === 'arxiv') return `https://arxiv.org/abs/${citation.identifier}`
+  try {
+    const url = new URL(citation.url)
+    return ['https:', 'http:'].includes(url.protocol) ? url.href : ''
+  } catch { return '' }
+}
+
+function answerClaimText(text) {
+  return String(text || '').normalize('NFKC').replace(/[\s\p{P}]+/gu, '').toLowerCase()
+}
+
+async function readAnswerClaimCandidates(text, citations, project, signal) {
+  const answer = answerClaimText(text)
+  const refs = new Set(citations.map(citation => String(citation.identifier || citation.url || '').toLowerCase()))
+  const scope = project || 'default'
+  const matched = []
+  let offset = 0
+  let evidenceById = new Map()
+  do {
+    const query = new URLSearchParams({ project: scope, offset: String(offset) })
+    const response = await fetch(`/dsh-research-kit/claim-review?${query}`, { signal })
+    const result = await response.json()
+    if (!response.ok || !result.ok || !Array.isArray(result.claims)) throw new Error('无法读取课题的论断。')
+    if (offset === 0) evidenceById = new Map((result.evidence || []).map(entry => [entry.id, entry]))
+    for (const claim of result.claims) {
+      const statement = answerClaimText(claim.statement)
+      const citation = String(claim.source_ref?.citation || '').toLowerCase()
+      if (!claim.id || (claim.project || 'default') !== scope || statement.length < 8
+          || !answer.includes(statement) || (citation && !refs.has(citation))) continue
+      matched.push(projectClaimProjection(claim, scope))
+    }
+    if (result.next_offset == null) break
+    if (!Number.isInteger(result.next_offset) || result.next_offset <= offset) throw new Error('论断分页响应无效。')
+    offset = result.next_offset
+  } while (true)
+  return { matched, evidenceById }
+}
+
 function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetProvider, useChat }) {
   const chatNodes = typeof useChat === 'function' ? useChat(snapshot => snapshot.nodes) : null
   const anchorRef = React.useRef(null)
   const [position, setPosition] = React.useState(null)
   const [preview, setPreview] = React.useState(null)
+  const [claimChoices, setClaimChoices] = React.useState(null)
+  const [confirmedClaims, setConfirmedClaims] = React.useState([])
+  const [claimNotice, setClaimNotice] = React.useState('')
+  const associationKey = preview && `dsh-research-kit.answer-claims.v1.${JSON.stringify([sessionId, messageId, preview.project])}`
+  React.useEffect(() => {
+    if (!preview) return undefined
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 10000)
+    try {
+      const ids = JSON.parse(window.localStorage.getItem(associationKey) || '[]')
+      if (Array.isArray(ids)) setConfirmedClaims(ids)
+    } catch { /* 已保存关联无法读取时仍可查看引用。 */ }
+    readAnswerClaimCandidates(preview.text, preview.extraction.citations, preview.project, controller.signal)
+      .then(result => { if (!controller.signal.aborted) setClaimChoices(result) })
+      .catch(() => { if (!controller.signal.aborted || controller.signal.reason?.name === 'AbortError') setClaimNotice('暂时无法读取已有论断。') })
+      .finally(() => window.clearTimeout(timer))
+    return () => { window.clearTimeout(timer); controller.abort(new Error('回答面板已关闭')) }
+  }, [preview, associationKey])
   const [selectedNodes, setSelectedNodes] = React.useState([])
   const [selectedCitations, setSelectedCitations] = React.useState([])
   const [busy, setBusy] = React.useState(false)
@@ -10531,10 +10811,26 @@ function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetPro
     place()
     const found = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
     if (!found) { setNotice('当前会话窗口中找不到这条回答。'); return }
-    setPreview(found)
-    setSelectedNodes(found.extraction.nodes.map(node => node.key))
+    setClaimChoices(null)
+    setClaimNotice('')
+    setConfirmedClaims([])
+    setPreview({ ...found, project: currentResearchContext().project })
+    setSelectedNodes([])
     setSelectedCitations(found.extraction.citations.map((_, index) => index))
     setNotice('')
+  }
+  const toggleClaimAssociation = id => {
+    const latest = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
+    if (!latest || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
+      setClaimNotice('回答或课题已变化，请重新打开。')
+      return
+    }
+    const ids = confirmedClaims.includes(id) ? confirmedClaims.filter(item => item !== id) : [...confirmedClaims, id]
+    try {
+      window.localStorage.setItem(associationKey, JSON.stringify(ids))
+      setConfirmedClaims(ids)
+      setClaimNotice('')
+    } catch { setClaimNotice('当前客户端无法保存回答关联。') }
   }
   const toggle = (values, setValues, key) => setValues(values.includes(key) ? values.filter(item => item !== key) : [...values, key])
   const confirm = async () => {
@@ -10546,58 +10842,106 @@ function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetPro
     try {
       const summary = await depositAssistantMessage({
         text: preview.text, sessionId: String(sessionId), seq: preview.seq, turn: preview.turn, at: preview.at,
-        selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, assetProvider: assetProvider?.(),
+        selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, activeProject: preview.project, assetProvider: assetProvider?.(),
       })
       setNotice(summary.extracted ? `已沉淀：知识 ${summary.addedNodes}、证据 ${summary.savedEvidence}、资产 ${summary.savedAssets}；均待人工核验。` : '所选内容没有可提取的研究信息。')
       setPreview(null)
     } catch (error) { setNotice(`沉淀失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
-  const panel = preview ? React.createElement('div', { key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', style: { ...position, zIndex: 2147483000, boxSizing: 'border-box', padding: 10, width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))', overflow: 'auto', border: '1px solid #d0d7de', borderRadius: 8, background: '#fff', boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, [
-      React.createElement('strong', { key: 'title' }, `回答 #${preview.seq} · 选择待核验内容`),
-      preview.interrupted ? React.createElement('div', { key: 'interrupted', style: { color: '#9a6700' } }, '这条回答曾被中断，内容可能不完整。') : null,
-      ...preview.extraction.nodes.map(node => React.createElement('label', { key: node.key, style: { display: 'block' } }, [
-        React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedNodes.includes(node.key), onChange: () => toggle(selectedNodes, setSelectedNodes, node.key) }),
-        `${KNOWLEDGE_KIND_LABELS[node.kind] || '知识'}：${node.label}`,
+  const citations = preview?.extraction.citations || []
+  const nodes = preview?.extraction.nodes || []
+  const matched = claimChoices?.matched || []
+  const orderedClaims = [
+    ...matched.filter(claim => confirmedClaims.includes(claim.id)),
+    ...matched.filter(claim => !confirmedClaims.includes(claim.id)),
+  ]
+  const sectionStyle = { display: 'grid', gap: 6, paddingBlock: 8, borderTop: `1px solid ${C.line}` }
+  const panel = preview ? React.createElement('div', {
+    key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览',
+    style: { ...position, zIndex: 2147483000, boxSizing: 'border-box', padding: '10px 12px', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))',
+      overflow: 'auto', border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, background: C.surface, boxShadow: C.shadowLg, font: `12px/1.45 ${C.font}` },
+  }, [
+    React.createElement('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, paddingBottom: 8 } }, [
+      React.createElement('strong', { key: 'title', style: { fontSize: 14 } }, '回答依据'),
+      React.createElement(Button, { key: 'close', size: 'sm', variant: 'ghost', 'aria-label': '取消', disabled: busy, onClick: () => setPreview(null) }, '关闭'),
+    ]),
+    preview.interrupted ? React.createElement('p', { key: 'interrupted', style: { color: C.amber } }, '这条回答曾被中断，内容可能不完整。') : null,
+    citations.length ? React.createElement('section', { key: 'citations', 'aria-label': '回答引用', style: sectionStyle }, [
+      React.createElement('strong', { key: 'title' }, '回答引用'),
+      ...citations.map((citation, index) => {
+        const label = citation.identifier || citation.url || citation.title || '来源待核验'
+        const href = researchCitationHref(citation)
+        return React.createElement(href ? 'a' : 'span', {
+          key: index, ...(href ? { href, target: '_blank', rel: 'noopener noreferrer' } : {}),
+          style: { overflowWrap: 'anywhere', color: href ? C.teal : C.muted },
+        }, label)
+      }),
+      React.createElement('small', { key: 'state', style: { color: C.muted } }, '引用来自回答，原文与支持关系待核验。'),
+    ]) : null,
+    orderedClaims.length ? React.createElement('section', { key: 'claims', 'aria-label': '相关论断', style: sectionStyle }, [
+      React.createElement('strong', { key: 'title' }, '相关论断'),
+      ...orderedClaims.map(claim => React.createElement('div', {
+        key: claim.id, style: { display: 'grid', gap: 5 },
+      }, [
+        React.createElement('span', { key: 'statement', style: { overflowWrap: 'anywhere' } }, claim.statement),
+        React.createElement(Button, {
+          key: 'link', size: 'sm', variant: 'ghost', onClick: () => toggleClaimAssociation(claim.id), style: { justifySelf: 'start' },
+        }, confirmedClaims.includes(claim.id) ? '取消关联' : '关联到此回答'),
+        confirmedClaims.includes(claim.id) ? React.createElement(ClaimEvidenceRelations, {
+          key: 'sources', claim, evidenceById: claimChoices.evidenceById,
+        }) : null,
       ])),
-      ...preview.extraction.citations.map((citation, index) => React.createElement('label', { key: `citation-${index}`, style: { display: 'block' } }, [
-        React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedCitations.includes(index), onChange: () => toggle(selectedCitations, setSelectedCitations, index) }),
-        `引用：${citation.identifier || citation.url || citation.title || '来源待核验'}`,
-      ])),
-      !preview.extraction.nodes.length && !preview.extraction.citations.length ? React.createElement('div', { key: 'empty' }, '未提取出知识或引用。') : null,
-      React.createElement('button', { key: 'confirm', type: 'button', disabled: busy || (!selectedNodes.length && !selectedCitations.length), onClick: confirm }, busy ? '沉淀中…' : '确认沉淀所选'),
-      React.createElement('button', { key: 'cancel', type: 'button', disabled: busy, onClick: () => setPreview(null) }, '取消'),
-    ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
+    ]) : null,
+    claimNotice ? React.createElement('p', { key: 'claim-notice', role: 'status' }, claimNotice) : null,
+    !citations.length && !orderedClaims.length ? React.createElement('p', { key: 'empty', style: { color: C.muted } }, '这条回答暂无可展示的引用或关联论断。') : null,
+    citations.length || nodes.length ? React.createElement('details', { key: 'deposit', style: { borderTop: `1px solid ${C.line}`, paddingTop: 8 } }, [
+      React.createElement('summary', { key: 'summary', style: { cursor: 'pointer', fontWeight: 600 } }, '沉淀所选'),
+      React.createElement('div', { key: 'choices', style: { display: 'grid', gap: 7, marginTop: 8 } }, [
+        ...citations.map((citation, index) => React.createElement('label', { key: `citation-${index}`, style: { overflowWrap: 'anywhere' } }, [
+          React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedCitations.includes(index), onChange: () => toggle(selectedCitations, setSelectedCitations, index) }),
+          `引用：${citation.identifier || citation.url || citation.title || '来源待核验'}`,
+        ])),
+        nodes.length ? React.createElement('small', { key: 'candidate-help', style: { color: C.muted } }, '可选的自动抽取候选，请检查后再保存。') : null,
+        ...nodes.map(node => React.createElement('label', { key: node.key, style: { overflowWrap: 'anywhere' } }, [
+          React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedNodes.includes(node.key), onChange: () => toggle(selectedNodes, setSelectedNodes, node.key) }),
+          `${KNOWLEDGE_KIND_LABELS[node.kind] || '知识'}：${node.label}`,
+        ])),
+        React.createElement(Button, { key: 'confirm', size: 'sm', variant: 'primary', style: { justifySelf: 'start' }, disabled: busy || (!selectedNodes.length && !selectedCitations.length), onClick: confirm }, busy ? '沉淀中…' : '确认沉淀所选'),
+        notice ? React.createElement('p', { key: 'deposit-notice', role: 'status' }, notice) : null,
+      ]),
+    ]) : null,
+  ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
   return React.createElement(React.Fragment, null, [
-    React.createElement('button', { key: 'open', ref: anchorRef, type: 'button', onClick: open, 'aria-label': '审阅并沉淀这条研究回答' }, '审阅沉淀'),
+    React.createElement('button', { key: 'open', ref: anchorRef, type: 'button', onClick: open, 'aria-label': '审阅并沉淀这条研究回答' }, '回答依据'),
     panel && typeof document !== 'undefined' ? createPortal(panel, document.body) : null,
   ])
 }
 
 
 
-// 手动沉淀伴生钮：贴着对话增强器的浮动按钮停靠（用户要求「往对话增强器按钮上放一个」）。
-// vendored QuickEnhancer 的触发钮是 44px 浮动圆钮、位置持久化在 localStorage；
-// 本按钮读同一存储位置，算出「正上方（放不下翻到正下方）」的伴生位，不独立拖拽——
-// 增强器挪，它跟着挪；拖拽结束（pointerup）与窗口尺寸变化时重算。
-//
-// 行为边界与图谱页的「沉淀最近回答」完全一致：同一提取链路、同一「待核验」起点、
-// 显式点击才触发；点击结果以临时状态条反馈并自动消失，绝不注入输入框。
 
-// 与 vendored useFloatingLauncher 的存储键逐字一致（storagePrefix + 'quick-action.position.v1'）。
+
+
+
+
+
+
+
+
 const QUICK_ENHANCER_POSITION_KEY = 'dsh-research-kit.promptkit.quick-action.position.v1'
-// vendored 触发钮固定 44px（vendor 源码 buttonStyle）；伴生钮略小以示主从。
+
 const ENHANCER_BUTTON_SIZE = 44
 const DEPOSIT_BUTTON_SIZE = 38
 const DEPOSIT_BUTTON_GAP = 8
-// vendored 的拖拽钳制范围（左上角坐标）：x ∈ [16, width-62]，y ∈ [58, height-62]。
+
 const CLAMP_MIN_X = 16
 const CLAMP_MAX_INSET_X = 62
 const CLAMP_MIN_Y = 58
 const CLAMP_MAX_INSET_Y = 62
 
-// 纯位置解算（单测覆盖）：给出增强器按钮的左上坐标与视口，返回伴生钮左上坐标。
-// stored 非法/缺省时按 vendored 默认位（右下角）推算，与增强器默认位对齐。
+
+
 function companionDepositPosition(stored, viewport, size = DEPOSIT_BUTTON_SIZE) {
   const width = Math.max(0, Number(viewport?.width) || 0)
   const height = Math.max(0, Number(viewport?.height) || 0)
@@ -10606,7 +10950,7 @@ function companionDepositPosition(stored, viewport, size = DEPOSIT_BUTTON_SIZE) 
     : { x: Math.max(24, width - 86), y: Math.max(96, height - 158) }
   const anchorX = Math.min(Math.max(CLAMP_MIN_X, usable.x), Math.max(CLAMP_MIN_X, width - CLAMP_MAX_INSET_X))
   const anchorY = Math.min(Math.max(CLAMP_MIN_Y, usable.y), Math.max(CLAMP_MIN_Y, height - CLAMP_MAX_INSET_Y))
-  // 与增强钮共享中轴；先试正上方，贴顶放不下翻到正下方，末端钳进视口。
+
   const x = anchorX + (ENHANCER_BUTTON_SIZE - size) / 2
   const above = anchorY - DEPOSIT_BUTTON_GAP - size
   if (above >= CLAMP_MIN_Y) return { x, y: above }
@@ -10634,7 +10978,7 @@ function ResearchDepositButton() {
 
   React.useEffect(() => {
     measure()
-    // 拖拽结束（vendored 在 pointerup 落盘位置）与窗口变化后重算，保持贴合增强器按钮。
+
     window.addEventListener('resize', measure)
     window.addEventListener('pointerup', measure)
     return () => {
@@ -10670,8 +11014,8 @@ function ResearchDepositButton() {
   }
 
   if (!position) return null
-  // 悬浮钮与状态条都是 position: fixed：必须 portal 到 body，否则 0.2.2-rc.1 起会被
-  // composer seat 的 transform containing block 带偏（见 src/lib/overlay-anchor.js 的 bodyPortal）。
+
+
   return bodyPortal(h(React.Fragment, null, [
     status ? h('div', {
       key: 'status',
@@ -10709,13 +11053,13 @@ function ResearchDepositButton() {
 }
 
 
-// 组装回放面板 —— 把 composeWorkflow 返回的 trace 逐段点亮，与 Prompt 文本互证。
-// 设计契约见 docs-internal/research-route-visualization.md §5.5/§6。
-// 动画手感对齐 archify（MIT，只借鉴机制不复制代码）：
-// - 彗星流光覆盖层：跑光画在 overlay 上，原图稳定，跑完淡出（intent-trace 机制）；
-// - 节点到达辉光脉冲：drop-shadow glow 一次性脉冲后落定（story-beat-node 机制）；
-// - 高级缓动 cubic-bezier(0.22,1,0.36,1)；完成后 lit 连线带 ambient 缓慢流动；
-// - prefers-reduced-motion 或读者切「静态」：整条点亮、序号标注、零动画声明。
+
+
+
+
+
+
+
 
 
 const ARCHIFY_TEMPLATE_PATH = '/dsh-research-kit/archify-template'
@@ -10736,7 +11080,7 @@ function loadArchifyTemplate(fetcher = globalThis.fetch) {
 const STEP_MS = 620
 const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
-// 主题色值烘焙：导出物里 CSS 变量不再有定义，必须解析成真实色值。
+
 function readTheme() {
   if (typeof document === 'undefined') {
     return { ink: '#17212b', muted: '#607080', line: '#d8e1e8', teal: '#0f766e', amber: '#b45309', canvas: '#f4f7f9', surface: '#fff', tealTint: '#f1faf8', amberTint: '#fff7ed' }
@@ -10754,12 +11098,12 @@ function prefersReduced() {
   return typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-// SVG 文本转义：trace 里带用户填写的参数值，进 markup 前必须转义。
+
 function escapeXml(text) {
   return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// 每个 trace 步骤在 prompt 中的锚点（用于「动画点亮 ↔ 文本高亮」互证）。
+
 function traceSegments(trace, prompt) {
   const text = String(prompt || '')
   const nextOccurrence = new Map()
@@ -10903,12 +11247,12 @@ function buttonStyle(C) {
   return { fontSize: 12, padding: '4px 10px', borderRadius: 8, border: `1px solid ${C.line}`, background: C.surface, color: C.ink, cursor: 'pointer' }
 }
 
-// 弹出回放窗口：trace → archify viewer 契约（vendored 运行时）→ 独立浏览器窗口。
-// 窗口里获得完整 viewer 能力（视觉预设/章节故事/透镜/雷达/路线动画）；
-// 只回放本次组装事实，不注入任何未声明的内容。
+
+
+
 async function openReplayWindow(trace, title) {
   if (typeof window === 'undefined') return null
-  // 必须在点击任务内先开窗，否则等待网络后再 window.open 会被浏览器当作非用户手势拦截。
+
   const popup = window.open('', '_blank')
   if (!popup) { alert('弹窗被浏览器拦截；请允许本站弹窗后重试。'); return null }
   popup.document.write('<!doctype html><meta charset="utf-8"><title>正在加载组装回放…</title><p style="font:14px system-ui;padding:24px">正在加载组装回放…</p>')
@@ -10967,8 +11311,8 @@ const RESEARCH_PLAN_STAGES = {
   '文献研究': ['界定问题与范围', '双语检索式', '筛选与证据表', '主题综合与研究空白', '核验引用与待确认项', '输出综述草案'],
   '数据分析': ['确认数据与分析问题', '数据质量检查', '分析计划与前提', '执行与结果核验', '可重复性记录', '输出分析报告'],
 }
-// 科研模式按当下常见科研任务重组：一键选择后附加对应的技能组合与领域纪律段。
-// 语义是「预设指导组合」而不是能力开关——不会自动执行任何工具。
+
+
 const SCIENCE_MODE_BASE = '【科研模式】本次任务按以下纪律执行：区分已提供材料、可验证外部来源与推断；不得编造文献、数据、页码或结论；结论标注为需人工核验的草案。'
 const SCIENCE_MODE_PRESETS = {
   general: {
@@ -11039,7 +11383,7 @@ function researchPlanFor(workflow) {
   return stages ? { stages, deliverables: workflow.category === '论文与手稿' ? ['章节草案', '待作者确认项', '引用/图表核对清单'] : ['检索策略或分析计划', '证据与待核验项', '可编辑草案'] } : null
 }
 
-// 状态色：插件直查与宿主已确认可用都算「现在就能查」，其余为待配置的琥珀色。
+
 function isDatabaseReady(availability) {
   return availability === 'available-in-plugin' || availability === 'available-in-host'
 }
@@ -11072,35 +11416,40 @@ function highlightCatalogText(value, term) {
   return [...parts, text.slice(offset)]
 }
 
-function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, launchSession, embedded = false }) {
+function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, initialType = 'all', launchSession, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [query, setQuery] = React.useState('')
   const deferredQuery = React.useDeferredValue(query)
-  const [type, setType] = React.useState('all')
+  const [type, setType] = React.useState(initialType)
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
   const [selectedId, setSelectedId] = React.useState(initialWorkflowId || 'review-paper')
+  React.useEffect(() => {
+    setType(initialType)
+    setQuery('')
+    if (initialType === 'workflow') setSelectedId(initialWorkflowId || 'review-paper')
+  }, [initialType, initialWorkflowId])
   const [values, setValues] = React.useState({})
   const [replayOpen, setReplayOpen] = React.useState(false)
-  // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
+
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [notice, setNotice] = React.useState('')
   const [attachedSkills, setAttachedSkills] = React.useState([])
-  // 科研模式：null 关闭；值为当前研究任务预设 key。
+
   const [scienceMode, setScienceMode] = React.useState(null)
   const [favorites, setFavorites] = React.useState(() => storage.getFavorites())
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
   const [planRows, setPlanRows] = React.useState(() => evidence.get().plans || [])
-  // 左列 sticky 的偏移量来源：二级吸顶带的实测高度（带高随折行变化：单行 76px、双行 126px）。
+
   const layoutRef = React.useRef(null)
   const toolbarRef = React.useRef(null)
   React.useEffect(() => {
-    // 与统一容器测一级导航同一模式：observe border-box（内边距/边框变化也要触发）、
-    // 挂载先写一次、窗口变化补测、卸载清理并移除变量。写在本分区栅格容器上，随分区卸载一并消失。
+
+
     const host = layoutRef.current
     const band = toolbarRef.current
     if (!host || !band) return undefined
@@ -11125,7 +11474,7 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
     () => filterCatalogCategory(searchCatalog({ query: deferredQuery, type }), type, activeCategory),
     [deferredQuery, type, activeCategory],
   )
-  // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
+
   const selected = selectedCatalogItem(items, selectedId)
   const workflow = selected?.type === 'workflow' ? selected : null
   const suggestedSkills = React.useMemo(
@@ -11137,13 +11486,13 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   const sessionDatabaseIds = React.useMemo(() => sessionResources.filter(item => item.type === 'database').map(item => item.id), [sessionResources])
   const activeSkillIds = React.useMemo(() => uniqueIds([...attachedSkills, ...sessionSkillIds]), [attachedSkills, sessionSkillIds])
   const sciencePreset = scienceMode ? SCIENCE_MODE_PRESETS[scienceMode] : null
-  // 科研模式下组装 Prompt 前统一前置纪律段（通用预设只有基础纪律）。
+
   const scienceAssemble = prompt => {
     if (!sciencePreset) return prompt
     const preamble = [SCIENCE_MODE_BASE, sciencePreset.preamble].filter(Boolean).join('\n')
     return `${preamble}\n\n${prompt}`
   }
-  // 预览阶段保留必填字段的可读占位；写入和发送前才阻止缺失字段。
+
   const composed = React.useMemo(
     () => workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null,
     [workflow, values, activeSkillIds, sessionDatabaseIds],
@@ -11159,22 +11508,22 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   const activePlan = workflow ? planRows.find(plan => plan.id === workflow.id) : null
 
   React.useEffect(() => {
-    // 切换资源后清空编辑态与勾选，避免把上一个工作流的内容或技能组合带过去。
+
     setValues({}); setEditedPrompt(null); setNotice(''); setAttachedSkills([])
   }, [selectedKey])
   React.useEffect(() => {
-    // 进入工作流时默认勾选其建议技能；用户可取消或补充。
-    // 科研模式下按领域预设附加技能；关闭时回到建议集合。
+
+
     setAttachedSkills(sciencePreset ? uniqueIds(sciencePreset.skills) : suggestedSkills.map(item => item.id))
   }, [selectedKey, workflow ? workflow.id : '', scienceMode])
   React.useEffect(() => {
-    // 收藏或历史在其他视图（如输入框弹窗）变更时同步刷新本视图。
+
     return storage.onHistoryChange?.(() => { setHistory(storage.getHistory()); setFavorites(storage.getFavorites()) }) || (() => {})
   }, [storage])
   React.useEffect(() => { setSessionResourceIds(selection.get()); return selection.subscribe(setSessionResourceIds) }, [selection])
   React.useEffect(() => { setPlanRows(evidence.get().plans || []); return evidence.subscribe(value => setPlanRows(value.plans || [])) }, [evidence])
-  // 宿主能力探测（ROADMAP §6）：部署级事实摘要（装配的服务 + 已连接 MCP），5 分钟缓存。
-  // 只在数据源详情展示一行事实，不据此改写目录 availability、不推断某数据库可用。
+
+
   const [hostCapabilitySummary, setHostCapabilitySummary] = React.useState('')
   React.useEffect(() => {
     let alive = true
@@ -11210,7 +11559,7 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
     evidence.togglePlanStage(workflow.id, index)
   }
   const toggleFavorite = id => setFavorites(storage.toggleFavorite(id))
-  // 「收藏」「最近使用」是虚拟分组：按存储顺序列出条目。
+
   const specialRows = React.useMemo(() => type === 'favorites'
     ? favorites.map(itemById).filter(Boolean).map(item => ({ item }))
     : type === 'history'
@@ -11223,12 +11572,12 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
     [isSpecialView, specialRows, items],
   )
   const listGroups = React.useMemo(() => deferredQuery.trim() && !isSpecialView ? [{ category: '按相关性排序', rows: listEntries }] : groupEntriesByCategory(listEntries), [listEntries, deferredQuery, isSpecialView])
-  // 成功出口共用的收尾：记录历史（首行摘要 + 时间戳）、提示。
-  // 研究运行的 sessionId 记录「由哪个会话发起」。开新会话这条路发起时新会话 id 还不可知
-  // （宿主 startSession 只返回 void），传空串如实表示「发起会话未知」，不冒充当前会话。
+
+
+
   const recordUse = (status = 'draft', { runSessionId = sessionId } = {}) => {
     if (!workflow) return
-    // 不把工作流参数、文件引用或最终 Prompt 的任何片段写进本地历史。
+
     setHistory(storage.recordHistory({ id: workflow.id, name: workflow.name }))
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...sessionResourceIds, ...attachedSkills] })
     if (taskPlan) evidence.recordPlan({ workflowId: workflow.id, name: workflow.name, stages: taskPlan.stages })
@@ -11240,8 +11589,8 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   const runPrompt = (run, prompt) => run
     ? `【研究运行】ID：${run.id}\n如需调用 dsh-research-kit MCP 工具（如 research_evidence_save、research_run_export），请在参数中传入 run_id="${run.id}"，以便把证据、checkpoint 与活动记录关联到本次运行。此标识不代表任何工具已经执行。\n\n${prompt}`
     : prompt
-  // 「在新会话开始」：宿主 0.2.1-rc.1 起有草稿预填通道，`whenDraftExists`（默认 append，不覆盖已有文字）
-  // 自 0.2.1-rc.3 起被识别；更早的宿主（0.1.7 / 0.2.0 线）没有该通道，入口不渲染，避免点了没反应。
+
+
   const startNewSession = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
     if (typeof launchSession !== 'function') return setNotice('当前宿主版本不支持开新会话并预填草稿；请改用“写入输入框”或“复制 Prompt”。')
@@ -11252,8 +11601,8 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
       if (!launchSession({ prompt: runPrompt(run, finalPrompt) })) {
         return setNotice(`宿主未接受开新会话请求；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建，可改用“写入输入框”。`)
       }
-      // 0.2.1-rc.3+ 才识别 whenDraftExists：更早宿主遇到已有草稿会整段保留（此时提示词不会写入），
-      // 所以提示语只说「已请求预填」，不承诺输入框里一定出现正文。
+
+
       setNotice(`已请求在新会话预填研究运行${run ? `「${run.workflowName}」` : ''}的提示词；请切到新会话确认（目标会话已有草稿时，较早宿主会保留原草稿）。`)
     } catch (error) { setNotice(error.message) }
   }
@@ -11295,12 +11644,12 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   const openHistoryEntry = row => {
     const item = itemById(row.id)
     if (!item) return
-    setType('all')
+    setType(embedded ? item.type : 'all')
     setQuery('')
     setSelectedId(item.id)
   }
   const openFavoriteEntry = item => {
-    setType('all')
+    setType(embedded ? item.type : 'all')
     setQuery('')
     setSelectedId(item.id)
   }
@@ -11319,19 +11668,18 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
   const content = [
     h(PageHead, {
       key: 'head',
-      kicker: 'Research Kit',
-      title: '资源与工作流',
-      lead: '浏览技能、科学数据库与工作流程；选择后再按需写入当前会话。',
+      title: initialType === 'database' ? '查来源' : '选择科研流程',
+      lead: initialType === 'database' ? '选择数据源，查看查询方式与返回的来源。' : '按任务选择流程，补充条件后预览要交给 Agent 的提示词。',
     }),
-    // 二级吸顶带 = 该分区「随时要用的操作」：检索、类型筛选、科研模式。
-    // 「科研模式」原先挂在分区封面右侧，会随页面一起滚走（实测滚 800px 后 top=-555），
-    // 每次确认或切换预设都得先滚回顶部；它是常驻的「模式」控件，不是一次性页面动作，
-    // 因此下沉到吸顶带。封面上只留读一次即可的标题与导语（分层原则见 docs/ARCHITECTURE.md §2.3）。
+
+
+
+
     h(Toolbar, { key: 'toolbar', sticky: true, innerRef: toolbarRef }, [
-      // 顺序有意为「模式 → 检索 → 筛选」：三者放不下一行时按 DOM 顺序折行，
-      // 把最宽的筛选项留在最后折行才能占满整行；若把「科研模式」放末尾，
-      // 被挤到第二行的是它一个窄控件，会留下一整行空白（实测 1180px 窗口即触发）。
-      h('label', { key: 'mode', style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 650, flexShrink: 0, color: scienceMode ? C.teal : C.muted } }, [
+
+
+
+      initialType !== 'database' ? h('label', { key: 'mode', style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 650, flexShrink: 0, color: scienceMode ? C.teal : C.muted } }, [
         h(Icon, { key: 'i', name: 'shield', size: 14 }),
         '科研模式',
         h(Select, {
@@ -11349,16 +11697,16 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
           className: 'rk-research-mode-select',
           style: { padding: '7px 10px', fontSize: 13, borderColor: scienceMode ? C.tealLineStrong : C.line, background: scienceMode ? C.tealTint : C.surface, color: scienceMode ? C.teal : C.ink },
         }),
-      ]),
-      // 检索框的 flex 基准（200px）是按「三者同占一行」倒推的：922px 内容宽下
-      // 模式 176 + 检索基准 200 + 筛选 495 + 间距 20 = 891 ≤ 922，刚好不折行；
-      // 基准若给到 260 就会把筛选挤到第二行（实测带高 76px → 126px）。
-      // 仍是弹性项：窗口更宽时它会吃掉剩余空间，更窄时按顺序折行、筛选独占下一行。
+      ]) : null,
+
+
+
+
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 200px', minWidth: 180 } }, [
         h('span', { key: 'icon', 'aria-hidden': 'true', style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' } }, h(Icon, { name: 'search', size: 14 })),
-        h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索工作流程、技能、数据库……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
+        h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: initialType === 'database' ? '搜索数据库、学术索引……' : '搜索工作流程、技能……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
       ]),
-      h(Segmented, { key: 'tabs', value: type, options: typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }),
+      initialType !== 'database' ? h(Segmented, { key: 'tabs', value: type, options: embedded ? typeTabs.filter(tab => tab.value !== 'all' && tab.value !== 'database') : typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }) : null,
       type === 'workflow' || type === 'skill' || type === 'database' ? h(CatalogCategoryFilter, {
         key: `${type}-categories`,
         type,
@@ -11368,9 +11716,9 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
       }) : null,
     ]),
     h('div', { key: 'layout', ref: layoutRef, className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [
-      // 左列 sticky（ROADMAP §2）：右列详情可达约 1044px，列表原来会滚出视口。
-      // 偏移 = 一级导航 + 二级吸顶带两段实测变量（都不写死：两者高度都随折行变化），
-      // maxHeight 约束在视口内、内部自行滚动，保证 sticky 有滑动余量且出口按钮可见时列表仍在。
+
+
+
       h(Panel, {
         key: 'list',
         'aria-label': '资源列表',
@@ -11553,15 +11901,15 @@ function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWor
       ]) : null,
     ]),
   ]
-  // embedded：由统一容器提供页面外壳与全局样式，这里只渲染分区内容；
-  // 独立挂载时仍走 Page + GlobalStyle，保持组件可单测、可单独渲染。
+
+
   return embedded
     ? h('div', { key: 'embedded', className: 'rk-page', style: { boxSizing: 'border-box', padding: '20px var(--rk-gutter) 48px', background: 'transparent', color: C.ink, fontFamily: C.font } }, content)
     : h(Page, null, [h(GlobalStyle, { key: 'global-style' }), ...content])
 }
 
 
-// 由 scripts/build-client.mjs 生成（mcp/tool-registry-projection.js）：浏览器只带渲染用得到的字段。
+
 const ARTIFACT_KIND_LABELS = {"figure":"图表脚本","evidence-report":"证据盘点","review-report":"综合审阅","claim-audit":"声明审计","anomaly-report":"异常报告","quality-report":"质量报告"}
 const TOOL_REGISTRY = [
   { name: "research_help", labelZh: "MCP 工具导航", summaryZh: "MCP 工具导航：按目标推荐工具与最短调用链，不执行任何动作", access: "read-only", requiresConfirmation: false },
@@ -11603,8 +11951,8 @@ const TOOL_REGISTRY = [
 ]
 
 
-// 浏览器侧标签函数：只依赖工具数据与产物标签表。
-// 单独成文件，客户端产物才能「投影后的数据 + 这两个函数」，而不必整份打进浏览器。
+
+
 
 const REGISTRY_BY_NAME = new Map(TOOL_REGISTRY.map(tool => [tool.name, tool]))
 
@@ -11618,7 +11966,7 @@ function artifactKindLabel(kind) {
 
 
 
-// DSH 的 keyed toolview 使用模型实际看到的完整 MCP 工具名。
+
 const MCP_TOOL_PREFIX = 'mcp__dsh-research-kit__'
 const byName = new Map(TOOL_REGISTRY.map(item => [`${MCP_TOOL_PREFIX}${item.name}`, item]))
 const researchToolNames = [...byName.keys()]
@@ -11639,7 +11987,7 @@ function researchToolArgumentSummary(raw) {
 }
 
 function resultValue(block) {
-  // ToolResultNode.content 是 DSH 的持久化结果；MCP Server 每次返回一块 JSON 文本。
+
   const content = block?.content
   const value = Array.isArray(content)
     ? content.find(item => item?.type === 'text' && typeof item.text === 'string')?.text
@@ -11653,7 +12001,7 @@ function recordsOf(value) {
   return [data?.sources, data?.entries, data?.results, data?.evidence?.entries, data?.evidence_save?.results].find(Array.isArray) || []
 }
 
-/** 将各 research_* 工具的异构结果收敛为不含正文的证据审阅模型。 */
+
 function researchToolDetailModel(toolName, block) {
   const tool = byName.get(toolName)
   const value = resultValue(block)
@@ -11683,7 +12031,7 @@ function researchToolDetailModel(toolName, block) {
   return { tool, evidence, pending: [...new Set(pending)].slice(0, 4), text: typeof value?.text === 'string' ? value.text.slice(0, 360) : '' }
 }
 
-/** DSH 0.1.7 keyed toolview：结构化呈现来源、DOI、等级与人工确认点。 */
+
 function PreparingResearchToolView({ toolName, useToolCallArgumentsPartial }) {
   const raw = typeof useToolCallArgumentsPartial === 'function' ? useToolCallArgumentsPartial() : ''
   const tool = byName.get(toolName)
@@ -11724,24 +12072,24 @@ function StartedResearchToolView({ toolName, phase, block, inspect }) {
 }
 
 
-// DSH slot 注册表：纯数据 + 注册动作，不依赖 React，供 standalone-glue 与测试共用。
-// 单一事实源：迁移文档第 7 节的注册表与此处一一对应。
-//
-// 视图槽位由 3 个收敛为 1 个：原「科研工作台 / 研究方法工坊 / 研究灵感库」三个并列标签
-// 合并为统一视图 dsh-research-kit-console，内部分区导航见 src/lib/console-sections.js。
+
+
+
+
+
 const RESEARCH_SLOTS = [
   { slot: 'conversation.view', id: 'dsh-research-kit-console', order: 91, label: '科研工作台' },
   { slot: 'conversation.input.left', id: 'dsh-research-kit-launcher', order: 90, label: '科研工具' },
   { slot: 'conversation.input.overlay', id: 'dsh-research-kit-overlay', order: 90, label: '科研选择器' },
-  // 草稿增强器：优先级低于模型选择器与发送按钮（order 较小 = 较次要）。
+
   { slot: 'conversation.input.right', id: 'dsh-research-kit-draft-enhancer', order: 80, label: '草稿增强' },
 ]
 
-// 用给定的 slots 服务注册全部槽位；inject 回调立即执行（与 glue 行为一致）。
-// components 数组与 RESEARCH_SLOTS 顺序一一对应，由 glue 传入 React 组件。
-//
-// 注册现场留痕：宿主上「某个入口没出现」时，先要分清是「inject 回调压根没跑」
-// 还是「register 抛错」——二者在界面上都只是安静地少一块，排障时无从下手。
+
+
+
+
+
 const SLOT_PROBE_KEY = 'dsh-research-kit.slots.probe.v1'
 const slotProbe = []
 function recordSlotProbe(text) {
@@ -11775,8 +12123,8 @@ function registerResearchSlots(ctx, components) {
 
 
 
-// Provider 只在 PromptKit 首次加载后创建；独立 storagePrefix 避免污染或依赖独立
-// dsh-promptkit 的资产。三个消费入口共用这两个实例。
+
+
 let researchMethodProvider = null
 let researchAssetProvider = null
 
@@ -11786,8 +12134,8 @@ function ensureResearchProviders(PromptKit = getPromptKit()) {
   return { researchMethodProvider, researchAssetProvider }
 }
 
-// 方法工坊只需要草稿读写和当前对话原料；项目记忆与跨会话摘要仍归草稿增强器，
-// 避免两个入口争抢外部上下文。
+
+
 class ResearchStudioComposer {
   constructor(input, inputActions) { this.input = input; this.inputActions = inputActions }
   getDraft() { return this.input?.draft ?? '' }
@@ -11812,9 +12160,9 @@ function LoadedResearchPromptStudioHost(props) {
     if (!writeDraftText(inputActions, text).ok) throw new Error('草稿已变化，未自动发送；请复制后手动粘贴。')
     await inputActions.submit()
   }
-  // 外层 .rk-studio-host 不承担业务职责，只为 style 源中的宽度解绑提供稳定锚点：
-  // PromptStudio 根 <main> 内联了 1240px 阅读宽度上限，嵌入统一容器后会让本分区
-  // 收成居中窄栏，与相邻两个铺满分区不一致（详见 src/theme.js 的同名规则注释）。
+
+
+
   return React.createElement('div', { className: 'rk-studio-host' },
     React.createElement(PromptKit.PromptStudio, {
       methodProvider: researchMethodProvider,
@@ -11846,21 +12194,21 @@ function ResearchPromptStudioHost(props) {
 }
 
 
-// 研究草稿增强器：把 vendored PromptKit.QuickEnhancer 适配到 Research Kit 的科研边界。
-// 增强服务端（dsh/semantic-enhance.js）复用当前会话模型路由；浏览器端不持有任何 Key。
-//
-// 研究定制（相对通用 QuickEnhancer 的差异）：
-//   1. 只读上下文摘要：把当前会话资源面板勾选的目录条目（数据库、技能等）注入
-//      researchContext，供改写对齐术语与范围；@文件 引用由 QuickEnhancer 的草稿解析单独并入；
-//   2. 研究边界由服务端 system 指令统一执行（不编造引用/数据、保持研究范围、保密、待核验标记）；
-//   3. 增强结果写入前保留差异/恢复能力（QuickEnhancer 内置 undoDraft）。
+
+
+
+
+
+
+
+
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
 const ENHANCE_STREAM_PATH = '/dsh-research-kit/semantic-enhance/stream'
 
-// 研究增强客户端：SSE 流式优先，404/501 时降级为非流式 JSON（与 PromptKit 契约一致）。
-// QuickEnhancer 的 options 不含 researchContext；这里在发送前统一注入当前会话的
-// 只读研究上下文摘要（已选数据库/技能/工作流名称与说明），供服务端对齐术语与范围。
+
+
+
 class ResearchSessionEnhancer {
   constructor(getSessionId) { this.getSessionId = getSessionId; this.controller = null }
   get loading() { return !!this.controller }
@@ -11947,8 +12295,8 @@ class ResearchSessionEnhancer {
   cancel() { this.controller?.abort(); this.controller = null }
 }
 
-// 桥接 DSH 输入框：inputActions 由槽位体系注入（setDraft / submit）。
-// 草稿真源随 DSH 版本：InputZone 点时快照（0.1.2）或 useInput 订阅（0.1.3+/旧契约）。
+
+
 class ResearchDraftComposer {
   constructor(input, inputActions) { this.input = input; this.inputActions = inputActions; this.listeners = new Set() }
   getDraft() { return this.input?.draft ?? '' }
@@ -11957,7 +12305,7 @@ class ResearchDraftComposer {
     if (typeof this.inputActions?.captureInsertion !== 'function') return null
     const span = this.inputActions.captureInsertion()
     if (!span || span.start === span.end) return null
-    // DSH 的选区坐标是 detect projection；含 @ 引用 chip 时与 clipboard 草稿坐标不同。
+
     if (this.input?.occurrences?.length) throw new Error('草稿包含引用，请先取消选区并使用整稿增强。')
     const draft = String(this.getDraft())
     if (!Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end > draft.length) throw new Error('选区已变化，请重新选择。')
@@ -11971,10 +12319,10 @@ class ResearchDraftComposer {
   notify(draft) { for (const cb of this.listeners) cb(draft) }
 }
 
-// 只读研究上下文：当前会话经资源面板勾选的目录条目（数据库、技能等）的名称与一句话说明。
-// 纯内存读取，不落盘、不携带文件正文或查询结果；服务端只把它作为改写的范围参照。
-// 注意：@文件 引用不在此摘要内——它们由 QuickEnhancer 的草稿解析（referencedFiles）
-// 单独并入增强请求的 extra，并自带"文件内容由 DSH @file 在发送后处理"的边界声明。
+
+
+
+
 function researchContextSummary(sessionId) {
   try {
     const rows = createResearchSelectionStore(sessionId).get().map(itemById).filter(Boolean)
@@ -11985,8 +12333,8 @@ function researchContextSummary(sessionId) {
 function LoadedResearchDraftEnhancerHost(props) {
   const PromptKit = getPromptKit()
   ensureResearchProviders(PromptKit)
-  // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
-  // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
+
+
   const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange, floating } = props
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
@@ -11996,7 +12344,7 @@ function LoadedResearchDraftEnhancerHost(props) {
   const composer = React.useMemo(() => new ResearchDraftComposer({ draft }, inputActions), [sessionId, inputActions])
   composer.input = { draft, occurrences: input?.occurrences ?? hookedInput?.occurrences }
   const enhancer = React.useMemo(() => new ResearchSessionEnhancer(() => sessionId), [sessionId])
-  // 会话资源选择变化时刷新上下文摘要；摘要每次增强时即时计算，避免过期引用。
+
   const [, setSelectionVersion] = React.useState(0)
   React.useEffect(() => {
     const dispose = subscribeCatalog(() => setSelectionVersion(value => value + 1))
@@ -12009,17 +12357,17 @@ function LoadedResearchDraftEnhancerHost(props) {
     return () => window.removeEventListener(RESEARCH_RESOURCE_SELECTION_EVENT, onChange)
   }, [])
   const searchMemory = React.useCallback(async query => {
-    // 研究上下文桥接（既有）：当前会话已选科研资源的只读摘要。
+
     const context = researchContextSummary(sessionId)
     const sources = context ? [{ kind: 'research-selection', label: '当前会话已选科研资源' }] : []
     let text = context
-    // Memory Center 项目记忆检索（ROADMAP §5）：经 Node half 路由代查宿主已连接的
-    // Memory Center MCP；结果只作为候选上下文返回，由 QuickEnhancer 的「项目记忆」
-    // 开关显式勾选后才进入增强（检索 → 来源预览 → 用户选择 → 组装，禁止静默注入）。
-    // 检索失败或部署未接入 Memory Center 时如实回落：只用研究上下文，不阻断增强。
-    // 可选模板：检索工具若是多动作门面（如必填 action），可在 localStorage 设置
-    // dsh-research-kit.memory-search.template 为 JSON 模板（{query}/{limit} 占位符），
-    // 例：{"action":"search","query":"{query}","limit":5}——这是对工具契约的显式声明。
+
+
+
+
+
+
+
     try {
       let args
       try { args = JSON.parse(window.localStorage.getItem('dsh-research-kit.memory-search.template') || 'null') || undefined } catch { args = undefined }
@@ -12039,17 +12387,17 @@ function LoadedResearchDraftEnhancerHost(props) {
     return { text, sources }
   }, [sessionId])
   React.useEffect(() => { composer.notify(draft ?? '') }, [draft, composer])
-  // 研究方法工坊共用同一 provider 资产命名空间（dsh-research-kit.promptkit.）。
-  // 面板本体两种形态共用，只有「启动钮归谁」不同（入口形态见 src/entry-mode.js）：
-  //   inline（默认）：launcher: 'inline' + renderLauncher: null —— 触发钮由
-  //     ResearchDraftEnhancerTrigger 自绘（工件挂起时入口仍在），anchorRef / open /
-  //     onOpenChange 让面板锚定该按钮并由插件受控开合（⌘K 也走同一状态）；
-  //   floating（设置里可选）：保留受控 open / onOpenChange 以承接首次按需加载；使用工件自己的可拖拽悬浮钮与位置记忆，
-  //     旁边并排渲染「沉淀最近回答」伴生圆钮。
+
+
+
+
+
+
+
   const launcherProps = floating
     ? { open, onOpenChange }
     : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
-  return React.createElement(PromptKit.QuickEnhancer, {
+  return React.createElement('div', { className: 'rk-enhancer-theme', style: { display: 'contents' } }, React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
     methodProvider: researchMethodProvider,
     assetProvider: researchAssetProvider,
@@ -12059,12 +12407,12 @@ function LoadedResearchDraftEnhancerHost(props) {
     searchMemory,
     storagePrefix: 'dsh-research-kit.promptkit.',
     ...launcherProps,
-  })
+  }))
 }
 
-// 悬浮形态下的加载兜底。工件没就绪时右下角不能什么都不留，否则又回到
-// 「插件装着、入口却消失」这种无从定位的状态。它就落在工件自己会用的位置上
-// （读同一个位置键，缺省用工件默认的右下角），加载完成后由工件的悬浮钮原样接替。
+
+
+
 function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
   const failed = state === 'error'
   const label = failed
@@ -12094,22 +12442,22 @@ function ResearchDraftEnhancerFallbackFab({ state, errorText, onClick }) {
       boxShadow: '0 10px 24px rgba(15, 23, 42, 0.18)',
     },
   }))
-  // fixed 浮层必须挂到 body：0.2.2-rc.1 的 composer seat 成了 fixed 后代的 containing block。
+
   return React.createElement(React.Fragment, null, [
     React.createElement(GlobalStyle, { key: 'style' }),
     bodyPortal(fab, 'fab'),
   ])
 }
 
-// PromptKit 工件是懒加载的（见 src/promptkit-loader.js）。它加载失败时，
-// conversation.input.right 这整块入口会静默收起——除控制台外现场不留任何痕迹，
-// 于是「插件装着、四个槽里唯独少了草稿增强」无从定位。这里把最后一次失败原因
-// 写进 localStorage（成功即清除），供 Plugins 页诊断与排障读取。
+
+
+
+
 const PROMPTKIT_LOAD_ERROR_KEY = 'dsh-research-kit.promptkit.load-error.v1'
-// 成功也要留痕：否则「加载成功但槽位没挂载」与「页面还在跑旧产物」在磁盘上无法区分。
+
 const PROMPTKIT_LOADED_KEY = 'dsh-research-kit.promptkit.loaded.v1'
 
-/** 标记加载成功（error 为空）或记录失败原因（error 非空）。 */
+
 function recordPromptKitLoadError(error) {
   if (error == null) {
     try {
@@ -12124,11 +12472,11 @@ function recordPromptKitLoadError(error) {
   console.error('[dsh-research-kit] PromptKit 工件加载失败，草稿增强入口保持收起：', error)
 }
 
-// 输入框右侧的内联入口：纯图标按钮（宿主原生 IconButton，与模型选择器等图标钮同规格）。
-// 不带文字标签，说明性文字只放在 title / aria-label 里。
-// 它由插件自己渲染，不依赖懒加载的 PromptKit 工件——工件挂起或加载失败时入口仍然在，
-// 用户看到「加载中 / 失败可重试」，而不是整块槽位静默消失。外层 div 持有 ref 作为面板锚点
-// （IconButton 不转发 ref，且外层矩形即按钮矩形）。
+
+
+
+
+
 function ResearchDraftEnhancerTrigger({ open, state, errorText, onClick, anchorRef }) {
   const active = Boolean(open)
   const label = state === 'error'
@@ -12161,10 +12509,10 @@ function ResearchDraftEnhancerHost(props) {
   const [open, setOpen] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
   const anchorRef = React.useRef(null)
-  // 入口形态：内联（默认，输入框图标钮）或悬浮（右下角可拖拽钮 + 沉淀伴生钮）。
+
   const mode = useEntryMode()
   const floating = mode === ENTRY_MODE_FLOATING
-  // 工件尚未就绪时点过按钮：加载完成后替他展开面板，避免「点了没反应」。
+
   const pendingOpen = React.useRef(false)
   React.useEffect(() => {
     if (promptKitReady()) { setState('ready'); return undefined }
@@ -12179,7 +12527,7 @@ function ResearchDraftEnhancerHost(props) {
     }).catch(error => {
       recordPromptKitLoadError(error)
       if (!active) return
-      // 失败不再静默收起：入口保留并显示可重试文案，原因同时写进 localStorage 与控制台。
+
       setErrorText(String(error?.message || error))
       setState('error')
     })
@@ -12190,19 +12538,26 @@ function ResearchDraftEnhancerHost(props) {
     pendingOpen.current = false
     setOpen(true)
   }, [state])
-  const onClick = React.useCallback(() => {
+  const organize = React.useCallback(() => {
     if (state === 'error' || state === 'idle') { pendingOpen.current = true; setState('loading'); setAttempt(value => value + 1); return }
     if (state !== 'ready') { pendingOpen.current = true; return }
-    setOpen(value => !value)
+    setOpen(true)
   }, [state])
   React.useEffect(() => {
+    const onOrganize = event => {
+      if (event.detail?.sessionId === props.sessionId) organize()
+    }
+    window.addEventListener(RESEARCH_ORGANIZE_EVENT, onOrganize)
+    return () => window.removeEventListener(RESEARCH_ORGANIZE_EVENT, onOrganize)
+  }, [organize, props.sessionId])
+  React.useEffect(() => {
     if (state === 'ready') return undefined
-    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); onClick() } }
+    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); organize() } }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [state, onClick])
+  }, [state, organize])
   if (floating) {
-    // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
+
     return React.createElement(React.Fragment, null, [
       React.createElement(ResearchDepositButton, { key: 'research-deposit-button' }),
       state === 'ready'
@@ -12210,14 +12565,14 @@ function ResearchDraftEnhancerHost(props) {
           key: 'draft-enhancer-panel', ...props, floating: true, open, onOpenChange: setOpen,
         })
         : React.createElement(ResearchDraftEnhancerFallbackFab, {
-          key: 'draft-enhancer-fallback', state, errorText, onClick,
+          key: 'draft-enhancer-fallback', state, errorText, onClick: organize,
         }),
     ])
   }
   return React.createElement(React.Fragment, null, [
-    React.createElement(ResearchDraftEnhancerTrigger, {
-      key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,
-    }),
+    state === 'error'
+      ? React.createElement(ResearchDraftEnhancerTrigger, { key: 'retry', open, state, errorText, onClick: organize, anchorRef })
+      : React.createElement('span', { key: 'anchor', ref: anchorRef, 'aria-hidden': true }),
     state === 'ready'
       ? React.createElement(LoadedResearchDraftEnhancerHost, {
         key: 'draft-enhancer-panel', ...props, anchorRef, open, onOpenChange: setOpen,
@@ -12226,8 +12581,8 @@ function ResearchDraftEnhancerHost(props) {
   ])
 }
 
-// 由 standalone-glue 统一注册为 conversation.input.right（顺序见 slot-registry.js）。
-// 优先级低于模型选择器与发送按钮；不得截获普通 Enter（QuickEnhancer 内部只拦截自身面板按键）。
+
+
 
 
 
@@ -12238,12 +12593,12 @@ const SERVICES = [
   ['llm', 'LLM'],
 ]
 
-// 宿主能力探测路由（Node half 定义于 dsh/host-capabilities.js，浏览器端只消费）。
+
 const HOST_CAPABILITIES_URL = '/dsh-research-kit/host-capabilities'
 
-// 目录规模在构建期由 scripts/build-client.mjs 烘焙成常量（349 工作流 / 109 技能 / 129 数据源）。
-// 独立模块上下文（node --test 直接 import 本文件）没有该常量，用 typeof 探测而非直接引用，
-// 否则会抛 ReferenceError。
+
+
+
 const BUILD_STATS = typeof RESEARCH_KIT_BUILD_STATS === 'undefined' ? null : RESEARCH_KIT_BUILD_STATS
 
 function isResearchBundle(subject) {
@@ -12254,7 +12609,7 @@ function directQueryCount() {
   return catalog.filter(item => item.type === 'database' && item.availability === 'available-in-plugin').length
 }
 
-// 探测只读一次事实：状态区与「复制诊断」共用同一条路径，避免两处各写一份 URL 与错误处理。
+
 function fetchHostCapabilities() {
   return fetch(HOST_CAPABILITIES_URL, { headers: { accept: 'application/json' } })
     .then(async response => {
@@ -12264,7 +12619,7 @@ function fetchHostCapabilities() {
     })
 }
 
-/** 构建期目录规模的紧凑标签；缺少烘焙数据或字段不可用时返回 null（徽章不渲染）。 */
+
 function researchKitScaleLabel(stats = BUILD_STATS) {
   if (!stats) return null
   const numbers = ['workflows', 'skills', 'resources'].map(key => stats[key])
@@ -12272,10 +12627,10 @@ function researchKitScaleLabel(stats = BUILD_STATS) {
   return `${stats.workflows} 工作流 · ${stats.skills} 技能 · ${stats.resources} 数据源`
 }
 
-/**
- * 「复制诊断」的剪贴板载荷（纯函数，单测覆盖）。只含版本、目录规模与部署事实；
- * 不含会话内容、提示词或任何凭据，且只在用户点击时写入本机剪贴板，不经网络上传。
- */
+
+
+
+
 function researchKitDiagnosticsPayload({ stats = BUILD_STATS, capabilities = null, generatedAt = new Date().toISOString(), userAgent = '' } = {}) {
   return {
     plugin: 'dsh-research-kit',
@@ -12287,7 +12642,7 @@ function researchKitDiagnosticsPayload({ stats = BUILD_STATS, capabilities = nul
   }
 }
 
-/** Plugins-page section for deployment facts; it never upgrades catalog claims. */
+
 function ResearchPluginStatusSection({ subject }) {
   const [state, setState] = React.useState({ status: 'loading', data: null, error: '' })
   const [, setCatalogVersion] = React.useState(0)
@@ -12336,16 +12691,16 @@ function ResearchPluginStatusSection({ subject }) {
   ])
 }
 
-/**
- * Plugins 页标题徽章：只陈述构建期烘焙的目录规模，不做任何运行时探测。
- * 徽章紧邻标题，异步补数会先闪一个 0 再跳成真实数字，观感与准确性都更差。
- */
+
+
+
+
 function ResearchKitBadge({ subject }) {
   if (!isResearchBundle(subject)) return null
   const label = researchKitScaleLabel()
   if (!label) return null
   return h(React.Fragment, null, [
-    // 徽章可能先于会话 UI 挂载，自带全局样式，避免 --rk-* 变量缺失时颜色失效。
+
     h(GlobalStyle, { key: 'style' }),
     h('span', {
       key: 'label',
@@ -12359,9 +12714,9 @@ function ResearchKitBadge({ subject }) {
   ])
 }
 
-/**
- * Plugins 页头部动作：按需复制诊断信息。只写入本机剪贴板，不触网。
- */
+
+
+
 function ResearchKitDiagnosticsAction({ subject }) {
   const [state, setState] = React.useState('idle')
   const timer = React.useRef(null)
@@ -12392,36 +12747,36 @@ function ResearchKitDiagnosticsAction({ subject }) {
   ])
 }
 
-/**
- * 本插件唯一对话视图的 id。必须与 dsh/slot-registry.js 的 RESEARCH_SLOTS 条目一致，
- * 否则导航请求会指向一个宿主不认识、因而不予激活的视图（单测断言两者相等）。
- */
+
+
+
+
 const RESEARCH_KIT_CONSOLE_VIEW = 'dsh-research-kit-console'
 
-/**
- * 请求宿主把主区切回当前会话（「回到会话」按钮）。
- *
- * 导航面（见 src/lib/host-navigation.js）：`uiWorkspace.openSession(当前会话)` 切回主区，再尽力
- * `uiConversation.binding(id).activate('dsh-research-kit-console')` 激活该视图的数据源。**不承诺选中
- * 视图标签**：标签是宿主会话 store 的 `s.view`，跨页没有公开的选中入口；只有该会话此前停在科研工作台
- * （宿主持久化了这个选择）时才会一并恢复。详情页与对话挂载树无关，「当前会话」由会话列表快照里的
- * `retainedBy.mainView` 解出。
- *
- * @param {unknown} open 已绑好服务的打开动作；通道缺失时为 undefined（按钮据此整块不渲染）。
- * @returns {boolean} 是否已把主区切回会话（false = 通道缺失、无会话或宿主拒绝）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
 function researchKitOpenWorkbench(open) {
   if (typeof open !== 'function') return false
   try { return open() !== false } catch { return false }
 }
 
-/**
- * 两组预设的唯一事实源：字段名必须与 dsh/config.js 的 volatile Config 字段一一对应
- * （volatile 正是宿主允许「免重挂载」就地写入的那类字段）。
- *
- * 同一组值还有第二份载体 presets/*.patch.yml（启动 overlay）。两条路径必须逐字段一致，
- * 由 test/plugin-detail-slots.test.js 直接比对，防止改了一处忘了另一处。
- */
+
+
+
+
+
+
+
 const RESEARCH_KIT_CONFIG_PRESETS = [
   {
     id: 'direct', label: '直连研究',
@@ -12435,14 +12790,14 @@ const RESEARCH_KIT_CONFIG_PRESETS = [
   },
 ]
 
-/** 预设 → 宿主的原子写入操作数组；未知 id 返回 null（不给「静默写默认值」留口子）。 */
+
 function researchKitPresetOps(presetId, presets = RESEARCH_KIT_CONFIG_PRESETS) {
   const preset = presets.find(candidate => candidate.id === presetId)
   if (!preset) return null
   return Object.entries(preset.values).map(([field, value]) => ({ op: 'set', path: [field], value }))
 }
 
-/** Plugins 配置页的 Research Kit 预设；写入走宿主的 revision-fenced ConfigForm。 */
+
 function ResearchKitPresetConfig({ view, form }) {
   const [state, setState] = React.useState('idle')
   if (view === 'summary') return '选择直连研究或 Agent 辅助配置。'
@@ -12467,12 +12822,12 @@ function ResearchKitPresetConfig({ view, form }) {
   ])
 }
 
-/**
- * Plugins 页头部动作：把主区切回当前会话。
- * 导航面由 src/lib/host-navigation.js 软探测（`uiWorkspace.openSession`；视图激活为加分项）；
- * 通道缺失时整个按钮不渲染 —— 留一个点了毫无反应的死按钮比没有更糟。
- * 宿主集成边界见 docs/PRODUCT.md 的集成边界表。
- */
+
+
+
+
+
+
 function ResearchKitOpenWorkbenchAction({ subject, open }) {
   const [denied, setDenied] = React.useState(false)
   const timer = React.useRef(null)
@@ -12496,228 +12851,6 @@ function ResearchKitOpenWorkbenchAction({ subject, open }) {
 
 
 
-
-const POLL_INTERVAL_MS = 5_000
-const AGENT_ACTIVITY_PATH = '/dsh-research-kit/agent-activity'
-
-function formatTime(iso) {
-  try {
-    const d = new Date(iso)
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
-  } catch { return '' }
-}
-
-function activityKey(call) {
-  return String(call?.id || `${call?.at || ''}:${call?.tool || ''}:${call?.result_summary || call?.error || ''}`)
-}
-
-const CallEntry = React.memo(function CallEntry({ call }) {
-  const label = toolLabel(call.tool)
-  const isError = call.ok === false
-  return h('div', {
-    key: call.id,
-    style: {
-      display: 'flex', alignItems: 'flex-start', gap: 8,
-      padding: '6px 0', borderBottom: `1px solid ${C.line}15`,
-    },
-  }, [
-    h('span', { key: 'time', style: { color: C.muted, fontSize: 11, minWidth: 56, flexShrink: 0 } }, formatTime(call.at)),
-    h('span', { key: 'tool', style: { fontSize: 12, fontWeight: 500, minWidth: 80, flexShrink: 0 } }, label),
-    h('span', {
-      key: 'detail',
-      style: { fontSize: 11, color: isError ? '#E74C3C' : C.muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-    }, isError ? call.error || '调用失败' : call.result_summary || ''),
-    call.artifact_kind ? h(Badge, { key: 'artifact', color: C.teal }, artifactKindLabel(call.artifact_kind)) : null,
-    h('span', {
-      key: 'duration',
-      style: { fontSize: 10, color: C.muted, flexShrink: 0, opacity: 0.7 },
-    }, call.duration_ms != null ? `${call.duration_ms}ms` : ''),
-  ])
-})
-
-const CheckpointBanner = React.memo(function CheckpointBanner({ cp, onApprove, busy }) {
-  const pendingStages = Object.entries(cp.checkpoints || {}).filter(([, v]) => !v.approved)
-  if (!pendingStages.length) return null
-  return h('div', {
-    key: `cp-${cp.run_id}`,
-    style: {
-      padding: '8px 12px', margin: '6px 0',
-      border: `1px solid ${C.amberLine}`,
-      borderRadius: 8,
-      background: C.amberTint,
-    },
-  }, [
-    h('div', { key: 'header', style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 } }, [
-      h('span', { key: 'icon', style: { fontSize: 14 } }, '⏸'),
-      h('span', { key: 'label', style: { fontSize: 12, fontWeight: 600 } }, `Checkpoint: ${cp.run_id}`),
-    ]),
-    ...pendingStages.map(([stage, info]) =>
-      h('div', { key: stage, style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 } }, [
-        h('span', { key: 'stage', style: { fontSize: 12, color: C.muted } }, stage),
-          h(Button, {
-          key: 'btn', variant: 'solid', size: 'sm', disabled: busy,
-          onClick: () => onApprove(cp.run_id, stage),
-          style: { fontSize: 11, padding: '3px 10px' },
-        }, '继续'),
-      ])
-    ),
-  ])
-})
-
-function AgentActivityPanel({ sessionId, runId = '', onRunDetected }) {
-  const [expanded, setExpanded] = React.useState(false)
-  const [calls, setCalls] = React.useState([])
-  const [checkpoints, setCheckpoints] = React.useState([])
-  const [artifacts, setArtifacts] = React.useState([])
-  const [runOverview, setRunOverview] = React.useState(null)
-  const [artifactFilter, setArtifactFilter] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const [error, setError] = React.useState(null)
-  const latestAt = React.useRef(null)
-
-  const fetchActivity = React.useCallback(async () => {
-    try {
-      const params = new URLSearchParams({ limit: '50' })
-      if (latestAt.current) params.set('since', latestAt.current)
-      if (runId) params.set('run_id', runId)
-      const res = await fetch(`${AGENT_ACTIVITY_PATH}?${params}`)
-      if (!res.ok) { setError(`HTTP ${res.status}`); return }
-      const data = await res.json()
-      if (data.ok) {
-        setError(null)
-        if (data.calls.length) {
-          latestAt.current = data.calls[0].at
-          setCalls(prev => {
-            const seen = new Set()
-            return [...data.calls, ...prev].filter(call => {
-              const key = activityKey(call)
-              if (seen.has(key)) return false
-              seen.add(key)
-              return true
-            }).slice(0, 100)
-          })
-
-          // 方案 A：runId 为空时，从 MCP 调用日志自动捕获最近的 research_run_start 的 run_id
-          if (!runId && onRunDetected) {
-            const startCall = data.calls.find(call => call.tool === 'research_run_start' && call.ok !== false)
-            if (startCall) {
-              const match = (startCall.result_summary || '').match(/passport:([A-Za-z0-9._-]+)/)
-              const detectedRunId = match?.[1] || startCall.run_id || ''
-              if (detectedRunId) onRunDetected(detectedRunId, startCall)
-            }
-          }
-        }
-        setCheckpoints(data.checkpoints || [])
-        setArtifacts(data.artifacts || [])
-        setRunOverview(data.run_overview || null)
-      }
-    } catch (error) { setError(`读取失败，保留上次数据：${error.message}`) }
-  }, [runId])
-
-  React.useEffect(() => {
-    latestAt.current = null
-    setCalls([])
-    setCheckpoints([])
-    setArtifacts([])
-    setRunOverview(null)
-    setArtifactFilter('')
-  }, [runId])
-
-  React.useEffect(() => {
-    if (!expanded || typeof document === 'undefined' || document.visibilityState === 'hidden') return undefined
-    fetchActivity()
-    const timer = setInterval(() => {
-      if (typeof document === 'undefined' || document.visibilityState !== 'hidden') fetchActivity()
-    }, POLL_INTERVAL_MS)
-    return () => clearInterval(timer)
-  }, [expanded, fetchActivity])
-
-  const approve = React.useCallback(async (runId, stage) => {
-    setBusy(true)
-    try {
-      const res = await fetch(AGENT_ACTIVITY_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'research_run_checkpoint_approve', run_id: runId, stage }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      await fetchActivity()
-    } catch (error) { setError(`审批未成功：${error.message}；请重新点击确认。`) }
-    setBusy(false)
-  }, [fetchActivity])
-
-  const pendingCheckpoints = checkpoints.filter(cp =>
-    Object.values(cp.checkpoints || {}).some(v => !v.approved)
-  )
-
-  // 产物按 kind 筛选（ROADMAP P1-3）：kinds 来自实际产物投影，全部有效时显示「全部」。
-  const artifactKinds = [...new Set(artifacts.map(item => item.kind))]
-  const visibleArtifacts = artifactFilter ? artifacts.filter(item => item.kind === artifactFilter) : artifacts
-  // 下一步建议直接来自 run_overview 聚合层推导，UI 不复刻业务规则。
-  const stageProgress = runOverview?.stage_progress
-  const overviewLine = runOverview
-    ? `阶段 ${runOverview.current_stage} · ${runOverview.status === 'waiting_review' ? '待人工审批' : '进行中'}`
-    : ''
-
-  return h('div', {
-    style: {
-      margin: '0 var(--rk-gutter) 8px',
-      border: `1px solid ${C.line}`,
-      borderRadius: 10,
-      background: C.surface,
-      overflow: 'hidden',
-    },
-  }, [
-    h('button', {
-      key: 'header', type: 'button', 'aria-expanded': expanded, 'aria-label': '展开或收起 Agent 活动',
-      onClick: () => setExpanded(e => !e),
-      style: {
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 14px', cursor: 'pointer', userSelect: 'none', width: '100%', background: 'transparent', border: 0, textAlign: 'left', color: C.ink, fontFamily: C.font,
-      },
-    }, [
-      h('span', { key: 'chevron', style: { fontSize: 11, color: C.muted, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' } }, '▸'),
-      h('span', { key: 'title', style: { fontSize: 13, fontWeight: 600 } }, runId ? '当前研究运行活动' : 'Agent 活动'),
-      pendingCheckpoints.length > 0 && h(Badge, { key: 'cp-badge', color: '#F39C12' }, `${pendingCheckpoints.length} 待确认`),
-      calls.length > 0 && h('span', { key: 'count', style: { marginLeft: 'auto', fontSize: 11, color: C.muted } }, `${calls.length} 条记录`),
-    ]),
-    expanded && h('div', { key: 'body', style: { padding: '0 14px 10px' } }, [
-      error && h(Notice, { key: 'err', tone: 'warn', icon: 'shield' }, `无法获取 Agent 活动数据：${error}`),
-      runOverview && h('div', { key: 'overview', style: { padding: '6px 0', borderBottom: `1px solid ${C.line}15` } }, [
-        h('div', { key: 'line', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-          h('span', { key: 'stage', style: { fontSize: 12, fontWeight: 600 } }, overviewLine),
-          stageProgress?.next_stage && h('span', { key: 'next', style: { fontSize: 11, color: C.muted } }, `下一阶段：${stageProgress.next_stage}`),
-          runOverview.workflow_name && h('span', { key: 'wf', style: { fontSize: 11, color: C.muted } }, runOverview.workflow_name),
-        ]),
-        ...(stageProgress?.completed_stages?.length ? [h('div', { key: 'done', style: { fontSize: 11, color: C.muted, marginTop: 2 } }, `已放行阶段：${stageProgress.completed_stages.join('、')}`)] : []),
-      ]),
-      ...pendingCheckpoints.map(cp => h(CheckpointBanner, { key: `cp-${cp.run_id}`, cp, onApprove: approve, busy })),
-      artifacts.length ? h('div', { key: 'artifacts', style: { margin: '4px 0 8px' } }, [
-        artifactKinds.length > 1 && h('div', { key: 'filter', style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 } }, [
-          h('button', {
-            key: 'all', onClick: () => setArtifactFilter(''),
-            style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter ? 'transparent' : C.amberTint, color: C.ink },
-          }, '全部'),
-          ...artifactKinds.map(kind => h('button', {
-            key: kind, onClick: () => setArtifactFilter(kind),
-            style: { fontSize: 11, padding: '2px 8px', borderRadius: 10, border: `1px solid ${C.line}`, cursor: 'pointer', background: artifactFilter === kind ? C.amberTint : 'transparent', color: C.ink },
-          }, artifactKindLabel(kind))),
-        ]),
-        h('div', { key: 'list', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, visibleArtifacts.map(item =>
-          h(Badge, { key: item.id, color: C.teal }, `${artifactKindLabel(item.kind)} · ${item.summary || '已生成'}`)
-        )),
-      ]) : null,
-      calls.length === 0 && !error
-        ? h('p', { key: 'empty', style: { margin: '6px 0', fontSize: 12, color: C.muted } }, runId ? '当前运行暂无带 run_id 的 MCP 调用记录。' : '暂无 Agent 调用记录。Agent 通过 MCP 调用工具后，调用轨迹会显示在这里。')
-        : h('div', { key: 'calls', style: { maxHeight: 300, overflowY: 'auto' } },
-            calls.map(call => h(CallEntry, { key: call.id, call }))
-          ),
-    ]),
-  ])
-}
-
-
-
 const TRANSFER_SECTIONS = [
   ['evidence', '证据'], ['claims', '论断'], ['links', '资产关联'], ['ledger', '筛选账本'],
   ['workspaces', '课题设置'], ['knowledgeNodes', '知识节点'], ['knowledgeClaims', '知识关系'],
@@ -12725,7 +12858,7 @@ const TRANSFER_SECTIONS = [
 ]
 
 function transferDownload(text, name) {
-  // 迁移包可能很大，保留更保守的回收延时。
+
   return downloadJsonFile(text, name, { revokeDelayMs: 10_000 })
 }
 
@@ -12745,7 +12878,7 @@ async function captureResearchTransfer(assetProvider) {
   const evidenceBackup = JSON.parse(serializeEvidenceBackup({ entries, claims, links, ledger,
     workspaces: workspaces.filter(row => row.origin === 'user' || row.updatedAt > 0) }))
   const knowledgeBackup = JSON.parse(serializeKnowledgeBackup({ nodes, claims: knowledgeClaims }))
-  // 导出时间只属于外层迁移文件；基线比较必须只比较业务数据。
+
   evidenceBackup.exportedAt = 0
   knowledgeBackup.exportedAt = 0
   return {
@@ -12903,6 +13036,10 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
   const [loaded, setData] = React.useState(null)
   const [error, setError] = React.useState('')
   const [draftFeedback, setDraftFeedback] = React.useState('')
+  const [projectEditor, setProjectEditor] = React.useState(null)
+  const [externalRunId, setExternalRunId] = React.useState('')
+  const [runAction, setRunAction] = React.useState(false)
+  const [runFeedback, setRunFeedback] = React.useState('')
   const run = activeResearchRun()
   const scopedRun = run?.project === context.project ? run : null
   const activeRunId = scopedRun?.id || (run ? '' : context.activeRunId)
@@ -12948,11 +13085,56 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
   const scopedClaims = activeRunId ? (data?.claims || []).filter(claim => claim.run_id === activeRunId) : data?.claims || []
   const pending = scopedClaims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length
   const question = scopedClaims.find(claim => claim.question)?.question || data?.claims.find(claim => claim.question)?.question
-  const checkpoints = data?.activity?.checkpoints || []
-  const pendingCheckpointCount = checkpoints.reduce((count, cp) => count + Object.values(cp.checkpoints || {}).filter(value => !value.approved).length, 0)
   const overview = data?.activity?.run_overview
+  const checkpoints = data?.activity?.checkpoints || []
+  const pendingStages = overview?.passport_found && overview.project !== (context.project || 'default')
+    ? []
+    : overview?.checkpoint_state?.pending || checkpoints.filter(cp => cp.run_id === activeRunId)
+      .flatMap(cp => Object.entries(cp.checkpoints || {}).filter(([, checkpoint]) => !checkpoint.approved).map(([stage]) => stage))
   const outputs = (data?.ledger || []).filter(event => event.kind === 'artifact' && (!activeRunId || event.runId === activeRunId)).slice(0, 3)
   const activityOutputs = data?.activity?.artifacts || []
+  const openProjectEditor = () => {
+    setProjectEditor(previous => previous === null ? context.project : null)
+    setExternalRunId('')
+    setRunFeedback('')
+  }
+  const bindRun = async event => {
+    event.preventDefault()
+    const id = externalRunId.trim()
+    if (!id || runAction) return
+    setRunAction(true)
+    setRunFeedback('')
+    try {
+      const params = new URLSearchParams({ run_id: id, limit: '1' })
+      const response = await fetch(`/dsh-research-kit/agent-activity?${params}`, { signal: AbortSignal.timeout(5000) })
+      const activity = await response.json()
+      if (!response.ok || !activity.ok) throw new Error('无法读取运行，请检查运行 ID 后重试。')
+      const found = activity.run_overview
+      if (!found?.passport_found || found.run_id !== id || found.project !== (context.project || 'default')) throw new Error('当前课题中找不到该运行，请核对课题和运行 ID。')
+      if (currentResearchContext().project !== context.project) return
+      setResearchContext({ activeRunId: id })
+      setProjectEditor(null)
+      setExternalRunId('')
+    } catch (failure) { setRunFeedback(failure.message) }
+    finally { setRunAction(false) }
+  }
+  const approveStage = async stage => {
+    if (!activeRunId || runAction) return
+    setRunAction(true)
+    setRunFeedback('')
+    try {
+      const response = await fetch('/dsh-research-kit/agent-activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'research_run_checkpoint_approve', run_id: activeRunId, stage }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      if (currentResearchContext().activeRunId === activeRunId) await refresh()
+    } catch (failure) { setRunFeedback(`阶段确认失败：${failure.message}`) }
+    finally { setRunAction(false) }
+  }
   const restore = id => {
     setDraftFeedback('')
     if (!resumeResearchRun(id, context.project)) setError('研究运行已变更，请刷新项目状态。')
@@ -12971,7 +13153,29 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
     } catch (error) { setDraftFeedback(error.message) }
   }
   return h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, [
-    h(PageHead, { key: 'head', title: '项目首页', lead: `当前项目：${context.project || '未命名项目'}。从任务开始，随时查看材料、证据与待办。`, actions: [h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态')] }),
+    h(PageHead, { key: 'head', title: '本次研究', lead: '查看当前任务、近期产出和待核验项。', actions: [
+      h(Button, { key: 'project', size: 'sm', variant: 'ghost', onClick: openProjectEditor, 'aria-expanded': projectEditor !== null }, context.project ? `课题 · ${context.project}` : '研究课题'),
+      h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态'),
+    ] }),
+    projectEditor !== null ? h(Card, { key: 'project-panel', style: { display: 'grid', gap: 8, marginBottom: 12 } }, [
+      h('form', { key: 'project', className: 'rk-compose-actions', onSubmit: event => {
+        event.preventDefault()
+        setResearchProject(projectEditor)
+        setProjectEditor(null)
+      } }, [
+        h(Input, { key: 'name', value: projectEditor, onChange: setProjectEditor, ariaLabel: '研究课题名称', placeholder: '留空使用默认课题', maxLength: 100, style: { width: 'min(260px, 100%)' } }),
+        h(Button, { key: 'save', type: 'submit', size: 'sm' }, '切换课题'),
+      ]),
+      h('small', { key: 'hint', style: { color: C.muted } }, '按课题查看已保存的资料、证据与论断。'),
+      h('details', { key: 'run' }, [
+        h('summary', { key: 'label', style: { cursor: 'pointer', color: C.muted, fontSize: 12 } }, '载入已有研究运行'),
+        h('form', { key: 'form', className: 'rk-compose-actions', style: { marginTop: 8 }, onSubmit: bindRun }, [
+          h(Input, { key: 'id', value: externalRunId, onChange: setExternalRunId, ariaLabel: '研究运行 ID', placeholder: '填写运行 ID', maxLength: 120, style: { width: 'min(260px, 100%)' } }),
+          h(Button, { key: 'bind', type: 'submit', size: 'sm', disabled: runAction || !externalRunId.trim() }, '载入运行'),
+        ]),
+      ]),
+    ]) : null,
+    runFeedback ? h(Notice, { key: 'run-feedback', tone: 'warn', style: { marginBottom: 12 } }, runFeedback) : null,
     error ? h(Notice, { key: 'error', tone: 'warn' }, `${error}。可刷新重试；离线数据不代表最新审核状态。`) : null,
     h(Card, { key: 'tasks', style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 } }, [
       h(Button, { key: 'review', variant: 'primary', onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) }, '做文献综述'),
@@ -12990,18 +13194,18 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
           `${item.workflowName || item.workflowId || '研究运行'} · ${new Date(item.createdAt || 0).toLocaleString()} · ${item.id}`)),
       ]),
     ]) : null,
-    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', style: { display: 'grid', gap: 12 } }, [
+    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', className: 'rk-research-home-grid' }, [
       h(Card, { key: 'progress', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究问题尚未登记'),
         h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : activeRunId ? `当前运行：${activeRunId}` : '还没有启动研究工作流'),
         overview?.current_stage && overview.current_stage !== 'unknown'
           ? h('span', { key: 'stage' }, `当前阶段：${overview.current_stage}`) : null,
         scopedRun && itemById(scopedRun.workflowId)?.requiresFiles ? h(Notice, { key: 'materials', tone: 'warn' }, '此工作流需要材料：请核对当前会话的 @文件 引用。') : null,
-        h('small', { key: 'boundary', style: { color: C.muted } }, '写入或发送提示词仅记录操作事实；实际执行与完成状态以运行记录和人工审批为准。'),
+        scopedRun ? h('small', { key: 'boundary', style: { color: C.muted } }, '执行情况见运行记录和人工审批。') : null,
       ]),
       h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, '待办收件箱'),
-        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0} · 待确认阶段 ${pendingCheckpointCount}`),
+        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0}`),
         h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
           h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '处理 Claim'),
           h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
@@ -13009,7 +13213,10 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
         data.missing.size ? h(Notice, { key: 'missing', tone: 'warn' }, `${data.missing.size} 条已关联证据在当前项目中缺失。`) : null,
         scopedClaims.some(claim => !claim.links?.length) ? h('span', { key: 'unlinked' },
           `${scopedClaims.filter(claim => !claim.links?.length).length} 条论断尚未关联证据`) : null,
-        pendingCheckpointCount ? h('small', { key: 'checkpoints' }, '展开页面底部的运行活动，逐阶段检查并确认。') : null,
+        ...pendingStages.map(stage => h('div', { key: stage, className: 'rk-compose-actions' }, [
+          h('span', { key: 'label' }, `待确认阶段 · ${stage}`),
+          h(Button, { key: 'approve', size: 'sm', disabled: runAction, onClick: () => approveStage(stage), 'aria-label': `确认阶段 ${stage}` }, '确认'),
+        ])),
       ]),
       h(Card, { key: 'outputs', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, `最近产出 · 已保存证据 ${data.counts.all}`),
@@ -13020,7 +13227,7 @@ function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions
   ])
 }
 
-/** 会话面板只显示这个会话已关联的课题及待审核信息。 */
+
 function ResearchSessionOverview({ sessionId = '' }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const [summary, setSummary] = React.useState(null)
@@ -13106,14 +13313,14 @@ function buildLiteratureReviewExport({ project, entries, claims, ledger, exporte
 
 const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 
-// 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
-// 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
+
+
 const SECTION_VIEWS = {
   home: props => h(ResearchProjectHome, { onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, launchSession: props.launchSession, embedded: true }),
-  methods: props => h(ResearchPromptStudioHost, props),
-  // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
-  // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, initialType: props.catalogType, launchSession: props.launchSession, embedded: true }),
+  methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
+
+
   vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate }),
 }
@@ -13122,7 +13329,7 @@ function readStoredSection() {
   try {
     return normalizeConsoleSection(window.localStorage.getItem(SECTION_STORAGE_KEY))
   } catch {
-    // 隐私模式或宿主禁用 storage：回落默认分区，不阻断渲染。
+
     return normalizeConsoleSection(null)
   }
 }
@@ -13131,7 +13338,149 @@ function persistSection(id) {
   try { window.localStorage.setItem(SECTION_STORAGE_KEY, id) } catch { /* 忽略：持久化失败不影响导航 */ }
 }
 
-const META_LINE = { margin: 0, fontSize: 12, lineHeight: 1.55 }
+const RESEARCH_HOME_TABS = [{ value: 'home', label: '本次研究' }, { value: 'catalog', label: '科研工具' }]
+const RESEARCH_TOOL_TABS = [
+  { value: 'workflow', label: '选流程' }, { value: 'methods', label: '用方法' },
+  { value: 'database', label: '查来源' }, { value: 'mine', label: '我的' },
+]
+
+const RESEARCH_TEMPLATE_HISTORY_KEY = 'dsh-research-kit.template-history.v1'
+
+function readResearchTemplateHistory(id) {
+  try {
+    const history = JSON.parse(window.localStorage.getItem(`${RESEARCH_TEMPLATE_HISTORY_KEY}.${id}`) || '[]')
+    return Array.isArray(history) ? history : []
+  } catch { return [] }
+}
+
+function ResearchPersonalTemplates({ inputActions }) {
+  const provider = researchMethodProvider
+  const [items, setItems] = React.useState([])
+  const [draft, setDraft] = React.useState(null)
+  const [busy, setBusy] = React.useState(false)
+  const [selectedHistory, setSelectedHistory] = React.useState('')
+  const [copyOpen, setCopyOpen] = React.useState(false)
+  const [sourceQuery, setSourceQuery] = React.useState('')
+  const [builtinMethods, setBuiltinMethods] = React.useState([])
+  const [notice, setNotice] = React.useState('')
+  const reload = async () => {
+    const backup = JSON.parse(await provider.exportPrivateMethods())
+    setItems(backup.methods)
+  }
+  React.useEffect(() => { reload().catch(error => setNotice(error.message)) }, [provider])
+  const save = async event => {
+    event.preventDefault()
+    if (!draft?.title.trim() || !draft.prompt.trim() || busy) return
+    setBusy(true)
+    const fields = {
+      title: draft.title, category: draft.category, purpose: draft.purpose, outcome: draft.outcome,
+      tags: draft.tags?.join(', '), keywords: draft.triggerKeywords?.join(', '),
+    }
+    const metadata = Object.entries(fields).filter(([, value]) => value).map(([key, value]) => `${key}: ${String(value).replace(/[\r\n]+/g, ' ').trim()}`)
+    const markdown = ['---', ...metadata, '---', '', draft.prompt].join('\n')
+    try {
+      const previous = items.find(item => item.id === draft.id)
+      let savedHistory = true
+      if (draft.id) await provider.updatePrivateMarkdown(draft.id, markdown)
+      else await provider.importPrivateMarkdown(markdown)
+      if (previous && (previous.title !== draft.title.trim() || previous.prompt !== draft.prompt.trim())) {
+        const history = readResearchTemplateHistory(draft.id)
+        try {
+          window.localStorage.setItem(`${RESEARCH_TEMPLATE_HISTORY_KEY}.${draft.id}`, JSON.stringify(
+            [{ at: Date.now(), title: previous.title, prompt: previous.prompt }, ...history].slice(0, 10),
+          ))
+        } catch { savedHistory = false }
+      }
+      setDraft(null)
+      await reload()
+      setNotice(savedHistory ? '已保存到我的模板。' : '模板已保存，客户端未能保留上一版本。')
+    } catch (error) { setNotice(error.message) }
+    finally { setBusy(false) }
+  }
+  const use = item => {
+    if (!supportsSafeInsert(inputActions)) return setNotice('当前客户端无法安全插入，请从编辑框复制。')
+    const span = inputActions.captureInsertion()
+    const ok = inputActions.insertText(`\n\n${item.prompt}\n\n`, { ...span, start: span.end })
+    setNotice(ok ? '已插入当前会话草稿。' : '草稿已变化，请重新尝试。')
+  }
+  const openCopy = () => {
+    setCopyOpen(value => !value)
+    if (!copyOpen) provider.list().then(methods => setBuiltinMethods(methods.filter(item => item.source !== 'private')))
+      .catch(error => setNotice(error.message))
+  }
+  const query = sourceQuery.trim().toLowerCase()
+  const sourceMethods = query ? builtinMethods.filter(item => `${item.title} ${item.purpose}`.toLowerCase().includes(query)).slice(0, 4) : []
+  const sourceWorkflows = query ? searchCatalog({ type: 'workflow', query }).slice(0, 4) : []
+  const newDraft = (category, item) => {
+    setNotice('')
+    setCopyOpen(false)
+    setDraft({
+      ...item, id: undefined, category,
+      title: item ? `${item.title}（副本）` : '',
+      prompt: item?.prompt || '',
+    })
+  }
+  return h('section', { className: 'rk-personal-templates' }, [
+    h('div', { key: 'head', className: 'rk-personal-head' }, [
+      h('div', { key: 'titles' }, [
+        h('h2', { key: 'title' }, '我的方法与流程'),
+        h('p', { key: 'help' }, '保存常用提示词与研究步骤，在本客户端重复使用。'),
+      ]),
+      h('div', { key: 'actions', className: 'rk-compose-actions' }, [
+        h(Button, { key: 'method', variant: 'primary', onClick: () => newDraft('我的方法') }, '新建方法'),
+        h(Button, { key: 'workflow', variant: 'ghost', onClick: () => newDraft('我的工作流') }, '新建流程'),
+        h(Button, { key: 'from', variant: 'ghost', 'aria-expanded': copyOpen, onClick: openCopy }, '从目录复制'),
+      ]),
+    ]),
+    copyOpen ? h(Card, { key: 'catalog-copy' }, h('div', { className: 'rk-template-form' }, [
+      h(Input, { key: 'q', value: sourceQuery, onChange: setSourceQuery, ariaLabel: '搜索可复制的模板', placeholder: '搜索内置流程或方法' }),
+      ...sourceWorkflows.map(item => h(Button, {
+        key: `workflow-${item.id}`, size: 'sm', variant: 'ghost',
+        onClick: () => newDraft('我的工作流', {
+          title: item.name, purpose: `复制自目录流程 · ${item.name}`,
+          prompt: composeWorkflow(item, {}, { enforceRequired: false, extraSkillIds: item.suggestedSkillIds, extraDatabaseIds: item.suggestedDatabaseIds }).prompt,
+        }),
+      }, `复制流程 · ${item.name}`)),
+      ...sourceMethods.map(item => h(Button, {
+        key: `method-${item.id}`, size: 'sm', variant: 'ghost',
+        onClick: () => newDraft('我的方法', { ...item, purpose: `复制自目录方法 · ${item.title}` }),
+      }, `复制方法 · ${item.title}`)),
+      query && !sourceWorkflows.length && !sourceMethods.length ? h('small', { key: 'empty', style: { color: C.muted } }, '未找到匹配的流程或方法。') : null,
+    ])) : null,
+    draft ? h(Card, { key: 'form' }, h('form', { onSubmit: save, className: 'rk-template-form' }, [
+      h(Input, { key: 'title', value: draft.title, ariaLabel: '模板名称', placeholder: '模板名称', required: true, onChange: title => setDraft({ ...draft, title }) }),
+      h(Textarea, { key: 'body', value: draft.prompt, ariaLabel: '模板内容', placeholder: '填写要交给 Agent 的提示词或研究步骤', rows: 8, required: true, onChange: prompt => setDraft({ ...draft, prompt }) }),
+      h('div', { key: 'actions', className: 'rk-compose-actions' }, [
+        h(Button, { key: 'save', type: 'submit', variant: 'primary', disabled: busy || !draft.title.trim() || !draft.prompt.trim() }, '保存模板'),
+        h(Button, { key: 'cancel', variant: 'ghost', onClick: () => setDraft(null) }, '取消'),
+      ]),
+    ])) : null,
+    notice ? h(Notice, { key: 'notice' }, notice) : null,
+    ...items.map(item => h(Card, { key: item.id }, [
+      h('div', { key: 'head', className: 'rk-personal-head' }, [
+        h('div', { key: 'label' }, [
+          h('strong', { key: 'title' }, item.title),
+          h('div', { key: 'category', className: 'rk-compose-reason' }, item.category === '我的工作流' ? '流程' : '方法'),
+          item.purpose?.startsWith('复制自目录') ? h('div', { key: 'source', className: 'rk-compose-reason' }, item.purpose) : null,
+        ]),
+        h('div', { key: 'actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'edit', size: 'sm', onClick: () => { setNotice(''); setDraft({ ...item }) } }, '查看或编辑'),
+          h(Button, { key: 'copy', size: 'sm', variant: 'ghost', onClick: () => newDraft(item.category, item) }, '复制为新模板'),
+          h(Button, { key: 'history', size: 'sm', variant: 'ghost', 'aria-expanded': selectedHistory === item.id, onClick: () => setSelectedHistory(current => current === item.id ? '' : item.id) }, '版本记录'),
+          h(Button, { key: 'use', size: 'sm', variant: 'primary', onClick: () => use(item) }, '插入草稿'),
+        ]),
+      ]),
+      selectedHistory === item.id ? h('div', { key: 'versions', className: 'rk-template-form' }, [
+        h('small', { key: 'note', style: { color: C.muted } }, '最多保留 10 条本地历史。载入后可在编辑区查看，保存后成为新版本。'),
+        ...readResearchTemplateHistory(item.id).map((version, index) => h(Button, {
+          key: `${version.at}-${index}`, variant: 'ghost', size: 'sm',
+          onClick: () => { setNotice('已载入历史版本，可在编辑区查看。'); setDraft({ ...item, title: version.title, prompt: version.prompt }) },
+        }, `查看 ${new Date(version.at).toLocaleString()} · ${version.title}`)),
+      ]) : null,
+    ])),
+    !items.length && !draft ? h('p', { key: 'empty', className: 'rk-compose-reason' }, '还没有个人模板。可以从一段常用提示词或可复用的研究步骤开始。') : null,
+  ])
+}
 
 class ResearchSectionBoundary extends React.Component {
   state = { error: '' }
@@ -13148,24 +13497,23 @@ class ResearchSectionBoundary extends React.Component {
 }
 
 function ResearchConsole(props) {
-  const { sessionId, inputActions } = props
   const [section, setSection] = React.useState(readStoredSection)
-  const [researchContext, setResearchContext] = React.useState(currentResearchContext)
-  const [projectDraft, setProjectDraft] = React.useState(() => currentResearchContext().project)
   const [catalogLoaded, setCatalogLoaded] = React.useState(catalogReady)
   const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
   const [catalogError, setCatalogError] = React.useState('')
   const [promptKitError, setPromptKitError] = React.useState('')
   const [vaultTab, setVaultTab] = React.useState('assets')
   const [initialWorkflowId, setInitialWorkflowId] = React.useState('')
+  const [catalogType, setCatalogType] = React.useState('workflow')
+  const [mine, setMine] = React.useState(false)
   const [transferOpen, setTransferOpen] = React.useState(false)
-  const current = findConsoleSection(section)
+  const current = findConsoleSection(section, RESEARCH_CONSOLE_SECTIONS)
   const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
   const navRef = React.useRef(null)
   React.useLayoutEffect(() => {
     navRef.current?.parentElement?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
   }, [current.id, vaultTab])
-  // 折行会改变导航高度，按实际 border-box 更新子分区的吸顶位置。
+
   React.useEffect(() => {
     const nav = navRef.current
     const host = nav?.parentElement
@@ -13181,7 +13529,6 @@ function ResearchConsole(props) {
       host.style.removeProperty('--rk-console-nav-h')
     }
   }, [])
-  React.useEffect(() => subscribeResearchContext(setResearchContext), [])
   React.useEffect(() => {
     let active = true
     const markReady = () => {
@@ -13201,20 +13548,21 @@ function ResearchConsole(props) {
     }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
     return () => { active = false }
   }, [needsPromptKit, promptKitLoaded])
-  React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
-  const run = activeResearchRun()
-  const activeRun = run?.project === researchContext.project ? run : null
-  const commitProject = () => {
-    const normalized = String(projectDraft || '').trim().slice(0, 100)
-    if (normalized !== researchContext.project) setResearchProject(normalized)
-  }
   const select = (id, options = {}) => {
-    if (options.workflowId) setInitialWorkflowId(options.workflowId)
+    if (id === 'catalog') {
+      setCatalogType(options.type || 'workflow')
+      if (options.workflowId) setInitialWorkflowId(options.workflowId)
+    }
+    if (id === 'methods') setMine(Boolean(options.mine))
     if (options.tab) setVaultTab(options.tab)
     setSection(normalizeConsoleSection(id))
     persistSection(id)
   }
-  const navOptions = RESEARCH_CONSOLE_SECTIONS.map(item => ({ value: item.id, label: item.label }))
+  const inTools = current.id === 'catalog' || current.id === 'methods'
+  const goTool = value => {
+    if (value === 'mine' || value === 'methods') select('methods', { mine: value === 'mine' })
+    else select('catalog', { type: value })
+  }
   const view = SECTION_VIEWS[current.id]
   const resourceError = catalogError || (needsPromptKit ? promptKitError : '')
   return h(Page, { style: { padding: 0 } }, [
@@ -13229,45 +13577,22 @@ function ResearchConsole(props) {
         borderBottom: `1px solid ${C.line}`,
       },
     }, [
-      h(Segmented, { key: 'tabs', value: current.id, options: navOptions, onChange: select, ariaLabel: '科研工作台分区' }),
-      h('div', { key: 'meta', style: { display: 'grid', gap: 2, marginTop: 10 } }, [
-        h('details', { key: 'description', style: { fontSize: 12, color: C.muted } }, [
-          h('summary', { key: 'summary', style: { cursor: 'pointer' } }, current.position),
-          h('p', { key: 'purpose', style: META_LINE }, current.purpose),
-          h('p', { key: 'boundary', style: META_LINE }, current.boundary),
-        ]),
-        h('div', { key: 'context', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' } }, [
-          h('label', { key: 'label', style: { fontSize: 12, color: C.muted } }, '当前项目'),
-          h('input', {
-            key: 'project', value: projectDraft,
-            onChange: event => setProjectDraft(event?.target?.value || ''),
-            onBlur: commitProject,
-            onKeyDown: event => { if (event.key === 'Enter') event.currentTarget.blur() },
-            placeholder: '未命名项目', 'aria-label': '当前研究项目',
-            style: { width: 190, maxWidth: '100%', border: `1px solid ${C.line}`, borderRadius: 7, padding: '5px 8px', color: C.ink, background: C.surface },
-          }),
-          activeRun ? h('span', { key: 'run', style: { fontSize: 12, color: C.teal } }, `运行中：${activeRun.workflowName || '未命名工作流'} · ${activeRun.status}`) : null,
-          h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '迁移到 App'),
+      h('div', { key: 'main', className: 'rk-console-main' }, [
+        h(Segmented, { key: 'tabs', value: inTools ? 'catalog' : 'home', options: RESEARCH_HOME_TABS, onChange: id => select(id), ariaLabel: '科研工作台分区' }),
+        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'materials', size: 'sm', variant: 'ghost', onClick: () => select('vault', { tab: 'assets' }) }, '研究资料'),
+          h(Button, { key: 'evidence', size: 'sm', variant: 'ghost', onClick: () => select('evidence') }, '证据关系'),
+          current.id === 'vault' ? h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '迁移到 App') : null,
         ]),
       ]),
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
-        view?.({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }))
+        view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),
-    h(AgentActivityPanel, {
-      key: 'agent-activity',
-      sessionId,
-      runId: activeRun?.id || (run ? '' : researchContext.activeRunId),
-      onRunDetected: mcpRunId => {
-        if (!run && mcpRunId && mcpRunId !== researchContext.activeRunId) {
-          updateResearchContext({ activeRunId: mcpRunId })
-        }
-      },
-    }),
   ])
 }
 
@@ -13291,10 +13616,13 @@ function researchKitApply(ctx) {
       ? path => insertResearchMaterial(hostNavigation, props.sessionId, path) : null
     return React.createElement(ResearchConsole, { ...props, launchSession, insertMaterialReference })
   }
+  function ResearchComposerOverlayHost(props) {
+    return React.createElement(ResearchComposerOverlay, { ...props, sessions: ctx.sessions })
+  }
   const components = [
     ResearchConsoleHost,        // dsh-research-kit-console
     ResearchComposerLauncher,   // dsh-research-kit-launcher
-    ResearchComposerOverlay,    // dsh-research-kit-overlay
+    ResearchComposerOverlayHost, // dsh-research-kit-overlay
     ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
   ]
   const disposers = [registerResearchSlots(ctx, components)]

@@ -116,9 +116,17 @@ test('迁移同步只计数文件侧已有同源，日常严格同步仍报告�
   const originalFetch = globalThis.fetch
   const project = `transfer-existing-${Date.now()}`
   globalThis.window = {}
-  globalThis.fetch = async (_url, options = {}) => options.method === 'POST'
-    ? { ok: true, json: async () => ({ ok: true, added: 0, skipped: 1 }) }
-    : { ok: true, json: async () => ({ ok: true, entries: [] }) }
+  let remote = []
+  let postCount = 0
+  let race = false
+  globalThis.fetch = async (_url, options = {}) => {
+    if (options.method === 'POST') {
+      postCount++
+      if (race) remote = JSON.parse(options.body).entries.map(row => ({ ...row, id: `${row.id}-remote` }))
+      return { ok: true, json: async () => ({ ok: true, added: 0, skipped: 1 }) }
+    }
+    return { ok: true, json: async () => ({ ok: true, entries: remote }) }
+  }
   try {
     await evidenceVaultStore().save({ id: `${project}-local`, title: '待同步来源',
       identifierKind: 'doi', identifier: '10.1234/already-file-side', project })
@@ -126,6 +134,20 @@ test('迁移同步只计数文件侧已有同源，日常严格同步仍报告�
     const result = await syncEvidenceVaultWithFiles(project, { force: true, allowExistingSources: true })
     assert.equal(result.exported, 0)
     assert.equal(result.existingSources, 1)
+    race = true
+    const reconciled = await syncEvidenceVaultWithFiles(project, { force: true })
+    assert.equal(reconciled.existingSources, 1, '并发写入后可确认同源记录，无需用户重试')
+    assert.equal(reconciled.exported, 0)
+    const countAfterRace = postCount
+    await syncEvidenceVaultWithFiles(project, { force: true })
+    assert.equal(postCount, countAfterRace)
+    const other = { id: `${project}-different-key`, title: '相同文件网址', identifierKind: 'accession', identifier: 'GSE12345', project,
+      url: 'https://example.org/same-source' }
+    await evidenceVaultStore().save(other)
+    remote.push({ id: `${project}-file-url`, title: other.title, identifier_type: 'accession', identifier: 'GSE67890', project, url: other.url })
+    await syncEvidenceVaultWithFiles(project, { force: true })
+    assert.equal(postCount, countAfterRace, '使用文件端规则，已存在的 URL 不应重复提交')
+    assert.ok((await evidenceVaultStore().list({project})).some(row => row.id === other.id), '保留已存在的本地记录')
   } finally {
     invalidateEvidenceSync(project)
     if (originalWindow === undefined) delete globalThis.window
@@ -143,7 +165,6 @@ test('大图与长列表性能守卫已接线', () => {
   const consoleView = readFileSync(new URL('../src/research-console.js', import.meta.url), 'utf8')
   const replay = readFileSync(new URL('../src/route-replay.js', import.meta.url), 'utf8')
   const activityRoute = readFileSync(new URL('../dsh/agent-activity.js', import.meta.url), 'utf8')
-  const activityView = readFileSync(new URL('../src/agent-activity.js', import.meta.url), 'utf8')
   assert.match(graph, /GRAPH_RENDER_NODE_LIMIT = 300/)
   assert.match(graph, /layoutEvidenceGraph\(interactiveGraph\)/)
   assert.match(graph, /const exportSource = renderLimitedCount \? displayGraph : interactiveGraph/)
@@ -165,23 +186,13 @@ test('大图与长列表性能守卫已接线', () => {
   assert.match(replay, /if \(popup\.closed\) return null/g)
   assert.match(activityRoute, /record\.at >= since/)
   assert.match(activityRoute, /checkpointSnapshots/)
-  assert.match(activityView, /activityKey\(call\)/)
 })
 
-test('轮询策略：唯一的定时轮询在 Agent 活动面板，且受「展开 + 页面可见」双闸门约束', () => {
-  // 决策与理由见 docs-internal/projection-vs-polling.md：本仓库不做全局投影层，
-  // 允许的唯一轮询必须能被用户「收起面板 / 切走标签页」立即停掉。
-  // 常驻 setInterval 是最容易悄悄加进来、又最难在评审里发现的一类回归，故用一条断言钉住。
+test('客户端活动由宿主展示，工作台无需定时轮询', () => {
   const srcDir = new URL('../src/', import.meta.url)
   const sources = readdirSync(srcDir, { recursive: true }).filter(name => String(name).endsWith('.js'))
   const polling = sources.filter(name => readFileSync(new URL(String(name), srcDir), 'utf8').includes('setInterval'))
-  assert.deepEqual(polling.map(name => String(name).split('/').pop()), ['agent-activity.js'],
-    '新增定时轮询前先读 docs-internal/projection-vs-polling.md：需要持续更新时优先用宿主事件或显式刷新')
-  const activityView = readFileSync(new URL('../src/agent-activity.js', import.meta.url), 'utf8')
-  assert.match(activityView, /if \(!expanded \|\| typeof document === 'undefined' \|\| document\.visibilityState === 'hidden'\) return undefined/,
-    '面板收起或页面隐藏时必须根本不启动轮询')
-  assert.match(activityView, /document\.visibilityState !== 'hidden'/, '每个 tick 也要复查可见性（切走标签页应立即停）')
-  assert.match(activityView, /return \(\) => clearInterval\(timer\)/, '卸载必须清掉定时器')
+  assert.deepEqual(polling, [])
 })
 
 test('文件同步重试会更新已存在的旧记录，并保留引用元数据', async () => {

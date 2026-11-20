@@ -26,9 +26,23 @@ const conversation = {input:{for(){return {
 const uiWorkspace = {startSession(_workspace,payload){window.launchDraft=payload}};
 plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
-ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions}),React.createElement(registered['dsh-research-kit-draft-enhancer'],{sessionId:'qa',inputActions:actions})));
+function ComposerHarness(){
+ const [input,setInput]=React.useState(()=>({draft:'',draftRev:0,attachmentIds:[],occurrences:[],phase:'plain'}));
+ window.setComposerDraft=(draft,attachmentIds=[])=>setInput(current=>({...current,draft,attachmentIds,draftRev:current.draftRev+1}));
+ window.composerInput=input;
+ const props={sessionId:'qa',input,inputActions:{...actions,
+   captureInsertion:()=>({start:input.draft.length,end:input.draft.length,draftRev:window.staleInsertion ? -1 : input.draftRev}),
+   insertText(text,span){
+     if(span.draftRev!==input.draftRev)return false;
+     window.setComposerDraft(input.draft.slice(0,span.start)+text+input.draft.slice(span.end),input.attachmentIds);
+     return true;
+   }
+ }};
+ return React.createElement(React.Fragment,null,...['launcher','overlay','draft-enhancer'].map(id=>React.createElement(registered['dsh-research-kit-'+id],{key:id,...props})));
+}
+ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(ComposerHarness));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
-const consoleActions = native ? {...actions,captureInsertion:()=>({}),insertText(text){window.draft+=text;return true}} : actions;
+const consoleActions = {...actions,captureInsertion:()=>({start:0,end:0,draftRev:0}),insertText(text){window.draft=text;return true}};
 root.render(React.createElement(registered['dsh-research-kit-console'],{sessionId:'qa',inputActions:consoleActions}));
 if (native) ReactDOM.createRoot(document.getElementById('plugin-status')).render(React.createElement(registered['dsh-research-kit-project'],{sessionId:'qa'}));
 </script>`;
@@ -112,20 +126,22 @@ const server = http.createServer((req,res)=>{
   page.setDefaultTimeout(10000);
   await page.goto('http://127.0.0.1:'+server.address().port);
   assert.equal(await page.title(),'科研工作台回归验证');
-  await page.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
+  assert.equal(await page.getByLabel('研究课题名称').count(),0);
+  assert.equal(await page.getByRole('button',{name:/Agent 活动/}).count(),0);
+  await page.screenshot({path:path.join(artifacts,'conversation-research-home.png')});
   assert.equal(promptKitRequests,0,'首页不得提前加载 PromptKit');
-  await page.getByRole('tab',{name:'研究证据图谱',exact:true}).click();
+  await page.getByRole('button',{name:'证据关系',exact:true}).click();
   await page.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
   assert.equal(promptKitRequests,0,'独立图谱不得等待 PromptKit');
-  await page.getByRole('tab',{name:'项目首页',exact:true}).click();
+  await page.getByRole('tab',{name:'本次研究',exact:true}).click();
   await page.getByRole('button',{name:'验证研究结论',exact:true}).click();
   await page.getByLabel('新建 Claim 内容').waitFor();
   await page.getByRole('button',{name:'从最近回答开始',exact:true}).click();
   assert.ok((await page.getByLabel('待提取的研究段落').inputValue()).includes('Ghd7'));
   await page.screenshot({path:path.join(artifacts,'claim-onboarding.png'),fullPage:false});
   assert.equal(promptKitRequests,0,'独立 Claim 入口不得等待 PromptKit');
-  await page.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
-  await page.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await page.getByRole('button',{name:'研究资料',exact:true}).click();
   await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
   await page.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
   await page.getByLabel('新建 Claim 内容').fill('干预 A 改善结局 B');
@@ -170,7 +186,7 @@ const server = http.createServer((req,res)=>{
   if(process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT});
   await page.setViewportSize({width:1280,height:900});
   console.log('Claim 审阅：草稿登记、确认门禁、证据关联及窄屏布局通过');
-  await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();
+  await page.getByRole('tab',{name:'科研工具',exact:true}).click();
   await page.evaluate(()=>{
     const target=document.createElement('div'); target.id='tool-card-smoke'; document.body.append(target);
     const result={data:{entries:[{title:'证据样本',identifier:'10.1000/example',source_id:'crossref',stored_grade:'ungraded',suggested_grade:'empirical'}]}};
@@ -195,13 +211,30 @@ const server = http.createServer((req,res)=>{
     const nodes={values:()=>[{kind:'turn-tail',data:{closing:{turn:2,status:'settled',finalNode:{messageId:'review-one',seq:14,time:123},blocks:[{kind:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}]};
     window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'review-one',sessionId:'qa',useChat:select=>select({nodes})}));
   });
+  const answerClaimRoute='**/dsh-research-kit/claim-review?project=default&offset=0';
+  await page.route(answerClaimRoute, route=>route.fulfill({json:{ok:true,claims:[
+    {id:'answer-claim',project:'default',statement:'Ghd7 促进水稻耐盐性',state:'verified',source_ref:{citation:'10.1038/review'},
+      evidence_ids:['answer-evidence'],links:[{evidenceId:'answer-evidence',stance:'supports',locator:'结果段',assessedBy:'样板用户'}]},
+    {id:'wrong-project',project:'另一课题',statement:'Ghd7 促进水稻耐盐性',state:'verified'},
+  ],evidence:[{id:'answer-evidence',title:'已关联的测试来源',identifier_type:'doi',identifier:'10.1038/review'}]}}));
   await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
-  await page.getByRole('group',{name:'研究回答沉淀预览'}).getByText(/10\.1038\/review/).waitFor();
+  const answerPanel=page.getByRole('group',{name:'研究回答沉淀预览'});
+  await answerPanel.getByRole('region',{name:'回答引用'}).getByRole('link',{name:'10.1038/review',exact:true}).waitFor();
+  assert.equal(await answerPanel.getByRole('checkbox').count(),0,'查看引用时无需经过自动抽取候选');
   const popover=await page.evaluate(()=>{
     const el=document.querySelector('[aria-label="研究回答沉淀预览"]'),r=el.getBoundingClientRect();
     return {portaled:el.parentElement===document.body,visible:r.top>=0&&r.bottom<=innerHeight,above:r.bottom<720,hit:el.contains(document.elementFromPoint(r.left+12,r.top+12))};
   });
   assert.deepEqual(popover,{portaled:true,visible:true,above:true,hit:true});
+  const linkClaim=page.getByRole('button',{name:'关联到此回答',exact:true});
+  await linkClaim.waitFor();
+  assert.equal(await linkClaim.count(),1);
+  assert.equal(await page.getByRole('link',{name:'已关联的测试来源'}).count(),0);
+  await linkClaim.click();
+  const supportedClaim=page.getByRole('group',{name:'支持',exact:true});
+  await supportedClaim.getByText(/原文位置 结果段/).waitFor();
+  assert.equal(await supportedClaim.getByRole('link',{name:'已关联的测试来源'}).getAttribute('href'),'https://doi.org/10.1038/review');
+
   if(process.env.RK_QA_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_SCREENSHOT});
   await page.setViewportSize({width:390,height:900});
   await page.waitForFunction(()=>{
@@ -214,7 +247,15 @@ const server = http.createServer((req,res)=>{
   await page.setViewportSize({width:1280,height:900});
   await page.getByRole('button',{name:'取消',exact:true}).click();
   await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
-  await page.getByRole('group',{name:'研究回答沉淀预览'}).getByLabel(/引用：10\.1038\/review/).uncheck();
+  await supportedClaim.getByRole('link',{name:'已关联的测试来源'}).waitFor();
+  await page.getByRole('button',{name:'取消关联',exact:true}).click();
+  assert.equal(await supportedClaim.count(),0);
+  await page.unroute(answerClaimRoute);
+  await answerPanel.getByText('沉淀所选',{exact:true}).click();
+  await answerPanel.getByLabel(/引用：10\.1038\/review/).uncheck();
+  const nodeCandidate=answerPanel.getByRole('checkbox',{name:/^(?!引用：)/}).first();
+  assert.equal(await nodeCandidate.isChecked(),false);
+  await nodeCandidate.check();
   await page.getByRole('button',{name:'确认沉淀所选'}).click();
   await page.getByRole('status').getByText(/已沉淀：知识 .*证据 0/).waitFor();
   await page.evaluate(()=>window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'missing',sessionId:'qa',useChat:select=>select({nodes:{values:()=>[]}})})));
@@ -284,16 +325,15 @@ const server = http.createServer((req,res)=>{
   assert.equal(await presetSection.locator('section').count(),0,'表单未就绪时预设区必须整块不渲染');
   await page.evaluate(()=>{window.rowConfigRoot.unmount();window.rowConfigHost.remove()});
   console.log('Plugins 行配置预设：ops + revision 写入、拒绝提示与只读/未就绪降级通过');
-  await page.getByRole('tab',{name:'方法工坊',exact:true}).click();
+  await page.getByRole('tab',{name:'用方法',exact:true}).click();
   await page.getByRole('heading',{name:'方法工坊',exact:true}).waitFor();
-  await page.getByRole('tab',{name:'资源与工作流',exact:true}).click();
+  await page.getByRole('tab',{name:'选流程',exact:true}).click();
   console.log('PromptKit 延迟加载、方法工坊与输入框增强器挂载：通过');
   await page.getByRole('tab',{name:/工作流程/}).click();
   await page.getByRole('group',{name:'工作流程分类筛选'}).getByRole('button',{name:'生物信息学',exact:true}).click();
   assert.equal(await page.getByLabel('全部工作流程分类').inputValue(),'生物信息学');
   await page.getByLabel('全部工作流程分类').selectOption('all');
   assert.equal(await page.getByRole('group',{name:'工作流程分类筛选'}).getByRole('button',{name:'生物信息学',exact:true}).getAttribute('aria-pressed'),'false');
-  await page.getByRole('tab',{name:/全部 \d/}).click();
   await page.getByLabel('资源列表').getByRole('button',{name:'收藏审阅论文',exact:true}).click();
   await page.getByRole('tab',{name:/★ 收藏/}).click();
   assert.ok(await page.getByLabel('资源列表').getByText('审阅论文',{exact:true}).count());
@@ -327,7 +367,7 @@ const server = http.createServer((req,res)=>{
   await page.getByLabel('选择科研模式领域预设').selectOption('bioinformatics');
   assert.equal(await page.getByLabel('提示词预览',{exact:true}).inputValue(),'手动编辑内容必须保留');
   console.log('切换科研模式保留手动编辑：通过');
-  await page.getByRole('tab',{name:/数据库 \d/}).click();
+  await page.getByRole('tab',{name:'查来源',exact:true}).click();
   await page.getByLabel('资源列表').getByText('PubMed',{exact:true}).click();
   await page.getByLabel('英文检索式').fill('rice');
   await page.route('**/dsh-research-kit/query?**', route=>route.fulfill({json:{mode:'direct',query:'rice',sources:[{id:'test',title:'测试候选记录',url:'https://example.org/test'}]}}));
@@ -339,24 +379,121 @@ const server = http.createServer((req,res)=>{
   assert.equal(await page.getByText('测试候选记录',{exact:true}).count(),0);
   assert.equal(await page.getByLabel('英文检索式').inputValue(),'');
   console.log('英文查询传给 Agent、切换数据库清除旧结果：通过');
+  await page.getByRole('tab',{name:'选流程',exact:true}).click();
   for (const [type,quick] of [['技能','生物信息学'],['数据库','文献与引文']]) {
-    await page.getByRole('tab',{name:new RegExp(type+' \\d')}).click();
+    await (type==='数据库' ? page.getByRole('tab',{name:'查来源',exact:true}) : page.getByRole('tab',{name:/技能 \d/})).click();
     const group=page.getByRole('group',{name:type+'分类筛选'});
     await group.getByRole('button',{name:quick,exact:true}).click();
     assert.equal(await group.getByRole('combobox').inputValue(),quick);
     await group.getByRole('combobox').selectOption('all');
     assert.equal(await group.getByRole('button',{name:quick,exact:true}).getAttribute('aria-pressed'),'false');
   }
-  await page.locator('#composer').getByRole('button',{name:'工作流程',exact:true}).click();
+  await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'选择科研工作流程'});
-  await dialog.getByRole('button',{name:'生物信息学',exact:true}).click();
-  assert.equal(await dialog.getByRole('combobox').inputValue(),'生物信息学');
-  await dialog.getByRole('combobox').selectOption('all');
-  await dialog.getByRole('combobox').selectOption('数据分析');
-  assert.equal(await dialog.getByRole('combobox').inputValue(),'数据分析');
+  const category=dialog.getByRole('combobox',{name:'工作流程分类'});
+  await category.selectOption('作物遗传育种');
+  assert.equal(await category.inputValue(),'作物遗传育种');
+  await page.emulateMedia({colorScheme:'dark'});
+  await page.locator('#composer').evaluate(node=>{node.style.bottom='calc(100% - 200px)'});
+  await page.setViewportSize({width:390,height:540});
+  await dialog.locator('.rk-picker-row').first().waitFor();
+  await dialog.locator('xpath=self::*[@data-short]').waitFor();
+  assert.ok(await dialog.getByRole('switch',{name:'自动科研辅助'}).isVisible());
+  const layout=await dialog.evaluate(node=>{
+    const panel=node.getBoundingClientRect();
+    const first=node.querySelector('.rk-picker-row').getBoundingClientRect();
+    return {top:panel.top,height:panel.height,firstVisible:first.top>=panel.top && first.bottom<=panel.bottom,overflow:node.scrollHeight>node.clientHeight};
+  });
+  assert.ok(layout.top>=0 && layout.height<230 && layout.firstVisible && layout.overflow,JSON.stringify(layout));
+  await dialog.screenshot({path:path.join(artifacts,'research-picker-compact-dark.png')});
+  const last=dialog.locator('.rk-picker-row').last();
+  await last.scrollIntoViewIfNeeded();
+  assert.ok(await last.evaluate(row=>{
+    const panel=row.closest('.rk-composer-picker').getBoundingClientRect();
+    const box=row.getBoundingClientRect();
+    return box.top>=panel.top && box.bottom<=panel.bottom;
+  }));
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
-  console.log('技能、数据库及弹层共享分类栏：通过');
-  await page.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await page.locator('#composer').evaluate(node=>{node.style.bottom='12px'});
+  await page.setViewportSize({width:1280,height:900});
+  await page.emulateMedia({colorScheme:'light'});
+  await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
+  await category.selectOption('数据分析');
+  assert.equal(await category.inputValue(),'数据分析');
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
+  await dialog.getByRole('tab',{name:'加资源'}).click();
+  const resources=page.getByRole('dialog',{name:'选择科研资源'});
+  await resources.getByLabel('搜索',{exact:true}).fill('PubMed');
+  await resources.getByRole('checkbox',{name:/PubMed/}).first().check();
+  await resources.getByRole('combobox',{name:'资源类型'}).selectOption('selected');
+  assert.equal(await resources.getByRole('checkbox',{name:/PubMed/}).first().isChecked(),true);
+  await resources.getByRole('button',{name:/^完成 · /}).click();
+  await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
+  const toggle=dialog.getByRole('switch',{name:'自动科研辅助'});
+  assert.equal(await toggle.isChecked(),false);
+  await toggle.check();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  const suggestion=page.getByRole('region',{name:'科研建议'});
+  await page.evaluate(()=>{
+    window.testEvents.push({type:'user/message',data:{content:[{type:'text',text:'请做一个关于水稻产量的文献综述。'}]}});
+    window.setComposerDraft('请继续刚才的研究。');
+  });
+  await suggestion.getByText('当前提问在延续本会话最近一次明确的研究任务。').waitFor();
+  await suggestion.getByRole('button',{name:'略过'}).click();
+  await page.evaluate(()=>window.setComposerDraft('什么是文献综述？'));
+  await page.waitForTimeout(850);
+  assert.equal(await suggestion.count(),0);
+  const original='请比较这两篇论文的证据强度。';
+  await page.evaluate(text=>window.setComposerDraft(text,['file1','file2']),original);
+  await suggestion.getByText('论文对比分析').waitFor();
+  await page.screenshot({path:path.join(artifacts,'conversation-research-suggestion.png')});
+  await suggestion.getByRole('button',{name:'预览改动'}).click();
+  const preview=page.getByRole('dialog',{name:'预览科研建议'});
+  assert.match(await preview.getByLabel('将插入的科研步骤').inputValue(),/科研执行步骤/);
+  await page.evaluate(()=>{window.staleInsertion=true});
+  await preview.getByRole('button',{name:'采用并插入'}).click();
+  await preview.getByText('草稿暂时无法写入，请检查当前输入后重试。').waitFor();
+  assert.equal(await page.evaluate(()=>window.composerInput.draft),original);
+  await page.evaluate(()=>{window.staleInsertion=false});
+  await preview.getByRole('button',{name:'采用并插入'}).click();
+  const adopted=await page.evaluate(()=>window.composerInput);
+  assert.ok(adopted.draft.startsWith(original));
+  assert.match(adopted.draft,/科研执行步骤/);
+  assert.deepEqual(adopted.attachmentIds,['file1','file2']);
+  await page.evaluate(()=>window.setComposerDraft('请做一个关于水稻耐盐性的文献综述。'));
+  await suggestion.getByRole('button',{name:'略过'}).click();
+  await page.evaluate(()=>window.setComposerDraft('请做一个关于水稻耐盐性的文献综述。'));
+  await page.waitForTimeout(850);
+  assert.equal(await suggestion.count(),0);
+  await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
+  await dialog.getByRole('button',{name:'整理当前提问'}).click();
+  await page.getByRole('button',{name:'应用增强到消息框'}).waitFor();
+  await page.keyboard.press('Escape');
+  console.log('统一入口、资源选择、手动整理及自动建议确认与过期保护：通过');
+  await page.getByRole('tab',{name:'我的',exact:true}).click();
+  await page.getByRole('button',{name:'从目录复制'}).click();
+  await page.getByLabel('搜索可复制的模板').fill('审阅论文');
+  await page.getByRole('button',{name:'复制流程 · 审阅论文',exact:true}).click();
+  assert.match(await page.getByLabel('模板内容').inputValue(),/通用科研边界/);
+  await page.getByRole('button',{name:'取消',exact:true}).click();
+  await page.getByRole('button',{name:'新建流程'}).click();
+  await page.getByLabel('模板名称').fill('个人科研模板');
+  await page.getByLabel('模板内容').fill('先核验来源，再整理研究步骤。');
+  await page.getByRole('button',{name:'保存模板'}).click();
+  await page.getByRole('button',{name:'查看或编辑'}).click();
+  assert.match(await page.getByLabel('模板内容').inputValue(),/核验来源/);
+  await page.getByLabel('模板内容').fill('先核验来源，再列出证据缺口。');
+  await page.getByRole('button',{name:'保存模板'}).click();
+  await page.getByRole('button',{name:'插入草稿'}).click();
+  assert.match(await page.evaluate(()=>window.draft),/证据缺口/);
+  await page.getByRole('button',{name:'版本记录'}).click();
+  await page.getByRole('button',{name:/^查看 .*个人科研模板/}).click();
+  assert.match(await page.getByLabel('模板内容').inputValue(),/整理研究步骤/);
+  await page.getByRole('button',{name:'取消',exact:true}).click();
+  console.log('个人流程新建、编辑、复用与历史版本：通过');
+  await page.getByRole('tab',{name:'本次研究',exact:true}).click();
+  await page.getByRole('button',{name:'研究资料',exact:true}).click();
   await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
   await page.getByRole('button',{name:'新建资产',exact:true}).click();
   await page.getByLabel('标题（留空自动取正文首行）').fill('水稻耐盐性研究');
@@ -425,7 +562,7 @@ const server = http.createServer((req,res)=>{
   const isolated=await browser.newContext();
   const appPage=await isolated.newPage();
   await appPage.goto('http://127.0.0.1:'+server.address().port);
-  await appPage.getByRole('tab',{name:'方法工坊',exact:true}).waitFor();
+  await appPage.getByRole('button',{name:'研究资料',exact:true}).click();
   await appPage.getByRole('button',{name:'迁移到 App'}).click();
   await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
   await appPage.getByLabel('选择 Research Kit 迁移文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
@@ -437,7 +574,7 @@ const server = http.createServer((req,res)=>{
   await appPage.getByRole('button',{name:'确认增量导入'}).click();
   await appPage.getByText(/导入完成：/).waitFor();
   await appPage.getByRole('button',{name:'关闭',exact:true}).click();
-  await appPage.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await appPage.getByRole('button',{name:'研究资料',exact:true}).click();
   await appPage.getByText('水稻耐盐性研究',{exact:true}).first().waitFor();
   await isolated.close();
   console.log('独立页面存储空间导入新增资产：通过');
@@ -445,8 +582,8 @@ const server = http.createServer((req,res)=>{
   const largePage=await largeContext.newPage();
   largePage.on('pageerror',error=>errors.push(String(error)));
   await largePage.goto('http://127.0.0.1:'+server.address().port);
-  await largePage.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
-  await largePage.getByRole('tab',{name:'研究资产库',exact:true}).click();
+  await largePage.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
+  await largePage.getByRole('button',{name:'研究资料',exact:true}).click();
   await largePage.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
   await largePage.getByText('第 1 页 · 本页 0 条 · 完整范围 0 条',{exact:true}).waitFor();
   await largePage.evaluate(async()=>{
@@ -504,9 +641,21 @@ const server = http.createServer((req,res)=>{
       { id: 'run-review-current', project: '综述样板', sessionId: 'qa', workflowId: 'literature-review', workflowName: '当前会话运行', status: 'draft', createdAt: 456 },
     ]));
   });
-  await runPage.route('**/dsh-research-kit/agent-activity?**', route => route.fulfill({ json: {
-    ok:true, calls:[], checkpoints:[{checkpoints:{screen:{approved:false}}}], artifacts:[{id:'qa-artifact', summary:'上次综述产出'}],
-  } }));
+  let stageApproved=false;
+  await runPage.route('**/dsh-research-kit/agent-activity*', route => {
+    if (route.request().method()==='POST') {
+      assert.deepEqual(route.request().postDataJSON(),{action:'research_run_checkpoint_approve',run_id:'run-review-original',stage:'screen'});
+      stageApproved=true;
+      return route.fulfill({json:{ok:true}});
+    }
+    const id=new URL(route.request().url()).searchParams.get('run_id');
+    return route.fulfill({ json: {
+      ok:true, calls:[],
+      checkpoints:[{run_id:id,checkpoints:{screen:{approved:stageApproved}}}],
+      artifacts:[{id:'qa-artifact', summary:'上次综述产出'}],
+      run_overview:{run_id:id,project:id==='run-other'?'另一课题':'综述样板',passport_found:true},
+    } });
+  });
   await runPage.route('**/dsh-research-kit/claim-review?**', route => route.fulfill({ json: {
     ok:true, evidence:[{ id:'paper-2', title:'反向样板来源', url:'https://example.org/refutes' }], claims:[{
       id:'review-claim', project:'综述样板', run_id:'run-review-original', statement:'需要核对的综述结论',
@@ -521,11 +670,31 @@ const server = http.createServer((req,res)=>{
     json:{ok:false,error:'样板重复来源'}, status:409,
   }));
   await runPage.goto('http://127.0.0.1:'+server.address().port+'/?native=1');
-  await runPage.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
+  await runPage.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
   await runPage.locator('#plugin-status').getByText('当前会话运行',{exact:true}).waitFor();
+  const projectButton=runPage.getByRole('button',{name:'课题 · 综述样板',exact:true});
+  await projectButton.click();
+  await runPage.getByLabel('研究课题名称').fill('其他课题');
+  await runPage.getByRole('button',{name:'切换课题',exact:true}).click();
+  await runPage.getByRole('button',{name:'课题 · 其他课题',exact:true}).click();
+  await runPage.getByLabel('研究课题名称').fill('综述样板');
+  await runPage.getByRole('button',{name:'切换课题',exact:true}).click();
+  await projectButton.click();
+  await runPage.getByText('载入已有研究运行',{exact:true}).click();
+  await runPage.getByLabel('研究运行 ID').fill('run-other');
+  await runPage.getByRole('button',{name:'载入运行',exact:true}).click();
+  await runPage.getByText(/当前课题中找不到该运行/).waitFor();
+  await runPage.getByLabel('研究运行 ID').fill('run-mcp-existing');
+  await runPage.getByRole('button',{name:'载入运行',exact:true}).click();
+  await runPage.getByText('当前运行：run-mcp-existing',{exact:true}).waitFor();
   await runPage.getByLabel('恢复指定运行').selectOption('run-review-original');
   await runPage.getByText('上次综述产出',{exact:true}).waitFor();
   await runPage.getByText(/待核验 Claim 1/).waitFor();
+  const approve=runPage.getByRole('button',{name:'确认阶段 screen',exact:true});
+  await approve.click();
+  await approve.waitFor({state:'hidden'});
+  assert.ok(stageApproved);
+  console.log('按需切换课题、载入同课题运行及收件箱阶段确认：通过');
   await runPage.getByRole('button',{name:'写入继续研究草稿'}).click();
   assert.match(await runPage.evaluate(()=>window.draft), /run-review-original/);
   await runPage.getByLabel('工作区文件路径').fill('文献/第 一篇.pdf');
@@ -568,7 +737,7 @@ const server = http.createServer((req,res)=>{
   await relation.getByText(/尚无关联证据/).waitFor();
   await runPage.unroute('**/dsh-research-kit/evidence-sync?**');
   console.log('论断卡片按立场追溯原文、收起后保留审阅草稿：通过');
-  await runPage.getByRole('tab',{name:'项目首页',exact:true}).click();
+  await runPage.getByRole('tab',{name:'本次研究',exact:true}).click();
   await runPage.getByRole('button',{name:'做文献综述'}).click();
   await runPage.getByLabel('综述问题',{exact:true}).fill('图书馆开放时段与读者体验');
   await runPage.getByRole('button',{name:'在新会话开始',exact:true}).click();

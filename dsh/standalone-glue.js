@@ -27,10 +27,13 @@ export function researchKitApply(ctx) {
       ? path => insertResearchMaterial(hostNavigation, props.sessionId, path) : null
     return React.createElement(ResearchConsole, { ...props, launchSession, insertMaterialReference })
   }
+  function ResearchComposerOverlayHost(props) {
+    return React.createElement(ResearchComposerOverlay, { ...props, sessions: ctx.sessions })
+  }
   const components = [
     ResearchConsoleHost,        // dsh-research-kit-console
     ResearchComposerLauncher,   // dsh-research-kit-launcher
-    ResearchComposerOverlay,    // dsh-research-kit-overlay
+    ResearchComposerOverlayHost, // dsh-research-kit-overlay
     ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
   ]
   const disposers = [registerResearchSlots(ctx, components)]

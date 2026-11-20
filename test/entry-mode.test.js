@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-// 入口形态偏好：默认内联（输入框图标钮），可在 Plugins 详情页切成悬浮伴生钮。
+// 入口形态偏好：默认内联（输入框内），可在 Plugins 详情页切成悬浮伴生钮。
 // 它是本机偏好而不是插件配置——改完即时生效，不必重启 profile 重载插件。
 // 这里用最小 localStorage 桩，验证「默认值 / 脏数据回落 / 持久化 / 广播与退订」。
 
@@ -73,9 +73,9 @@ test('入口形态设置项：两个标签与各自说明逐字成契约', async
   const browser = installStorage()
   t.after(() => browser.restore())
   const mod = await import('../src/entry-mode.js?hints=1')
-  assert.deepEqual(mod.ENTRY_MODE_OPTIONS.map(option => option.label), ['输入框图标钮', '悬浮伴生钮'])
-  assert.match(mod.ENTRY_MODE_HINTS.inline, /图标钮/)
-  assert.match(mod.ENTRY_MODE_HINTS.inline, /操作区/, '内联形态要说明手动沉淀仍在消息操作区')
+  assert.deepEqual(mod.ENTRY_MODE_OPTIONS.map(option => option.label), ['输入框内', '悬浮伴生钮'])
+  assert.match(mod.ENTRY_MODE_HINTS.inline, /科研辅助.*整理当前提问/)
+  assert.match(mod.ENTRY_MODE_HINTS.inline, /回答依据/, '内联形态要说明从回答依据查看和保存引用')
   assert.match(mod.ENTRY_MODE_HINTS.floating, /伴生圆钮/)
   assert.match(mod.ENTRY_MODE_HINTS.floating, /拖拽/)
 })

@@ -8,7 +8,7 @@ import { CLIENT_TOOL_FIELDS, SERVER_ONLY_FIELDS, clientToolRegistrySource, proje
 // example / helpRoute / tier / artifactKind / category 一律不进 ui/client.js。
 // 这里守住三件事：投影字段齐全、消费方没读被裁字段、产物里确实没有它们。
 
-const CONSUMERS = ['../src/research-toolview.js', '../src/agent-activity.js']
+const CONSUMERS = ['../src/research-toolview.js']
 
 test('工具投影：字段齐全、数量与注册表一致、被裁字段不出现', () => {
   const projected = projectToolRegistry()
@@ -52,7 +52,7 @@ test('工具投影：产物里 36 个工具的中文名与摘要都在，服务�
   const sentinel = TOOL_REGISTRY.map(tool => String(tool.example || '')).sort((a, b) => b.length - a.length)[0]
   assert.ok(sentinel.length > 30, '注册表 example 字段应足够长，才能当哨兵')
   assert.ok(!bundle.includes(sentinel.slice(0, 40)), 'example 是服务端字段，不得进入客户端产物')
-  // 标签函数仍在产物内（agent-activity 依赖）。
+  // 标签函数仍在产物内。
   assert.match(bundle, /function toolLabel\(/)
   assert.match(bundle, /function artifactKindLabel\(/)
 })

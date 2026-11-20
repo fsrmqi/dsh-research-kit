@@ -63,12 +63,15 @@ test('导航与实现一一对应：每个分区都挂载了组件，不存在�
   }
 })
 
-test('性能接线：项目输入延迟提交，目录检索可让位，图谱拖拽不逐事件重渲染', () => {
+test('性能接线：按需切换课题，目录检索可让位，图谱拖拽不逐事件重渲染', () => {
   const consoleSource = readFileSync(new URL('../src/research-console.js', import.meta.url), 'utf8')
+  const homeSource = readFileSync(new URL('../src/research-project-home.js', import.meta.url), 'utf8')
   const workbenchSource = readFileSync(new URL('../src/research-workbench.js', import.meta.url), 'utf8')
   const graphSource = readFileSync(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')
-  assert.match(consoleSource, /onChange:\s*event\s*=>\s*setProjectDraft/, '项目输入仍在每个字符上写全局上下文')
-  assert.match(consoleSource, /onBlur:\s*commitProject/, '项目输入失焦时未提交')
+  assert.doesNotMatch(consoleSource, /setResearchProject|AgentActivityPanel/)
+  assert.match(homeSource, /projectEditor !== null \? h\(Card/)
+  assert.match(homeSource, /onChange: setProjectEditor/)
+  assert.match(homeSource, /onSubmit: event => \{\s*event\.preventDefault\(\)\s*setResearchProject\(projectEditor\)/)
   assert.match(workbenchSource, /React\.useDeferredValue\(query\)/, '目录检索没有让输入更新优先')
   assert.match(graphSource, /requestAnimationFrame\(paint\)/, '图谱拖拽没有按动画帧合并 DOM 更新')
   assert.match(graphSource, /\[vault, projectFilter\]/, '图谱证据刷新仍可能捕获陈旧项目筛选')

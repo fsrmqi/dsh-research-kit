@@ -128,17 +128,22 @@ function highlightCatalogText(value, term) {
   return [...parts, text.slice(offset)]
 }
 
-export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, launchSession, embedded = false }) {
+export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, initialType = 'all', launchSession, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [query, setQuery] = React.useState('')
   const deferredQuery = React.useDeferredValue(query)
-  const [type, setType] = React.useState('all')
+  const [type, setType] = React.useState(initialType)
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
   const [selectedId, setSelectedId] = React.useState(initialWorkflowId || 'review-paper')
+  React.useEffect(() => {
+    setType(initialType)
+    setQuery('')
+    if (initialType === 'workflow') setSelectedId(initialWorkflowId || 'review-paper')
+  }, [initialType, initialWorkflowId])
   const [values, setValues] = React.useState({})
   const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
@@ -351,12 +356,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const openHistoryEntry = row => {
     const item = itemById(row.id)
     if (!item) return
-    setType('all')
+    setType(embedded ? item.type : 'all')
     setQuery('')
     setSelectedId(item.id)
   }
   const openFavoriteEntry = item => {
-    setType('all')
+    setType(embedded ? item.type : 'all')
     setQuery('')
     setSelectedId(item.id)
   }
@@ -375,9 +380,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const content = [
     h(PageHead, {
       key: 'head',
-      kicker: 'Research Kit',
-      title: '资源与工作流',
-      lead: '浏览技能、科学数据库与工作流程；选择后再按需写入当前会话。',
+      title: initialType === 'database' ? '查来源' : '选择科研流程',
+      lead: initialType === 'database' ? '选择数据源，查看查询方式与返回的来源。' : '按任务选择流程，补充条件后预览要交给 Agent 的提示词。',
     }),
     // 二级吸顶带 = 该分区「随时要用的操作」：检索、类型筛选、科研模式。
     // 「科研模式」原先挂在分区封面右侧，会随页面一起滚走（实测滚 800px 后 top=-555），
@@ -387,7 +391,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
       // 顺序有意为「模式 → 检索 → 筛选」：三者放不下一行时按 DOM 顺序折行，
       // 把最宽的筛选项留在最后折行才能占满整行；若把「科研模式」放末尾，
       // 被挤到第二行的是它一个窄控件，会留下一整行空白（实测 1180px 窗口即触发）。
-      h('label', { key: 'mode', style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 650, flexShrink: 0, color: scienceMode ? C.teal : C.muted } }, [
+      initialType !== 'database' ? h('label', { key: 'mode', style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, fontWeight: 650, flexShrink: 0, color: scienceMode ? C.teal : C.muted } }, [
         h(Icon, { key: 'i', name: 'shield', size: 14 }),
         '科研模式',
         h(Select, {
@@ -405,16 +409,16 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
           className: 'rk-research-mode-select',
           style: { padding: '7px 10px', fontSize: 13, borderColor: scienceMode ? C.tealLineStrong : C.line, background: scienceMode ? C.tealTint : C.surface, color: scienceMode ? C.teal : C.ink },
         }),
-      ]),
+      ]) : null,
       // 检索框的 flex 基准（200px）是按「三者同占一行」倒推的：922px 内容宽下
       // 模式 176 + 检索基准 200 + 筛选 495 + 间距 20 = 891 ≤ 922，刚好不折行；
       // 基准若给到 260 就会把筛选挤到第二行（实测带高 76px → 126px）。
       // 仍是弹性项：窗口更宽时它会吃掉剩余空间，更窄时按顺序折行、筛选独占下一行。
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 200px', minWidth: 180 } }, [
         h('span', { key: 'icon', 'aria-hidden': 'true', style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' } }, h(Icon, { name: 'search', size: 14 })),
-        h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: '搜索工作流程、技能、数据库……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
+        h(Input, { key: 'i', value: query, onChange: setQuery, placeholder: initialType === 'database' ? '搜索数据库、学术索引……' : '搜索工作流程、技能……', ariaLabel: '搜索科研资源', style: { paddingLeft: 32 } }),
       ]),
-      h(Segmented, { key: 'tabs', value: type, options: typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }),
+      initialType !== 'database' ? h(Segmented, { key: 'tabs', value: type, options: embedded ? typeTabs.filter(tab => tab.value !== 'all' && tab.value !== 'database') : typeTabs, onChange: setType, ariaLabel: '资源类型筛选' }) : null,
       type === 'workflow' || type === 'skill' || type === 'database' ? h(CatalogCategoryFilter, {
         key: `${type}-categories`,
         type,

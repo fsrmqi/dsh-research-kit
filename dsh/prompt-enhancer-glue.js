@@ -8,7 +8,7 @@ import React from 'react'
 //   2. 研究边界由服务端 system 指令统一执行（不编造引用/数据、保持研究范围、保密、待核验标记）；
 //   3. 增强结果写入前保留差异/恢复能力（QuickEnhancer 内置 undoDraft）。
 import { itemById, loadBrowserCatalog, subscribeCatalog } from '../src/catalog.js'
-import { RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
+import { RESEARCH_ORGANIZE_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from '../src/composer-launcher.js'
 import { createResearchSelectionStore } from '../src/research-selection-store.js'
 import { C, GlobalStyle } from '../src/theme.js'
 import { bodyPortal } from '../src/lib/overlay-anchor.js'
@@ -211,7 +211,7 @@ function LoadedResearchDraftEnhancerHost(props) {
   const launcherProps = floating
     ? { open, onOpenChange }
     : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
-  return React.createElement(PromptKit.QuickEnhancer, {
+  return React.createElement('div', { className: 'rk-enhancer-theme', style: { display: 'contents' } }, React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
     methodProvider: researchMethodProvider,
     assetProvider: researchAssetProvider,
@@ -221,7 +221,7 @@ function LoadedResearchDraftEnhancerHost(props) {
     searchMemory,
     storagePrefix: 'dsh-research-kit.promptkit.',
     ...launcherProps,
-  })
+  }))
 }
 
 // 悬浮形态下的加载兜底。工件没就绪时右下角不能什么都不留，否则又回到
@@ -352,17 +352,24 @@ export function ResearchDraftEnhancerHost(props) {
     pendingOpen.current = false
     setOpen(true)
   }, [state])
-  const onClick = React.useCallback(() => {
+  const organize = React.useCallback(() => {
     if (state === 'error' || state === 'idle') { pendingOpen.current = true; setState('loading'); setAttempt(value => value + 1); return }
     if (state !== 'ready') { pendingOpen.current = true; return }
-    setOpen(value => !value)
+    setOpen(true)
   }, [state])
   React.useEffect(() => {
+    const onOrganize = event => {
+      if (event.detail?.sessionId === props.sessionId) organize()
+    }
+    window.addEventListener(RESEARCH_ORGANIZE_EVENT, onOrganize)
+    return () => window.removeEventListener(RESEARCH_ORGANIZE_EVENT, onOrganize)
+  }, [organize, props.sessionId])
+  React.useEffect(() => {
     if (state === 'ready') return undefined
-    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); onClick() } }
+    const shortcut = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); organize() } }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
-  }, [state, onClick])
+  }, [state, organize])
   if (floating) {
     // 悬浮形态：伴生钮照旧并排渲染；工件就绪前由兜底悬浮钮交出加载/重试反馈。
     return React.createElement(React.Fragment, null, [
@@ -372,14 +379,14 @@ export function ResearchDraftEnhancerHost(props) {
           key: 'draft-enhancer-panel', ...props, floating: true, open, onOpenChange: setOpen,
         })
         : React.createElement(ResearchDraftEnhancerFallbackFab, {
-          key: 'draft-enhancer-fallback', state, errorText, onClick,
+          key: 'draft-enhancer-fallback', state, errorText, onClick: organize,
         }),
     ])
   }
   return React.createElement(React.Fragment, null, [
-    React.createElement(ResearchDraftEnhancerTrigger, {
-      key: 'draft-enhancer-trigger', open, state, errorText, onClick, anchorRef,
-    }),
+    state === 'error'
+      ? React.createElement(ResearchDraftEnhancerTrigger, { key: 'retry', open, state, errorText, onClick: organize, anchorRef })
+      : React.createElement('span', { key: 'anchor', ref: anchorRef, 'aria-hidden': true }),
     state === 'ready'
       ? React.createElement(LoadedResearchDraftEnhancerHost, {
         key: 'draft-enhancer-panel', ...props, anchorRef, open, onOpenChange: setOpen,

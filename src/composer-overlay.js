@@ -7,28 +7,28 @@ import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import { POPOVER_GAP, POPOVER_MAX_HEIGHT, overlayMaxHeight, findScrollport } from './lib/overlay-anchor.js'
 import {
-  Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Segmented, EmptyState,
+  Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Select,
 } from './ui.js'
-import { RESEARCH_COMPOSER_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
-import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
+import { RESEARCH_COMPOSER_EVENT, RESEARCH_ORGANIZE_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
+import { canWriteDraft, supportsSafeInsert, writeDraftText } from './lib/input-actions.js'
 
 const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
-import { CatalogCategoryFilter, WORKBENCH_CATEGORY_COLORS, workbenchFallbackCategoryColor } from './catalog-category-filter.js'
+import { WORKBENCH_CATEGORY_COLORS, workbenchFallbackCategoryColor } from './catalog-category-filter.js'
 
 function unique(ids) { return [...new Set(ids)] }
 
 function SearchInput({ value, onChange, placeholder, ariaLabel }) {
-  return h('div', { style: { position: 'relative' } }, [
+  return h('div', { className: 'rk-picker-search' }, [
     h('span', {
       key: 'icon',
       'aria-hidden': 'true',
       style: { position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.muted, display: 'flex' },
     }, h(Icon, { name: 'search', size: 14 })),
-    h(Input, { key: 'input', value, onChange, placeholder, ariaLabel, style: { paddingLeft: 32 } }),
+    h(Input, { key: 'input', value, onChange, placeholder, ariaLabel, style: { padding: '6px 8px 6px 30px', height: 32 } }),
   ])
 }
 
-function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, onClose }) {
+function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, originalDraft, originalRevision, onClose }) {
   const [values, setValues] = React.useState({})
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [missing, setMissing] = React.useState([])
@@ -56,8 +56,18 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法使用。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
-      const written = writeDraftText(inputActions, finalPrompt)
-      if (!written.ok) return setNotice('草稿已变化，未自动写入；请复制提示词后手动粘贴。')
+      if (supportsSafeInsert(inputActions)) {
+        const span = inputActions.captureInsertion()
+        const text = originalDraft ? `\n\n${finalPrompt}\n\n` : finalPrompt
+        if (!span || (Number.isInteger(originalRevision) && span.draftRev !== originalRevision)
+            || !inputActions.insertText(text, { ...span, start: span.end })) {
+          return setNotice('草稿已变化。请重新打开流程，或复制提示词后手动粘贴。')
+        }
+      } else {
+        if (originalDraft) return setNotice('当前客户端只能替换整份草稿，请复制提示词后手动粘贴。')
+        const written = writeDraftText(inputActions, finalPrompt)
+        if (!written.ok) return setNotice('草稿暂时无法写入，请复制后手动粘贴。')
+      }
       recordUse()
       onClose()
     } catch (error) { setMissing([]); setNotice(error.message) }
@@ -128,8 +138,36 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   ])
 }
 
+const researchAutoSessions = new Map()
+
+function matchResearchDraft(draft, materialCount) {
+  const text = draft.trim()
+  if (!text || text.length > 2500 || /^[/@]/.test(text) && !materialCount
+      || /^(什么是|啥是|如何理解|请解释|解释一下|为什么|what is|what are|explain)/i.test(text)
+      || text.includes('科研执行步骤')) return null
+  if (materialCount >= 2 && /(?:比较|对比).{0,20}(?:论文|文献|证据|研究)|compare.{0,40}(?:papers|studies|evidence)/i.test(text)) {
+    return { id: 'compare-papers', values: {}, reason: '当前问题涉及对比多份材料的发现和证据强度。' }
+  }
+  if (materialCount && /(?:审阅|评审|审查).{0,20}(?:论文|稿件)|(?:peer.review|review).{0,40}(?:paper|manuscript)/i.test(text)) {
+    return { id: 'review-paper', values: {}, reason: '当前问题适合按方法、统计和局限逐项审阅。' }
+  }
+  if (/(?:做|写|整理|开展|完成|制定).{0,30}(?:文献综述|证据综述)|(?:conduct|write|prepare).{0,35}(?:literature review|evidence review)/i.test(text)) {
+    return { id: 'literature-review', values: { question: text }, reason: '当前问题适合先明确检索范围，再综合已有证据。' }
+  }
+  return null
+}
+
+function recentResearchRequest(sessions, sessionId) {
+  try {
+    const entries = sessions?.binding?.(sessionId)?.eventSource?.getSnapshot?.()?.entries
+    const recent = entries?.slice(-24).findLast(event => event.type === 'user/message')
+    const message = recent?.data?.message ?? recent?.data
+    return message?.content?.find(block => block.type === 'text')?.text?.slice(0, 600) || ''
+  } catch { return '' }
+}
+
 /** 由 conversation.input.overlay 承载，锚定在输入卡片上方。 */
-export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorage }) {
+export function ResearchComposerOverlay({ sessionId, input, useInput, inputActions, catalogStorage, sessions }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const [mode, setMode] = React.useState(null)
@@ -142,12 +180,105 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
   const popoverRef = React.useRef(null)
   const [popoverHeight, setPopoverHeight] = React.useState(null)
   const [catalogVersion, setCatalogVersion] = React.useState(0)
+  const hookedInput = useInput ? useInput(value => value) : undefined
+  const draftState = hookedInput?.draftRev !== undefined ? hookedInput : input
+  const draft = draftState?.draft
+  const revision = draftState?.draftRev
+  const fileReferences = draftState?.occurrences?.filter(item => !item.invalid && item.appearance === 'file').length || 0
+  const materialCount = (draftState?.attachmentIds?.length || 0) + fileReferences
+  const available = Boolean(sessionId) && typeof draft === 'string' && Number.isInteger(revision)
+    && typeof draftState?.phase === 'string' && supportsSafeInsert(inputActions)
+  const [autoSession, setAutoSession] = React.useState(() => researchAutoSessions.has(sessionId) ? sessionId : '')
+  const [suggestion, setSuggestion] = React.useState(null)
+  const [preview, setPreview] = React.useState(false)
+  const [composing, setComposing] = React.useState(false)
+  const [assistNotice, setAssistNotice] = React.useState('')
+  const assistRef = React.useRef(null)
+  const enabled = available && autoSession === sessionId
+  React.useEffect(() => {
+    setAutoSession(researchAutoSessions.has(sessionId) ? sessionId : '')
+    setMode(null)
+    setLaunchWorkflow(null)
+    setSuggestion(null)
+    setPreview(false)
+    setAssistNotice('')
+    setComposing(false)
+  }, [sessionId])
+  React.useEffect(() => {
+    if (!enabled) {
+      setComposing(false)
+      return undefined
+    }
+    const onComposition = event => {
+      if (event.target?.closest?.('[data-composer-card]') === assistRef.current?.closest('[data-composer-card]')) {
+        const starting = event.type === 'compositionstart'
+        if (starting) setSuggestion(null)
+        setComposing(starting)
+      }
+    }
+    document.addEventListener('compositionstart', onComposition)
+    document.addEventListener('compositionend', onComposition)
+    return () => {
+      document.removeEventListener('compositionstart', onComposition)
+      document.removeEventListener('compositionend', onComposition)
+    }
+  }, [enabled])
+  const eligible = enabled && !composing && draftState?.phase === 'plain'
+  const ignored = enabled ? researchAutoSessions.get(sessionId) : undefined
+  React.useEffect(() => {
+    setPreview(false)
+    setAssistNotice('')
+    if (!eligible || !draft.trim() || ignored?.has(draft.trim())) return undefined
+    const handle = setTimeout(() => {
+      const direct = matchResearchDraft(draft, materialCount)
+      const followUp = !direct && /^(请)?(继续|接着|按刚才的|continue\b)/i.test(draft.trim())
+      const previous = followUp ? recentResearchRequest(sessions, sessionId) : ''
+      const inherited = previous && matchResearchDraft(previous, materialCount)
+      const match = direct || (inherited && { ...inherited, reason: '当前提问在延续本会话最近一次明确的研究任务。' })
+      if (match) setSuggestion({ ...match, sessionId, revision, draft, materialCount })
+    }, 650)
+    return () => clearTimeout(handle)
+  }, [eligible, sessionId, revision, draft, materialCount, sessions, ignored])
+  const currentSuggestion = eligible && suggestion?.sessionId === sessionId && suggestion.revision === revision
+    && suggestion.draft === draft && suggestion.materialCount === materialCount && !ignored?.has(draft.trim()) ? suggestion : null
+  React.useEffect(() => {
+    if (mode || currentSuggestion) loadBrowserCatalog().catch(() => {})
+  }, [mode, currentSuggestion])
+  const suggestionWorkflow = currentSuggestion && itemById(currentSuggestion.id)
+  const toggleAuto = () => {
+    if (enabled) researchAutoSessions.delete(sessionId)
+    else researchAutoSessions.set(sessionId, new Set())
+    setSuggestion(null)
+    setAutoSession(enabled ? '' : sessionId)
+  }
+  const suggestedText = suggestionWorkflow && `科研执行步骤\n${composeWorkflow(suggestionWorkflow, currentSuggestion.values, {
+    extraSkillIds: unique([...(suggestionWorkflow.suggestedSkillIds || []), ...resourceIds.filter(id => itemById(id)?.type === 'skill')]),
+    extraDatabaseIds: resourceIds.filter(id => itemById(id)?.type === 'database'),
+  }).prompt}`
+  const dismissSuggestion = () => {
+    if (ignored?.size >= 25) ignored.delete(ignored.values().next().value)
+    ignored?.add(draft.trim())
+    setSuggestion(null)
+    setPreview(false)
+    setAssistNotice('')
+  }
+  const adoptSuggestion = () => {
+    if (!currentSuggestion || !suggestedText) return
+    const span = inputActions.captureInsertion()
+    if (span?.draftRev !== currentSuggestion.revision || !inputActions.insertText(`\n\n${suggestedText}\n\n`, { ...span, start: span.end })) {
+      setAssistNotice('草稿暂时无法写入，请检查当前输入后重试。')
+      return
+    }
+    storage.recordHistory?.({ id: suggestionWorkflow.id, name: suggestionWorkflow.name })
+    createEvidenceStore(sessionId).recordWorkflow({
+      id: suggestionWorkflow.id, name: suggestionWorkflow.name,
+      resourceIds: unique([...resourceIds, ...(suggestionWorkflow.suggestedSkillIds || [])]),
+    })
+    dismissSuggestion()
+  }
   // 目录可能由默认工作台先加载完成；浮层关闭时也要订阅版本变化，否则首次打开时
   // useMemo 仍会保留挂载阶段基于空目录算出的分类与计数。
   React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
-  React.useEffect(() => {
-    if (mode) loadBrowserCatalog().catch(() => {})
-  }, [mode])
   // 浮层贴住输入卡片上沿，而不是钉在视口左下角：
   // 槽位锚点是卡片顶边的零高条，绝对定位即与触发按钮同宽同轴；
   // 可用高度按「卡片顶边 → 滚动区顶边」实测，随输入框行数、附件栏与窗口尺寸自适应。
@@ -176,6 +307,7 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
   }, [mode])
   React.useEffect(() => {
     const onOpen = event => {
+      if (event.detail?.sessionId !== sessionId) return
       const nextMode = event.detail?.mode === 'resources' ? 'resources' : 'workflows'
       setMode(nextMode)
       setQuery('')
@@ -184,22 +316,23 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
     }
     window.addEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
     return () => window.removeEventListener(RESEARCH_COMPOSER_EVENT, onOpen)
-  }, [])
+  }, [sessionId])
   React.useEffect(() => { setResourceIds(selection.get()); return selection.subscribe(setResourceIds) }, [selection])
   React.useEffect(() => {
-    window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { count: resourceIds.length } }))
-  }, [resourceIds])
+    window.dispatchEvent(new CustomEvent(RESEARCH_RESOURCE_SELECTION_EVENT, { detail: { sessionId, count: resourceIds.length, enabled } }))
+  }, [sessionId, resourceIds, enabled])
   // Escape 关闭最上层的弹层：先关预览弹窗，再关选择器。
   React.useEffect(() => {
-    if (!mode && !launchWorkflow) return
+    if (!mode && !launchWorkflow && !preview) return
     const onKeyDown = event => {
       if (event.key !== 'Escape') return
-      if (launchWorkflow) setLaunchWorkflow(null)
+      if (preview) setPreview(false)
+      else if (launchWorkflow) setLaunchWorkflow(null)
       else setMode(null)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [mode, launchWorkflow])
+  }, [mode, launchWorkflow, preview])
   // 浮层不是 Modal，没有遮罩层；因此要在文档层判定“点击是否落在整张浮层卡片内”。
   // 不能绑在内容滚动区，否则标题、筛选栏或卡片边框都会被误判为外部点击。
   React.useEffect(() => {
@@ -211,159 +344,153 @@ export function ResearchComposerOverlay({ sessionId, inputActions, catalogStorag
     document.addEventListener('pointerdown', onPointerDown)
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [mode, launchWorkflow])
-  const listType = mode === 'workflows' ? 'workflow' : resourceType === 'all' ? 'all' : resourceType
-  const rows = React.useMemo(() => searchCatalog({ query: deferredQuery, type: listType })
+  const selectedOnly = mode === 'resources' && resourceType === 'selected' ? resourceIds : null
+  const listType = mode === 'workflows' ? 'workflow' : selectedOnly ? 'all' : resourceType
+  const rows = React.useMemo(() => mode ? searchCatalog({ query: deferredQuery, type: listType })
     .filter(item => mode !== 'resources' || item.type !== 'workflow')
-    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory),
-  [deferredQuery, listType, mode, workflowCategory, catalogVersion])
-  const toggle = id => selection.toggle(id)
+    .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory)
+    .filter(item => !selectedOnly || selectedOnly.includes(item.id)) : [],
+  [deferredQuery, listType, mode, workflowCategory, catalogVersion, selectedOnly])
   const close = () => setMode(null)
-  const selectWorkflow = workflow => { setLaunchWorkflow(workflow); setMode(null) }
+  const selectWorkflow = workflow => { setLaunchWorkflow({ workflow, draft, revision, sessionId }); setMode(null) }
   const recommendedWorkflows = React.useMemo(
-    () => recommendedWorkflowsForResources(resourceIds).slice(0, 4),
-    [resourceIds, catalogVersion],
+    () => selectedOnly && !deferredQuery.trim() ? recommendedWorkflowsForResources(selectedOnly).slice(0, 4) : [],
+    [selectedOnly, deferredQuery, catalogVersion],
   )
-  const catalogMeta = React.useMemo(() => {
-    const workflowCategories = new Set()
-    const counts = { resource: 0, database: 0, skill: 0 }
-    for (const item of catalog) {
-      if (item.type === 'workflow') workflowCategories.add(item.category)
-      else counts.resource++
-      if (item.type === 'database') counts.database++
-      if (item.type === 'skill') counts.skill++
-    }
-    return { workflowCategories: [...workflowCategories], counts }
-  }, [catalogVersion])
-  const resourceTabs = [
-    { value: 'all', label: `全部（${catalogMeta.counts.resource}）` },
-    { value: 'database', label: `数据库（${catalogMeta.counts.database}）` },
-    { value: 'skill', label: `技能（${catalogMeta.counts.skill}）` },
+  const workflowCategories = React.useMemo(
+    () => [...new Set(catalog.filter(item => item.type === 'workflow' && item.category).map(item => item.category))],
+    [catalogVersion],
+  )
+  const resourceFilters = [
+    { value: 'all', label: '全部资源' },
+    { value: 'database', label: '数据库' },
+    { value: 'skill', label: '技能' },
+    ...(resourceIds.length || selectedOnly ? [{ value: 'selected', label: `已选 ${resourceIds.length} 项` }] : []),
   ]
-  if (!mode && !launchWorkflow) return null
-  const categoryStyle = WORKBENCH_CATEGORY_COLORS[workflowCategory] || workbenchFallbackCategoryColor
+  const pickerHeight = popoverHeight ?? POPOVER_MAX_HEIGHT
+  const autoScopeId = React.useId()
+  if (!mode && !launchWorkflow && !enabled) return null
   return h(React.Fragment, null, [
+    h('div', { key: 'assist', ref: assistRef, className: 'rk-compose-suggestion' },
+      !mode && !launchWorkflow && suggestionWorkflow ? h('section', { 'aria-label': '科研建议' }, [
+        h('div', { key: 'text', role: 'status' }, [
+          h('strong', { key: 'name' }, suggestionWorkflow.name),
+          h('div', { key: 'why', className: 'rk-compose-reason' }, currentSuggestion.reason),
+        ]),
+        h('div', { key: 'actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'adopt', variant: 'primary', size: 'sm', onClick: adoptSuggestion, title: '在光标处插入科研步骤，保留原文与引用' }, '采用'),
+          h(Button, { key: 'preview', variant: 'ghost', size: 'sm', onClick: () => setPreview(true) }, '预览改动'),
+          h(Button, { key: 'skip', variant: 'ghost', size: 'sm', onClick: dismissSuggestion }, '略过'),
+        ]),
+        assistNotice ? h('div', { key: 'notice', role: 'status' }, assistNotice) : null,
+      ]) : null),
+    preview && !mode && suggestedText ? h(Modal, { key: 'preview', title: '预览科研建议', onClose: () => setPreview(false) }, [
+      h('p', { key: 'description', style: { color: C.muted } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),
+      h(Textarea, { key: 'text', value: suggestedText, readOnly: true, ariaLabel: '将插入的科研步骤', rows: 9 }),
+      h(Button, { key: 'apply', variant: 'primary', onClick: adoptSuggestion }, '采用并插入'),
+      assistNotice ? h(Notice, { key: 'notice', tone: 'warn' }, assistNotice) : null,
+    ]) : null,
     mode ? h('section', {
       key: 'popover',
       ref: popoverRef,
       role: 'dialog',
       'aria-label': mode === 'workflows' ? '选择科研工作流程' : '选择科研资源',
-      className: 'rk-pop',
+      className: 'rk-pop rk-composer-picker',
+      'data-short': pickerHeight < 230 ? '' : undefined,
       style: {
-        // 锚定在输入卡片顶边（宿主槽位锚点）：水平贴合卡片左缘，垂直顶在卡片上方间隙处。
-        // 不写死 left/bottom 像素坐标，也不写死 100vw 宽度——全部相对锚点解算。
-        position: 'absolute', left: 0, bottom: `calc(100% + ${POPOVER_GAP}px)`, zIndex: 20010,
-        boxSizing: 'border-box', width: 'min(560px, 100%)',
+        position: 'absolute', left: 0, width: 'min(460px, 100%)',
+        bottom: `calc(100% + ${POPOVER_GAP}px)`,
         maxHeight: popoverHeight == null ? POPOVER_MAX_HEIGHT : popoverHeight,
-        overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        border: `1px solid ${C.tealLine}`, borderRadius: 16,
-        background: C.surface, color: C.ink, boxShadow: C.shadowLg,
       },
     }, [
       h(GlobalStyle, { key: 'style' }),
-      h('div', { key: 'head', style: { padding: '13px 14px 10px', borderBottom: `1px solid ${C.line}`, display: 'grid', gap: 10 } }, [
-        h('div', { key: 'top', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 } }, [
-          h('span', { key: 'title', style: { fontSize: 13, fontWeight: 750, color: C.ink } }, mode === 'workflows' ? '科研工作流程' : '科研资源'),
-          h(IconButton, { key: 'close', name: 'close', size: 16, label: '关闭', onClick: close }),
+      h('header', { key: 'head', className: 'rk-picker-header' }, [
+        h('div', { key: 'top', className: 'rk-picker-top' }, [
+          h('div', { key: 'tabs', role: 'tablist', 'aria-label': '科研辅助功能', className: 'rk-picker-tabs' },
+            [['workflows', '选流程'], ['resources', '加资源']].map(([value, label]) => h('button', {
+              key: value, type: 'button', role: 'tab', 'aria-selected': mode === value,
+              onClick: () => { setMode(value); setQuery(''); popoverRef.current?.scrollTo(0, 0) },
+            }, label)),
+          ),
+          h('div', { key: 'actions', className: 'rk-picker-actions' }, [
+            available ? h('label', {
+              key: 'auto', className: 'rk-picker-switch',
+              title: '仅在当前会话提供本地建议，确认后插入草稿。',
+            }, [
+              h('span', { key: 'label' }, '自动科研辅助'),
+              h('input', { key: 'check', type: 'checkbox', role: 'switch', checked: enabled, onChange: toggleAuto, 'aria-describedby': autoScopeId }),
+              h('span', { key: 'track', className: 'rk-picker-switch-track', 'aria-hidden': true }),
+              h('span', { key: 'scope', id: autoScopeId, hidden: true }, '仅在当前会话提供本地建议，确认后插入草稿。'),
+            ]) : null,
+            h(IconButton, { key: 'close', name: 'close', size: 14, label: '关闭', onClick: close, style: { border: 0, background: 'transparent', borderRadius: 6 } }),
+          ]),
         ]),
-        h(SearchInput, {
-          key: 'search',
-          value: query,
-          onChange: setQuery,
-          placeholder: mode === 'workflows' ? '搜索工作流程……' : '输入搜索内容…',
-          ariaLabel: '搜索',
-        }),
-        mode === 'resources'
-          ? h(Segmented, { key: 'tabs', value: resourceType, options: resourceTabs, onChange: setResourceType, ariaLabel: '资源类型' })
-          : h(CatalogCategoryFilter, { key: 'cats', type: 'workflow', categories: catalogMeta.workflowCategories, value: workflowCategory, onChange: setWorkflowCategory }),
-      ]),
-      h('div', { key: 'rows', className: 'rk-scroll', style: { overflowY: 'auto', flex: 1, padding: rows.length ? '10px 0' : 0 } }, [
-        mode === 'workflows' && rows.length ? h('div', {
-          key: 'label',
-          style: { padding: '2px 15px 7px', color: categoryStyle, fontSize: 12, fontWeight: 750 },
-        }, `${workflowCategory === 'all' ? '全部工作流程' : workflowCategory}（${rows.length}）`) : null,
-        rows.length ? rows.map(item => mode === 'workflows' ? (() => {
-          const color = WORKBENCH_CATEGORY_COLORS[item.category] || workbenchFallbackCategoryColor
-          return h('button', {
-            key: item.id,
-            type: 'button',
-            onClick: () => selectWorkflow(item),
-            className: 'rk-card',
-            style: {
-              width: 'calc(100% - 28px)', margin: '0 14px 10px', display: 'grid', gap: 5,
-              textAlign: 'left', padding: '13px 15px', cursor: 'pointer',
-              border: `1px solid ${C.line}`, borderLeft: `3px solid ${color}`, borderRadius: 12,
-              background: C.surface, color: C.ink, boxShadow: C.shadowCard,
+        h('div', { key: 'filters', className: 'rk-picker-filters' }, [
+          h(SearchInput, {
+            key: 'search', value: query, onChange: setQuery, ariaLabel: '搜索',
+            placeholder: mode === 'workflows' ? '搜索工作流程' : '搜索技能或数据库',
+          }),
+          h(Select, {
+            key: 'filter', className: 'rk-picker-filter',
+            ariaLabel: mode === 'workflows' ? '工作流程分类' : '资源类型',
+            value: mode === 'workflows' ? workflowCategory : resourceType,
+            onChange: value => {
+              if (mode === 'workflows') setWorkflowCategory(value)
+              else setResourceType(value)
+              popoverRef.current?.scrollTo(0, 0)
             },
-          }, [
-            h('div', { key: 'row', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-              h('strong', { key: 'name', style: { fontSize: 13, fontWeight: 700 } }, item.name),
-              item.requiresFiles ? h(Badge, { key: 'file', color: C.amber }, '需要材料') : null,
-            ]),
-            h('span', { key: 'desc', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.description),
-          ])
-        })() : h('label', {
-          key: item.id,
-          className: 'rk-row',
-          style: {
-            display: 'grid', gridTemplateColumns: '18px 1fr', gap: 10, alignItems: 'start',
-            padding: '13px 15px', borderBottom: `1px solid ${C.divide}`, cursor: 'pointer',
-            background: resourceIds.includes(item.id) ? C.tealTint : 'transparent',
-          },
-        }, [
-          h('input', { type: 'checkbox', checked: resourceIds.includes(item.id), onChange: () => toggle(item.id), style: { marginTop: 3, accentColor: C.teal } }),
-          h('span', { key: 'text' }, [
-            h('span', { key: 'top', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-              h('strong', { key: 'name', style: { fontSize: 13, fontWeight: 650 } }, item.name),
-              h(Badge, { key: 'type', color: C.teal }, COMPOSER_TYPE_LABELS[item.type]),
-            ]),
-            h('span', { key: 'desc', style: { display: 'block', marginTop: 3, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, item.description),
-          ]),
-        ])) : h(EmptyState, {
-          key: 'empty',
-          icon: 'search',
-          text: mode === 'workflows' ? '没有匹配的工作流程。' : '没有匹配的资源。',
-          hint: '换个关键词，或切换上方的分类筛选。',
-        }),
+            options: mode === 'workflows'
+              ? [{ value: 'all', label: '全部分类' }, ...workflowCategories.map(value => ({ value, label: value }))]
+              : resourceFilters,
+            style: { height: 32, padding: '4px 20px 4px 8px', fontSize: 12 },
+          }),
+          mode === 'workflows' ? h('button', {
+            key: 'organize', type: 'button', className: 'rk-picker-text-action rk-picker-organize',
+            'aria-label': '整理当前提问', title: '整理当前提问',
+            onClick: () => {
+              close()
+              window.dispatchEvent(new CustomEvent(RESEARCH_ORGANIZE_EVENT, { detail: { sessionId } }))
+            },
+          }, '整理提问') : resourceIds.length ? h('button', {
+            key: 'add', type: 'button', className: 'rk-picker-text-action rk-picker-done', onClick: close,
+          }, `完成 · ${resourceIds.length}`) : null,
+        ]),
       ]),
-      h('div', { key: 'footer', style: { padding: '10px 14px', borderTop: `1px solid ${C.line}`, display: 'grid', gap: 8, fontSize: 12, color: C.muted, background: C.surfaceAlt } }, mode === 'resources'
-        ? [
-          h('div', { key: 'picked', style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
-            resourceIds.length
-              ? resourceIds.map(id => {
-                const item = itemById(id)
-                if (!item) return null
-                return h(Chip, {
-                  key: id,
-                  color: C.teal,
-                  onRemove: () => toggle(id),
-                  removeLabel: `移除 ${item.name}`,
-                }, `${COMPOSER_TYPE_LABELS[item.type]} · ${item.name}`)
-              })
-              : '尚未选择资源；勾选技能或数据库后，将在启动工作流时并入提示词。'),
-          recommendedWorkflows.length ? h('div', { key: 'rec', style: { display: 'grid', gap: 5 } }, [
-            h('span', { key: 'l', style: { fontSize: 12, color: C.muted } }, '推荐下一步工作流程'),
-            h('div', { key: 'items', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, recommendedWorkflows.map(workflow => h('button', {
-              key: workflow.id,
-              type: 'button',
-              onClick: () => selectWorkflow(workflow),
-              className: 'rk-btn',
-              style: {
-                padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${C.tealLineStrong}`, background: C.tealTint, color: C.teal,
-                fontSize: 12, fontWeight: 650,
-              },
-            }, workflow.name))),
-          ]) : null,
-          h('div', { key: 'actions', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-            h('span', { key: 'hint' }, resourceIds.length ? `已选 ${resourceIds.length} 项：技能作为附加指导、数据库作为研究提示并入提示词` : '输入筛选条件，点击条目前的选择框'),
-            h('div', { key: 'right', style: { display: 'flex', gap: 6, flexShrink: 0 } }, [
-              resourceIds.length ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', onClick: () => selection.clear() }, '清空全部') : null,
-              h(Button, { key: 'add', variant: 'primary', size: 'sm', onClick: close }, '添加'),
+      h('div', { key: 'rows', className: 'rk-picker-results', 'aria-label': '科研选择结果' }, [
+        selectedOnly?.length ? h('div', { key: 'selected', className: 'rk-picker-selected' }, [
+          h('span', { key: 'count' }, `已选 ${resourceIds.length} 项`),
+          h('button', { key: 'clear', type: 'button', className: 'rk-picker-text-action', onClick: () => selection.clear() }, '清空'),
+        ]) : null,
+        rows.length ? rows.map(item => {
+          const workflow = mode === 'workflows'
+          const checked = !workflow && resourceIds.includes(item.id)
+          return h(workflow ? 'button' : 'label', {
+            key: item.id,
+            className: 'rk-picker-row',
+            'data-selected': checked ? '' : undefined,
+            'data-material': workflow && item.requiresFiles ? '' : undefined,
+            ...(workflow ? { type: 'button', onClick: () => selectWorkflow(item) } : {}),
+          }, [
+            workflow ? null : h('input', { key: 'select', type: 'checkbox', checked, onChange: () => selection.toggle(item.id) }),
+            h('span', { key: 'text', className: 'rk-picker-row-text' }, [
+              h('strong', { key: 'name' }, item.name),
+              h('span', { key: 'desc', className: 'rk-picker-desc', title: item.description }, item.description),
             ]),
-          ]),
-        ]
-        : [h('span', { key: 'c' }, `${catalog.filter(item => item.type === 'workflow').length} 个工作流程中的 ${rows.length} 个`), h('span', { key: 't' }, '点击使用')]),
+            h('span', { key: 'meta', className: 'rk-picker-meta' }, workflow
+              ? (item.requiresFiles ? '需材料' : item.category)
+              : COMPOSER_TYPE_LABELS[item.type]),
+          ])
+        }) : h('p', { key: 'empty', className: 'rk-picker-empty' }, selectedOnly && !selectedOnly.length
+          ? '还没有选择资源。'
+          : catalog.length ? '没有匹配结果，试试其他关键词或分类。' : '正在读取科研目录…'),
+        recommendedWorkflows.length ? h('div', { key: 'recommended', className: 'rk-picker-selected' }, [
+          h('span', { key: 'label' }, '推荐流程'),
+          ...recommendedWorkflows.map(workflow => h('button', {
+            key: workflow.id, type: 'button', className: 'rk-picker-text-action', onClick: () => selectWorkflow(workflow),
+          }, workflow.name)),
+        ]) : null,
+      ]),
     ]) : null,
-    launchWorkflow ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
+    launchWorkflow && launchWorkflow.sessionId === sessionId ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow.workflow, originalDraft: launchWorkflow.draft, originalRevision: launchWorkflow.revision, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
   ])
 }

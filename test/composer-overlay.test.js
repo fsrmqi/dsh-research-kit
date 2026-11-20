@@ -56,7 +56,7 @@ test('浮层定位：相对输入卡片锚点，不写死视口坐标', () => {
   assert.doesNotMatch(style, /left: [1-9]/, '浮层水平位置不得写死像素坐标')
   assert.doesNotMatch(style, /bottom: [1-9]/, '浮层垂直位置不得写死像素坐标')
   // 尺寸自适应：宽度相对锚点，高度取实测值而非固定表达式。
-  assert.match(style, /width: 'min\(560px, 100%\)'/, '浮层宽度应相对锚点解算，而非 100vw')
+  assert.match(style, /width: 'min\(460px, 100%\)'/, '浮层宽度应相对锚点解算，而非 100vw')
   assert.match(style, /maxHeight: popoverHeight == null \? POPOVER_MAX_HEIGHT : popoverHeight/, '浮层高度应由实测可用空间驱动')
   assert.doesNotMatch(style, /100vh/, '浮层不得再以视口高度近似可用空间')
   assert.doesNotMatch(style, /100vw/, '浮层不得以视口宽度近似可用宽度')

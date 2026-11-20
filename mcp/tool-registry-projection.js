@@ -5,7 +5,7 @@
 // 原先整份打进 ui/client.js，占预算却对浏览器无用；这里改成构建期投影：
 //   scripts/build-client.mjs → clientToolRegistrySource() → 产物里的 TOOL_REGISTRY
 // 消费方只有两个（src/research-toolview.js 按 name 建索引、渲染 labelZh/summaryZh/
-// access/requiresConfirmation；src/agent-activity.js 用标签函数），test/tool-registry-projection.test.js 守护这条边界。
+// access/requiresConfirmation），test/tool-registry-projection.test.js 守护这条边界。
 
 import { ARTIFACT_KIND_LABELS, TOOL_REGISTRY } from './tool-registry-data.js'
 

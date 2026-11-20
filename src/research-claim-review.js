@@ -24,7 +24,7 @@ const CLAIM_EVIDENCE_GROUPS = [
   ['insufficient', '证据不足', C.amber], ['unassessed', '待评估', C.muted],
 ]
 
-function ClaimEvidenceRelations({ claim, evidenceById }) {
+export function ClaimEvidenceRelations({ claim, evidenceById }) {
   const ids = claim.evidence_ids
   const [local, setLocal] = React.useState(null)
   const [error, setError] = React.useState('')

@@ -186,7 +186,7 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 
 - **UI 四分区**：人手动选工作流、拼 Prompt、发送，Agent 执行 prompt。
 - **MCP Tool**：Agent 自主调用 research_catalog_search -> research_workflow_compose -> research_source_query，拿到结构化数据后自主推理。
-- **Agent 活动面板**：人查看 Agent 的调用轨迹，在 checkpoint 处确认。
+- **研究阶段确认**：在「本次研究」的待办收件箱确认待审核阶段。工具调用详情在 DSH 活动中查看。
 
 两种方式共享同一个 `catalog/` 目录和同一个证据存储（文件系统为真源，IndexedDB 为 UI 缓存）。
 

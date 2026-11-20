@@ -1,7 +1,7 @@
 import React from 'react'
 import { h, C } from './theme.js'
-import { Button, Card, PageHead, Notice, Spinner } from './ui.js'
-import { currentResearchContext, activeResearchRun, listResearchRuns, resumeResearchRun, subscribeResearchContext } from './research-context-store.js'
+import { Button, Card, PageHead, Notice, Spinner, Input } from './ui.js'
+import { currentResearchContext, activeResearchRun, listResearchRuns, resumeResearchRun, setResearchContext, setResearchProject, subscribeResearchContext } from './research-context-store.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
 import { itemById } from './catalog.js'
 import { evidenceVaultStore, subscribeEvidenceVault, syncEvidenceVaultWithFiles } from './lib/evidence-vault-sync.js'
@@ -14,6 +14,10 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
   const [loaded, setData] = React.useState(null)
   const [error, setError] = React.useState('')
   const [draftFeedback, setDraftFeedback] = React.useState('')
+  const [projectEditor, setProjectEditor] = React.useState(null)
+  const [externalRunId, setExternalRunId] = React.useState('')
+  const [runAction, setRunAction] = React.useState(false)
+  const [runFeedback, setRunFeedback] = React.useState('')
   const run = activeResearchRun()
   const scopedRun = run?.project === context.project ? run : null
   const activeRunId = scopedRun?.id || (run ? '' : context.activeRunId)
@@ -59,11 +63,56 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
   const scopedClaims = activeRunId ? (data?.claims || []).filter(claim => claim.run_id === activeRunId) : data?.claims || []
   const pending = scopedClaims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length
   const question = scopedClaims.find(claim => claim.question)?.question || data?.claims.find(claim => claim.question)?.question
-  const checkpoints = data?.activity?.checkpoints || []
-  const pendingCheckpointCount = checkpoints.reduce((count, cp) => count + Object.values(cp.checkpoints || {}).filter(value => !value.approved).length, 0)
   const overview = data?.activity?.run_overview
+  const checkpoints = data?.activity?.checkpoints || []
+  const pendingStages = overview?.passport_found && overview.project !== (context.project || 'default')
+    ? []
+    : overview?.checkpoint_state?.pending || checkpoints.filter(cp => cp.run_id === activeRunId)
+      .flatMap(cp => Object.entries(cp.checkpoints || {}).filter(([, checkpoint]) => !checkpoint.approved).map(([stage]) => stage))
   const outputs = (data?.ledger || []).filter(event => event.kind === 'artifact' && (!activeRunId || event.runId === activeRunId)).slice(0, 3)
   const activityOutputs = data?.activity?.artifacts || []
+  const openProjectEditor = () => {
+    setProjectEditor(previous => previous === null ? context.project : null)
+    setExternalRunId('')
+    setRunFeedback('')
+  }
+  const bindRun = async event => {
+    event.preventDefault()
+    const id = externalRunId.trim()
+    if (!id || runAction) return
+    setRunAction(true)
+    setRunFeedback('')
+    try {
+      const params = new URLSearchParams({ run_id: id, limit: '1' })
+      const response = await fetch(`/dsh-research-kit/agent-activity?${params}`, { signal: AbortSignal.timeout(5000) })
+      const activity = await response.json()
+      if (!response.ok || !activity.ok) throw new Error('无法读取运行，请检查运行 ID 后重试。')
+      const found = activity.run_overview
+      if (!found?.passport_found || found.run_id !== id || found.project !== (context.project || 'default')) throw new Error('当前课题中找不到该运行，请核对课题和运行 ID。')
+      if (currentResearchContext().project !== context.project) return
+      setResearchContext({ activeRunId: id })
+      setProjectEditor(null)
+      setExternalRunId('')
+    } catch (failure) { setRunFeedback(failure.message) }
+    finally { setRunAction(false) }
+  }
+  const approveStage = async stage => {
+    if (!activeRunId || runAction) return
+    setRunAction(true)
+    setRunFeedback('')
+    try {
+      const response = await fetch('/dsh-research-kit/agent-activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'research_run_checkpoint_approve', run_id: activeRunId, stage }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      if (currentResearchContext().activeRunId === activeRunId) await refresh()
+    } catch (failure) { setRunFeedback(`阶段确认失败：${failure.message}`) }
+    finally { setRunAction(false) }
+  }
   const restore = id => {
     setDraftFeedback('')
     if (!resumeResearchRun(id, context.project)) setError('研究运行已变更，请刷新项目状态。')
@@ -82,7 +131,29 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
     } catch (error) { setDraftFeedback(error.message) }
   }
   return h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, [
-    h(PageHead, { key: 'head', title: '项目首页', lead: `当前项目：${context.project || '未命名项目'}。从任务开始，随时查看材料、证据与待办。`, actions: [h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态')] }),
+    h(PageHead, { key: 'head', title: '本次研究', lead: '查看当前任务、近期产出和待核验项。', actions: [
+      h(Button, { key: 'project', size: 'sm', variant: 'ghost', onClick: openProjectEditor, 'aria-expanded': projectEditor !== null }, context.project ? `课题 · ${context.project}` : '研究课题'),
+      h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态'),
+    ] }),
+    projectEditor !== null ? h(Card, { key: 'project-panel', style: { display: 'grid', gap: 8, marginBottom: 12 } }, [
+      h('form', { key: 'project', className: 'rk-compose-actions', onSubmit: event => {
+        event.preventDefault()
+        setResearchProject(projectEditor)
+        setProjectEditor(null)
+      } }, [
+        h(Input, { key: 'name', value: projectEditor, onChange: setProjectEditor, ariaLabel: '研究课题名称', placeholder: '留空使用默认课题', maxLength: 100, style: { width: 'min(260px, 100%)' } }),
+        h(Button, { key: 'save', type: 'submit', size: 'sm' }, '切换课题'),
+      ]),
+      h('small', { key: 'hint', style: { color: C.muted } }, '按课题查看已保存的资料、证据与论断。'),
+      h('details', { key: 'run' }, [
+        h('summary', { key: 'label', style: { cursor: 'pointer', color: C.muted, fontSize: 12 } }, '载入已有研究运行'),
+        h('form', { key: 'form', className: 'rk-compose-actions', style: { marginTop: 8 }, onSubmit: bindRun }, [
+          h(Input, { key: 'id', value: externalRunId, onChange: setExternalRunId, ariaLabel: '研究运行 ID', placeholder: '填写运行 ID', maxLength: 120, style: { width: 'min(260px, 100%)' } }),
+          h(Button, { key: 'bind', type: 'submit', size: 'sm', disabled: runAction || !externalRunId.trim() }, '载入运行'),
+        ]),
+      ]),
+    ]) : null,
+    runFeedback ? h(Notice, { key: 'run-feedback', tone: 'warn', style: { marginBottom: 12 } }, runFeedback) : null,
     error ? h(Notice, { key: 'error', tone: 'warn' }, `${error}。可刷新重试；离线数据不代表最新审核状态。`) : null,
     h(Card, { key: 'tasks', style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 } }, [
       h(Button, { key: 'review', variant: 'primary', onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) }, '做文献综述'),
@@ -101,18 +172,18 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
           `${item.workflowName || item.workflowId || '研究运行'} · ${new Date(item.createdAt || 0).toLocaleString()} · ${item.id}`)),
       ]),
     ]) : null,
-    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', style: { display: 'grid', gap: 12 } }, [
+    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', className: 'rk-research-home-grid' }, [
       h(Card, { key: 'progress', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究问题尚未登记'),
         h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : activeRunId ? `当前运行：${activeRunId}` : '还没有启动研究工作流'),
         overview?.current_stage && overview.current_stage !== 'unknown'
           ? h('span', { key: 'stage' }, `当前阶段：${overview.current_stage}`) : null,
         scopedRun && itemById(scopedRun.workflowId)?.requiresFiles ? h(Notice, { key: 'materials', tone: 'warn' }, '此工作流需要材料：请核对当前会话的 @文件 引用。') : null,
-        h('small', { key: 'boundary', style: { color: C.muted } }, '写入或发送提示词仅记录操作事实；实际执行与完成状态以运行记录和人工审批为准。'),
+        scopedRun ? h('small', { key: 'boundary', style: { color: C.muted } }, '执行情况见运行记录和人工审批。') : null,
       ]),
       h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, '待办收件箱'),
-        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0} · 待确认阶段 ${pendingCheckpointCount}`),
+        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0}`),
         h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
           h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '处理 Claim'),
           h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
@@ -120,7 +191,10 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
         data.missing.size ? h(Notice, { key: 'missing', tone: 'warn' }, `${data.missing.size} 条已关联证据在当前项目中缺失。`) : null,
         scopedClaims.some(claim => !claim.links?.length) ? h('span', { key: 'unlinked' },
           `${scopedClaims.filter(claim => !claim.links?.length).length} 条论断尚未关联证据`) : null,
-        pendingCheckpointCount ? h('small', { key: 'checkpoints' }, '展开页面底部的运行活动，逐阶段检查并确认。') : null,
+        ...pendingStages.map(stage => h('div', { key: stage, className: 'rk-compose-actions' }, [
+          h('span', { key: 'label' }, `待确认阶段 · ${stage}`),
+          h(Button, { key: 'approve', size: 'sm', disabled: runAction, onClick: () => approveStage(stage), 'aria-label': `确认阶段 ${stage}` }, '确认'),
+        ])),
       ]),
       h(Card, { key: 'outputs', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, `最近产出 · 已保存证据 ${data.counts.all}`),

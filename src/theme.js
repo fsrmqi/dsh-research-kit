@@ -2,20 +2,16 @@ import React from 'react'
 
 const h = React.createElement
 
-// 视觉系统单一真源。色值与 dsh-promptkit「研究方法工厂对话增强器」（--pk-*）逐项对齐，
-// 仅变量名前缀改为 --rk，避免与宿主或其他插件冲突；改这里即可整体换肤。
-//
-// 对齐要点：teal #0f766e 主色、#0b5f58 主按钮底、12px 卡片圆角、8px 控件圆角、
-// 13px 正文字号、14px 面板标题、27px 页面标题、统一的三级阴影刻度。
+// 沿用 DSH 的语义色，旧客户端和独立预览使用内置蓝灰配色。
 const GLOBAL_CSS = `
-:root {
-  --rk-ink: #17212b; --rk-muted: #607080; --rk-slate: #52606d;
-  --rk-line: #d8e1e8; --rk-line-strong: #b6c6d1; --rk-divide: #edf1f4;
-  --rk-canvas: #f4f7f9; --rk-surface: #fff; --rk-surface-alt: #fcfdff; --rk-track: #e8eef2;
-  --rk-teal: #0f766e; --rk-teal-strong: #0b5f58;
-  --rk-teal-line: #cce8e2; --rk-teal-line-strong: #8acbbd; --rk-teal-line-active: #67b9aa;
-  --rk-teal-tint: #f1faf8; --rk-teal-tint-deep: #effaf7;
-  --rk-on-ink: #ffffff;
+:root, body {
+  --rk-ink: var(--dsw-alias-label-primary, #17212b); --rk-muted: var(--dsw-alias-label-secondary, #607080); --rk-slate: var(--dsw-alias-label-secondary, #52606d);
+  --rk-line: var(--dsw-alias-border-l1, #d8e1e8); --rk-line-strong: var(--dsw-alias-border-l2, #b6c6d1); --rk-divide: var(--dsw-alias-border-l1, #edf1f4);
+  --rk-canvas: var(--dsw-alias-bg-layer-1, #f4f7f9); --rk-surface: var(--dsw-alias-bg-base, #fff); --rk-surface-alt: var(--dsw-alias-bg-layer-1, #fcfdff); --rk-track: var(--dsw-alias-bg-layer-2, #e8eef2);
+  --rk-teal: var(--dsw-alias-state-business-primary, #315fc4); --rk-teal-strong: var(--dsw-alias-button-info-fill, #2d58bc);
+  --rk-teal-line: #d9e4fa; --rk-teal-line-strong: #a4bcef; --rk-teal-line-active: var(--dsw-alias-state-business-primary, #4774d6);
+  --rk-teal-tint: #edf3ff; --rk-teal-tint-deep: #e5edfd;
+  --rk-on-ink: var(--dsw-alias-label-on-color, #ffffff);
   --rk-blue: #2563eb; --rk-amber: #b45309; --rk-amber-line: #f1d4a5; --rk-amber-tint: #fff7ed;
   --rk-red: #b91c1c; --rk-red-tint: #fdecec;
   --rk-status-verified: #15803d; --rk-status-inferred: #2563eb; --rk-status-toverify: #b45309;
@@ -32,10 +28,10 @@ const GLOBAL_CSS = `
   --rk-d-ink: #e8eaed; --rk-d-muted: #9aa0a6; --rk-d-slate: #8a9199;
   --rk-d-line: #3c4043; --rk-d-line-strong: #4a4f59; --rk-d-divide: #2d3139;
   --rk-d-canvas: #181a20; --rk-d-surface: #242830; --rk-d-surface-alt: #1e2127; --rk-d-track: #2d3139;
-  --rk-d-teal: #3dbdb4; --rk-d-teal-strong: #2a9d94;
-  --rk-d-teal-line: #1a3d38; --rk-d-teal-line-strong: #2a6a60; --rk-d-teal-line-active: #3a9a8a;
-  --rk-d-teal-tint: #1a2e2c; --rk-d-teal-tint-deep: #162a28;
-  --rk-d-on-ink: #f4f7f9;
+  --rk-d-teal: #8db6ff; --rk-d-teal-strong: #9cbfff;
+  --rk-d-teal-line: #2a3b58; --rk-d-teal-line-strong: #425d86; --rk-d-teal-line-active: #8db6ff;
+  --rk-d-teal-tint: #1d2b43; --rk-d-teal-tint-deep: #243652;
+  --rk-d-on-ink: #131b2a;
   --rk-d-blue: #5c9dff; --rk-d-amber: #f0a040; --rk-d-amber-line: #5a3a10; --rk-d-amber-tint: #2a1f10;
   --rk-d-red: #ff6b6b; --rk-d-red-tint: #3a1a1a;
   --rk-d-status-verified: #34d399; --rk-d-status-inferred: #5c9dff; --rk-d-status-toverify: #f0a040;
@@ -46,14 +42,14 @@ const GLOBAL_CSS = `
   --rk-d-shadow-lg: 0 20px 50px rgba(0,0,0,.55);
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --rk-ink: var(--rk-d-ink); --rk-muted: var(--rk-d-muted); --rk-slate: var(--rk-d-slate);
-    --rk-line: var(--rk-d-line); --rk-line-strong: var(--rk-d-line-strong); --rk-divide: var(--rk-d-divide);
-    --rk-canvas: var(--rk-d-canvas); --rk-surface: var(--rk-d-surface); --rk-surface-alt: var(--rk-d-surface-alt); --rk-track: var(--rk-d-track);
-    --rk-teal: var(--rk-d-teal); --rk-teal-strong: var(--rk-d-teal-strong);
-    --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--rk-d-teal-line-active);
+  :root, body {
+    --rk-ink: var(--dsw-alias-label-primary, var(--rk-d-ink)); --rk-muted: var(--dsw-alias-label-secondary, var(--rk-d-muted)); --rk-slate: var(--dsw-alias-label-secondary, var(--rk-d-slate));
+    --rk-line: var(--dsw-alias-border-l1, var(--rk-d-line)); --rk-line-strong: var(--dsw-alias-border-l2, var(--rk-d-line-strong)); --rk-divide: var(--dsw-alias-border-l1, var(--rk-d-divide));
+    --rk-canvas: var(--dsw-alias-bg-layer-1, var(--rk-d-canvas)); --rk-surface: var(--dsw-alias-bg-base, var(--rk-d-surface)); --rk-surface-alt: var(--dsw-alias-bg-layer-1, var(--rk-d-surface-alt)); --rk-track: var(--dsw-alias-bg-layer-2, var(--rk-d-track));
+    --rk-teal: var(--dsw-alias-state-business-primary, var(--rk-d-teal)); --rk-teal-strong: var(--dsw-alias-button-info-fill, var(--rk-d-teal-strong));
+    --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--dsw-alias-state-business-primary, var(--rk-d-teal-line-active));
     --rk-teal-tint: var(--rk-d-teal-tint); --rk-teal-tint-deep: var(--rk-d-teal-tint-deep);
-    --rk-on-ink: var(--rk-d-on-ink);
+    --rk-on-ink: var(--dsw-alias-label-on-color, var(--rk-d-on-ink));
     --rk-blue: var(--rk-d-blue); --rk-amber: var(--rk-d-amber); --rk-amber-line: var(--rk-d-amber-line); --rk-amber-tint: var(--rk-d-amber-tint);
     --rk-red: var(--rk-d-red); --rk-red-tint: var(--rk-d-red-tint);
     --rk-status-verified: var(--rk-d-status-verified); --rk-status-inferred: var(--rk-d-status-inferred); --rk-status-toverify: var(--rk-d-status-toverify);
@@ -62,13 +58,13 @@ const GLOBAL_CSS = `
   }
 }
 body[data-ds-dark-theme] {
-  --rk-ink: var(--rk-d-ink); --rk-muted: var(--rk-d-muted); --rk-slate: var(--rk-d-slate);
-  --rk-line: var(--rk-d-line); --rk-line-strong: var(--rk-d-line-strong); --rk-divide: var(--rk-d-divide);
-  --rk-canvas: var(--rk-d-canvas); --rk-surface: var(--rk-d-surface); --rk-surface-alt: var(--rk-d-surface-alt); --rk-track: var(--rk-d-track);
-  --rk-teal: var(--rk-d-teal); --rk-teal-strong: var(--rk-d-teal-strong);
-  --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--rk-d-teal-line-active);
+  --rk-ink: var(--dsw-alias-label-primary, var(--rk-d-ink)); --rk-muted: var(--dsw-alias-label-secondary, var(--rk-d-muted)); --rk-slate: var(--dsw-alias-label-secondary, var(--rk-d-slate));
+  --rk-line: var(--dsw-alias-border-l1, var(--rk-d-line)); --rk-line-strong: var(--dsw-alias-border-l2, var(--rk-d-line-strong)); --rk-divide: var(--dsw-alias-border-l1, var(--rk-d-divide));
+  --rk-canvas: var(--dsw-alias-bg-layer-1, var(--rk-d-canvas)); --rk-surface: var(--dsw-alias-bg-base, var(--rk-d-surface)); --rk-surface-alt: var(--dsw-alias-bg-layer-1, var(--rk-d-surface-alt)); --rk-track: var(--dsw-alias-bg-layer-2, var(--rk-d-track));
+  --rk-teal: var(--dsw-alias-state-business-primary, var(--rk-d-teal)); --rk-teal-strong: var(--dsw-alias-button-info-fill, var(--rk-d-teal-strong));
+  --rk-teal-line: var(--rk-d-teal-line); --rk-teal-line-strong: var(--rk-d-teal-line-strong); --rk-teal-line-active: var(--dsw-alias-state-business-primary, var(--rk-d-teal-line-active));
   --rk-teal-tint: var(--rk-d-teal-tint); --rk-teal-tint-deep: var(--rk-d-teal-tint-deep);
-  --rk-on-ink: var(--rk-d-on-ink);
+  --rk-on-ink: var(--dsw-alias-label-on-color, var(--rk-d-on-ink));
   --rk-blue: var(--rk-d-blue); --rk-amber: var(--rk-d-amber); --rk-amber-line: var(--rk-d-amber-line); --rk-amber-tint: var(--rk-d-amber-tint);
   --rk-red: var(--rk-d-red); --rk-red-tint: var(--rk-d-red-tint);
   --rk-status-verified: var(--rk-d-status-verified); --rk-status-inferred: var(--rk-d-status-inferred); --rk-status-toverify: var(--rk-d-status-toverify);
@@ -88,6 +84,93 @@ body[data-ds-dark-theme] {
    !important 时会被 author 级 !important 规则覆盖）：宽度交还给 100%（相对父容器，
    随窗口自适应，不再受 1240px 与 100vw-280px 约束），内边距改用与其他分区同一枚流式令牌。 */
 .rk-studio-host { min-width: 0; display: block }
+/* 方法库和手动整理面板共享宿主语义色。 */
+.rk-studio-host, .rk-enhancer-theme {
+  --pk-ink: var(--rk-ink); --pk-muted: var(--rk-muted); --pk-slate: var(--rk-slate);
+  --pk-line: var(--rk-line); --pk-surface: var(--rk-surface); --pk-surface-alt: var(--rk-surface-alt);
+  --pk-canvas: var(--rk-canvas); --pk-paper-warm: var(--rk-canvas);
+  --pk-teal: var(--rk-teal); --pk-teal-strong: var(--rk-teal-strong);
+  --pk-teal-line: var(--rk-teal-line); --pk-teal-line-strong: var(--rk-teal-line-strong);
+  --pk-teal-line-active: var(--rk-teal-line-active); --pk-teal-tint: var(--rk-teal-tint);
+  --pk-teal-tint-deep: var(--rk-teal-tint-deep); --pk-action-bg: var(--rk-teal-strong); --pk-action-fg: var(--rk-on-ink);
+}
+.rk-console-main, .rk-compose-actions, .rk-personal-head {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.rk-console-main, .rk-personal-head { justify-content: space-between }
+.rk-composer-picker {
+  z-index: 20010;
+  box-sizing: border-box;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rk-line-strong) transparent;
+  border: 1px solid var(--rk-line);
+  border-radius: 12px;
+  background: var(--rk-surface);
+  color: var(--rk-ink);
+  box-shadow: var(--rk-shadow-lg);
+  font: 13px/1.4 var(--rk-font);
+}
+.rk-picker-header { position: sticky; top: 0; z-index: 1; background: var(--rk-surface); border-bottom: 1px solid var(--rk-line) }
+.rk-composer-picker[data-short] .rk-picker-header { position: relative }
+.rk-picker-top, .rk-picker-filters { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px }
+.rk-picker-top { padding-bottom: 0; flex-wrap: wrap }
+.rk-picker-filters { padding-bottom: 8px }
+.rk-picker-tabs, .rk-picker-actions { display: inline-flex; align-items: center; gap: 4px }
+.rk-picker-tabs { padding: 2px; border: 1px solid var(--rk-line); border-radius: 8px; background: var(--rk-surface-alt) }
+.rk-picker-actions { margin-inline-start: auto }
+.rk-picker-tabs button, .rk-picker-text-action {
+  min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--rk-muted); font: 600 12px/1.35 var(--rk-font);
+  cursor: pointer; white-space: nowrap;
+}
+.rk-picker-tabs button[aria-selected="true"], .rk-picker-done { background: var(--rk-teal-tint-deep); color: var(--rk-teal) }
+.rk-picker-tabs button:hover, .rk-picker-text-action:hover { background: var(--rk-teal-tint); color: var(--rk-teal) }
+.rk-picker-organize { min-height: 32px; border: 1px solid var(--rk-line); color: var(--rk-ink); background: var(--rk-surface-alt) }
+.rk-picker-switch {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 28px;
+  padding: 0 3px; color: var(--rk-ink); white-space: nowrap; cursor: pointer; font-size: 12px;
+}
+.rk-picker-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer }
+.rk-picker-switch-track { width: 28px; height: 16px; padding: 2px; box-sizing: border-box; border-radius: 999px; background: var(--rk-track); box-shadow: inset 0 0 0 1px var(--rk-line-strong) }
+.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted) }
+.rk-picker-switch input:checked + .rk-picker-switch-track { background: var(--rk-teal-strong); box-shadow: none }
+.rk-picker-switch input:checked + .rk-picker-switch-track::before { transform: translateX(12px); background: var(--rk-on-ink) }
+.rk-picker-switch input:focus-visible + .rk-picker-switch-track { outline: 2px solid var(--rk-teal); outline-offset: 2px }
+.rk-picker-search { position: relative; flex: 1; min-width: 0 }
+.rk-picker-filter { flex: 0 1 132px; min-width: 0; max-width: 42%; text-overflow: ellipsis }
+.rk-picker-results { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 6px 10px 10px }
+.rk-picker-row {
+  width: 100%; min-width: 0; min-height: 45px; display: flex; align-items: center; gap: 8px; box-sizing: border-box;
+  padding: 5px 9px; border: 1px solid var(--rk-line); border-radius: 8px; background: var(--rk-surface-alt);
+  color: var(--rk-ink); font: inherit; text-align: left; cursor: pointer;
+}
+.rk-picker-row:hover, .rk-picker-row[data-selected] { border-color: var(--rk-teal-line-strong); background: var(--rk-teal-tint) }
+.rk-picker-row:focus-visible { outline-offset: -2px }
+.rk-picker-row input { flex: none; margin: 0; accent-color: var(--rk-teal) }
+.rk-picker-row-text { flex: 1; min-width: 0 }
+.rk-picker-row-text strong { display: block; font-weight: 650 }
+.rk-picker-desc { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.rk-picker-desc, .rk-picker-meta, .rk-picker-selected, .rk-picker-empty { color: var(--rk-muted); font-size: 11px }
+.rk-picker-meta { max-width: 28%; padding: 2px 6px; border-radius: 6px; background: var(--rk-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rk-picker-row[data-material] .rk-picker-meta { background: var(--rk-teal-tint); color: var(--rk-teal) }
+.rk-picker-selected { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 4px 8px }
+.rk-picker-empty { margin: 0; padding: 10px 8px }
+.rk-compose-suggestion > section {
+  position: absolute; bottom: calc(100% + 8px); width: min(550px, 100%); left: 0; z-index: 20009;
+  display: grid; gap: 8px; box-sizing: border-box; padding: 11px 14px;
+  border: 1px solid var(--rk-teal-line); border-radius: 12px;
+  background: var(--rk-surface); color: var(--rk-ink); box-shadow: var(--rk-shadow-panel);
+  font: 13px/1.5 var(--rk-font);
+}
+.rk-compose-reason { color: var(--rk-muted); font-size: 12px; line-height: 1.5 }
+.rk-personal-templates { display: grid; gap: 12px; padding: 24px var(--rk-gutter) 48px; color: var(--rk-ink) }
+.rk-personal-head h2, .rk-personal-head p { margin: 0 }
+.rk-personal-head p { color: var(--rk-muted); margin-top: 6px; font-size: 13px }
+.rk-template-form { display: grid; gap: 10px }
+.rk-research-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px }
+.rk-research-home-grid > * { align-content: start }
 .rk-studio-host > main {
   width: 100% !important;
   max-width: none !important;
@@ -159,7 +242,7 @@ body[data-ds-dark-theme] {
 .rk-card { transition: transform .18s ease, box-shadow .18s ease }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
 .rk-row { transition: background .15s ease }
-button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgba(15,118,110,.45); outline-offset: 2px }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--rk-teal-line-active); outline-offset: 2px }
 @keyframes rk-spin { to { transform: rotate(360deg) } }
 @keyframes rk-pop { from { opacity: 0; transform: translateY(6px) scale(.985) } to { opacity: 1; transform: none } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
