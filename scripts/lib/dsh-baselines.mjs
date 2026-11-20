@@ -12,7 +12,7 @@
 // 失败信息会点名是哪条 seam 变了，而不是「某处坏了」。
 //
 // 基线覆盖 0.1.7 与 0.2 线已验证的 rc。更早的 0.1.5/0.1.6 线不在范围内（宿主自身的
-// peer 准入会拒绝装载）。0.2.2 线的 rc.1～rc.3 均已发布；rc.3 是当前 Desktop App 与 CLI
+// peer 准入会拒绝装载）。0.2.2 线的 rc.1～rc.5 均已发布；rc.5 是当前 Desktop App 与 CLI
 // 随附的宿主，按 docs/COMPATIBILITY.md §6 增行（peer 范围已覆盖，无需改动）。
 
 /** package.json 里声明的宿主版本范围；BASELINES 的每个版本都必须落在其中。 */
@@ -90,7 +90,19 @@ export const BASELINES = [
     id: 'dsh-v0.2.2-rc.3',
     tag: 'dsh-v0.2.2-rc.3',
     version: '0.2.2-rc.3',
-    notes: '0.2.2 线第三个 rc，也是当前 Desktop App 与 CLI（0.2.2-rc.3）随附的宿主版本；rc.2→rc.3 新增 sidebar.session.action hoc 槽、workspace.picker Factory（含 workspace.picker.directoryFlow）与官方可选 bundle deepseek-chat-import，本插件未注册这些面；12 条 seam + 平台表逐字成立。',
+    notes: '0.2.2 线第三个 rc；rc.2→rc.3 新增 sidebar.session.action hoc 槽、workspace.picker Factory（含 workspace.picker.directoryFlow）与官方可选 bundle deepseek-chat-import，本插件未注册这些面；12 条 seam + 平台表逐字成立。',
+  },
+  {
+    id: 'dsh-v0.2.2-rc.4',
+    tag: 'dsh-v0.2.2-rc.4',
+    version: '0.2.2-rc.4',
+    notes: '第 4 个候选版本，现有宿主契约与客户端模块检查通过。',
+  },
+  {
+    id: 'dsh-v0.2.2-rc.5',
+    tag: 'dsh-v0.2.2-rc.5',
+    version: '0.2.2-rc.5',
+    notes: '第 5 个候选版本，现有宿主契约与客户端模块检查通过。',
   },
 ]
 
@@ -282,9 +294,9 @@ export const PLUGIN_SLOT_SOURCES = [
   { file: 'dsh/standalone-glue.js', pattern: /name:\s*['"](tool\.call\.toolview|conversation\.chat\.assistant-actions|plugins\.detail\.[a-z]+)['"]/g, label: '键控槽位注册' },
 ]
 
-/** HOST_SEAMS 声明的全部槽位名。 */
+/** 必需宿主契约及有独立降级路径的可选槽位。 */
 export function declaredSlots() {
-  const slots = new Set()
+  const slots = new Set(['conversation.session.panel.section'])
   for (const seam of HOST_SEAMS) {
     if (seam.slot) slots.add(seam.slot)
     for (const slot of seam.slots || []) slots.add(slot)
@@ -300,18 +312,4 @@ export function declaredSlots() {
  * 提醒把这条缺口从本清单、docs/COMPATIBILITY.md 与 ROADMAP 里一起删掉；
  * 不修则永远有一条测试在说「这里还欠着」。
  */
-export const KNOWN_GAPS = [
-  {
-    id: 'phantom-client-inject',
-    label: 'package.json 的 dsh.client.inject 含一个宿主查无此名的模块',
-    evidence:
-      'dsh.client.inject 写的是其它客户端插件行的包名，宿主按依赖闭合解析。'
-      + '@deepseek-ai/dsh-client-runtime 在 0.1.7-rc.1/rc.2 的工作区包名里不存在，'
-      + '在宿主自带的 docs/dependency-catalog.json（@deepseek-ai/dsh@0.1.5-rc.1 的安装闭合）里同样不存在；'
-      + '0.2.0 与 0.2.1 各 rc 的工作区包名里也查无此名（compat 矩阵逐基线审计）。'
-      + '另两个注入项（ui-conversation / ui-tool）两处都能查到。'
-      + '客户端产物实际 require 的只有 react / react-dom，因此该条目不影响装载，只是「我依赖谁」失真。',
-    tripwire: { file: 'package.json', token: '"@deepseek-ai/dsh-client-runtime"' },
-    trackedIn: 'docs/COMPATIBILITY.md',
-  },
-]
+export const KNOWN_GAPS = []

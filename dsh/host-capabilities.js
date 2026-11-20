@@ -26,6 +26,12 @@ export function parseMcpToolName(name) {
   return { server: rest.slice(0, sep), tool: rest.slice(sep + 2) }
 }
 
+// 宿主在连接成功后发布该加载器，实际工具只注册到调用它的 Agent 作用域。
+export function isDeferredMcpLoader(schema) {
+  return parseMcpToolName(schema?.name)?.tool === 'load_tools'
+    && String(schema.description || '').startsWith('Add tools from MCP server ')
+}
+
 function servicePresent(service, methods) {
   if (!service || typeof service !== 'object') return false
   return methods.every(method => typeof service[method] === 'function')
@@ -54,6 +60,7 @@ export function probeHostCapabilities({ tools, web, shell, fs, llm, now = Date.n
   capabilities.toolProbeAvailable = true
   const byServer = new Map()
   const totals = new Map()
+  const deferred = new Set()
   let total = 0
   for (const schema of schemas) {
     if (capabilities.toolCount >= MAX_TOTAL_TOOLS) break
@@ -64,12 +71,19 @@ export function probeHostCapabilities({ tools, web, shell, fs, llm, now = Date.n
     if (!parsed) { capabilities.builtinToolCount++; continue }
     if (!byServer.has(parsed.server)) { byServer.set(parsed.server, []); totals.set(parsed.server, 0) }
     totals.set(parsed.server, totals.get(parsed.server) + 1)
+    if (isDeferredMcpLoader(schema)) {
+      deferred.add(parsed.server)
+      totals.set(parsed.server, totals.get(parsed.server) - 1)
+      continue
+    }
     const list = byServer.get(parsed.server)
     if (list.length < MAX_TOOLS_PER_SERVER) list.push(parsed.tool)
   }
   capabilities.mcpServers = [...byServer.entries()]
     .slice(0, MAX_SERVERS)
-    .map(([server, toolNames]) => ({ server, tools: toolNames, truncated: totals.get(server) > toolNames.length }))
+    .map(([server, toolNames]) => ({ server, tools: toolNames, truncated: totals.get(server) > toolNames.length,
+      ...(deferred.has(server) ? { toolLoading: 'on-demand' } : {}),
+    }))
     .sort((a, b) => a.server.localeCompare(b.server))
   return capabilities
 }

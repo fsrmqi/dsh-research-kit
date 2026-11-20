@@ -10,6 +10,12 @@
 
 ### 新增
 
+- DSH `0.2.2-rc.4` 和 `rc.5` 加入兼容矩阵，移除不存在的客户端注入项。新增隔离 DSH Web 装载测试。
+- 项目首页可跨会话恢复同一研究运行，继续草稿沿用原运行 ID。首页展示待审核论断、缺失来源、检查点与最近产出。
+- 证据库支持导出当前项目综述审核包，包含候选及排除理由、可通过证据 ID 回查的论断审核记录，以及纳入文献的 BibTeX。
+- 支持 MCP 按需加载状态，以及具备相应宿主能力时的会话项目摘要和草稿文件引用。
+
+
 - 🧾 **检查点改为「事实 + 投影」，并补上并发与崩溃语义**：新增 `mcp/state/checkpoint-facts.js`，为每个 run 追加一条只增不改的事实（`seq` 自增、`prev_digest` 成链、`receipt_digest` 记录这次放行的依据摘要）；`<run_id>.json` 仍是要给 `run_status`、UI 与工具读的投影，但由事实重放得出。投影丢失或落后（进程在「事实已落盘、投影未写」之间被强杀）时按事实恢复，已放行的闸门不会丢；投影损坏、事实链断裂仍报错，不被静默当作「无待批项」。`research_run_checkpoint_approve` 新增可选 `expected_seq`（与状态里的 `seq` 不一致即返回 `CHECKPOINT_CONFLICT`，避免用旧快照覆盖别人的放行）与同内容幂等重试（不追加事实，`attempt` 按关计次，审计能看出放过几次）；`research_run_checkpoint_status` 新增可选 `explain`，返回每次初始化的放行时间线，用于回答「这次为什么停在这里」。测试 579 → **586 项 / 77 个测试文件**。
 - 🚀 **工作台「在新会话开始」**：工作台第三个出口把同一份组装结果交给宿主 `uiWorkspace.startSession(undefined, { prompt, whenDraftExists: 'append' })`，由宿主预填为新会话草稿——不自动发送。草稿预填通道（`startSession` 的 `prompt` + **`conversation` 服务**的 `input.requestDraftInitialization`）自 DSH `0.2.1-rc.1` 起存在；`whenDraftExists` 语义自 `0.2.1-rc.3` 起（更早宿主按「已有草稿则保留」处理，新开的空白会话照常预填）。`0.1.7` / `0.2.0` 线没有该通道，入口整块不渲染。研究运行以 `sessionId: ''` 记录（发起会话未知，不冒充当前会话），详情见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) §4 与 MANUAL-QA F5。
 - 📌 **会话视图的「更多会话视图」菜单改为宿主原生能力（文档登记，无插件改动）**：0.2.1-rc.3 起宿主把未固定的会话视图收进标签栏「更多会话视图」菜单。插件只需正常注册 `conversation.view`，不再需要（也不该）自己实现视图选择入口；COMPATIBILITY §4 已记录这条边界，避免以后重复造轮子。

@@ -71,6 +71,7 @@
     "mcp": "node mcp/server.js",
     "check": "node --experimental-vm-modules --no-warnings scripts/check-syntax.mjs && node scripts/check-vendor.mjs && node scripts/validate-catalog.mjs && node scripts/validate-diagrams.mjs --repo && node scripts/sync-tool-docs.mjs --check && node scripts/check-doc-stats.mjs && node scripts/check-doc-assets.mjs && node scripts/check-manual-qa.mjs && node scripts/check-client-budget.mjs",
     "test": "npm run build && node --test \"test/*.test.js\" \"test/*.test.mjs\"",
+    "test:dsh-web": "npm run build && node scripts/dsh-web-smoke.mjs",
     "test:browser": "npm run build && node scripts/browser-regression.cjs",
     "prepublishOnly": "npm run check && npm test && npm run check:dsh-app && npm run check:test-count",
     "check:performance": "node scripts/check-product-performance.mjs"
@@ -82,7 +83,6 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-tool"
       ]

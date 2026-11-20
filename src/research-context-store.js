@@ -54,7 +54,11 @@ export function setResearchContext(next = {}) {
 }
 
 export function setResearchProject(project) {
-  return setResearchContext({ project: normalizeProject(project) })
+  const scope = normalizeProject(project)
+  const current = currentResearchContext()
+  const activeRunId = current.project === scope || listResearchRuns({ project: scope }).some(run => run.id === current.activeRunId)
+    ? current.activeRunId : ''
+  return setResearchContext({ project: scope, activeRunId })
 }
 
 export function subscribeResearchContext(listener) {
@@ -109,6 +113,16 @@ export function listResearchRuns({ project, sessionId } = {}) {
 }
 
 // App 迁移只补入缺失运行；既有运行的状态和当前活跃运行都不被旧备份覆盖。
+// 恢复只切换活动记录，保留原始会话、运行 ID 与执行状态。
+export function resumeResearchRun(id, project = currentResearchContext().project) {
+  const scope = normalizeProject(project)
+  if (currentResearchContext().project !== scope) return null
+  const run = listResearchRuns({ project: scope }).find(item => item.id === id)
+  if (!run) return null
+  setResearchContext({ activeRunId: run.id })
+  return run
+}
+
 export function importResearchRuns(incoming = []) {
   const rows = readRuns()
   const known = new Set(rows.map(row => row.id))

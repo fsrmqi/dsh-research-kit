@@ -243,3 +243,18 @@ test('接线：增强器 searchMemory 经路由检索并合并来源；用户不
   assert.match(vendor, /setUseMemoryContext\(value => !value\)/, '项目记忆必须是显式开关（off 默认）')
   assert.match(glue, /记忆检索不可用不是增强的失败条件|不阻断增强/, '记忆失败回落而非失败')
 })
+
+test('按需加载的连接不被当成记忆检索工具，也不会被面板隐式调用', async () => {
+  const route = memorySearchRoute({ tools: {
+    schemas: () => [{
+      name: 'mcp__memory-center__load_tools',
+      description: 'Add tools from MCP server memory-center to your tool list.',
+    }],
+    execute() { assert.fail('按需加载器不能被记忆入口隐式调用') },
+  } })
+  for (const input of [{ query: '文献' }, { query: '文献', tool: 'mcp__memory-center__mc_search' }]) {
+    const result = await post(route, input).done
+    assert.equal(result.body.reason, 'tools-on-demand')
+    assert.equal(result.body.available, false)
+  }
+})

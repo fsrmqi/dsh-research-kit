@@ -77,12 +77,15 @@ const DECLARED_BASELINE_IDS = [
   'dsh-v0.2.2-rc.1',
   'dsh-v0.2.2-rc.2',
   'dsh-v0.2.2-rc.3',
+  'dsh-v0.2.2-rc.4',
+  'dsh-v0.2.2-rc.5',
 ]
 const DECLARED_SLOT_NAMES = [
   'conversation.chat.assistant-actions',
   'conversation.input.left',
   'conversation.input.overlay',
   'conversation.input.right',
+  'conversation.session.panel.section',
   'conversation.view',
   'plugins.detail.actions',
   'plugins.detail.badge',
@@ -240,7 +243,7 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
         assert.deepEqual(platform.missing, [])
       })
 
-      test('dsh.client.inject 的每个未命中项都已在 KNOWN_GAPS 里挂号（不许有未追踪的失真声明）', t => {
+      test('dsh.client.inject 的全部声明均能在宿主依赖清单中找到', t => {
         if (!picked.source) {
           // 无源码时守住 CLI 的硬门禁语义（这正是「看起来在守、其实没守」的高发处）：
           // 未知/拼错参数、路径不存在、--require-source 配不存在的路径，都必须退出 2。
@@ -263,15 +266,7 @@ describe('compat 矩阵 —— 真实宿主源码（无源码时核对降级路�
         // 而且没有任何信号。改成显式失败：读不到清单说明清单被改名/删了，必须有人处理。
         assert.equal(audit.checked, true, '宿主依赖清单读不到，等于这条断言没跑：请确认 docs/dependency-catalog.json 仍存在且可解析')
         assert.ok(audit.known.length >= 1, '注入清单与宿主包清单完全不相交，八成是清单口径写错了')
-        const tracked = KNOWN_GAPS.find(gap => gap.id === 'phantom-client-inject')
-        assert.ok(tracked, '未命中的注入项必须在 KNOWN_GAPS 中有记录，否则没人知道它一直对不上')
-        const pkgSource = readFileSync(join(ROOT, 'package.json'), 'utf8')
-        for (const spec of audit.unknown) {
-          assert.ok(
-            pkgSource.includes(spec) && tracked.tripwire.token.includes(spec),
-            `注入项 ${spec} 在宿主里查不到，却没被 KNOWN_GAPS 的绊线覆盖`,
-          )
-        }
+        assert.deepEqual(audit.unknown, [], '注入项在宿主依赖清单中不存在')
         t.diagnostic(`真实基线：命中 ${audit.known.length} 项 / 未命中 ${audit.unknown.length} 项`)
       })
     })

@@ -143,3 +143,16 @@ test('接线：Node half 注册两条路由；工作台只读摘要不改写目�
   const client = readFileSync(new URL('../src/host-capabilities-client.js', import.meta.url), 'utf8')
   assert.doesNotMatch(client, /availability/, '能力探测消费端不得改写目录标注')
 })
+
+test('按需加载模式下连接仍可见，加载器自身不算可调用的研究工具', () => {
+  const tools = { schemas: () => [
+    { name: 'mcp__memory-center__load_tools', description: 'Add tools from MCP server memory-center to your tool list.' },
+    { name: 'mcp__other__load_tools', description: '服务器自有的同名工具' },
+  ] }
+  const result = probeHostCapabilities({ tools })
+  assert.deepEqual(result.mcpServers, [
+    { server: 'memory-center', tools: [], truncated: false, toolLoading: 'on-demand' },
+    { server: 'other', tools: ['load_tools'], truncated: false },
+  ])
+  assert.match(summarizeHostCapabilities(result), /memory-center（按需加载）/)
+})

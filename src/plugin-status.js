@@ -103,7 +103,7 @@ export function ResearchPluginStatusSection({ subject }) {
     })) : null,
     capabilities ? h('div', { key: 'rows', style: { display: 'grid', gap: 5, fontSize: 13, lineHeight: 1.5, color: C.muted } }, [
       h('div', { key: 'direct' }, `插件直查适配器：${directQueryCount()} 个`),
-      h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.server).join('、') : '无'}`),
+      h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.toolLoading === 'on-demand' ? `${item.server}（按需加载，当前可见 ${item.tools.length} 项）` : `${item.server}（当前可见 ${item.tools.length} 项）`).join('、') : capabilities.toolProbeAvailable ? '无可见记录' : '未知'}`),
       h('div', { key: 'tools' }, `工具注册表：${capabilities.toolProbeAvailable ? `${capabilities.toolCount} 个工具` : '不可读'}`),
     ]) : null,
   ])

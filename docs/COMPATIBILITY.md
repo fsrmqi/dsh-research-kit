@@ -26,7 +26,9 @@
 | `dsh-v0.2.1-rc.5` | `0.2.1-rc.5` | 0.2.1 线最终 rc；0.2.2-rc.1 直接从它切出（merge-base 即本行 tag），二者是线性后继关系 |
 | `dsh-v0.2.2-rc.1` | `0.2.2-rc.1` | 0.2.2 线首个 rc；客户端契约变化以新增为主（input 加 `insertQuote` / `phase:'sending'`，chat 加 `text-interaction` / `user.before`，toolview 与 view owner props 未动；另有本插件未使用的 `fileMentions` 删除与 `readAttachment` 签名调整），12 条 seam + 平台表在 rc.5→rc.1 上逐字成立；宿主 Node engines 升到 `>=24.9.0` |
 | `dsh-v0.2.2-rc.2` | `0.2.2-rc.2` | 0.2.2 线第二个 rc（线性包含 rc.1）；客户端改动仍以新增为主（`hoc` 槽种与 `conversation.hero.frame` / `conversation.chat.markdown.fence`、composer 文件粘贴路由与失败重试、`insertQuote` 可选摘要、plugin-manager Git 更新入口），本插件均未使用；12 条 seam + 平台表逐字成立 |
-| `dsh-v0.2.2-rc.3` | `0.2.2-rc.3` | 0.2.2 线第三个 rc（线性包含 rc.2），也是**当前 Desktop App 与 CLI 随附的宿主版本**；新增 `sidebar.session.action` hoc 槽、`workspace.picker` Factory（含 `workspace.picker.directoryFlow`）与官方可选 bundle `deepseek-chat-import`，本插件未使用；12 条 seam + 平台表逐字成立 |
+| `dsh-v0.2.2-rc.3` | `0.2.2-rc.3` | 0.2.2 线第三个 rc（线性包含 rc.2）；新增 `sidebar.session.action` hoc 槽、`workspace.picker` Factory（含 `workspace.picker.directoryFlow`）与官方可选 bundle `deepseek-chat-import`，本插件未使用；12 条 seam + 平台表逐字成立 |
+| `dsh-v0.2.2-rc.4` | `0.2.2-rc.4` | 12 条宿主契约与客户端模块表通过 |
+| `dsh-v0.2.2-rc.5` | `0.2.2-rc.5` | 本机 Desktop App 与 CLI 所用版本，12 条宿主契约与客户端模块表通过 |
 
 `package.json` 的 `peerDependencies` 与 `engines.dsh` 声明同一个范围 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`（`engines.dsh` 是宿主优先读取的口径：0.2.1 线自 rc.1 起就已优先读它并忽略 peer，只有 0.1.7/0.2.0 线忽略它、回落到 peer）。矩阵里每个基线版本都必须落在该范围内——这条由测试自己断言，防止「清单越写越宽、peer 范围却没收」。宿主自身的 Node `engines` 分两段：`0.1.7`～`0.2.1` 线是 `^22.19.0 || >=24.0.0`，`0.2.2` 线是 `>=24.9.0`——插件自己的 `>=22.19` 不拦，但在 0.2.2 线上跑必须是 Node 24.9+。
 
@@ -36,7 +38,7 @@
 
 **0.2.2-rc.2 已列入基线。** rc.2 在 rc.1 之后、线性包含 rc.1（`merge-base` 即 rc.1 的 tag 提交），但改动面比 rc.1 大得多（合并了 master 的整条发布列车）。逐面审计结论：**12 条 seam + 平台模块表 13/13 在 rc.2 上仍逐字成立**；客户端契约改动全部是新增，没有本插件用到的形状变化——`hoc` 槽种落地并新增 `conversation.hero.frame`（root）与 `conversation.chat.markdown.fence`（session）两个包裹层；composer 增加文档级文件粘贴路由与失败重试（`ComposerBarInjected.registerFileIntake` / `retry`、`ComposerBarOwnerProps.occurrence`）；`InputActions.insertQuote` / `DraftQuote` 增加可选 `summary`（草稿正文与发送内容仍用 `text`）；plugin-manager 增加 Git 更新入口（`PluginTabProps.update`、`BundleInfo.update: 'registry' | 'git'`）；sidebar / settings / approval 的 `hooks` 与选装字段也各有新增。Server 侧新增 agent-team、office 工具、MCP manager 与 `wsl` 平台准入，均不触及本插件的注册面。本插件用到的 toolview 三阶段、`ConvViewOwnerProps`、`InputActions.setDraft/insertText/captureInsertion`、`plugins.detail.*` / `plugins.row.config` props 形状未变；rc.1 上处理的两处真实影响（composer portal、`agent.model.current()`）在 rc.2 上同样成立且已保留。跨页预选视图边界同 rc.1。
 
-**0.2.2-rc.3 已列入基线（当前 Desktop App 与 CLI 随附）。** rc.3 在 rc.2 之后、线性包含 rc.2；改动面集中在官方可选 bundle 与 ui 槽位新增：`sidebar.session.action`（root hoc，包裹 New-session 行内容）、`workspace.picker` Factory（root，含 `workspace.picker.directoryFlow`），以及新的官方实验性可选 bundle `deepseek-chat-import`（导入 DeepSeek 网站聊天导出，使用上述两个槽位）；另有图标、CI 与 tsconfig 调整。本插件不注册 sidebar/workspace 槽，也不使用 chat-import；**12 条 seam + 平台模块表 13/13 在 rc.3 上仍逐字成立**，本插件用到的 toolview 三阶段、`ConvViewOwnerProps`、`InputActions.setDraft/insertText/captureInsertion`、`plugins.detail.*` / `plugins.row.config` props 形状未变；rc.1/rc.2 处理的两处适配继续生效。跨页预选视图边界同 rc.1。
+**0.2.2-rc.3 已列入基线。** rc.3 在 rc.2 之后、线性包含 rc.2；改动面集中在官方可选 bundle 与 ui 槽位新增：`sidebar.session.action`（root hoc，包裹 New-session 行内容）、`workspace.picker` Factory（root，含 `workspace.picker.directoryFlow`），以及新的官方实验性可选 bundle `deepseek-chat-import`（导入 DeepSeek 网站聊天导出，使用上述两个槽位）；另有图标、CI 与 tsconfig 调整。本插件不注册 sidebar/workspace 槽，也不使用 chat-import；**12 条 seam + 平台模块表 13/13 在 rc.3 上仍逐字成立**，本插件用到的 toolview 三阶段、`ConvViewOwnerProps`、`InputActions.setDraft/insertText/captureInsertion`、`plugins.detail.*` / `plugins.row.config` props 形状未变；rc.1/rc.2 处理的两处适配继续生效。跨页预选视图边界同 rc.1。
 
 新增一个受支持版本 = 在 `BASELINES` 加一条 + 拉 tag + 跑测试。失败信息会点名**哪条 seam 在哪个宿主文件里少了什么**。
 
@@ -75,11 +77,11 @@
 
 字符串 seam 有一个天然盲区：**宿主接口存在、插件接线却对不上**。这时矩阵全绿，功能却永远不出现。所以每条已知缺口都配一个**绊线断言**：断言「插件里仍然写着那段对不上的代码」。修好之后绊线会失败，逼你回来同步删掉缺口记录、本文与 ROADMAP——不修，则永远有一条测试在说「这里还欠着」。
 
-| 缺口 | 影响 | 绊线 |
-| --- | --- | --- |
-| `phantom-client-inject` | `dsh.client.inject` 里的 `@deepseek-ai/dsh-client-runtime` 在 0.1.7/0.2.0/0.2.1 各已列 rc 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到；另两个注入项两处都能查到。产物实际只 require `react`/`react-dom`，故不影响装载，只是「我依赖谁」失真 | `package.json` 里仍有该字符串 |
+客户端注入声明已清理，并由矩阵逐版本核对。
 
-`npm run check:dsh-app` 与 `npm test` 都会把未命中的 inject 名字打出来（警告，不失败）。
+宿主声明 `conversation.session.panel.section` 时，会话面板显示该会话关联的科研项目与待审核论断。宿主提供会话级 `addReferences` 时，项目首页可把工作区内相对文件路径添加到该会话草稿。两个入口独立探测。
+
+MCP 按需加载模式下，宿主加载器表明服务器已连接。项目记忆面板需要全局可见的检索工具；可在会话里由 Agent 加载后检索，或把对应服务器设为预加载。
 
 **详情页「回到会话」走的是哪条通道（0.3.0 已修）**：旧接线找的是服务级方法 `uiConversation.openView(sessionId, view, focus?)`，它在全部已列基线上都不存在——宿主真正的导航面是 `uiWorkspace.openSession(target)`（切回主区）+ `uiConversation.binding(source).activate(target)`（把目标视图加入会话活跃目标集），这两条自 0.1.7 起就有。现在由 [`src/lib/host-navigation.js`](../src/lib/host-navigation.js) 组合：先从会话列表快照里取 `retainedBy.mainView > 0` 的会话（宿主内置客户端也这么取），`openSession` 同步 retain 后再 `binding(id).activate('dsh-research-kit-console')`。顺序不可交换：先 `binding` 会因会话未激活而抛错。由此删掉了 `cross-page-view-navigation` 缺口与 `view-navigation` 探测，两条真实 API 升级为必需 seam（见 §3）。
 

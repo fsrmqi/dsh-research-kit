@@ -1,3 +1,4 @@
+import { isDeferredMcpLoader } from './host-capabilities.js'
 export const MEMORY_SEARCH_PATH = '/dsh-research-kit/memory-search'
 export const DEFAULT_MEMORY_SERVER = 'memory-center'
 import { readConfigValue } from './config.js'
@@ -149,10 +150,17 @@ export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS, 
       }
       let schemas = []
       try { schemas = tools.schemas() || [] } catch { schemas = [] }
+      const loaderVisible = schemas.some(schema => isDeferredMcpLoader(schema) && parseServerOf(schema.name) === server)
+      schemas = schemas.filter(schema => !isDeferredMcpLoader(schema))
+      const deferred = () => reply(res, 200, {
+        ok: true, available: false, reason: 'tools-on-demand', server,
+        message: 'MCP 服务器已连接，工具按会话加载。请在当前会话让 Agent 加载并检索，或在宿主中将该服务器设为预加载以使用面板检索。',
+      })
       let tool = null
       let candidates = []
       if (explicitTool) {
         const found = schemas.find(schema => schema?.name === explicitTool)
+        if (!found && loaderVisible) return deferred()
         if (!found) return reply(res, 200, { ok: true, available: false, reason: 'tool-not-found', tool: explicitTool })
         if (parseServerOf(found.name) !== server) {
           return reply(res, 400, {
@@ -168,6 +176,7 @@ export function memorySearchRoute({ tools, logger, timeoutMs = EXEC_TIMEOUT_MS, 
         candidates = picked.candidates
       }
       if (!tool) {
+        if (loaderVisible) return deferred()
         return reply(res, 200, {
           ok: true, available: false, reason: 'server-not-found', server, candidates,
           servers: [...new Set(schemas.map(schema => parseServerOf(schema?.name)).filter(Boolean))].slice(0, MAX_SERVERS),

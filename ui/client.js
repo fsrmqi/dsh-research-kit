@@ -436,7 +436,11 @@ function setResearchContext(next = {}) {
 }
 
 function setResearchProject(project) {
-  return setResearchContext({ project: normalizeProject(project) })
+  const scope = normalizeProject(project)
+  const current = currentResearchContext()
+  const activeRunId = current.project === scope || listResearchRuns({ project: scope }).some(run => run.id === current.activeRunId)
+    ? current.activeRunId : ''
+  return setResearchContext({ project: scope, activeRunId })
 }
 
 function subscribeResearchContext(listener) {
@@ -491,6 +495,16 @@ function listResearchRuns({ project, sessionId } = {}) {
 }
 
 // App 迁移只补入缺失运行；既有运行的状态和当前活跃运行都不被旧备份覆盖。
+// 恢复只切换活动记录，保留原始会话、运行 ID 与执行状态。
+function resumeResearchRun(id, project = currentResearchContext().project) {
+  const scope = normalizeProject(project)
+  if (currentResearchContext().project !== scope) return null
+  const run = listResearchRuns({ project: scope }).find(item => item.id === id)
+  if (!run) return null
+  setResearchContext({ activeRunId: run.id })
+  return run
+}
+
 function importResearchRuns(incoming = []) {
   const rows = readRuns()
   const known = new Set(rows.map(row => row.id))
@@ -3862,23 +3876,7 @@ function writeDraftText(inputActions, text, { mode = 'insert' } = {}) {
 }
 
 
-// 宿主导航与草稿初始化（浏览器半）：把「回到会话」与「开新会话并预填草稿」收敛成可测的纯函数。
-//
-// 用到的宿主公开 API：
-//   - `uiWorkspace.openSession(target)`   切换主区到指定会话（同步 retain）；
-//   - `uiConversation.binding(id).activate(view)` 把目标视图加入该会话的活跃目标集（**不是**选中标签页，
-//     见下）；
-//   - `uiWorkspace.startSession(ws, options)` 新建会话并预填草稿（`prompt` 自 0.2.1-rc.1 起，
-//     `whenDraftExists` 自 0.2.1-rc.3 起被识别），草稿初始化由 `conversation.input.requestDraftInitialization` 承担。
-//
-// 视图标签是宿主自己的 UI 状态：会话 store 的 `s.view` 决定渲染哪个视图，`binding.activate()` 只保证该目标
-// 的数据源被激活。因此跨页无法可靠地「选中科研工作台标签」——只有该会话此前停在科研工作台（宿主持久化了这个
-// 选择）时，回到会话才会一并恢复。入口文案按这个事实写「回到会话」，不承诺选标签。
-//
-// 服务是否装配仍要软探测：旧宿主 / 无 UI 装配时返回 false，调用方按「该入口不渲染」降级，
-// 绝不让探测反过来打断插件装载（与 dsh/optional-service.js 的三条规则一致；本文件进浏览器产物，
-// 因此不 import 宿主半区的 optional-service）。
-
+// 回到会话使用宿主公开导航。视图标签由会话选择状态恢复，activate 只激活数据源。
 /** 在会话列表快照里找主区当前持有的会话；宿主内置客户端也这样取（DocumentTitle / ui-open-in-app）。 */
 function currentMainSessionId(sessions) {
   try {
@@ -3943,6 +3941,30 @@ function launchResearchSession({ uiWorkspace, conversation } = {}, { prompt, whe
     uiWorkspace.startSession(undefined, { prompt: text, whenDraftExists })
     return true
   } catch { return false }
+}
+
+/** 宿主只有在已绑定的会话且编辑器允许时才会接收原生文件引用。 */
+function researchMaterialInput({ sessions, conversation }, sessionId) {
+  try {
+    if (!sessionId) return null
+    const binding = sessions?.binding?.(sessionId)
+    const input = binding && conversation?.input?.for?.(binding.ctx)
+    return typeof input?.addReferences === 'function' && typeof input.canInsertReferences === 'function' ? input : null
+  } catch { return null }
+}
+
+function insertResearchMaterial(host, sessionId, value) {
+  const path = String(value || '').trim()
+  const segments = path.split('/')
+  if (!path || /[\u0000-\u001f\u007f-\u009f"\\:]/u.test(path)
+    || segments.some(part => !part || part === '..') || segments.at(-1) === '.') {
+    throw new Error('请输入工作区内的相对文件路径。')
+  }
+  const input = researchMaterialInput(host, sessionId)
+  const ref = /\s/u.test(path) ? `@"${path}"` : `@${path}`
+  if (!input?.canInsertReferences() || !input.addReferences([{
+    source: 'reference', ref, label: segments.at(-1), appearance: 'file', clipboardText: ref,
+  }])) throw new Error('当前会话暂时无法添加文件引用。')
 }
 
 
@@ -4050,7 +4072,7 @@ function summarizeHostCapabilities(capabilities) {
   if (flags.length) parts.push(`已装配：${flags.join('、')}`)
   const servers = Array.isArray(capabilities.mcpServers) ? capabilities.mcpServers : []
   if (servers.length) {
-    const names = servers.slice(0, MAX_LISTED_SERVERS).map(server => server.server)
+    const names = servers.slice(0, MAX_LISTED_SERVERS).map(server => server.toolLoading === 'on-demand' ? `${server.server}（按需加载）` : server.server)
     const more = servers.length > MAX_LISTED_SERVERS ? ` 等 ${servers.length} 台` : ''
     parts.push(`MCP 已连接：${names.join('、')}${more}`)
   } else if (capabilities.toolProbeAvailable) {
@@ -6776,7 +6798,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
   const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState('')
   const [workspaceRenameOpen, setWorkspaceRenameOpen] = React.useState(false)
   const [confirmArchiveWorkspace, setConfirmArchiveWorkspace] = React.useState(false)
-  const [project, setProject] = React.useState(() => store.getActiveProject())
+  const [project, setProject] = React.useState(getActiveProject)
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
   const [filter, setFilter] = React.useState('all')
@@ -7165,6 +7187,24 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
+  const exportLiteratureReview = async () => {
+    try {
+      const scope = project || ''
+      const [{ claims: latestClaims }, entries, events] = await Promise.all([
+        synchronizeResearchClaims(store, scope),
+        store.list({ project: scope }),
+        store.listResearchLedger({ project: scope }),
+      ])
+      const report = buildLiteratureReviewExport({
+        project: scope, entries: entries.filter(item => (item.project || '') === scope),
+        claims: latestClaims.filter(item => (item.project || '') === scope),
+        ledger: events.filter(item => (item.project || '') === scope),
+      })
+      downloadJsonFile(JSON.stringify(report, null, 2) + '\n', `research-literature-review-${stamp()}.json`)
+      setNotice(`已导出 ${report.summary.candidates} 条候选文献与 ${report.claims.length} 条论断的审核记录。`)
+    } catch (error) { setNotice(`导出失败：${error.message}`) }
+  }
+
   const previewCitations = () => {
     try {
       const result = parseBibliography(citationText)
@@ -7548,6 +7588,7 @@ function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, as
         h('strong', { key: 'title', style: { fontSize: 13 } }, '科研账本与复现链'),
         h('span', { key: 'summary', style: { fontSize: 12, color: C.muted } }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+        h(Button, { key: 'review-export', size: 'sm', onClick: exportLiteratureReview }, '导出当前项目综述与审核记录'),
         h(Button, { key: 'screen-report', size: 'sm', disabled: !counts.all, onClick: exportScreeningReport }, '导出 PRISMA 计数与排除理由'),
         h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
         h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
@@ -12256,7 +12297,7 @@ function ResearchPluginStatusSection({ subject }) {
     })) : null,
     capabilities ? h('div', { key: 'rows', style: { display: 'grid', gap: 5, fontSize: 13, lineHeight: 1.5, color: C.muted } }, [
       h('div', { key: 'direct' }, `插件直查适配器：${directQueryCount()} 个`),
-      h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.server).join('、') : '无'}`),
+      h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.toolLoading === 'on-demand' ? `${item.server}（按需加载，当前可见 ${item.tools.length} 项）` : `${item.server}（当前可见 ${item.tools.length} 项）`).join('、') : capabilities.toolProbeAvailable ? '无可见记录' : '未知'}`),
       h('div', { key: 'tools' }, `工具注册表：${capabilities.toolProbeAvailable ? `${capabilities.toolCount} 个工具` : '不可读'}`),
     ]) : null,
   ])
@@ -12824,10 +12865,14 @@ function ResearchTransferPanel({ assetProvider, onClose }) {
 
 const HOME_RUN_LABELS = { draft: '提示词草稿', active: '已发送到会话', waiting_review: '待人工审核', completed: '已完成', failed: '失败' }
 
-function ResearchProjectHome({ onNavigate, sessionId = '' }) {
+function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions }) {
   const [context, setContext] = React.useState(currentResearchContext)
-  const [data, setData] = React.useState(null)
+  const [loaded, setData] = React.useState(null)
   const [error, setError] = React.useState('')
+  const [draftFeedback, setDraftFeedback] = React.useState('')
+  const run = activeResearchRun()
+  const scopedRun = run?.project === context.project ? run : null
+  const activeRunId = scopedRun?.id || (run ? '' : context.activeRunId)
   const version = React.useRef(0)
   React.useEffect(() => subscribeResearchContext(setContext), [])
   const refresh = React.useCallback(async () => {
@@ -12837,14 +12882,22 @@ function ResearchProjectHome({ onNavigate, sessionId = '' }) {
     try {
       await syncEvidenceVaultWithFiles(context.project || undefined).catch(failure => { syncError = `文件同步失败：${failure.message}` })
       const [counts, ledger, claims] = await Promise.all([
-        store.evidenceSummary({ project: context.project || undefined }),
-        store.listResearchLedger({ project: context.project || undefined }),
+        store.evidenceSummary({ project: context.project }),
+        store.listResearchLedger({ project: context.project }),
         synchronizeResearchClaims(store, context.project).then(result => result.claims)
           .catch(failure => { syncError += ` Claim 台账暂不可达：${failure.message}`; return store.listResearchClaims({ project: context.project }) }),
       ])
+      const runClaims = activeRunId ? claims.filter(claim => claim.run_id === activeRunId) : claims
+      const missing = new Set()
+      if (runClaims.some(claim => claim.links?.length)) {
+        const ids = new Set((await store.list({ project: context.project })).map(entry => entry.id))
+        for (const claim of runClaims) {
+          for (const link of claim.links || []) if (!ids.has(link.evidenceId)) missing.add(link.evidenceId)
+        }
+      }
       let activity = null
-      if (context.activeRunId) {
-        const params = new URLSearchParams({ run_id: context.activeRunId, limit: '1' })
+      if (activeRunId) {
+        const params = new URLSearchParams({ run_id: activeRunId, limit: '30' })
         try {
           const response = await fetch(`/dsh-research-kit/agent-activity?${params}`, { signal: AbortSignal.timeout(5000) })
           activity = await response.json()
@@ -12852,19 +12905,38 @@ function ResearchProjectHome({ onNavigate, sessionId = '' }) {
         } catch (failure) { syncError += ` 运行状态暂不可达：${failure.message}`; activity = null }
       }
       if (request !== version.current) return
-      setData({ counts, ledger, claims, activity }); setError(syncError)
+      setData({ counts, ledger, claims, activity, missing, project: context.project, runId: activeRunId }); setError(syncError)
     } catch (failure) { if (request === version.current) setError(`读取失败，保留上次数据：${failure.message}`) }
-  }, [context.project, context.activeRunId])
+  }, [context.project, activeRunId])
   React.useEffect(() => { refresh(); const dispose = subscribeEvidenceVault(refresh); return () => { version.current++; dispose() } }, [refresh])
-  const run = activeResearchRun()
-  const scopedRun = run?.project === context.project ? run : null
-  const recentRun = listResearchRuns({ project: context.project, sessionId })[0]
-  const pending = data?.claims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length || 0
-  const question = data?.claims.find(claim => claim.question)?.question
+  const data = loaded?.project === context.project && loaded?.runId === activeRunId ? loaded : null
+  const projectRuns = listResearchRuns({ project: context.project }).sort((a, b) => b.createdAt - a.createdAt)
+  const recentRun = projectRuns[0]
+  const scopedClaims = activeRunId ? (data?.claims || []).filter(claim => claim.run_id === activeRunId) : data?.claims || []
+  const pending = scopedClaims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length
+  const question = scopedClaims.find(claim => claim.question)?.question || data?.claims.find(claim => claim.question)?.question
   const checkpoints = data?.activity?.checkpoints || []
   const pendingCheckpointCount = checkpoints.reduce((count, cp) => count + Object.values(cp.checkpoints || {}).filter(value => !value.approved).length, 0)
-  const actions = data?.activity?.run_overview?.next_actions || []
-  const outputs = data?.ledger.filter(event => event.kind === 'artifact').slice(0, 3) || []
+  const overview = data?.activity?.run_overview
+  const outputs = (data?.ledger || []).filter(event => event.kind === 'artifact' && (!activeRunId || event.runId === activeRunId)).slice(0, 3)
+  const activityOutputs = data?.activity?.artifacts || []
+  const restore = id => {
+    setDraftFeedback('')
+    if (!resumeResearchRun(id, context.project)) setError('研究运行已变更，请刷新项目状态。')
+  }
+  const prepareContinuation = () => {
+    const prompt = [
+      `继续科研运行 ${activeRunId}，研究项目：${context.project || 'default'}。`,
+      '先用 research_run_status 查看进度，再用 research_context_pack 读取现有论断、证据和回执。后续记录沿用这个 run_id。',
+      scopedRun?.workflowId
+        ? `若没有状态护照，核对材料后用 research_run_start，以工作流 ${scopedRun.workflowId} 和原 run_id 初始化。`
+        : '请保留待人工核验项和检查点。',
+    ].join('\n')
+    try {
+      const ok = inputActions.insertText(prompt, inputActions.captureInsertion()) === true
+      setDraftFeedback(ok ? '已插入继续研究草稿。' : '草稿暂不可写入，请切回会话后重试。')
+    } catch (error) { setDraftFeedback(error.message) }
+  }
   return h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, [
     h(PageHead, { key: 'head', title: '项目首页', lead: `当前项目：${context.project || '未命名项目'}。从任务开始，随时查看材料、证据与待办。`, actions: [h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态')] }),
     error ? h(Notice, { key: 'error', tone: 'warn' }, `${error}。可刷新重试；离线数据不代表最新审核状态。`) : null,
@@ -12872,48 +12944,139 @@ function ResearchProjectHome({ onNavigate, sessionId = '' }) {
       h(Button, { key: 'review', variant: 'primary', onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) }, '做文献综述'),
       h(Button, { key: 'paper', onClick: () => onNavigate('catalog', { workflowId: 'review-paper' }) }, '审阅论文'),
       h(Button, { key: 'claims', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '验证研究结论'),
-      h(Button, { key: 'continue', disabled: !recentRun?.workflowId, onClick: () => onNavigate('catalog', { workflowId: recentRun?.workflowId }) }, '继续上次工作流'),
+      h(Button, { key: 'continue', disabled: !recentRun, onClick: () => restore(recentRun.id) }, '继续上次工作流'),
+      activeRunId && supportsSafeInsert(inputActions) ? h(Button, { key: 'continue-draft', onClick: prepareContinuation }, '写入继续研究草稿') : null,
+      draftFeedback ? h('span', { key: 'draft-feedback', role: 'status' }, draftFeedback) : null,
     ]),
+    insertMaterialReference ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
+    projectRuns.length > 1 ? h('label', { key: 'run-picker', style: { display: 'block', marginBottom: 12 } }, [
+      '恢复指定运行 ',
+      h('select', { key: 'select', value: activeRunId, onChange: event => restore(event.target.value), 'aria-label': '恢复指定运行' }, [
+        h('option', { key: 'none', value: '', disabled: true }, '选择运行'),
+        ...projectRuns.map(item => h('option', { key: item.id, value: item.id },
+          `${item.workflowName || item.workflowId || '研究运行'} · ${new Date(item.createdAt || 0).toLocaleString()} · ${item.id}`)),
+      ]),
+    ]) : null,
     !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', style: { display: 'grid', gap: 12 } }, [
       h(Card, { key: 'progress', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究问题尚未登记'),
-        h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : context.activeRunId ? `当前运行：${context.activeRunId}` : '还没有启动研究工作流'),
+        h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : activeRunId ? `当前运行：${activeRunId}` : '还没有启动研究工作流'),
+        overview?.current_stage && overview.current_stage !== 'unknown'
+          ? h('span', { key: 'stage' }, `当前阶段：${overview.current_stage}`) : null,
         scopedRun && itemById(scopedRun.workflowId)?.requiresFiles ? h(Notice, { key: 'materials', tone: 'warn' }, '此工作流需要材料：请核对当前会话的 @文件 引用。') : null,
         h('small', { key: 'boundary', style: { color: C.muted } }, '写入或发送提示词仅记录操作事实；实际执行与完成状态以运行记录和人工审批为准。'),
       ]),
       h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, '待办收件箱'),
-        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 未核验证据 ${data.counts.unverified || 0} · 待确认阶段 ${pendingCheckpointCount}`),
+        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0} · 待确认阶段 ${pendingCheckpointCount}`),
         h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
           h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '处理 Claim'),
           h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
         ]),
-        ...actions.slice(0, 5).map((action, index) => h('p', { key: index, style: { margin: 0, fontSize: 12, color: C.muted } }, typeof action === 'string' ? action : action.message || action.reason || action.action || '查看运行活动中的下一步')),
+        data.missing.size ? h(Notice, { key: 'missing', tone: 'warn' }, `${data.missing.size} 条已关联证据在当前项目中缺失。`) : null,
+        scopedClaims.some(claim => !claim.links?.length) ? h('span', { key: 'unlinked' },
+          `${scopedClaims.filter(claim => !claim.links?.length).length} 条论断尚未关联证据`) : null,
         pendingCheckpointCount ? h('small', { key: 'checkpoints' }, '展开页面底部的运行活动，逐阶段检查并确认。') : null,
       ]),
       h(Card, { key: 'outputs', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, `最近产出 · 已保存证据 ${data.counts.all}`),
-        ...(outputs.length ? outputs.map(output => h('span', { key: output.id }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : [h('span', { key: 'empty', style: { color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
+        ...activityOutputs.slice(0, 3).map(item => h('span', { key: `tool-${item.id}` }, item.summary || item.kind)),
+        ...(outputs.length ? outputs.map(output => h('span', { key: output.id }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : activityOutputs.length ? [] : [h('span', { key: 'empty', style: { color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
       ]),
     ]),
   ])
 }
 
+/** 会话面板只显示这个会话已关联的课题及待审核信息。 */
+function ResearchSessionOverview({ sessionId = '' }) {
+  const [context, setContext] = React.useState(currentResearchContext)
+  const [summary, setSummary] = React.useState(null)
+  React.useEffect(() => subscribeResearchContext(setContext), [])
+  const run = sessionId && listResearchRuns({ project: context.project, sessionId })[0]
+  const runId = run?.id
+  const project = run?.project
+  React.useEffect(() => {
+    if (!runId) return undefined
+    let alive = true
+    synchronizeResearchClaims(evidenceVaultStore(), project)
+      .then(({ claims }) => {
+        if (alive) setSummary({ runId, pending: claims.filter(claim =>
+          claim.run_id === runId && !['verified', 'rejected'].includes(claim.state)).length })
+      })
+      .catch(() => { if (alive) setSummary({ runId, pending: null }) })
+    return () => { alive = false }
+  }, [project, runId])
+  if (!runId) return null
+  return h('div', { style: { display: 'grid', gap: 4 } }, [
+    h('strong', { key: 'project' }, project || '未命名项目'),
+    h('span', { key: 'run' }, run.workflowName || run.workflowId),
+    summary?.runId === runId ? h('span', { key: 'pending' },
+      summary.pending === null ? '审核状态暂不可达' : `待审核论断 ${summary.pending}`) : null,
+  ])
+}
+
+function ResearchMaterialReferenceForm({ insert }) {
+  const [path, setPath] = React.useState('')
+  const [feedback, setFeedback] = React.useState('')
+  return h('form', {
+    style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 },
+    onSubmit: event => {
+      event.preventDefault()
+      try { insert(path); setPath(''); setFeedback('已添加到会话草稿。') }
+      catch (error) { setFeedback(error.message) }
+    },
+  }, [
+    h('input', { key: 'path', value: path, 'aria-label': '工作区文件路径', placeholder: '工作区相对文件路径',
+      onChange: event => { setPath(event.target.value); setFeedback('') } }),
+    h('button', { key: 'insert', type: 'submit', disabled: !path.trim() }, '添加材料引用'),
+    feedback ? h('span', { key: 'feedback', role: 'status' }, feedback) : null,
+  ])
+}
 
 
-// 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
-// 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
-//
-// 容器职责边界：只做导航与分区声明，不持有任何业务逻辑，也不读写子模块的数据。
-// 三个旧分区组件原样复用（本仓库组件走 embedded 模式，vendored 工坊零改动），合并前后能力集合不变；
-// 「研究证据图谱」是合并之后新增的第四分区，也是本容器唯一的增量。
+
+function buildLiteratureReviewExport({ project, entries, claims, ledger, exportedAt = Date.now() }) {
+  const decisions = latestResearchScreening(ledger)
+  const candidates = entries.map(entry => {
+    const { id, title, identifier, identifierKind, url, status, bibliography } = entry
+    return {
+      id, title, identifier, identifierKind, url, status, bibliography,
+      screening: decisions.get(id) || { decision: 'pending', reason: '尚未筛选' },
+    }
+  })
+  const ids = new Set(candidates.map(item => item.id))
+  const summary = { candidates: candidates.length, included: 0, excluded: 0, pending: 0 }
+  const excludedReasons = new Map()
+  for (const candidate of candidates) {
+    const { decision, reason } = candidate.screening
+    if (decision === 'include') summary.included++
+    else if (decision === 'exclude') {
+      summary.excluded++
+      excludedReasons.set(reason, (excludedReasons.get(reason) || 0) + 1)
+    } else summary.pending++
+  }
+  return {
+    kind: 'dsh-literature-review', version: 1, project, exportedAt,
+    scope: '当前项目的本地候选集与文件论断台账',
+    summary, excludedReasons: Object.fromEntries(excludedReasons), candidates,
+    searches: ledger.filter(event => event.kind === 'search'),
+    claims: claims.map(claim => ({
+      id: claim.id, statement: claim.statement, question: claim.question, state: claim.state,
+      runId: claim.run_id, version: claim.version, assessedBy: claim.assessed_by, reason: claim.assessment_reason,
+      links: (claim.links || []).map(link => ({ ...link, sourceAvailable: ids.has(link.evidenceId) })),
+    })),
+    bibtex: serializeBibliography(entries.filter(entry => decisions.get(entry.id)?.decision === 'include'), 'bibtex'),
+  }
+}
+
+
 
 const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
+  home: props => h(ResearchProjectHome, { onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
   catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, launchSession: props.launchSession, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
@@ -12937,6 +13100,20 @@ function persistSection(id) {
 
 const META_LINE = { margin: 0, fontSize: 12, lineHeight: 1.55 }
 
+class ResearchSectionBoundary extends React.Component {
+  state = { error: '' }
+
+  static getDerivedStateFromError(error) {
+    return { error: error?.message || '未知错误' }
+  }
+
+  render() {
+    return this.state.error
+      ? h(Notice, { tone: 'error', style: { margin: 20 } }, `分区无法显示：${this.state.error}。切换分区后可以重试。`)
+      : this.props.children
+  }
+}
+
 function ResearchConsole(props) {
   const { sessionId, inputActions } = props
   const [section, setSection] = React.useState(readStoredSection)
@@ -12952,13 +13129,10 @@ function ResearchConsole(props) {
   const current = findConsoleSection(section)
   const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
   const navRef = React.useRef(null)
-  // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
-  // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
-  // 取 ceil 而非 round：宁可让二级吸顶压住导航 1px 边框，也不要留出透缝。
-  //
-  // box 必须显式指定 border-box：ResizeObserver 默认只观察 content-box，
-  // 因此「改内边距/边框导致视觉高度变化而内容框不变」不会触发回调
-  // ——实测中表现为导航被撑高 40px 后二级吸顶仍停在旧位置，压进导航底下。
+  React.useLayoutEffect(() => {
+    navRef.current?.parentElement?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  }, [current.id, vaultTab])
+  // 折行会改变导航高度，按实际 border-box 更新子分区的吸顶位置。
   React.useEffect(() => {
     const nav = navRef.current
     const host = nav?.parentElement
@@ -12995,7 +13169,8 @@ function ResearchConsole(props) {
     return () => { active = false }
   }, [needsPromptKit, promptKitLoaded])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
-  const activeRun = activeResearchRun()
+  const run = activeResearchRun()
+  const activeRun = run?.project === researchContext.project ? run : null
   const commitProject = () => {
     const normalized = String(projectDraft || '').trim().slice(0, 100)
     if (normalized !== researchContext.project) setResearchProject(normalized)
@@ -13045,16 +13220,17 @@ function ResearchConsole(props) {
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
-      ? (view ? view({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }) : null)
+      ? h(ResearchSectionBoundary, { key: current.id },
+        view?.({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),
     h(AgentActivityPanel, {
       key: 'agent-activity',
       sessionId,
-      runId: researchContext.activeRunId,
+      runId: activeRun?.id || (run ? '' : researchContext.activeRunId),
       onRunDetected: mcpRunId => {
-        if (mcpRunId && mcpRunId !== researchContext.activeRunId) {
+        if (!run && mcpRunId && mcpRunId !== researchContext.activeRunId) {
           updateResearchContext({ activeRunId: mcpRunId })
         }
       },
@@ -13065,30 +13241,23 @@ function ResearchConsole(props) {
 
 
 function researchKitApply(ctx) {
-  // 可选宿主服务只软探测（与 dsh/optional-service.js 同一规则）：写进 dsh.client.inject 会让缺该
-  // 服务的旧宿主拒绝装载整个插件；这里缺任何一个都只是让对应入口降级/不渲染。
-  // 草稿初始化通道在 `conversation` 服务上（`uiConversation` 没有 input），别把两者混为一谈。
   const hostNavigation = {
     uiWorkspace: ctx.get?.('uiWorkspace'),
     uiConversation: ctx.get?.('uiConversation'),
     conversation: ctx.get?.('conversation'),
     sessions: ctx.sessions,
   }
-  // Plugins 详情页「回到会话」：主区切回当前会话（视图标签由宿主持久化状态决定，跨页无法代选）。
-  // 通道缺失时按钮整块不渲染 —— 留一个点了没反应的死按钮比没有更糟。
   const openConversation = typeof hostNavigation.uiWorkspace?.openSession === 'function'
     ? () => returnToConversation({ ...hostNavigation, view: RESEARCH_KIT_CONSOLE_VIEW })
     : null
-  // 开新会话并预填草稿：0.2.1-rc.1 起有 prompt 通道，whenDraftExists 语义 0.2.1-rc.3 起
-  // （0.1.7 / 0.2.0 线没有该通道，因此不显示入口）。
   const launchSession = supportsSessionLaunch(hostNavigation)
     ? input => launchResearchSession(hostNavigation, input)
     : null
-  // 唯一视图：内部按分区渲染「资源与工作流 / 方法工坊 / 研究资产库 / 研究证据图谱」。
   function ResearchConsoleHost(props) {
-    return React.createElement(ResearchConsole, { ...props, launchSession })
+    const insertMaterialReference = researchMaterialInput(hostNavigation, props.sessionId)
+      ? path => insertResearchMaterial(hostNavigation, props.sessionId, path) : null
+    return React.createElement(ResearchConsole, { ...props, launchSession, insertMaterialReference })
   }
-  // 组件数组顺序与 slot-registry.js 的 RESEARCH_SLOTS 一一对应。
   const components = [
     ResearchConsoleHost,        // dsh-research-kit-console
     ResearchComposerLauncher,   // dsh-research-kit-launcher
@@ -13096,14 +13265,14 @@ function researchKitApply(ctx) {
     ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
   ]
   const disposers = [registerResearchSlots(ctx, components)]
-  // Plugins-page status section follows the Plugins page lifecycle; other
-  // subjects render null instead of making this row require plugin-manager.
+  disposers.push(ctx.slots.inject('conversation.session.panel.section', () => ctx.slots.register({
+    name: 'conversation.session.panel.section',
+    id: 'dsh-research-kit-project', label: '科研项目', order: 90,
+  }, ResearchSessionOverview)))
   disposers.push(ctx.slots.inject('plugins.detail.section', () => ctx.slots.register({
     name: 'plugins.detail.section',
     id: 'dsh-research-kit-status',
   }, ResearchPluginStatusSection)))
-  // 标题徽章与头部动作同样只在科研套件的详情页渲染；其他 subject 一律返回 null，
-  // 因此这些槽位缺失（旧宿主／无 plugin-manager）时只是不显示，不报错。
   disposers.push(ctx.slots.inject('plugins.detail.badge', () => ctx.slots.register({
     name: 'plugins.detail.badge',
     id: 'dsh-research-kit-badge',
@@ -13112,8 +13281,6 @@ function researchKitApply(ctx) {
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-diagnostics',
   }, ResearchKitDiagnosticsAction)))
-  // 跨页跳转（详情页 → 当前会话）依赖宿主公开的会话导航服务；服务探测在
-  // src/lib/host-navigation.js 里，通道缺失时按钮整块不渲染、插件照常加载。
   disposers.push(ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
     name: 'plugins.detail.actions',
     id: 'dsh-research-kit-open-workbench',
@@ -13125,7 +13292,6 @@ function researchKitApply(ctx) {
     const toolDisposers = researchToolNames.map(key => ctx.slots.register({ name: 'tool.call.toolview', key }, ResearchToolView))
     return () => toolDisposers.forEach(dispose => dispose?.())
   }))
-  // 沉淀真正需要资产时再加载工件；注册事件订阅不应触发首屏下载。
   const resolveDepositProvider = async () => {
     try {
       const PromptKit = await loadPromptKit()
@@ -13142,8 +13308,6 @@ function researchKitApply(ctx) {
   }, props => React.createElement(ResearchMessageDepositAction, {
     ...props, sessions: ctx.sessions, assetProvider: () => depositAssetProvider,
   }))))
-  // 自动沉淀：订阅 DSH 会话事件流（assistant/message = 一次回答完成），
-  // 开启开关后自动提取知识入库。宿主未提供 sessions 服务时静默跳过（单测/独立页）。
   const disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: depositAssetProvider }) || (() => {})
   disposers.push(disposeDeposition)
   return () => disposers.forEach(dispose => dispose?.())

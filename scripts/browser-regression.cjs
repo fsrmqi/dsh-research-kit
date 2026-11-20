@@ -18,11 +18,19 @@ window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){retu
 // 假 slots 服务必须认三种注册形态：按 key（tool.call.toolview、plugins.row.config）、
 // 按 id（徽章 / 动作 / 输入框）。过去只按 o.id 登记，键控注册一律落到 registered[undefined]——
 // 于是 Plugins 行配置里的预设 UI 在浏览器回归里完全隐形（点不到，也就没人发现点击路径没被覆盖）。
-plugin.apply({sessions:window.testSessions,slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
+const native = new URLSearchParams(location.search).has('native');
+if (native) window.testSessions.binding = () => ({ctx:{}});
+const conversation = {input:{for(){return {
+ canInsertReferences:()=>true,addReferences(references){window.materialReference=references[0];return true}
+}},requestDraftInitialization(){}}};
+const uiWorkspace = {startSession(_workspace,payload){window.launchDraft=payload}};
+plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
 ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(React.Fragment,null,React.createElement(registered['dsh-research-kit-launcher']),React.createElement(registered['dsh-research-kit-overlay'],{sessionId:'qa',inputActions:actions}),React.createElement(registered['dsh-research-kit-draft-enhancer'],{sessionId:'qa',inputActions:actions})));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(registered['dsh-research-kit-console'],{sessionId:'qa',inputActions:{setDraft(s){window.draft=s},submit(){}}}));
+const consoleActions = native ? {...actions,captureInsertion:()=>({}),insertText(text){window.draft+=text;return true}} : actions;
+root.render(React.createElement(registered['dsh-research-kit-console'],{sessionId:'qa',inputActions:consoleActions}));
+if (native) ReactDOM.createRoot(document.getElementById('plugin-status')).render(React.createElement(registered['dsh-research-kit-project'],{sessionId:'qa'}));
 </script>`;
 const server = http.createServer((req,res)=>{
  if(req.url==='/dsh-research-kit/catalog-data'){
@@ -301,7 +309,7 @@ const server = http.createServer((req,res)=>{
   const popupPromise=page.waitForEvent('popup');
   await page.getByRole('button',{name:'弹出回放窗口',exact:true}).click();
   const popup=await popupPromise;
-  await popup.waitForLoadState();
+  await popup.locator('g[data-node-id]').first().waitFor({state:'attached'});
   const ids=await popup.locator('g[data-node-id]').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-node-id')));
   assert.ok(ids.length>0);
   assert.equal(new Set(ids).size,ids.length);
@@ -364,9 +372,10 @@ const server = http.createServer((req,res)=>{
   await page.evaluate(async()=>{
     const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
     const tx=db.transaction('evidence','readwrite');
+    const savedAt=Date.now();
     const entries=[
-      {id:'qa-agent-new',title:'待判断证据',url:'https://example.org/new',project:'',savedAt:Date.now(),status:'unverified'},
-      {id:'qa-agent-human',title:'人工处理证据',url:'https://example.org/human',project:'',savedAt:Date.now()-1,status:'verified',assessedBy:'researcher',assessedAt:Date.now(),assessmentReason:'人工已核对'},
+      {id:'qa-agent-new',title:'待判断证据',url:'https://example.org/new',project:'',savedAt,status:'unverified'},
+      {id:'qa-agent-human',title:'人工处理证据',url:'https://example.org/human',project:'',savedAt:savedAt-1,status:'verified',assessedBy:'researcher',assessedAt:Date.now(),assessmentReason:'人工已核对'},
     ];
     for(const entry of entries) tx.objectStore('evidence').put(entry);
     await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});
@@ -484,6 +493,64 @@ const server = http.createServer((req,res)=>{
   assert.ok(await largePage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await largeContext.close();
   console.log('真实 IndexedDB 1 万条分页、跨页及跨筛选选择、全范围搜索、显式引用导入与窄屏布局：通过');
+
+  const runContext = await browser.newContext();
+  const runPage = await runContext.newPage();
+  runPage.on('pageerror', error => errors.push(String(error)));
+  await runContext.addInitScript(() => {
+    localStorage.setItem('dsh-research-kit.research-context.v1', JSON.stringify({ project: '综述样板', activeRunId: '' }));
+    localStorage.setItem('dsh-research-kit.research-runs.v1', JSON.stringify([
+      { id: 'run-review-original', project: '综述样板', sessionId: 'older-session', workflowId: 'literature-review', workflowName: '综述原运行', status: 'draft', createdAt: 123 },
+      { id: 'run-review-current', project: '综述样板', sessionId: 'qa', workflowId: 'literature-review', workflowName: '当前会话运行', status: 'draft', createdAt: 456 },
+    ]));
+  });
+  await runPage.route('**/dsh-research-kit/agent-activity?**', route => route.fulfill({ json: {
+    ok:true, calls:[], checkpoints:[{checkpoints:{screen:{approved:false}}}], artifacts:[{id:'qa-artifact', summary:'上次综述产出'}],
+  } }));
+  await runPage.route('**/dsh-research-kit/claim-review?**', route => route.fulfill({ json: {
+    ok:true, evidence:[], claims:[{
+      id:'review-claim', project:'综述样板', run_id:'run-review-original', statement:'需要核对的综述结论',
+      state:'ambiguous', assessed_by:'样板审核者', assessment_reason:'待核对原文范围', evidence_ids:['paper-1'],
+      links:[{evidenceId:'paper-1', stance:'supports', locator:'结果段'}],
+    }],
+  } }));
+  await runPage.goto('http://127.0.0.1:'+server.address().port+'/?native=1');
+  await runPage.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
+  await runPage.locator('#plugin-status').getByText('当前会话运行',{exact:true}).waitFor();
+  await runPage.getByLabel('恢复指定运行').selectOption('run-review-original');
+  await runPage.getByText('上次综述产出',{exact:true}).waitFor();
+  await runPage.getByText(/待核验 Claim 1/).waitFor();
+  await runPage.getByRole('button',{name:'写入继续研究草稿'}).click();
+  assert.match(await runPage.evaluate(()=>window.draft), /run-review-original/);
+  await runPage.getByLabel('工作区文件路径').fill('文献/第 一篇.pdf');
+  await runPage.getByRole('button',{name:'添加材料引用'}).click();
+  assert.equal(await runPage.evaluate(()=>window.materialReference.ref), '@"文献/第 一篇.pdf"');
+  await runPage.getByRole('button',{name:'打开证据与筛选队列'}).click();
+  await runPage.getByRole('button',{name:'导出当前项目综述与审核记录'}).waitFor();
+  await runPage.evaluate(async()=>{
+    const db=await new Promise((resolve,reject)=>{const req=indexedDB.open('dsh-research-kit-evidence');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+    const tx=db.transaction(['evidence','researchLedger'],'readwrite');
+    tx.objectStore('evidence').put({id:'paper-1',title:'样板来源',project:'综述样板',savedAt:1,status:'unverified',identifierKind:'doi',identifier:'10.9999/qa'});
+    tx.objectStore('researchLedger').put({id:'screen-1',kind:'screening',project:'综述样板',evidenceId:'paper-1',decision:'include',at:1});
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});db.close();
+  });
+  const reviewDownload = runPage.waitForEvent('download');
+  await runPage.getByRole('button',{name:'导出当前项目综述与审核记录'}).click();
+  const report = JSON.parse(fs.readFileSync(await (await reviewDownload).path(), 'utf8'));
+  assert.equal(report.summary.included, 1);
+  assert.equal(report.claims[0].reason, '待核对原文范围');
+  assert.equal(report.claims[0].links[0].sourceAvailable, true);
+  assert.equal(report.claims[0].links[0].stance, 'supports');
+  await runPage.getByRole('tab',{name:'项目首页',exact:true}).click();
+  await runPage.getByRole('button',{name:'做文献综述'}).click();
+  await runPage.getByLabel('综述问题',{exact:true}).fill('图书馆开放时段与读者体验');
+  await runPage.getByRole('button',{name:'在新会话开始',exact:true}).click();
+  const launch = await runPage.evaluate(()=>window.launchDraft);
+  assert.equal(launch.whenDraftExists, 'append');
+  assert.match(launch.prompt, /图书馆开放时段与读者体验/);
+  assert.match(launch.prompt, /研究运行/);
+  await runContext.close();
+  console.log('跨会话恢复原运行、继续草稿、新会话预填、原生文件引用与综述审核导出：通过');
 
   await page.screenshot({path:path.join(artifacts,'desktop.png'),fullPage:false});
   if(process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_ASSET_DESKTOP_SCREENSHOT});

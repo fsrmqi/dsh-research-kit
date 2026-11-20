@@ -1,3 +1,4 @@
+import { buildLiteratureReviewExport } from './lib/literature-review-export.js'
 // 证据库界面层：保存表单（EvidenceSaveForm）与证据库面板（EvidenceVaultPane：
 // 列表/筛选/导入导出/Agent 批量初判/互链反查/项目整理）。
 //
@@ -20,7 +21,7 @@ import {
 import { auditResearchDataQuality } from './lib/research-quality.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { parseBibliography, serializeBibliography } from './lib/bibliography.js'
-import { synchronizeClaimScopes } from './lib/claim-review-client.js'
+import { synchronizeResearchClaims, synchronizeClaimScopes } from './lib/claim-review-client.js'
 import { downloadText, downloadJsonFile } from './lib/download.js'
 import {
   evidenceAssessmentFingerprint, normalizeAgentEvidenceResult, planAgentEvidenceBatch,
@@ -127,7 +128,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [workspaceNameDraft, setWorkspaceNameDraft] = React.useState('')
   const [workspaceRenameOpen, setWorkspaceRenameOpen] = React.useState(false)
   const [confirmArchiveWorkspace, setConfirmArchiveWorkspace] = React.useState(false)
-  const [project, setProject] = React.useState(() => store.getActiveProject())
+  const [project, setProject] = React.useState(getActiveProject)
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
   const [filter, setFilter] = React.useState('all')
@@ -516,6 +517,24 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
+  const exportLiteratureReview = async () => {
+    try {
+      const scope = project || ''
+      const [{ claims: latestClaims }, entries, events] = await Promise.all([
+        synchronizeResearchClaims(store, scope),
+        store.list({ project: scope }),
+        store.listResearchLedger({ project: scope }),
+      ])
+      const report = buildLiteratureReviewExport({
+        project: scope, entries: entries.filter(item => (item.project || '') === scope),
+        claims: latestClaims.filter(item => (item.project || '') === scope),
+        ledger: events.filter(item => (item.project || '') === scope),
+      })
+      downloadJsonFile(JSON.stringify(report, null, 2) + '\n', `research-literature-review-${stamp()}.json`)
+      setNotice(`已导出 ${report.summary.candidates} 条候选文献与 ${report.claims.length} 条论断的审核记录。`)
+    } catch (error) { setNotice(`导出失败：${error.message}`) }
+  }
+
   const previewCitations = () => {
     try {
       const result = parseBibliography(citationText)
@@ -899,6 +918,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         h('strong', { key: 'title', style: { fontSize: 13 } }, '科研账本与复现链'),
         h('span', { key: 'summary', style: { fontSize: 12, color: C.muted } }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+        h(Button, { key: 'review-export', size: 'sm', onClick: exportLiteratureReview }, '导出当前项目综述与审核记录'),
         h(Button, { key: 'screen-report', size: 'sm', disabled: !counts.all, onClick: exportScreeningReport }, '导出 PRISMA 计数与排除理由'),
         h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
         h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),

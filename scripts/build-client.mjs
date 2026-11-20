@@ -25,7 +25,7 @@ files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-t
 files.splice(files.indexOf('src/agent-activity.js') + 1, 0, 'src/research-transfer-panel.js')
 files.splice(files.indexOf('src/lib/evidence-graph-core.js') + 1, 0, 'src/lib/test-projects.js')
 files.splice(files.indexOf('src/lib/evidence-vault-core.js'), 0, 'src/lib/bibliography.js')
-files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js')
+files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js', 'src/lib/literature-review-export.js')
 files.splice(files.indexOf('src/evidence-vault-store.js') + 1, 0, 'src/lib/claim-review-client.js')
 // 入口形态偏好：必须在 dsh/prompt-enhancer-glue.js（按形态分支）与 src/plugin-status.js（设置项）之前。
 files.splice(files.indexOf('src/promptkit-loader.js') + 1, 0, 'src/entry-mode.js')

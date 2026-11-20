@@ -7,6 +7,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   currentMainSessionId,
+  insertResearchMaterial, researchMaterialInput,
   launchResearchSession,
   returnToConversation,
   supportsSessionLaunch,
@@ -101,4 +102,29 @@ test('launchResearchSession 在提示词为空、通道缺失或宿主抛错时�
   assert.equal(launchResearchSession(host, { prompt: '内容' }), false)
   assert.equal(launchResearchSession({}, { prompt: '内容' }), false)
   assert.equal(launchResearchSession({ uiWorkspace: { startSession: () => {} } }, { prompt: '内容' }), false)
+})
+
+test('原生材料引用只写入绑定会话的可编辑草稿，并兼容旧宿主', () => {
+  assert.equal(researchMaterialInput({}, 's1'), null)
+  const context = {}
+  let editable = true
+  let captured
+  const host = {
+    sessions: { binding: id => id === 's1' ? { ctx: context } : undefined },
+    conversation: { input: { for(ctx) {
+      assert.equal(ctx, context)
+      return {
+        canInsertReferences: () => editable,
+        addReferences: references => { captured = references; return true },
+      }
+    } } },
+  }
+  assert.throws(() => insertResearchMaterial(host, 's1', '../outside.pdf'), /相对文件路径/)
+  assert.throws(() => insertResearchMaterial(host, 's2', 'paper.pdf'), /无法添加/)
+  insertResearchMaterial(host, 's1', '文献/论文 一.pdf')
+  assert.deepEqual(captured, [{
+    source: 'reference', ref: '@"文献/论文 一.pdf"', label: '论文 一.pdf', appearance: 'file', clipboardText: '@"文献/论文 一.pdf"',
+  }])
+  editable = false
+  assert.throws(() => insertResearchMaterial(host, 's1', 'paper.pdf'), /无法添加/)
 })

@@ -11,19 +11,12 @@ import { AgentActivityPanel } from './agent-activity.js'
 import { ResearchTransferPanel } from './research-transfer-panel.js'
 import { currentResearchContext, setResearchProject, setResearchContext as updateResearchContext, subscribeResearchContext, activeResearchRun } from './research-context-store.js'
 
-// 统一容器：把原先三个并列的 conversation.view 标签（科研工作台 / 研究方法工坊 / 研究灵感库）
-// 收敛为一个视图，内部用二级导航按「发现 → 构造 → 沉淀 → 证据」组织。
-//
-// 容器职责边界：只做导航与分区声明，不持有任何业务逻辑，也不读写子模块的数据。
-// 三个旧分区组件原样复用（本仓库组件走 embedded 模式，vendored 工坊零改动），合并前后能力集合不变；
-// 「研究证据图谱」是合并之后新增的第四分区，也是本容器唯一的增量。
-
 const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate }),
+  home: props => h(ResearchProjectHome, { onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
   catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, launchSession: props.launchSession, embedded: true }),
   methods: props => h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
@@ -47,6 +40,20 @@ function persistSection(id) {
 
 const META_LINE = { margin: 0, fontSize: 12, lineHeight: 1.55 }
 
+class ResearchSectionBoundary extends React.Component {
+  state = { error: '' }
+
+  static getDerivedStateFromError(error) {
+    return { error: error?.message || '未知错误' }
+  }
+
+  render() {
+    return this.state.error
+      ? h(Notice, { tone: 'error', style: { margin: 20 } }, `分区无法显示：${this.state.error}。切换分区后可以重试。`)
+      : this.props.children
+  }
+}
+
 export function ResearchConsole(props) {
   const { sessionId, inputActions } = props
   const [section, setSection] = React.useState(readStoredSection)
@@ -62,13 +69,10 @@ export function ResearchConsole(props) {
   const current = findConsoleSection(section)
   const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
   const navRef = React.useRef(null)
-  // 二级吸顶偏移量 = 一级导航的实测高度。不能写死：窗口变窄时说明块换行、
-  // 分区标签条在窄屏折行，都会改变导航高度（实测 149px @990px 宽，约 120px @窄屏）。
-  // 取 ceil 而非 round：宁可让二级吸顶压住导航 1px 边框，也不要留出透缝。
-  //
-  // box 必须显式指定 border-box：ResizeObserver 默认只观察 content-box，
-  // 因此「改内边距/边框导致视觉高度变化而内容框不变」不会触发回调
-  // ——实测中表现为导航被撑高 40px 后二级吸顶仍停在旧位置，压进导航底下。
+  React.useLayoutEffect(() => {
+    navRef.current?.parentElement?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
+  }, [current.id, vaultTab])
+  // 折行会改变导航高度，按实际 border-box 更新子分区的吸顶位置。
   React.useEffect(() => {
     const nav = navRef.current
     const host = nav?.parentElement
@@ -105,7 +109,8 @@ export function ResearchConsole(props) {
     return () => { active = false }
   }, [needsPromptKit, promptKitLoaded])
   React.useEffect(() => setProjectDraft(researchContext.project), [researchContext.project])
-  const activeRun = activeResearchRun()
+  const run = activeResearchRun()
+  const activeRun = run?.project === researchContext.project ? run : null
   const commitProject = () => {
     const normalized = String(projectDraft || '').trim().slice(0, 100)
     if (normalized !== researchContext.project) setResearchProject(normalized)
@@ -155,16 +160,17 @@ export function ResearchConsole(props) {
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
-      ? (view ? view({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }) : null)
+      ? h(ResearchSectionBoundary, { key: current.id },
+        view?.({ ...props, initialWorkflowId, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),
     h(AgentActivityPanel, {
       key: 'agent-activity',
       sessionId,
-      runId: researchContext.activeRunId,
+      runId: activeRun?.id || (run ? '' : researchContext.activeRunId),
       onRunDetected: mcpRunId => {
-        if (mcpRunId && mcpRunId !== researchContext.activeRunId) {
+        if (!run && mcpRunId && mcpRunId !== researchContext.activeRunId) {
           updateResearchContext({ activeRunId: mcpRunId })
         }
       },

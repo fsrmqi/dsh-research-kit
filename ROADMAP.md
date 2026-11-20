@@ -161,7 +161,7 @@
 
 ### 13. DSH 兼容性矩阵与已知缺口（矩阵已落地 · 2026-09-28；缺口 1 已于 2026-10-30 修复）
 
-**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：12 个基线 tag、12 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
+**已完成**：把「支持哪些 DSH 版本、依赖宿主什么」从口头声明变成可核对的数据——`scripts/lib/dsh-baselines.mjs`（唯一事实源：14 个基线 tag、12 条宿主 seam、插件自身接线契约）+ `scripts/check-dsh-app.mjs`（多基线 CLI）+ `test/dsh-compat-matrix.test.mjs`（无源码时核对降级路径，用例数不随环境变化；CI 用 `--require-source` 硬失败）。
 同批补上「门禁可信度」：seam 清单与产物 require 提取各有冻结清单与空转守卫（此前平台模块检查因只认双引号而恒真、删两条无 slot 的 seam 仍全绿）、源码来源自证绑 git tag/HEAD（已解包副本只算未自证）、覆盖率棘轮加上测试规模只许涨（比值型覆盖率挡不住"删测试"）、TAP 汇总行解析要求唯一（锁住"Node 会转义用例输出"这层隐形依赖）。同批落地：发布流水线（tag → 全门禁 → OIDC 发布）、覆盖率棘轮、文档测试数字真值校验、开发回路脚本。读者文档见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)。
 
 **已知缺口 1 · 跨页视图导航（已修复 · 2026-10-30）**：旧接线探测服务级 `uiConversation.openView(sessionId, view, focus?)`，而已发布的 0.1.7、`0.2.0-rc.1`/`rc.2` 与 `0.2.1-rc.1`～`rc.5` 都没有该方法，按钮一直静默缺席。核对宿主源码后确认真正可用的公开导航面是 `uiWorkspace.openSession(target)`（切回主区，同步 retain；0.1.7 起）+ `uiConversation.binding(source).activate(target)`（把目标加入会话活跃目标集；0.1.7 起）。
@@ -171,12 +171,9 @@
 - **同批**：工作台新增「在新会话开始」入口（`conversation` 服务的 `input.requestDraftInitialization` + `uiWorkspace.startSession` 的 `prompt`，DSH `0.2.1-rc.1` 起；`whenDraftExists` 语义 rc.3 起，更早按「已有草稿则保留」；`0.1.7`/`0.2.0` 线不渲染），验收见 MANUAL-QA F5。会话视图的「更多会话视图」菜单自 rc.3 起由宿主原生提供，插件不做任何注册。
 - **0.2.2 线（2026-11-06）**：`dsh-v0.2.2-rc.1` 入基线（10 条基线 × 13 条检查全部成立），peer 上界放宽到 `<0.2.3-0` 并补 `engines.dsh`。0.2.2 是 0.2.1-rc.5 的直接后继；客户端改动以新增 API 为主（另有本插件未使用的 `fileMentions` / `readAttachment` 变化），只有两处需要跟：composer seat 的 transform containing block 让插件 fixed 浮层改 portal 到 body（视觉回归），以及模型路由改读 `agent.model.current()`。跨页预选视图在 rc.1 上仍无公开入口，边界同上一条。
 - **0.2.2-rc.2（2026-11-11）**：`dsh-v0.2.2-rc.2` 入基线（11 条基线 × 13 条检查全部成立），peer 范围与 `engines.dsh` 无需改动（仍在 `<0.2.3-0` 内）。rc.2 线性包含 rc.1（merge-base 即 rc.1 tag），但改动面是整条 master 发布列车：12 条 seam 与平台模块表仍逐字成立，客户端新增 `hoc` 槽种、`conversation.hero.frame` / `conversation.chat.markdown.fence`、composer 文件粘贴路由与失败重试、`insertQuote` 可选摘要、plugin-manager Git 更新入口，均不被本插件使用；本插件依赖的 toolview / view / input / plugins props 形状未变。当时 Desktop App 与 CLI 为 rc.2。
-- **0.2.2-rc.3（2026-11-14）**：`dsh-v0.2.2-rc.3` 入基线（12 条基线 × 13 条检查全部成立），peer 范围与 `engines.dsh` 无需改动。rc.3 线性包含 rc.2，改动集中在官方可选 bundle 与 ui 槽位新增：`sidebar.session.action` hoc、`workspace.picker` Factory（含 directoryFlow 洞）与 `deepseek-chat-import`；本插件不注册 sidebar/workspace 槽、不使用 chat-import，12 条 seam 与平台表仍逐字成立。当前 Desktop App 与 CLI 已切换到 rc.3。
+- **0.2.2-rc.3（2026-11-14）**：`dsh-v0.2.2-rc.3` 入基线（12 条基线 × 13 条检查全部成立），peer 范围与 `engines.dsh` 无需改动。rc.3 线性包含 rc.2，改动集中在官方可选 bundle 与 ui 槽位新增：`sidebar.session.action` hoc、`workspace.picker` Factory（含 directoryFlow 洞）与 `deepseek-chat-import`；本插件不注册 sidebar/workspace 槽、不使用 chat-import，12 条 seam 与平台表仍逐字成立。
 
-**已知缺口 2 · `dsh.client.inject` 里的幽灵包名**：`package.json` 的 `dsh.client.inject` 含 `@deepseek-ai/dsh-client-runtime`，该名字在 0.1.7/0.2.0/0.2.1 各已列 rc 的工作区包名与宿主自带 `docs/dependency-catalog.json` 里都查不到（另两个注入项两处都能查到）。客户端产物实际只 require `react`/`react-dom`，因此不影响装载，只是「我依赖谁」失真。
-
-- **修法**：核实真实包名后替换或删除该条目；`npm run check:dsh-app` 目前已把它作为警告打印。
-- **验收**：绊线（`package.json` 里仍有该字符串）失败后同步删除记录。
+- **0.2.2-rc.4 与 rc.5** 已加入基线，清理了不存在的客户端注入项。
 
 ## 明确暂缓（不做或暂不做）
 

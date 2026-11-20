@@ -1,20 +1,4 @@
-// 宿主导航与草稿初始化（浏览器半）：把「回到会话」与「开新会话并预填草稿」收敛成可测的纯函数。
-//
-// 用到的宿主公开 API：
-//   - `uiWorkspace.openSession(target)`   切换主区到指定会话（同步 retain）；
-//   - `uiConversation.binding(id).activate(view)` 把目标视图加入该会话的活跃目标集（**不是**选中标签页，
-//     见下）；
-//   - `uiWorkspace.startSession(ws, options)` 新建会话并预填草稿（`prompt` 自 0.2.1-rc.1 起，
-//     `whenDraftExists` 自 0.2.1-rc.3 起被识别），草稿初始化由 `conversation.input.requestDraftInitialization` 承担。
-//
-// 视图标签是宿主自己的 UI 状态：会话 store 的 `s.view` 决定渲染哪个视图，`binding.activate()` 只保证该目标
-// 的数据源被激活。因此跨页无法可靠地「选中科研工作台标签」——只有该会话此前停在科研工作台（宿主持久化了这个
-// 选择）时，回到会话才会一并恢复。入口文案按这个事实写「回到会话」，不承诺选标签。
-//
-// 服务是否装配仍要软探测：旧宿主 / 无 UI 装配时返回 false，调用方按「该入口不渲染」降级，
-// 绝不让探测反过来打断插件装载（与 dsh/optional-service.js 的三条规则一致；本文件进浏览器产物，
-// 因此不 import 宿主半区的 optional-service）。
-
+// 回到会话使用宿主公开导航。视图标签由会话选择状态恢复，activate 只激活数据源。
 /** 在会话列表快照里找主区当前持有的会话；宿主内置客户端也这样取（DocumentTitle / ui-open-in-app）。 */
 export function currentMainSessionId(sessions) {
   try {
@@ -79,4 +63,28 @@ export function launchResearchSession({ uiWorkspace, conversation } = {}, { prom
     uiWorkspace.startSession(undefined, { prompt: text, whenDraftExists })
     return true
   } catch { return false }
+}
+
+/** 宿主只有在已绑定的会话且编辑器允许时才会接收原生文件引用。 */
+export function researchMaterialInput({ sessions, conversation }, sessionId) {
+  try {
+    if (!sessionId) return null
+    const binding = sessions?.binding?.(sessionId)
+    const input = binding && conversation?.input?.for?.(binding.ctx)
+    return typeof input?.addReferences === 'function' && typeof input.canInsertReferences === 'function' ? input : null
+  } catch { return null }
+}
+
+export function insertResearchMaterial(host, sessionId, value) {
+  const path = String(value || '').trim()
+  const segments = path.split('/')
+  if (!path || /[\u0000-\u001f\u007f-\u009f"\\:]/u.test(path)
+    || segments.some(part => !part || part === '..') || segments.at(-1) === '.') {
+    throw new Error('请输入工作区内的相对文件路径。')
+  }
+  const input = researchMaterialInput(host, sessionId)
+  const ref = /\s/u.test(path) ? `@"${path}"` : `@${path}`
+  if (!input?.canInsertReferences() || !input.addReferences([{
+    source: 'reference', ref, label: segments.at(-1), appearance: 'file', clipboardText: ref,
+  }])) throw new Error('当前会话暂时无法添加文件引用。')
 }

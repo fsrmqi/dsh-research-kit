@@ -18,7 +18,7 @@ export function summarizeHostCapabilities(capabilities) {
   if (flags.length) parts.push(`已装配：${flags.join('、')}`)
   const servers = Array.isArray(capabilities.mcpServers) ? capabilities.mcpServers : []
   if (servers.length) {
-    const names = servers.slice(0, MAX_LISTED_SERVERS).map(server => server.server)
+    const names = servers.slice(0, MAX_LISTED_SERVERS).map(server => server.toolLoading === 'on-demand' ? `${server.server}（按需加载）` : server.server)
     const more = servers.length > MAX_LISTED_SERVERS ? ` 等 ${servers.length} 台` : ''
     parts.push(`MCP 已连接：${names.join('、')}${more}`)
   } else if (capabilities.toolProbeAvailable) {
