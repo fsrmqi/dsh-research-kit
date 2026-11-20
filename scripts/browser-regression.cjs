@@ -508,12 +508,18 @@ const server = http.createServer((req,res)=>{
     ok:true, calls:[], checkpoints:[{checkpoints:{screen:{approved:false}}}], artifacts:[{id:'qa-artifact', summary:'上次综述产出'}],
   } }));
   await runPage.route('**/dsh-research-kit/claim-review?**', route => route.fulfill({ json: {
-    ok:true, evidence:[], claims:[{
+    ok:true, evidence:[{ id:'paper-2', title:'反向样板来源', url:'https://example.org/refutes' }], claims:[{
       id:'review-claim', project:'综述样板', run_id:'run-review-original', statement:'需要核对的综述结论',
-      state:'ambiguous', assessed_by:'样板审核者', assessment_reason:'待核对原文范围', evidence_ids:['paper-1'],
-      links:[{evidenceId:'paper-1', stance:'supports', locator:'结果段'}],
+      state:'ambiguous', assessed_by:'样板审核者', assessment_reason:'待核对原文范围', evidence_ids:['paper-1','paper-2','paper-missing'],
+      links:[{evidenceId:'paper-1', stance:'supports', locator:'结果段'},
+        {evidenceId:'paper-2', stance:'refutes', locator:'讨论段'}],
+    },{
+      id:'review-unlinked', project:'综述样板', state:'extracted', statement:'没有证据的样板结论', evidence_ids:[],
     }],
   } }));
+  await runPage.route('**/dsh-research-kit/evidence-sync?**', route => route.fulfill({
+    json:{ok:false,error:'样板重复来源'}, status:409,
+  }));
   await runPage.goto('http://127.0.0.1:'+server.address().port+'/?native=1');
   await runPage.getByRole('heading',{name:'项目首页',exact:true}).waitFor();
   await runPage.locator('#plugin-status').getByText('当前会话运行',{exact:true}).waitFor();
@@ -541,6 +547,27 @@ const server = http.createServer((req,res)=>{
   assert.equal(report.claims[0].reason, '待核对原文范围');
   assert.equal(report.claims[0].links[0].sourceAvailable, true);
   assert.equal(report.claims[0].links[0].stance, 'supports');
+  await runPage.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
+  await runPage.getByText('需要核对的综述结论',{exact:true}).waitFor();
+  await runPage.getByText(/文件同步失败.*HTTP 409/).waitFor();
+  const targetClaim = runPage.getByText('需要核对的综述结论',{exact:true}).locator('../..').locator('..');
+  await targetClaim.getByRole('button',{name:'逐条审阅',exact:true}).click();
+  await runPage.getByLabel('Claim 评估理由').fill('保留未提交的人工笔记');
+  await targetClaim.getByRole('button',{name:'查看证据关系',exact:true}).click();
+  const relation = runPage.getByRole('region',{name:'当前论断的证据关系'});
+  const supports = relation.getByRole('group',{name:'支持',exact:true});
+  await supports.getByText('原文位置 结果段',{exact:false}).waitFor();
+  assert.equal(await supports.getByRole('link',{name:'样板来源'}).getAttribute('href'),'https://doi.org/10.9999/qa');
+  await relation.getByRole('group',{name:'反驳',exact:true}).getByText('原文位置 讨论段').waitFor();
+  await relation.getByRole('group',{name:'待评估',exact:true}).getByText('未找到来源（paper-missing）').waitFor();
+  await targetClaim.getByRole('button',{name:'收起证据关系',exact:true}).click();
+  assert.equal(await relation.count(),0);
+  assert.equal(await runPage.getByLabel('Claim 评估理由').inputValue(),'保留未提交的人工笔记');
+  const unlinked = runPage.getByText('没有证据的样板结论',{exact:true}).locator('../..').locator('..');
+  await unlinked.getByRole('button',{name:'查看证据关系',exact:true}).click();
+  await relation.getByText(/尚无关联证据/).waitFor();
+  await runPage.unroute('**/dsh-research-kit/evidence-sync?**');
+  console.log('论断卡片按立场追溯原文、收起后保留审阅草稿：通过');
   await runPage.getByRole('tab',{name:'项目首页',exact:true}).click();
   await runPage.getByRole('button',{name:'做文献综述'}).click();
   await runPage.getByLabel('综述问题',{exact:true}).fill('图书馆开放时段与读者体验');

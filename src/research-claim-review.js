@@ -19,6 +19,60 @@ async function claimReviewRequest(project, body, signal) {
   return result
 }
 
+const CLAIM_EVIDENCE_GROUPS = [
+  ['supports', '支持', C.statusVerified], ['refutes', '反驳', C.statusRefuted],
+  ['insufficient', '证据不足', C.amber], ['unassessed', '待评估', C.muted],
+]
+
+function ClaimEvidenceRelations({ claim, evidenceById }) {
+  const ids = claim.evidence_ids
+  const [local, setLocal] = React.useState(null)
+  const [error, setError] = React.useState('')
+  React.useEffect(() => {
+    if (!ids?.length) return
+    let alive = true
+    evidenceVaultStore().getMany(ids).then(rows => {
+      if (alive) setLocal(new Map(rows.map(row => [row.id, row])))
+    }).catch(() => { if (alive) setError('本地证据读取失败。') })
+    return () => { alive = false }
+  }, [ids])
+  const links = new Map((claim.links || []).map(link => [link.evidenceId, link]))
+  return h('section', {
+    'aria-label': '当前论断的证据关系',
+    style: { display: 'grid', gap: 8, borderTop: `1px solid ${C.line}`, paddingTop: 10 },
+  }, [
+    h('strong', { key: 'title' }, '当前论断的证据关系'),
+    error ? h('span', { key: 'error', role: 'status' }, error) : null,
+    !ids?.length ? h('p', { key: 'empty' }, '尚无关联证据。可在逐条审阅中选择已保存的来源。') : null,
+    ...CLAIM_EVIDENCE_GROUPS.map(([stance, label, color]) => {
+      const group = ids?.filter(id => (links.get(id)?.stance || 'unassessed') === stance)
+      if (!group?.length) return null
+      return h('div', { key: stance, role: 'group', 'aria-label': label,
+        style: { borderInlineStart: `2px solid ${color}`, paddingInlineStart: 10 } }, [
+        h(Badge, { key: 'relation', color }, `↑ ${label} · ${group.length}`),
+        h('ul', { key: 'sources' }, group.map(id => {
+          const link = links.get(id)
+          const row = local?.get(id)
+          const cached = row?.project === claim.project ? row : null
+          const source = cached || evidenceById.get(id)
+          const rawUrl = String(source?.url || '').trim()
+          const doi = (source?.identifierKind || source?.identifier_type) === 'doi' ? source.identifier : ''
+          const url = /^https?:\/\//i.test(rawUrl) ? rawUrl
+            : /^10\.\d+\//.test(doi || '') ? `https://doi.org/${encodeURI(doi)}` : ''
+          return h('li', { key: id, style: { marginBlock: 6, overflowWrap: 'anywhere' } }, [
+            url
+              ? h('a', { key: 'source', href: url, target: '_blank', rel: 'noopener noreferrer' }, source.title)
+              : h('span', { key: 'source' }, source?.title || (local ? `未找到来源（${id}）` : id)),
+            h('small', { key: 'locator', style: { display: 'block', color: C.muted } },
+              [link?.locator && `原文位置 ${link.locator}`, link?.assessedBy && `评估人 ${link.assessedBy}`,
+                (cached?.sourceVerification || cached?.status) === 'unverified' && '来源待核验'].filter(Boolean).join(' · ')),
+          ])
+        })),
+      ])
+    }),
+  ])
+}
+
 export function ResearchClaimReview({ sessionId = '' }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const project = context.project || 'default'
@@ -27,6 +81,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
   const [evidence, setEvidence] = React.useState([])
   const [limits, setLimits] = React.useState({})
   const [loading, setLoading] = React.useState(true)
+  const [syncWarning, setSyncWarning] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
   const [statement, setStatement] = React.useState('')
@@ -35,18 +90,22 @@ export function ResearchClaimReview({ sessionId = '' }) {
   const [pickedCandidates, setPickedCandidates] = React.useState([])
   const [reviewer, setReviewer] = React.useState('')
   const [editingId, setEditingId] = React.useState('')
+  const [relationId, setRelationId] = React.useState('')
   const [draft, setDraft] = React.useState({ state: 'ambiguous', reason: '', evidenceIds: [] })
   const requestVersion = React.useRef(0)
 
   React.useEffect(() => subscribeResearchContext(setContext), [])
-  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setClaimPage(0) }, [project])
+  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setRelationId(''); setClaimPage(0) }, [project])
   const refresh = React.useCallback(async () => {
     const version = ++requestVersion.current
     setLoading(true)
     try {
+      let warning = ''
       await syncEvidenceVaultWithFiles(context.project || undefined)
+        .catch(error => { warning = `文件同步失败：${error.message}` })
       const result = await synchronizeResearchClaims(evidenceVaultStore(), context.project || '')
       if (version !== requestVersion.current) return
+      setSyncWarning(warning)
       setClaims(result.claims)
       setClaimPage(page => Math.min(page, Math.max(0, Math.ceil(result.claims.length / 50) - 1)))
       setEvidence(result.evidence)
@@ -222,6 +281,7 @@ export function ResearchClaimReview({ sessionId = '' }) {
     ]),
     notice ? h(Notice, { key: 'notice', tone: /失败|请填写|至少/.test(notice) ? 'error' : 'info' }, notice) : null,
     limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
+    syncWarning ? h(Notice, { key: 'sync-warning', tone: 'warn' }, syncWarning) : null,
     loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
     !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '从已有研究段落提取候选，或去证据库选择来源并建立论断，再返回这里审核。' }) : null,
     claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
@@ -249,10 +309,14 @@ export function ResearchClaimReview({ sessionId = '' }) {
         h('div', { key: 'buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
           !['verified', 'rejected'].includes(claim.state) ? h(Button, { key: 'agent', size: 'sm', variant: 'ghost', disabled: busy,
             onClick: () => agentReview([claim.id]) }, 'Agent 审阅') : null,
+          h(Button, { key: 'relations', size: 'sm', variant: 'ghost', 'aria-expanded': relationId === claim.id,
+            onClick: () => setRelationId(relationId === claim.id ? '' : claim.id) },
+          relationId === claim.id ? '收起证据关系' : '查看证据关系'),
           h(Button, { key: 'edit', size: 'sm', variant: editingId === claim.id ? 'soft' : 'ghost', disabled: busy,
             onClick: () => editingId === claim.id ? setEditingId('') : openReview(claim) }, editingId === claim.id ? '收起审阅' : '逐条审阅'),
         ]),
       ]),
+      relationId === claim.id ? h(ClaimEvidenceRelations, { key: 'relations', claim, evidenceById }) : null,
       editingId === claim.id ? h('div', { key: 'editor', style: { display: 'grid', gap: 11, borderTop: `1px solid ${C.line}`, paddingTop: 12 } }, [
         h('div', { key: 'actions', role: 'group', 'aria-label': 'Claim 审阅结论', style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
           [['verified', '确认'], ['ambiguous', '存疑'], ['rejected', '驳回']].map(([state, label]) => h(Button, {

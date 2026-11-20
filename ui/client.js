@@ -8322,6 +8322,60 @@ async function claimReviewRequest(project, body, signal) {
   return result
 }
 
+const CLAIM_EVIDENCE_GROUPS = [
+  ['supports', '支持', C.statusVerified], ['refutes', '反驳', C.statusRefuted],
+  ['insufficient', '证据不足', C.amber], ['unassessed', '待评估', C.muted],
+]
+
+function ClaimEvidenceRelations({ claim, evidenceById }) {
+  const ids = claim.evidence_ids
+  const [local, setLocal] = React.useState(null)
+  const [error, setError] = React.useState('')
+  React.useEffect(() => {
+    if (!ids?.length) return
+    let alive = true
+    evidenceVaultStore().getMany(ids).then(rows => {
+      if (alive) setLocal(new Map(rows.map(row => [row.id, row])))
+    }).catch(() => { if (alive) setError('本地证据读取失败。') })
+    return () => { alive = false }
+  }, [ids])
+  const links = new Map((claim.links || []).map(link => [link.evidenceId, link]))
+  return h('section', {
+    'aria-label': '当前论断的证据关系',
+    style: { display: 'grid', gap: 8, borderTop: `1px solid ${C.line}`, paddingTop: 10 },
+  }, [
+    h('strong', { key: 'title' }, '当前论断的证据关系'),
+    error ? h('span', { key: 'error', role: 'status' }, error) : null,
+    !ids?.length ? h('p', { key: 'empty' }, '尚无关联证据。可在逐条审阅中选择已保存的来源。') : null,
+    ...CLAIM_EVIDENCE_GROUPS.map(([stance, label, color]) => {
+      const group = ids?.filter(id => (links.get(id)?.stance || 'unassessed') === stance)
+      if (!group?.length) return null
+      return h('div', { key: stance, role: 'group', 'aria-label': label,
+        style: { borderInlineStart: `2px solid ${color}`, paddingInlineStart: 10 } }, [
+        h(Badge, { key: 'relation', color }, `↑ ${label} · ${group.length}`),
+        h('ul', { key: 'sources' }, group.map(id => {
+          const link = links.get(id)
+          const row = local?.get(id)
+          const cached = row?.project === claim.project ? row : null
+          const source = cached || evidenceById.get(id)
+          const rawUrl = String(source?.url || '').trim()
+          const doi = (source?.identifierKind || source?.identifier_type) === 'doi' ? source.identifier : ''
+          const url = /^https?:\/\//i.test(rawUrl) ? rawUrl
+            : /^10\.\d+\//.test(doi || '') ? `https://doi.org/${encodeURI(doi)}` : ''
+          return h('li', { key: id, style: { marginBlock: 6, overflowWrap: 'anywhere' } }, [
+            url
+              ? h('a', { key: 'source', href: url, target: '_blank', rel: 'noopener noreferrer' }, source.title)
+              : h('span', { key: 'source' }, source?.title || (local ? `未找到来源（${id}）` : id)),
+            h('small', { key: 'locator', style: { display: 'block', color: C.muted } },
+              [link?.locator && `原文位置 ${link.locator}`, link?.assessedBy && `评估人 ${link.assessedBy}`,
+                (cached?.sourceVerification || cached?.status) === 'unverified' && '来源待核验'].filter(Boolean).join(' · ')),
+          ])
+        })),
+      ])
+    }),
+  ])
+}
+
 function ResearchClaimReview({ sessionId = '' }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const project = context.project || 'default'
@@ -8330,6 +8384,7 @@ function ResearchClaimReview({ sessionId = '' }) {
   const [evidence, setEvidence] = React.useState([])
   const [limits, setLimits] = React.useState({})
   const [loading, setLoading] = React.useState(true)
+  const [syncWarning, setSyncWarning] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
   const [statement, setStatement] = React.useState('')
@@ -8338,18 +8393,22 @@ function ResearchClaimReview({ sessionId = '' }) {
   const [pickedCandidates, setPickedCandidates] = React.useState([])
   const [reviewer, setReviewer] = React.useState('')
   const [editingId, setEditingId] = React.useState('')
+  const [relationId, setRelationId] = React.useState('')
   const [draft, setDraft] = React.useState({ state: 'ambiguous', reason: '', evidenceIds: [] })
   const requestVersion = React.useRef(0)
 
   React.useEffect(() => subscribeResearchContext(setContext), [])
-  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setClaimPage(0) }, [project])
+  React.useEffect(() => { setCandidates([]); setPickedCandidates([]); setEditingId(''); setRelationId(''); setClaimPage(0) }, [project])
   const refresh = React.useCallback(async () => {
     const version = ++requestVersion.current
     setLoading(true)
     try {
+      let warning = ''
       await syncEvidenceVaultWithFiles(context.project || undefined)
+        .catch(error => { warning = `文件同步失败：${error.message}` })
       const result = await synchronizeResearchClaims(evidenceVaultStore(), context.project || '')
       if (version !== requestVersion.current) return
+      setSyncWarning(warning)
       setClaims(result.claims)
       setClaimPage(page => Math.min(page, Math.max(0, Math.ceil(result.claims.length / 50) - 1)))
       setEvidence(result.evidence)
@@ -8525,6 +8584,7 @@ function ResearchClaimReview({ sessionId = '' }) {
     ]),
     notice ? h(Notice, { key: 'notice', tone: /失败|请填写|至少/.test(notice) ? 'error' : 'info' }, notice) : null,
     limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
+    syncWarning ? h(Notice, { key: 'sync-warning', tone: 'warn' }, syncWarning) : null,
     loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
     !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '从已有研究段落提取候选，或去证据库选择来源并建立论断，再返回这里审核。' }) : null,
     claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
@@ -8552,10 +8612,14 @@ function ResearchClaimReview({ sessionId = '' }) {
         h('div', { key: 'buttons', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
           !['verified', 'rejected'].includes(claim.state) ? h(Button, { key: 'agent', size: 'sm', variant: 'ghost', disabled: busy,
             onClick: () => agentReview([claim.id]) }, 'Agent 审阅') : null,
+          h(Button, { key: 'relations', size: 'sm', variant: 'ghost', 'aria-expanded': relationId === claim.id,
+            onClick: () => setRelationId(relationId === claim.id ? '' : claim.id) },
+          relationId === claim.id ? '收起证据关系' : '查看证据关系'),
           h(Button, { key: 'edit', size: 'sm', variant: editingId === claim.id ? 'soft' : 'ghost', disabled: busy,
             onClick: () => editingId === claim.id ? setEditingId('') : openReview(claim) }, editingId === claim.id ? '收起审阅' : '逐条审阅'),
         ]),
       ]),
+      relationId === claim.id ? h(ClaimEvidenceRelations, { key: 'relations', claim, evidenceById }) : null,
       editingId === claim.id ? h('div', { key: 'editor', style: { display: 'grid', gap: 11, borderTop: `1px solid ${C.line}`, paddingTop: 12 } }, [
         h('div', { key: 'actions', role: 'group', 'aria-label': 'Claim 审阅结论', style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
           [['verified', '确认'], ['ambiguous', '存疑'], ['rejected', '驳回']].map(([state, label]) => h(Button, {
@@ -9059,7 +9123,6 @@ const GRAPH_VIEW_MODES = [
   { value: 'path', label: '两点路径' }
 ]
 
-// 图例：只渲染图上实际出现的类型；顺序按「自动沉淀知识的流向」排列新旧两组节点。
 const GRAPH_KIND_LABELS = {
   database: '数据库', skill: '技能', workflow: '工作流', query: '查询', 'agent-query': 'Agent 查询',
   source: '候选来源', plan: '计划', stage: '阶段', asset: '灵感资产', evidence: '已保存证据',
@@ -9068,15 +9131,12 @@ const GRAPH_KIND_LABELS = {
 const GRAPH_LEGEND_ORDER = ['message', 'question', 'entity', 'finding', 'hypothesis', 'method', 'database', 'skill', 'workflow', 'query', 'source', 'plan', 'stage', 'asset', 'evidence']
 const IDENTIFIER_KIND_LABELS = { doi: 'DOI', pmid: 'PMID', pmcid: 'PMCID', arxiv: 'arXiv', nct: 'NCT', accession: '编号', none: '无标识符' }
 const KNOWLEDGE_STATUS_OPTIONS = KNOWLEDGE_STATUSES.map(status => ({ value: status, label: KNOWLEDGE_STATUS_LABELS[status] }))
-// 节点范围：把「会话记录」与「持久沉淀」分开看——两类节点生命周期不同，混在一幅图里曾是最常见的困惑。
 const GRAPH_SCOPE_MODES = [
   { value: 'all', label: '全部' },
   { value: 'session', label: '本会话' },
   { value: 'persistent', label: '持久沉淀' },
 ]
 
-// 导出物会被转发出去，读者需要先知道它含什么、不含什么。这段话同时出现在导出
-// 提示弹窗与导出文件正文里——提示不是装饰，它是本能力的验收项之一。
 const GRAPH_EXPORT_SCOPE = '仅含图上已显示的节点标题、来源库、稳定标识符、核验状态与关系；不含笔记、全文、检索词、附件或输入框草稿。'
 const GRAPH_FRAME_HEIGHT = 520
 const GRAPH_RENDER_NODE_LIMIT = 300
@@ -9139,7 +9199,6 @@ function buildGraphSvgMarkup(layout, routes, theme) {
     + `\n  ${edges}\n  ${nodes}\n</svg>`
 }
 
-// 薄委托：保留本名（导出接线的源码锚点），回收时机统一由 src/lib/download.js 决定。
 function downloadGraphFile(text, type, filename) {
   return downloadText(text, type, filename)
 }
@@ -9165,32 +9224,23 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
   const [evidenceProjects, setEvidenceProjects] = React.useState([])
   const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
   const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
-  // 自动沉淀开关是显式 opt-in：默认关闭；状态持久在 localStorage，由 knowledge-deposition 读写。
   const [autoDeposit, setAutoDeposit] = React.useState(() => isAutoDepositEnabled())
   const [selectedKnowledgeId, setSelectedKnowledgeId] = React.useState('')
   const [selectedEvidenceNodeId, setSelectedEvidenceNodeId] = React.useState('')
   const [confirmDeleteEvidence, setConfirmDeleteEvidence] = React.useState(false)
-  // 「清空本会话临时记录」范围有限但不可逆，用两段式确认（与证据库清空同一模式）。
   const [confirmClear, setConfirmClear] = React.useState(false)
-  // 项目筛选：默认跟随证据库的当前项目（该字段是工作上下文，跨会话保留），'' 表示全部项目。
   const [projectFilter, setProjectFilter] = React.useState(() => { try { return getActiveProject() || '' } catch { return '' } })
   const [questionFilter, setQuestionFilter] = React.useState('')
   const [directionFilter, setDirectionFilter] = React.useState('all')
-  // 节点范围：区分「本会话记录」（刷新即消失）与「持久沉淀」（证据/资产/知识）。
   const [scope, setScope] = React.useState('all')
   const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
   const [lastDeposition, setLastDeposition] = React.useState(() => lastDepositionSummary())
-  // 资产-证据互链（ROADMAP §11 P5 出口）：用户显式确认的「资产 → 支撑证据」边。
   const [assetEvidenceLinks, setAssetEvidenceLinks] = React.useState([])
-  // 手动沉淀：不开自动开关也能把最近一条助手回答显式入库；请求期间禁用按钮防重复点击。
   const [depositing, setDepositing] = React.useState(false)
-  // 知识库备份（导出直接下载；恢复用两段式文本框，与证据库备份同一交互模式）。
   const [knowledgeBackupOpen, setKnowledgeBackupOpen] = React.useState(false)
   const [knowledgeBackupText, setKnowledgeBackupText] = React.useState('')
   const [flowing, setFlowing] = React.useState(true)
-  // 未关联节点默认不画：它们之间没有任何关系，铺成网格只是一堵卡片墙。
   const [showIsolated, setShowIsolated] = React.useState(false)
-  // 清理遗留测试课题：只列明显的测试/演示/探针名，并且必须由用户确认后才删除。
   const [cleanupOpen, setCleanupOpen] = React.useState(false)
   const [cleaning, setCleaning] = React.useState(false)
   const [view, setView] = React.useState(() => decodeGraphView(typeof window === 'undefined' ? '' : window.location.hash))
@@ -9301,7 +9351,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
       ? knowledgeClaims.filter(item => visibleKnowledgeNodeIdSet.has(item.from) && visibleKnowledgeNodeIdSet.has(item.to))
       : knowledgeClaims
   ), [knowledgeClaims, visibleKnowledgeNodeIdSet, projectFilter])
-  // 测试课题候选：只从当前可见证据里汇总；真实课题名不命中（见 lib/test-projects.js）。
   const testProjects = React.useMemo(() => selectTestProjects(savedEvidence), [savedEvidence])
   const testProjectEntryCount = testProjects.reduce((sum, item) => sum + item.count, 0)
   const projectOverview = React.useMemo(() => summarizeEvidenceProjects(graphEvidence), [graphEvidence])
@@ -9312,7 +9361,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     for (const item of knowledgeNodes) { if (item.project) names.add(item.project) }
     return [...names].sort((a, b) => a.localeCompare(b, 'zh-CN'))
   }, [evidenceProjects, savedEvidence, assets, knowledgeNodes])
-  // 范围筛选：会话记录（资源/工作流/查询/计划，刷新即消失）与持久沉淀（证据/资产/知识）可分开看。
   const includeSession = scope !== 'persistent'
   const includePersistent = scope !== 'session'
   const graphResources = React.useMemo(() => {
@@ -9466,7 +9514,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     applyView({ focus: nodeId })
   }
 
-  // ── 结论追溯面板（点击知识节点展开）────────────────────────────────────────
   const selectedKnowledge = React.useMemo(
     () => knowledgeNodes.find(node => node.id === selectedKnowledgeId) || null,
     [knowledgeNodes, selectedKnowledgeId],
@@ -9653,9 +9700,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
       .catch(() => setNotice('复制失败，可手动复制地址栏。'))
   }
 
-  // ── 手动沉淀 ────────────────────────────────────────────────────────────────
-  // 与自动沉淀同一套提取与入库链路（同一 store、同一「待核验」起点、同一去重口径），
-  // 区别只在触发方式：显式点击、只处理最近一条、不要求开启开关。
   const depositLatest = async () => {
     if (depositing) return
     setDepositing(true)
@@ -9676,7 +9720,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     }
   }
 
-  // ── 知识库备份 ────────────────────────────────────────────────────────────────
   const exportKnowledgeBackup = () => {
     try {
       const text = serializeKnowledgeBackup({ nodes: knowledgeNodes, claims: knowledgeClaims })
@@ -9698,7 +9741,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
-  // ── 清理遗留测试课题 ──────────────────────────────────────────────────────────
   // 只清理「文件名与数据两侧都在」的测试证据：先删文件再删本地 IndexedDB，
   // 两步都成功才算删掉一条；顺序不能反——先删本地会让下一次同步把文件里的旧条目
   // 当成「本地缺失、文件有」重新导回。
@@ -9769,8 +9811,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
           title: '从 JSON 备份增量恢复知识节点与关系',
           onClick: () => setKnowledgeBackupOpen(value => !value),
         }, '恢复知识'),
-        // 命名修正：这个动作清的是「本会话临时记录」（查询/工作流/计划），
-        // 不含持久化的证据、灵感资产与自动沉淀知识——两段式确认把边界写在按钮上。
         confirmClear
           ? h(Button, {
             key: 'clear-confirm', variant: 'danger', icon: 'trash',
@@ -9816,18 +9856,15 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
       '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
     renderLimitedCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
       `当前有关联的节点共 ${displayGraph.nodes.length} 个；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderLimitedCount} 个未绘制）。导出仍包含全部有关系节点，请使用项目或生命周期筛选缩小范围。`) : null,
-    // 有关系但也有孤立节点：默认不画它们，明确告诉读者「少了什么」，并提供一键对照。
     hiddenIsolatedCount && graph.edges.length
       ? h('div', { key: 'graph-isolated-hidden', style: { display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', margin: '10px var(--rk-gutter) 0' } }, [
           h(Notice, { key: 'n', tone: 'info', icon: 'filter', style: { margin: 0, flex: '1 1 320px' } },
             `默认只绘制有关系的节点；另有 ${hiddenIsolatedCount} 个未关联节点已隐藏${isolatedKindSummary ? `（${isolatedKindSummary}）` : ''}。`),
           h(Button, { key: 'show', size: 'sm', variant: 'ghost', onClick: () => setShowIsolated(true) }, `显示未关联节点（${hiddenIsolatedCount}）`),
         ]) : null,
-    // 用户显式打开孤立节点且全图没有关系：这不是图谱，必须说明它只是卡片网格。
     showIsolated && graph.edges.length === 0 && graph.nodes.length
       ? h(Notice, { key: 'graph-isolated-only', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
         `正在显示 ${graph.nodes.length} 个未关联节点。它们之间没有记录到的关系，下面的卡片只是按类型排列的网格，不代表图谱结构。`) : null,
-    // 图例：只列图上实际出现的节点类型，随图动态增减；自动沉淀开启时附带最近一次沉淀摘要。
     graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
       [
         ...GRAPH_LEGEND_ORDER.filter(kind => graph.nodes.some(node => node.kind === kind)).map(kind => h('span', { key: kind, style: { display: 'inline-flex', alignItems: 'center', gap: 5 } }, [
@@ -9889,8 +9926,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
           ? '调整上方的节点范围或项目筛选；「本会话」只含刷新即消失的记录，「持久沉淀」含证据、灵感资产与自动沉淀知识。'
           : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」让图谱随科研对话积累，或点「沉淀最近回答」手动提取当前会话最近一条回答。',
       }),
-    // Evidence node 详情卡片：点击图谱中的证据节点后弹出，
-    // 展示元数据（标题/DOI/状态/分级/笔记/项目/来源），支持关闭和跳转链接。
     selectedEvidenceEntry ? h(Card, {
       key: 'evidence-detail',
       style: {
@@ -9950,7 +9985,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
           }, '删除'),
       ]),
     ]) : null,
-    // 结论追溯面板：点开知识节点后展示关系、关联证据、沉淀资产与来源消息摘录。
     selectedKnowledge ? h(Card, { key: 'knowledge-detail', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [
       h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
         h('strong', { key: 't', style: { fontSize: 14 } }, selectedKnowledge.label),
@@ -9998,7 +10032,6 @@ function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onN
       h('p', { key: 'hint', style: { margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.5 } },
         '以上内容由规则提取自动生成，全部以「待核验」起步；提取不等于正确，请以可访问的原文为准逐条核验后再引用。'),
     ]) : null,
-    // 知识备份恢复：与证据库备份同一交互模式（粘贴 JSON → 增量合并 → 汇报跳过数）。
     knowledgeBackupOpen ? h(Card, { key: 'knowledge-backup', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的知识库 JSON 备份（增量合并：已存在的节点与关系跳过，不覆盖现有核验状态）'),
       h(Textarea, { key: 'i', value: knowledgeBackupText, onChange: setKnowledgeBackupText, rows: 5, mono: true, ariaLabel: '知识库 JSON 备份内容' }),
