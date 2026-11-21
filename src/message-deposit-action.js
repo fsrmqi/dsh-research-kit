@@ -1,10 +1,13 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { extractKnowledge, KNOWLEDGE_KIND_LABELS } from './lib/knowledge-extract.js'
+import { extractAnswerEvidence, researchCitationHref } from './lib/answer-evidence.js'
 import { currentResearchContext } from './research-context-store.js'
 import { projectClaimProjection } from './lib/claim-review-client.js'
 import { ClaimEvidenceRelations } from './research-claim-review.js'
 import { C } from './theme.js'
+import { inheritResearchAutoSession, readResearchAutoSession, subscribeResearchAutoSessions, RESEARCH_STEPS_HEADING } from './composer-overlay.js'
+import { readSessionEvents } from './lib/session-events.js'
 import { Button } from './ui.js'
 import { depositAssistantMessage } from './knowledge-deposition.js'
 
@@ -18,9 +21,7 @@ export function reviewableAssistantMessage(sessions, sessionId, messageId, chatN
       at: Number(closing.finalNode.time) || 0, interrupted: closing.status === 'interrupted', extraction: extractKnowledge(text),
     }
   }
-  let entries
-  try { entries = sessions?.binding?.(String(sessionId))?.eventSource?.getSnapshot?.()?.entries } catch { return null }
-  if (!Array.isArray(entries)) return null
+  const entries = readSessionEvents(sessions, sessionId, Infinity)
   const event = entries.findLast(item => item?.type === 'assistant/message' && String(item?.data?.message?.id) === String(messageId))
   const content = event?.data?.message?.content
   if (!Array.isArray(content)) return null
@@ -36,17 +37,6 @@ function depositPopoverPosition(anchor, viewport, width = 360) {
   return anchor.bottom > viewport.height * 0.6
     ? { position: 'fixed', left, bottom: viewport.height - anchor.top + 8 }
     : { position: 'fixed', left, top: anchor.bottom + 8 }
-}
-
-function researchCitationHref(citation) {
-  if (citation.identifierKind === 'doi') return `https://doi.org/${citation.identifier.split('/').map(encodeURIComponent).join('/')}`
-  if (citation.identifierKind === 'pmid') return `https://pubmed.ncbi.nlm.nih.gov/${citation.identifier}/`
-  if (citation.identifierKind === 'pmcid') return `https://pmc.ncbi.nlm.nih.gov/articles/${citation.identifier}/`
-  if (citation.identifierKind === 'arxiv') return `https://arxiv.org/abs/${citation.identifier}`
-  try {
-    const url = new URL(citation.url)
-    return ['https:', 'http:'].includes(url.protocol) ? url.href : ''
-  } catch { return '' }
 }
 
 function answerClaimText(text) {
@@ -80,9 +70,35 @@ async function readAnswerClaimCandidates(text, citations, project, signal) {
   return { matched, evidenceById }
 }
 
+export function researchAnswerCandidateSummary(sessions, sessionId, messageId, autoSession) {
+  if (!autoSession || !sessionId || !messageId) return null
+  const entries = readSessionEvents(sessions, sessionId)
+  const answer = entries.findLast(event => event.type === 'assistant/message'
+    && String(event.data?.message?.id) === String(messageId))
+  if (!answer || !Number.isFinite(Number(answer.seq)) || Number(answer.seq) <= autoSession.afterSeq || answer.data?.interrupted) return null
+  const text = answer.data.message.content?.filter(block => block.type === 'text').map(block => block.text).join('\n') || ''
+  if (!text.trim()) return null
+  const prompt = readSessionEvents(sessions, sessionId, 256).findLast(event => {
+    const source = (event.data?.message ?? event.data)?.source
+    return event.type === 'user/message' && (!source || source.kind === 'user') && Number(event.seq) < Number(answer.seq)
+  })
+  const adopted = (prompt?.data?.message ?? prompt?.data)?.content?.some(block => block.type === 'text' && block.text?.includes(RESEARCH_STEPS_HEADING))
+  const extracted = extractAnswerEvidence(text)
+  const sources = extracted.citations.filter(item => ['doi', 'pmid', 'pmcid', 'arxiv'].includes(item.identifierKind)).length
+  const findings = extracted.nodes.filter(node => node.kind === 'finding').length
+  if (!adopted && !(sources && (findings || /论文|文献|研究|实验|study|studies|paper|research/i.test(text)))) return null
+  return findings || sources ? { findings, sources } : null
+}
+
 export function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetProvider, useChat }) {
   const chatNodes = typeof useChat === 'function' ? useChat(snapshot => snapshot.nodes) : null
   const anchorRef = React.useRef(null)
+  const autoSession = React.useSyncExternalStore(subscribeResearchAutoSessions, () => readResearchAutoSession(sessionId), () => null)
+  React.useEffect(() => inheritResearchAutoSession(sessions, sessionId), [sessions, sessionId, messageId])
+  const autoCandidate = React.useMemo(() => researchAnswerCandidateSummary(sessions, sessionId, messageId, autoSession),
+    [sessions, sessionId, messageId, autoSession, chatNodes])
+  const [savedFromAnswer, setSavedFromAnswer] = React.useState(false)
+  React.useEffect(() => setSavedFromAnswer(false), [sessionId, messageId])
   const [position, setPosition] = React.useState(null)
   const [preview, setPreview] = React.useState(null)
   const [claimChoices, setClaimChoices] = React.useState(null)
@@ -129,9 +145,11 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     setClaimChoices(null)
     setClaimNotice('')
     setConfirmedClaims([])
-    setPreview({ ...found, project: currentResearchContext().project })
+    const project = currentResearchContext().project
+    const extraction = extractAnswerEvidence(found.text, project)
+    setPreview({ ...found, extraction, project })
     setSelectedNodes([])
-    setSelectedCitations(found.extraction.citations.map((_, index) => index))
+    setSelectedCitations(extraction.citations.map((_, index) => index))
     setNotice('')
   }
   const toggleClaimAssociation = id => {
@@ -152,13 +170,19 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     if (!preview || busy) return
     if (!selectedNodes.length && !selectedCitations.length) { setNotice('请至少选择一项。'); return }
     const latest = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
-    if (!latest || latest.seq !== preview.seq || latest.text !== preview.text) { setNotice('回答已变化，请重新打开预览。'); setPreview(null); return }
+    if (!latest || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
+      setNotice('回答或课题已变化，请重新打开预览。')
+      setPreview(null)
+      return
+    }
     setBusy(true)
     try {
       const summary = await depositAssistantMessage({
         text: preview.text, sessionId: String(sessionId), seq: preview.seq, turn: preview.turn, at: preview.at,
-        selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, activeProject: preview.project, assetProvider: assetProvider?.(),
+        selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, traceAnswerSources: true,
+        activeProject: preview.project, assetProvider: assetProvider?.(),
       })
+      if (summary.extracted) setSavedFromAnswer(true)
       setNotice(summary.extracted ? `已沉淀：知识 ${summary.addedNodes}、证据 ${summary.savedEvidence}、资产 ${summary.savedAssets}；均待人工核验。` : '所选内容没有可提取的研究信息。')
       setPreview(null)
     } catch (error) { setNotice(`沉淀失败：${error?.message || error}`) }
@@ -166,6 +190,12 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   }
   const citations = preview?.extraction.citations || []
   const nodes = preview?.extraction.nodes || []
+  const evidenceRows = preview?.extraction.rows || []
+  const inlineCitations = new Set(evidenceRows.flatMap(row => row.references.map(ref => ref.index)))
+  const otherCitations = citations.filter((_, index) => !inlineCitations.has(index))
+  const candidateLabel = autoCandidate && !savedFromAnswer
+    ? `可保存 ${[autoCandidate.findings && `${autoCandidate.findings} 条结论`, autoCandidate.sources && `${autoCandidate.sources} 条来源`].filter(Boolean).join('、')}`
+    : ''
   const matched = claimChoices?.matched || []
   const orderedClaims = [
     ...matched.filter(claim => confirmedClaims.includes(claim.id)),
@@ -182,9 +212,34 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
       React.createElement(Button, { key: 'close', size: 'sm', variant: 'ghost', 'aria-label': '取消', disabled: busy, onClick: () => setPreview(null) }, '关闭'),
     ]),
     preview.interrupted ? React.createElement('p', { key: 'interrupted', style: { color: C.amber } }, '这条回答曾被中断，内容可能不完整。') : null,
-    citations.length ? React.createElement('section', { key: 'citations', 'aria-label': '回答引用', style: sectionStyle }, [
-      React.createElement('strong', { key: 'title' }, '回答引用'),
-      ...citations.map((citation, index) => {
+    evidenceRows.length ? React.createElement('section', { key: 'evidence-rows', 'aria-label': '逐条核对结论', style: sectionStyle }, [
+      React.createElement('strong', { key: 'title' }, '逐条核对结论'),
+      ...evidenceRows.map(row => React.createElement('div', {
+        key: row.nodeKey, style: { display: 'grid', gap: 4, paddingBlock: 4, overflowWrap: 'anywhere' },
+      }, [
+        row.statement ? React.createElement('span', { key: 'finding' }, row.statement) : null,
+        ...row.references.map(ref => {
+          const citation = citations[ref.index]
+          const href = researchCitationHref(citation)
+          return React.createElement('div', { key: `${ref.index}:${ref.paper}:${ref.locator}` }, [
+            React.createElement(href ? 'a' : 'span', {
+              key: 'paper', ...(href ? { href, target: '_blank', rel: 'noopener noreferrer', title: citation.identifier || href } : {}),
+              style: { color: href ? C.teal : C.muted },
+            }, ref.paper),
+            React.createElement('span', { key: 'locator', style: { color: C.muted } }, ` · ${ref.locator}`),
+          ])
+        }),
+        ...row.unlinked.map(ref => React.createElement('span', { key: `${ref.paper}:${ref.locator}`, style: { color: C.muted } },
+          `${ref.paper} · ${ref.locator}（标识符缺失或无法识别）`)),
+        ...row.gaps.map(gap => React.createElement('span', { key: gap, style: { color: C.amber } }, `证据缺口 · ${gap}`)),
+        !row.references.length && !row.unlinked.length && !row.gaps.length
+          ? React.createElement('span', { key: 'missing', style: { color: C.muted } }, '回答未提供可定位的来源。') : null,
+      ])),
+      React.createElement('small', { key: 'state', style: { color: C.muted } }, '出处由回答给出，支持关系待核验。'),
+    ]) : null,
+    otherCitations.length ? React.createElement('section', { key: 'citations', 'aria-label': '回答引用', style: sectionStyle }, [
+      React.createElement('strong', { key: 'title' }, inlineCitations.size ? '其他回答引用' : '回答引用'),
+      ...otherCitations.map((citation, index) => {
         const label = citation.identifier || citation.url || citation.title || '来源待核验'
         const href = researchCitationHref(citation)
         return React.createElement(href ? 'a' : 'span', {
@@ -209,7 +264,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
       ])),
     ]) : null,
     claimNotice ? React.createElement('p', { key: 'claim-notice', role: 'status' }, claimNotice) : null,
-    !citations.length && !orderedClaims.length ? React.createElement('p', { key: 'empty', style: { color: C.muted } }, '这条回答暂无可展示的引用或关联论断。') : null,
+    !citations.length && !orderedClaims.length && !evidenceRows.length ? React.createElement('p', { key: 'empty', style: { color: C.muted } }, '这条回答暂无可展示的引用或关联论断。') : null,
     citations.length || nodes.length ? React.createElement('details', { key: 'deposit', style: { borderTop: `1px solid ${C.line}`, paddingTop: 8 } }, [
       React.createElement('summary', { key: 'summary', style: { cursor: 'pointer', fontWeight: 600 } }, '沉淀所选'),
       React.createElement('div', { key: 'choices', style: { display: 'grid', gap: 7, marginTop: 8 } }, [
@@ -228,7 +283,10 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     ]) : null,
   ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
   return React.createElement(React.Fragment, null, [
-    React.createElement('button', { key: 'open', ref: anchorRef, type: 'button', onClick: open, 'aria-label': '审阅并沉淀这条研究回答' }, '回答依据'),
+    React.createElement('button', {
+      key: 'open', ref: anchorRef, type: 'button', onClick: open,
+      'aria-label': candidateLabel || '审阅并沉淀这条研究回答',
+    }, candidateLabel || '回答依据'),
     panel && typeof document !== 'undefined' ? createPortal(panel, document.body) : null,
   ])
 }

@@ -14,7 +14,8 @@ const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content
 <script src="/bundle"></script><script>
 const registered={}; window.toolViews={}; window.rowConfigs={};
 window.testEvents=[{type:'assistant/message',seq:14,time:123,data:{turn:2,message:{id:'review-one',content:[{type:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}];
-window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){return ()=>{}}},binding(){return {eventSource:{getSnapshot(){return {entries:window.testEvents}},subscribe(){return ()=>{}}}}}};
+window.sessionEventsById={};
+window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){return ()=>{}}},binding(id){return {eventSource:{getSnapshot(){return {entries:window.sessionEventsById[id] || window.testEvents}},subscribe(){return ()=>{}}}}}};
 // 假 slots 服务必须认三种注册形态：按 key（tool.call.toolview、plugins.row.config）、
 // 按 id（徽章 / 动作 / 输入框）。过去只按 o.id 登记，键控注册一律落到 registered[undefined]——
 // 于是 Plugins 行配置里的预设 UI 在浏览器回归里完全隐形（点不到，也就没人发现点击路径没被覆盖）。
@@ -27,10 +28,12 @@ const uiWorkspace = {startSession(_workspace,payload){window.launchDraft=payload
 plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
 function ComposerHarness(){
+ const [sessionId,setSessionId]=React.useState('qa');
+ window.changeComposerSession=setSessionId;
  const [input,setInput]=React.useState(()=>({draft:'',draftRev:0,attachmentIds:[],occurrences:[],phase:'plain'}));
- window.setComposerDraft=(draft,attachmentIds=[])=>setInput(current=>({...current,draft,attachmentIds,draftRev:current.draftRev+1}));
+ window.setComposerDraft=(draft,attachmentIds=[],phase='plain')=>setInput(current=>({...current,draft,attachmentIds,phase,draftRev:current.draftRev+1}));
  window.composerInput=input;
- const props={sessionId:'qa',input,inputActions:{...actions,
+ const props={sessionId,input,inputActions:{...actions,
    captureInsertion:()=>({start:input.draft.length,end:input.draft.length,draftRev:window.staleInsertion ? -1 : input.draftRev}),
    insertText(text,span){
      if(span.draftRev!==input.draftRev)return false;
@@ -356,6 +359,64 @@ const server = http.createServer((req,res)=>{
   await popup.close();
   assert.equal(catalogRequests,1,'科研目录应由所有视图共享一次请求');
   assert.equal(promptKitRequests,1,'PromptKit 应由所有消费入口共享一次请求');
+  const tracePage=await browser.newPage({viewport:{width:1280,height:900}});
+  tracePage.on('pageerror',error=>errors.push(error.message));
+  await tracePage.goto('http://127.0.0.1:'+server.address().port);
+  await tracePage.evaluate(()=>{
+    localStorage.setItem('dsh-research-kit.research-context.v1',JSON.stringify({project:'原文追溯验收',activeRunId:''}));
+    const target=document.createElement('div');
+    target.id='trace-answer';
+    document.body.prepend(target);
+    const text=[
+      '中欧城市的卫星地表温差为 8–12 K。【依据：Schwaab 2021｜10.1038/s41467-021-26768-w｜结果；图 1；图 2c】',
+      '麦迪逊 60–90 米尺度的估计差异更大。【依据：Ziter 2019｜10.1073/pnas.1817561116｜图 2C–D】',
+      '【缺口：Ziter 的补充图 S4 未提供】',
+    ].join('\n');
+    window.testEvents.push({type:'assistant/message',seq:15,data:{message:{id:'trace-qa',content:[{type:'text',text}]}}});
+    ReactDOM.createRoot(target).render(React.createElement(registered['dsh-research-kit-review-deposit'],{sessionId:'qa',messageId:'trace-qa'}));
+  });
+  await tracePage.locator('#trace-answer').getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  const tracePreview=tracePage.getByRole('group',{name:'研究回答沉淀预览'});
+  await tracePreview.getByRole('region',{name:'逐条核对结论'}).getByText(/证据缺口.*S4 未提供/).waitFor();
+  assert.equal(await tracePreview.getByRole('link',{name:'Schwaab 2021'}).getAttribute('href'),'https://doi.org/10.1038/s41467-021-26768-w');
+  assert.equal(await tracePreview.getByRole('link',{name:'Ziter 2019'}).getAttribute('href'),'https://doi.org/10.1073/pnas.1817561116');
+  await tracePreview.getByText('沉淀所选',{exact:true}).click();
+  await tracePreview.getByLabel(/引用：10\.1073\/pnas/).uncheck();
+  await tracePreview.getByRole('checkbox',{name:/中欧城市的卫星地表温差/}).check();
+  await tracePreview.getByRole('button',{name:'确认沉淀所选'}).click();
+  await tracePage.getByRole('status').getByText(/知识 1、证据 1/).waitFor();
+  await tracePage.reload();
+  const persistedTrace=await tracePage.evaluate(async()=>{
+    const database=await new Promise((resolve,reject)=>{
+      const request=indexedDB.open('dsh-research-kit-knowledge');
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>reject(request.error);
+    });
+    try {
+      return await new Promise((resolve,reject)=>{
+        const request=database.transaction('nodes').objectStore('nodes').getAll();
+        request.onsuccess=()=>resolve(request.result.filter(node=>node.project==='原文追溯验收'));
+        request.onerror=()=>reject(request.error);
+      });
+    } finally { database.close(); }
+  });
+  assert.equal(persistedTrace.length,1);
+  assert.equal(persistedTrace[0].evidenceIds.length,1);
+  assert.match(persistedTrace[0].sources[0].excerpt,/Schwaab 2021 · 结果；图 1；图 2c/);
+  await tracePage.getByRole('button',{name:'证据关系',exact:true}).click();
+  await tracePage.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
+  await tracePage.locator('svg a[aria-label^="聚焦 中欧城市的卫星地表温差"]').click();
+  await tracePage.getByText(/原文位置（待核验）：Schwaab 2021 · 结果；图 1；图 2c/).waitFor();
+  const originalDoi='https://doi.org/10.1038/s41467-021-26768-w';
+  await tracePage.context().route(originalDoi,route=>route.fulfill({body:'论文目标地址已打开'}));
+  const [originalPage]=await Promise.all([
+    tracePage.waitForEvent('popup'),
+    tracePage.locator(`a[href="${originalDoi}"]`).first().click(),
+  ]);
+  await originalPage.waitForURL(originalDoi);
+  await originalPage.close();
+  await tracePage.close();
+  console.log('逐条原文追溯：隔离课题勾选、刷新后图谱定位与打开 DOI 通过');
   assert.equal(archifyRequests,1,'Archify 模板应只在回放窗口首次使用时请求一次');
   await page.getByRole('button',{name:'收起回放',exact:true}).click();
   console.log('回放自动完成、静态模式和独立窗口：通过');
@@ -432,8 +493,34 @@ const server = http.createServer((req,res)=>{
   await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
   const toggle=dialog.getByRole('switch',{name:'自动科研辅助'});
   assert.equal(await toggle.isChecked(),false);
+  await page.evaluate(()=>{
+    window.testEvents=[{type:'assistant/message',seq:100,data:{message:{id:'qa-old',content:[{type:'text',text:'研究表明，遮阴降低地表温度。见 10.1038/old。'}]}}}];
+  });
   await toggle.check();
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.evaluate(()=>{
+    window.testEvents.push(...[
+      {type:'assistant/message',seq:101,data:{message:{id:'qa-research',content:[{type:'text',text:'研究表明，遮阴降低地表温度。见 10.1038/review。'}]}}},
+      {type:'assistant/message',seq:102,data:{message:{id:'qa-ordinary',content:[{type:'text',text:'你好，今天聊得很愉快。'}]}}},
+    ].map(event=>({type:'event',event})));
+    const target=document.createElement('div');
+    target.id='qa-auto-answer';
+    document.body.prepend(target);
+    window.autoAnswerRoot=ReactDOM.createRoot(target);
+    window.autoAnswerRoot.render(React.createElement(React.Fragment,null,...['qa-old','qa-research','qa-ordinary'].map(messageId=>
+      React.createElement(registered['dsh-research-kit-review-deposit'],{key:messageId,messageId,sessionId:'qa'}))));
+  });
+  const autoAnswer=page.locator('#qa-auto-answer');
+  await autoAnswer.getByRole('button',{name:'可保存 1 条结论、1 条来源'}).waitFor();
+  assert.equal(await autoAnswer.getByRole('button',{name:/可保存/}).count(),1);
+  assert.equal(await autoAnswer.getByRole('button',{name:'审阅并沉淀这条研究回答'}).count(),2);
+  await autoAnswer.getByRole('button',{name:'可保存 1 条结论、1 条来源'}).click();
+  const autoPreview=page.getByRole('group',{name:'研究回答沉淀预览'});
+  await autoPreview.getByRole('link',{name:'10.1038/review',exact:true}).waitFor();
+  assert.equal(await autoPreview.getByRole('button',{name:'确认沉淀所选'}).count(),0);
+  await autoPreview.getByRole('button',{name:'取消',exact:true}).click();
+  await page.evaluate(()=>{window.autoAnswerRoot.unmount();document.getElementById('qa-auto-answer').remove()});
+
   const suggestion=page.getByRole('region',{name:'科研建议'});
   await page.evaluate(()=>{
     window.testEvents.push({type:'user/message',data:{content:[{type:'text',text:'请做一个关于水稻产量的文献综述。'}]}});
@@ -450,7 +537,12 @@ const server = http.createServer((req,res)=>{
   await page.screenshot({path:path.join(artifacts,'conversation-research-suggestion.png')});
   await suggestion.getByRole('button',{name:'预览改动'}).click();
   const preview=page.getByRole('dialog',{name:'预览科研建议'});
-  assert.match(await preview.getByLabel('将插入的科研步骤').inputValue(),/科研执行步骤/);
+  const shortPrompt=await preview.getByLabel('将插入的科研步骤').inputValue();
+  assert.match(shortPrompt,/科研执行步骤.*先回答差异/s);
+  assert.match(shortPrompt,/区分实测、模型估计和推测.*勿把局部阈值推广为通用门槛/);
+  assert.match(shortPrompt,/【缺口：具体缺失】/);
+  assert.match(shortPrompt,/DOI｜原文章节或图表/);
+  assert.doesNotMatch(shortPrompt,/@文件|附加技能指导/);
   await page.evaluate(()=>{window.staleInsertion=true});
   await preview.getByRole('button',{name:'采用并插入'}).click();
   await preview.getByText('草稿暂时无法写入，请检查当前输入后重试。').waitFor();
@@ -470,6 +562,31 @@ const server = http.createServer((req,res)=>{
   await dialog.getByRole('button',{name:'整理当前提问'}).click();
   await page.getByRole('button',{name:'应用增强到消息框'}).waitFor();
   await page.keyboard.press('Escape');
+
+  const firstPrompt='请核对遮阴对地表温度的影响。';
+  await page.evaluate(()=>{
+    window.sessionEventsById['qa-blank']=[];
+    window.changeComposerSession('qa-blank');
+  });
+  const workflowLauncher=page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true});
+  await workflowLauncher.click();
+  await toggle.check();
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.evaluate(draft=>window.setComposerDraft(draft,[],'sending'),firstPrompt);
+  await page.locator('#composer').evaluate(node=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await page.evaluate(draft=>{
+    window.sessionEventsById['qa-created']=[
+      {type:'turn/start',seq:1,data:{turn:1}},
+      {type:'user/message',seq:2,data:{source:{kind:'user'},content:[{type:'text',text:draft}]}},
+    ].map(event=>({type:'event',event}));
+    window.setComposerDraft('');
+    window.changeComposerSession('qa-created');
+  },firstPrompt);
+  await workflowLauncher.click();
+  await toggle.waitFor();
+  assert.equal(await toggle.isChecked(),true,'首条消息落到新的正式会话后应保留科研辅助开关');
+  await dialog.getByRole('button',{name:'关闭',exact:true}).click();
+  await page.evaluate(()=>window.changeComposerSession('qa'));
   console.log('统一入口、资源选择、手动整理及自动建议确认与过期保护：通过');
   await page.getByRole('tab',{name:'我的',exact:true}).click();
   await page.getByRole('button',{name:'从目录复制'}).click();

@@ -78,6 +78,32 @@ test('引用来源：DOI/URL/访问号，markdown 链接标题优先，同一 DO
   assert.equal(deduped[0].identifierKind, 'doi')
 })
 
+test('论文对比表逐格处理，保留完整发现和 DOI，跳过数字、断句及跨列关系', () => {
+  const text = [
+    '| 指标 | 文献 | 对照 |',
+    '| :--- | ---: | --- |',
+    '| 0.2–0.6 °C | 10.1038/s41467-021-26768-w | ，北欧/不列颠反而增强（Results |',
+    '| 热极端下的表现 | 10.1073/pnas.1817561116 | 最热日降温增强0.2–0.6 |',
+    '| 树冠覆盖 | 降低 | 空气温度 |',
+    '| 研究表明，树冠覆盖降低近地空气温度。 | 8–12 K | — |',
+    '| 树木遮阴降低地表温度 | 293 | — |',
+    '',
+    '我们采用卫星遥感方法估计地表温度。城市绿地降低地表温度。',
+    '某项指标提高0.2–0.6。',
+  ].join('\n')
+  const result = extractKnowledge(text)
+  assert.deepEqual(new Set(result.citations.map(row => row.identifier)), new Set(['10.1038/s41467-021-26768-w', '10.1073/pnas.1817561116']))
+  assert.ok(result.nodes.some(row => row.kind === 'finding' && row.label.includes('树冠覆盖降低近地空气温度')))
+  assert.ok(result.nodes.some(row => row.label === '树木遮阴'))
+  assert.ok(result.nodes.some(row => row.kind === 'method' && row.label.includes('卫星遥感')))
+  assert.ok(result.nodes.some(row => row.label === '城市绿地'))
+  assert.ok(result.nodes.every(row => !/[|｜]|0\.2|Results|热极端下的表现/.test(row.label)))
+  assert.ok(result.claims.every(row => !row.excerpt.includes('树冠覆盖\n降低')))
+  const borderless = extractKnowledge('发现 | DOI\n--- | ---\n绿地降低地表温度。 | 10.1073/pnas.1817561116')
+  assert.equal(borderless.citations.length, 1)
+  assert.ok(borderless.nodes.some(row => row.label === '绿地'))
+})
+
 test('同一条消息的输出有界：节点、关系、引用各自封顶', () => {
   const manyClaims = Array.from({ length: 30 }, (_, index) => `基因X${index} 促进水稻耐盐性。`).join('')
   const claimsResult = extractKnowledge(manyClaims)

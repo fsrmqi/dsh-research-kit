@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { installFakeIndexedDB } from './helpers/fake-indexeddb.js'
 import { createKnowledgeStore, knowledgeStore } from '../src/knowledge-store.js'
+import { extractAnswerEvidence } from '../src/lib/answer-evidence.js'
 import {
   depositAssistantMessage, attachKnowledgeDeposition,
   depositLatestAssistantMessage, latestDepositableMessage,
@@ -121,6 +122,55 @@ test('自动沉淀全链路：知识入库、证据入库、资产创建并相�
   assert.ok(finding.assetId, '发现节点应记录对应资产 id（图谱 deposited 边的数据源）')
   const gene = nodes.find(node => node.label === 'Ghd7')
   assert.ok(gene && !gene.assetId, '实体节点不进灵感资产，只作为关系端点')
+})
+
+test('逐条沉淀按标注关联论文，保留图表位置，复用已有证据并隔离课题', async () => {
+  const text = [
+    '- 中欧部分地区的地表温差可达 8–12 K。【依据：Schwaab 2021｜10.1038/s41467-021-26768-w｜结果；图 1；图 2c】',
+    '- 麦迪逊 60 至 90 米尺度的气温关系更明显。【依据：Ziter 2019｜10.1073/pnas.1817561116｜图 2C–D】',
+    '- 研究表明，只能在样本条件下解释。',
+    '- 其余材料需查全文。【依据：另一篇论文｜未提供 DOI｜方法小节】',
+    '- 结果仅在各自研究尺度下成立。【依据：10.1038/s41467-021-26768-w｜图 1；10.1073/pnas.1817561116｜图 2】',
+    '- 论文和标识符互相冲突。【依据：10.1038/s41467-021-26768-w｜10.1073/pnas.1817561116｜讨论】',
+    ...Array.from({ length: 6 }, (_, i) => `- 额外结论 ${i}。【依据：Ziter 2019｜10.1073/pnas.1817561116｜讨论】`),
+    '【缺口：附录图 S4 未提供。】',
+  ].join('\n')
+  const preview = extractAnswerEvidence(text, '验收课题')
+  assert.equal(preview.rows[0].references[0].locator, '结果；图 1；图 2c')
+  assert.equal(preview.rows[2].unlinked[0].paper, '另一篇论文')
+  assert.deepEqual(preview.rows[3].references.map(ref => ref.index), [0, 1])
+  assert.equal(preview.rows[4].references.length, 0)
+  assert.deepEqual(preview.rows.at(-1).gaps, ['附录图 S4 未提供。'])
+  const store = createKnowledgeStore()
+  const firstCitation = '10.1038/s41467-021-26768-w'
+  const secondCitation = '10.1073/pnas.1817561116'
+  const run = async (project, citationIndexes) => {
+    const scoped = extractAnswerEvidence(text, project)
+    return depositAssistantMessage({
+      text, store, activeProject: project, traceAnswerSources: true, sessionId: 'qa-trace', seq: 1,
+      selection: { nodeKeys: scoped.nodes.slice(0, 2).map(node => node.key), citationIndexes },
+      saveEvidence: async input => {
+        assert.equal(input.url, `https://doi.org/${input.identifier}`)
+        if (input.identifier === firstCitation) {
+          throw Object.assign(new Error('已有证据'), { code: 'DUPLICATE', duplicate: { id: `${project}-existing` } })
+        }
+        assert.equal(input.identifier, secondCitation)
+        return { entry: { id: `${project}-new` } }
+      },
+    })
+  }
+  await run('验收课题', [0, 1])
+  await run('另一个课题', [0])
+  const rows = (await store.listNodes({ kind: 'finding' })).filter(node => ['验收课题', '另一个课题'].includes(node.project))
+  assert.equal(rows.length, 4)
+  for (const [project, expected] of [['验收课题', ['验收课题-existing', '验收课题-new']], ['另一个课题', ['另一个课题-existing', undefined]]]) {
+    const first = rows.find(node => node.project === project && node.label.startsWith('中欧'))
+    const second = rows.find(node => node.project === project && node.label.startsWith('麦迪逊'))
+    assert.deepEqual(first.evidenceIds, [expected[0]])
+    assert.match(first.sources[0].excerpt, /图 2c/)
+    assert.deepEqual(second.evidenceIds, expected[1] ? [expected[1]] : [])
+    if (!expected[1]) assert.doesNotMatch(second.sources[0].excerpt, /图 2C/)
+  }
 })
 
 test('重复消息合并：同一来源命中证据库去重，同一结论不重复建资产', async () => {

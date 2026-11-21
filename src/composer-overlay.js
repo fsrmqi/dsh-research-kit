@@ -1,4 +1,5 @@
 import React from 'react'
+import { readSessionEvents } from './lib/session-events.js'
 import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createEvidenceStore } from './evidence-store.js'
@@ -139,12 +140,74 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
 }
 
 const researchAutoSessions = new Map()
+const researchAutoListeners = new Set()
+const pendingFirstPrompts = new Map()
+
+export function readResearchAutoSession(sessionId) {
+  return researchAutoSessions.get(sessionId) || null
+}
+
+export function subscribeResearchAutoSessions(listener) {
+  researchAutoListeners.add(listener)
+  return () => researchAutoListeners.delete(listener)
+}
+
+export function inheritResearchAutoSession(sessions, sessionId) {
+  if (!sessionId || !pendingFirstPrompts.size) return
+  const alreadyEnabled = researchAutoSessions.has(sessionId)
+  if (alreadyEnabled && !pendingFirstPrompts.has(sessionId)) return
+  const events = readSessionEvents(sessions, sessionId, 128)
+  const firstTurn = events.find(event => event.type === 'turn/start')
+  if (firstTurn?.data?.turn !== 1) return
+  const prompt = events.find(event => event.type === 'user/message' && (event.data?.message ?? event.data)?.source?.kind === 'user')
+  const draft = (prompt?.data?.message ?? prompt?.data)?.content?.filter(part => part.type === 'text').map(part => part.text).join('\n').trim()
+  const now = Date.now()
+  const matches = []
+  for (const [previousId, pending] of pendingFirstPrompts) {
+    if (pending.expires < now) { pendingFirstPrompts.delete(previousId); continue }
+    if (draft === pending.draft && (!firstTurn.time || firstTurn.time >= pending.sentAt - 3000)) matches.push(previousId)
+  }
+  if (alreadyEnabled) {
+    if (matches.includes(sessionId)) pendingFirstPrompts.delete(sessionId)
+    return
+  }
+  if (matches.length !== 1) return
+  const [previousId] = matches
+  const { ignored } = pendingFirstPrompts.get(previousId)
+  pendingFirstPrompts.delete(previousId)
+  researchAutoSessions.delete(previousId)
+  researchAutoSessions.set(sessionId, { ignored, afterSeq: Number(firstTurn.seq) || 0 })
+  for (const listener of researchAutoListeners) listener()
+}
+
+export const RESEARCH_STEPS_HEADING = '科研执行步骤'
+const SHORT_RESEARCH_STEPS = {
+  'compare-papers': '先回答差异。关键数值随文交代指标、地点、比较对象、尺度和条件；区分实测、模型估计和推测，勿把局部阈值推广为通用门槛。',
+  'review-paper': '先给最重要的审阅发现。逐条指出问题所在、影响和可行改进，区分材料未报告和方法本身的不足。',
+  'literature-review': '先给简明结论。交代检索范围和纳入条件，区分一致发现、分歧和证据空白。',
+}
+
+export function compactResearchInstructions(workflowId, inheritedQuestion, selectedResources = []) {
+  const steps = SHORT_RESEARCH_STEPS[workflowId]
+  if (!steps) return ''
+  return [
+    RESEARCH_STEPS_HEADING,
+    inheritedQuestion ? `延续问题：${inheritedQuestion}` : '',
+    steps,
+    '关键结论各占一条，句末标【依据：论文｜DOI｜原文章节或图表】；多篇用分号分隔。仅有元数据或缺少正文、补充材料时，标【缺口：具体缺失】，不推断缺失内容。篇幅按原问题要求。',
+    ...selectedResources.map(item => {
+      if (item.type === 'skill' && item.promptFragment) return `技能 · ${item.name}：${item.promptFragment}`
+      if (item.type === 'database') return `数据源 · ${item.name}：${item.accessNote || '根据当前会话权限查询'}。核实查询成功后再引用。`
+      return ''
+    }),
+  ].filter(Boolean).join('\n')
+}
 
 function matchResearchDraft(draft, materialCount) {
   const text = draft.trim()
   if (!text || text.length > 2500 || /^[/@]/.test(text) && !materialCount
       || /^(什么是|啥是|如何理解|请解释|解释一下|为什么|what is|what are|explain)/i.test(text)
-      || text.includes('科研执行步骤')) return null
+      || text.includes(RESEARCH_STEPS_HEADING)) return null
   if (materialCount >= 2 && /(?:比较|对比).{0,20}(?:论文|文献|证据|研究)|compare.{0,40}(?:papers|studies|evidence)/i.test(text)) {
     return { id: 'compare-papers', values: {}, reason: '当前问题涉及对比多份材料的发现和证据强度。' }
   }
@@ -158,16 +221,14 @@ function matchResearchDraft(draft, materialCount) {
 }
 
 function recentResearchRequest(sessions, sessionId) {
-  try {
-    const entries = sessions?.binding?.(sessionId)?.eventSource?.getSnapshot?.()?.entries
-    const recent = entries?.slice(-24).findLast(event => event.type === 'user/message')
-    const message = recent?.data?.message ?? recent?.data
-    return message?.content?.find(block => block.type === 'text')?.text?.slice(0, 600) || ''
-  } catch { return '' }
+  const recent = readSessionEvents(sessions, sessionId, 24).findLast(event =>
+    event.type === 'user/message' && (!(event.data?.message ?? event.data)?.source || (event.data?.message ?? event.data).source.kind === 'user'))
+  const message = recent?.data?.message ?? recent?.data
+  return message?.content?.find(block => block.type === 'text')?.text?.split(RESEARCH_STEPS_HEADING, 1)[0].trim().slice(0, 600) || ''
 }
 
 /** 由 conversation.input.overlay 承载，锚定在输入卡片上方。 */
-export function ResearchComposerOverlay({ sessionId, input, useInput, inputActions, catalogStorage, sessions }) {
+export function ResearchComposerOverlay({ sessionId, input, useInput, inputActions, catalogStorage, sessions, useSession }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const [mode, setMode] = React.useState(null)
@@ -188,15 +249,27 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
   const materialCount = (draftState?.attachmentIds?.length || 0) + fileReferences
   const available = Boolean(sessionId) && typeof draft === 'string' && Number.isInteger(revision)
     && typeof draftState?.phase === 'string' && supportsSafeInsert(inputActions)
-  const [autoSession, setAutoSession] = React.useState(() => researchAutoSessions.has(sessionId) ? sessionId : '')
+  const autoSession = React.useSyncExternalStore(subscribeResearchAutoSessions, () => readResearchAutoSession(sessionId), () => null)
+  const blank = typeof useSession === 'function' ? useSession(snapshot => snapshot?.blank) : undefined
   const [suggestion, setSuggestion] = React.useState(null)
   const [preview, setPreview] = React.useState(false)
   const [composing, setComposing] = React.useState(false)
   const [assistNotice, setAssistNotice] = React.useState('')
   const assistRef = React.useRef(null)
-  const enabled = available && autoSession === sessionId
+  const enabled = available && Boolean(autoSession)
   React.useEffect(() => {
-    setAutoSession(researchAutoSessions.has(sessionId) ? sessionId : '')
+    const inherit = () => inheritResearchAutoSession(sessions, sessionId)
+    inherit()
+    return sessions?.binding?.(sessionId)?.eventSource?.subscribe?.(inherit)
+  }, [sessions, sessionId])
+  React.useEffect(() => {
+    if (!enabled || draftState?.phase !== 'sending' || !draft?.trim() || blank === false
+        || (blank === undefined && autoSession.afterSeq > 0)) return
+    const sentAt = Date.now()
+    pendingFirstPrompts.set(sessionId, { draft: draft.trim(), ignored: autoSession.ignored, sentAt, expires: sentAt + 5 * 60 * 1000 })
+    if (pendingFirstPrompts.size > 12) pendingFirstPrompts.delete(pendingFirstPrompts.keys().next().value)
+  }, [enabled, draftState?.phase, draft, blank, sessionId, autoSession])
+  React.useEffect(() => {
     setMode(null)
     setLaunchWorkflow(null)
     setSuggestion(null)
@@ -224,7 +297,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
     }
   }, [enabled])
   const eligible = enabled && !composing && draftState?.phase === 'plain'
-  const ignored = enabled ? researchAutoSessions.get(sessionId) : undefined
+  const ignored = enabled ? readResearchAutoSession(sessionId)?.ignored : undefined
   React.useEffect(() => {
     setPreview(false)
     setAssistNotice('')
@@ -246,15 +319,23 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
   }, [mode, currentSuggestion])
   const suggestionWorkflow = currentSuggestion && itemById(currentSuggestion.id)
   const toggleAuto = () => {
-    if (enabled) researchAutoSessions.delete(sessionId)
-    else researchAutoSessions.set(sessionId, new Set())
+    if (enabled) {
+      researchAutoSessions.delete(sessionId)
+      pendingFirstPrompts.delete(sessionId)
+    }
+    else {
+      const afterSeq = Number(readSessionEvents(sessions, sessionId).findLast(event => Number.isFinite(Number(event.seq)))?.seq) || 0
+      researchAutoSessions.set(sessionId, { ignored: new Set(), afterSeq })
+    }
+    for (const listener of researchAutoListeners) listener()
     setSuggestion(null)
-    setAutoSession(enabled ? '' : sessionId)
   }
-  const suggestedText = suggestionWorkflow && `科研执行步骤\n${composeWorkflow(suggestionWorkflow, currentSuggestion.values, {
-    extraSkillIds: unique([...(suggestionWorkflow.suggestedSkillIds || []), ...resourceIds.filter(id => itemById(id)?.type === 'skill')]),
-    extraDatabaseIds: resourceIds.filter(id => itemById(id)?.type === 'database'),
-  }).prompt}`
+  const inheritedQuestion = currentSuggestion?.values.question
+  const suggestedText = suggestionWorkflow && compactResearchInstructions(
+    suggestionWorkflow.id,
+    inheritedQuestion && inheritedQuestion !== draft.trim() ? inheritedQuestion : '',
+    resourceIds.map(itemById).filter(Boolean),
+  )
   const dismissSuggestion = () => {
     if (ignored?.size >= 25) ignored.delete(ignored.values().next().value)
     ignored?.add(draft.trim())
@@ -272,7 +353,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
     storage.recordHistory?.({ id: suggestionWorkflow.id, name: suggestionWorkflow.name })
     createEvidenceStore(sessionId).recordWorkflow({
       id: suggestionWorkflow.id, name: suggestionWorkflow.name,
-      resourceIds: unique([...resourceIds, ...(suggestionWorkflow.suggestedSkillIds || [])]),
+      resourceIds: unique(resourceIds),
     })
     dismissSuggestion()
   }
@@ -415,12 +496,12 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           h('div', { key: 'actions', className: 'rk-picker-actions' }, [
             available ? h('label', {
               key: 'auto', className: 'rk-picker-switch',
-              title: '仅在当前会话提供本地建议，确认后插入草稿。',
+              title: '仅当前会话：提问时推荐流程，回答后准备可保存候选。插入和保存均需确认。',
             }, [
               h('span', { key: 'label' }, '自动科研辅助'),
               h('input', { key: 'check', type: 'checkbox', role: 'switch', checked: enabled, onChange: toggleAuto, 'aria-describedby': autoScopeId }),
               h('span', { key: 'track', className: 'rk-picker-switch-track', 'aria-hidden': true }),
-              h('span', { key: 'scope', id: autoScopeId, hidden: true }, '仅在当前会话提供本地建议，确认后插入草稿。'),
+              h('span', { key: 'scope', id: autoScopeId, hidden: true }, '仅当前会话：提问时推荐流程，回答后准备可保存候选。插入和保存均需确认。'),
             ]) : null,
             h(IconButton, { key: 'close', name: 'close', size: 14, label: '关闭', onClick: close, style: { border: 0, background: 'transparent', borderRadius: 6 } }),
           ]),

@@ -83,10 +83,10 @@ test('输入框浮层：关闭态渲染为空且不抛错（打开态由事件�
   assert.equal(html, '', '浮层未打开时应渲染为空，不应抛错')
 })
 
-test('研究证据图谱：初始渲染含自动沉淀开关与知识维护入口，不抛错', () => {
+test('研究证据图谱：初始渲染保留知识维护入口，移除旧的自动入库开关', () => {
   const html = render(ResearchEvidenceGraph, { sessionId: 'r2', assetProvider: assetProviderStub, embedded: true })
   assert.ok(html.length > 0, '图谱页应完整渲染')
-  assert.match(html, /自动沉淀 · 已关闭/, '自动沉淀开关默认关闭')
+  assert.doesNotMatch(html, /自动沉淀 · 已/, '图谱不再提供自动入库开关')
   assert.match(html, /导出知识/, '知识备份导出入口存在')
   assert.match(html, /恢复知识/, '知识备份恢复入口存在')
   assert.doesNotMatch(html, /刷新页面后会丢失/, 'IndexedDB 可用时不应出现知识库降级警告')

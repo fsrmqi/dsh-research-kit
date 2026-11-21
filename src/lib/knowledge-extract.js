@@ -78,9 +78,9 @@ const MARKDOWN_LINK = /\[([^\]]{1,120})\]\((https?:\/\/[^)\s]+)\)/g
 // 主体/客体各限 24 字：科学陈述的主语通常是短语而非长句，超限多半是没抽对。
 // polarity 是模式自带的方向先验；句中含不确定词时统一收敛为 uncertain。
 const CLAIM_PATTERNS = [
-  { relation: 'may-affect', re: /^(.{1,24}?)(?:可能|或许|也许|有望)(?:会|将|将会)?(?:显著|明显)?(?:地)?(影响|调控|调节|改变|决定)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
-  { relation: 'promotes', re: /^(.{1,24}?)(?:显著|明显)?(?:地)?(促进|增强|提高|上调|提升|增加|延长|改善|激活)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
-  { relation: 'inhibits', re: /^(.{1,24}?)(?:显著|明显)?(?:地)?(抑制|削弱|减弱|降低|下调|减少|缩短|阻碍|损害|破坏)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+  { relation: 'may-affect', re: /^(.{1,24}?)(?:可能|或许|也许|有望)(?:会|将|将会)?(?:(?:显著|明显)地?)?(影响|调控|调节|改变|决定)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+  { relation: 'promotes', re: /^(.{1,24}?)(?:(?:显著|明显)地?)?(促进|增强|提高|上调|提升|增加|延长|改善|激活)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
+  { relation: 'inhibits', re: /^(.{1,24}?)(?:(?:显著|明显)地?)?(抑制|削弱|减弱|降低|下调|减少|缩短|阻碍|损害|破坏)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
   { relation: 'causes', re: /^(.{1,24}?)(?:直接|间接)?(导致|引起|造成|诱发|引发)(?:了)?(.{1,24}?)(?:[，。；！？、\s]|$)/ },
   { relation: 'correlates', re: /^(.{1,24}?)与(.{1,24}?)(?:之间)?(?:呈|存在)?(?:显著)?(正|负)?相关/ },
 ]
@@ -302,9 +302,25 @@ function sentenceIndexAt(text, index, sentences) {
 
 // ── 关系抽取 ──────────────────────────────────────────────────────────────────
 
+// 数值可以留在完整陈述中，但单独的数值或单位不能成为论断的端点。
+const BARE_MEASUREMENT = /^(?:[<>≤≥≈~±+−-]\s*)?\d+(?:[.,]\d+)?(?:\s*[–—−~-至到]\s*[+−-]?\d+(?:[.,]\d+)?)*(?:\s*(?:[%％°℃℉]|°\s*[CF]|K|[munμ]?m|km|s|ms|h|kg|g|mg|Pa|kPa|ppm|dB))?$/iu
+
+function isKnowledgeFragment(text) {
+  return !/[\p{L}\p{N}]/u.test(text)
+    || /^[|｜，,、；;：:。.!！?？)）\]】]/u.test(text)
+    || BARE_MEASUREMENT.test(text)
+}
+
+function isBrokenClaimSpan(text) {
+  return isKnowledgeFragment(text) || /[：:|｜]|的$/u.test(text)
+    || [['（', '）'], ['(', ')'], ['“', '”'], ['「', '」'], ['【', '】']].some(([left, right]) =>
+      text.split(left).length !== text.split(right).length)
+}
+
 function cleanClaimSpan(span) {
+  if (isBrokenClaimSpan(span.trim())) return ''
   const text = normalizeKnowledgeLabel(span)
-  if (!text || text.length > 24) return ''
+  if (!text || text.length > 24 || isKnowledgeFragment(text)) return ''
   if (CLAIM_SPAN_PRONOUNS.test(text)) return ''
   if (CLAIM_SPAN_STOPWORDS.test(text)) return ''
   return text
@@ -312,10 +328,11 @@ function cleanClaimSpan(span) {
 
 // 英文跨度清洗：放宽到 48 字符；句首状语（Under salt stress, …）取最后一个逗号后的主体。
 function cleanClaimSpanEn(span) {
+  if (isKnowledgeFragment(span.trim())) return ''
   const text = normalizeKnowledgeLabel(span)
   if (!text || text.length > 48) return ''
   const head = text.split(/,\s+/).pop().trim()
-  if (!head || head.length > 48) return ''
+  if (!head || head.length > 48 || isBrokenClaimSpan(head)) return ''
   if (EN_CLAIM_SPAN_PRONOUNS.test(head)) return ''
   if (EN_CLAIM_SPAN_STOPWORDS.test(head)) return ''
   return head
@@ -403,9 +420,36 @@ function isQuestionSentence(sentence) {
 
 // ── 主入口 ────────────────────────────────────────────────────────────────────
 
+function markdownTableCells(line) {
+  const text = line.trim()
+  const cells = text.replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/)
+  return cells.length >= 2 ? cells.map(cell => cell.trim()) : null
+}
+
+function separateKnowledgeTableCells(text) {
+  const lines = text.split(/\r?\n/)
+  const prose = []
+  for (let index = 0; index < lines.length; index++) {
+    const header = markdownTableCells(lines[index])
+    const divider = header && index + 1 < lines.length ? markdownTableCells(lines[index + 1]) : null
+    if (divider && divider.length === header.length && divider.every(cell => /^:?-{3,}:?$/.test(cell))) {
+      index++
+      for (let row = markdownTableCells(lines[index + 1] || ''); row?.length === header.length; row = markdownTableCells(lines[index + 1] || '')) {
+        // 每格独立判断，禁止从相邻列拼出一条论断。
+        prose.push(...row.filter(cell => !isKnowledgeFragment(cell)
+          && (/[。！？.!?]$/.test(cell) || !/[，,；;|｜：:()（）]/.test(cell))))
+        index++
+      }
+    } else {
+      const line = lines[index]
+      if (!/^\s*\|/.test(line)) prose.push(line)
+    }
+  }
+  return prose.join('\n')
+}
+
 function stripMarkdownForClaims(text) {
-  return String(text || '')
-    .replace(MARKDOWN_CODE_BLOCK, ' ')
+  return separateKnowledgeTableCells(String(text || '').replace(MARKDOWN_CODE_BLOCK, ' '))
     .replace(MARKDOWN_INLINE_CODE, '$1')
     .replace(MARKDOWN_BOLD, '$1')
     .replace(MARKDOWN_ITALIC, '$1')
@@ -422,7 +466,7 @@ export function extractKnowledge(rawText) {
   if (!text.trim()) return { nodes: [], claims: [], citations: [] }
   const citations = extractCitations(text)
   const clean = stripMarkdownForClaims(text)
-  const sentences = clean.split(SENTENCE_SPLIT).map(part => part.trim()).filter(part => part.length >= 4)
+  const sentences = clean.split(SENTENCE_SPLIT).map(part => part.trim()).filter(part => part.length >= 4 && !isKnowledgeFragment(part))
 
   const nodes = new Map()
   const claims = []
@@ -452,7 +496,7 @@ export function extractKnowledge(rawText) {
       for (const extra of [...subject.extras, ...object.extras]) addClaim({ ...extra, excerpt: sentence })
       claimEntityKeys = [...claimEntityKeys, subject.endpoint, object.endpoint, ...subject.extras.map(item => item.fromKey), ...object.extras.map(item => item.fromKey)]
     }
-    if (marked) {
+    if (marked && !isKnowledgeFragment(clause)) {
       const key = addNode(marked.kind, '', clause, sentence)
       // 发现/假设/问题节点与该句关系涉及的实体相连（最多 3 个），否则知识节点会悬浮成孤岛。
       for (const entityKey of [...new Set(claimEntityKeys)].slice(0, 3)) addClaim({ fromKey: key, toKey: entityKey, relation: 'about', polarity: 'neutral', excerpt: sentence })

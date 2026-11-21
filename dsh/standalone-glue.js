@@ -3,7 +3,7 @@ import { ResearchConsole } from '../src/research-console.js'
 import { ResearchComposerLauncher } from '../src/composer-launcher.js'
 import { ResearchComposerOverlay } from '../src/composer-overlay.js'
 import { registerResearchSlots } from './slot-registry.js'
-import { attachKnowledgeDeposition } from '../src/knowledge-deposition.js'
+import { registerDepositionSessions } from '../src/knowledge-deposition.js'
 import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction, ResearchKitPresetConfig, RESEARCH_KIT_CONSOLE_VIEW } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
@@ -80,7 +80,7 @@ export function researchKitApply(ctx) {
   }, props => React.createElement(ResearchMessageDepositAction, {
     ...props, sessions: ctx.sessions, assetProvider: () => depositAssetProvider,
   }))))
-  const disposeDeposition = attachKnowledgeDeposition(ctx, { assetProvider: depositAssetProvider }) || (() => {})
-  disposers.push(disposeDeposition)
+  registerDepositionSessions(ctx.sessions)
+  disposers.push(() => registerDepositionSessions(null))
   return () => disposers.forEach(dispose => dispose?.())
 }

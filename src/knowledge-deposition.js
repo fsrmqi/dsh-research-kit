@@ -1,4 +1,5 @@
 import { extractKnowledge, normalizeKnowledgeLabel } from './lib/knowledge-extract.js'
+import { extractAnswerEvidence, researchCitationHref } from './lib/answer-evidence.js'
 import { autoDepositionTags } from './lib/deposition-taxonomy.js'
 import { knowledgeStore, publishKnowledge } from './knowledge-store.js'
 import { saveEvidenceEntry, getActiveProject } from './lib/evidence-vault-sync.js'
@@ -98,6 +99,7 @@ function assetDedupeKey(title, project) {
 export async function depositAssistantMessage({
   text,
   selection,
+  traceAnswerSources = false,
   sessionId = '',
   seq = null,
   turn = null,
@@ -111,11 +113,20 @@ export async function depositAssistantMessage({
   const summary = { ...EMPTY_SUMMARY, sessionId: String(sessionId || ''), seq: Number.isFinite(Number(seq)) ? Number(seq) : null }
   const source = String(text || '')
   if (!source.trim()) return summary
-  const extracted = extractKnowledge(source)
+  const project = activeProject !== undefined ? activeProject : getActiveProject()
+  const extracted = traceAnswerSources ? extractAnswerEvidence(source, project) : extractKnowledge(source)
   const selectedKeys = Array.isArray(selection?.nodeKeys) ? new Set(selection.nodeKeys) : null
   const selectedCitations = Array.isArray(selection?.citationIndexes) ? new Set(selection.citationIndexes) : null
+  const referencesByNode = new Map((extracted.rows || []).map(row => [row.nodeKey,
+    row.references.filter(ref => !selectedCitations || selectedCitations.has(ref.index))]))
+  const chosenNodes = selectedKeys ? extracted.nodes.filter(node => selectedKeys.has(node.key)) : extracted.nodes
   const extraction = {
-    nodes: selectedKeys ? extracted.nodes.filter(node => selectedKeys.has(node.key)) : extracted.nodes,
+    nodes: chosenNodes.map(node => {
+      const refs = referencesByNode.get(node.key) || []
+      if (!refs.length) return node
+      const positions = refs.map(ref => `${ref.paper} · ${ref.locator}`)
+      return { ...node, excerpt: `原文位置（待核验）：${positions.join('；')}\n${node.excerpt}` }
+    }),
     claims: selectedKeys ? extracted.claims.filter(claim => selectedKeys.has(claim.fromKey) && selectedKeys.has(claim.toKey)) : extracted.claims,
     citations: selectedCitations ? extracted.citations.filter((_, index) => selectedCitations.has(index)) : extracted.citations,
   }
@@ -125,7 +136,6 @@ export async function depositAssistantMessage({
   summary.extracted = true
 
   const origin = { sessionId: summary.sessionId, seq: summary.seq, turn, at: at || now, excerpt: source.trim() }
-  const project = activeProject !== undefined ? activeProject : getActiveProject()
   const applied = await store.applyExtraction({ nodes: extraction.nodes, claims: extraction.claims, source: origin, project, now })
   summary.addedNodes = applied.addedNodes
   summary.mergedNodes = applied.mergedNodes
@@ -135,31 +145,37 @@ export async function depositAssistantMessage({
   const touchedByThisMessage = row => (row.sources || []).some(item => item.sessionId === summary.sessionId && item.seq === summary.seq)
 
   // 引用来源 → 证据库：状态保持「未核验」，重复（同项目同标识符）直接跳过，绝不覆盖已有条目。
-  const evidenceIds = []
-  for (const citation of extraction.citations) {
+  const evidenceIds = new Map()
+  for (const [index, citation] of extracted.citations.entries()) {
+    if (selectedCitations && !selectedCitations.has(index)) continue
     try {
       const result = await saveEvidence({
         title: citation.title || citation.identifier || citation.url,
         sourceDatabase: DEPOSITION_SOURCE_DATABASE,
         identifier: citation.identifier,
         identifierKind: citation.identifierKind,
-        url: citation.url,
+        url: traceAnswerSources ? researchCitationHref(citation) : citation.url,
         project,
         tags: autoDepositionTags({ text: `${taxonomyText} ${citation.title || ''}`, identifierKind: citation.identifierKind }),
         reason: `自动沉淀：助手回答中引用的来源（消息 seq ${summary.seq ?? '未知'}），需逐条人工核验。`,
         note: `来源摘录：${(citation.title || '').slice(0, 160)}`,
       })
-      if (result?.entry?.id) { evidenceIds.push(result.entry.id); summary.savedEvidence++ }
+      if (result?.entry?.id) { evidenceIds.set(index, result.entry.id); summary.savedEvidence++ }
     } catch (error) {
-      if (error?.code === 'DUPLICATE') summary.duplicateEvidence++
-      else summary.failedEvidence++
+      if (error?.code === 'DUPLICATE') {
+        summary.duplicateEvidence++
+        if (traceAnswerSources && error.duplicate?.id) evidenceIds.set(index, error.duplicate.id)
+      } else summary.failedEvidence++
     }
   }
-  if (evidenceIds.length) {
+  if (evidenceIds.size) {
     for (const node of applied.nodes) {
       if (!DEPOSIT_ASSET_KINDS.includes(node.kind) || (selectedKeys && !selectedKeys.has(node.key))) continue
       if (!touchedByThisMessage(node)) continue
-      for (const evidenceId of evidenceIds) await store.linkEvidence(node.id, evidenceId)
+      const ids = traceAnswerSources
+        ? (referencesByNode.get(node.key) || []).map(ref => evidenceIds.get(ref.index)).filter(Boolean)
+        : evidenceIds.values()
+      for (const evidenceId of new Set(ids)) await store.linkEvidence(node.id, evidenceId)
     }
   }
 
@@ -311,7 +327,7 @@ export function attachKnowledgeDeposition(ctx, { assetProvider } = {}) {
 
 let depositionSessions = null
 
-function registerDepositionSessions(sessions) {
+export function registerDepositionSessions(sessions) {
   depositionSessions = sessions?.list && typeof sessions?.binding === 'function' ? sessions : null
 }
 

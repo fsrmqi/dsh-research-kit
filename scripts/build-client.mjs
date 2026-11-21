@@ -28,6 +28,8 @@ files.splice(files.indexOf('src/lib/evidence-graph-core.js') + 1, 0, 'src/lib/te
 files.splice(files.indexOf('src/lib/evidence-vault-core.js'), 0, 'src/lib/bibliography.js')
 files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js', 'src/lib/literature-review-export.js')
 files.splice(files.indexOf('src/evidence-vault-store.js') + 1, 0, 'src/lib/claim-review-client.js')
+files.splice(files.indexOf('src/composer-overlay.js'), 0, 'src/lib/session-events.js')
+files.splice(files.indexOf('src/lib/knowledge-extract.js') + 1, 0, 'src/lib/answer-evidence.js')
 // 入口形态偏好：必须在 dsh/prompt-enhancer-glue.js（按形态分支）与 src/plugin-status.js（设置项）之前。
 files.splice(files.indexOf('src/promptkit-loader.js') + 1, 0, 'src/entry-mode.js')
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
@@ -86,10 +88,12 @@ const ORDERED_SYMBOLS = [
   'readEntryMode', 'useEntryMode', 'EntryModeSetting', // src/entry-mode.js（入口形态偏好 + Plugins 页设置项）
   'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
   'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
+  'readSessionEvents',
+  'extractAnswerEvidence',
   'ResearchPluginStatusSection',   // src/plugin-status.js（standalone-glue 注册状态区）
   'ResearchKitBadge', 'ResearchKitDiagnosticsAction', 'ResearchKitOpenWorkbenchAction', // src/plugin-status.js（Plugins 页徽章、诊断与跨页跳转动作）
   'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
-  'attachKnowledgeDeposition',     // src/knowledge-deposition.js（standalone-glue 接线）
+  'registerDepositionSessions',   // src/knowledge-deposition.js（standalone-glue 接线）
   'ResearchDepositButton',         // src/composer-deposit-button.js（悬浮入口形态下的沉淀伴生钮）
   'ResearchConsole',               // src/research-console.js
 ]

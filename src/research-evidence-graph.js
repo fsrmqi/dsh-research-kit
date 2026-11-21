@@ -22,12 +22,13 @@ import {
   knowledgeStore, subscribeKnowledge, publishKnowledge, KNOWLEDGE_NODE_ID_PREFIX,
   serializeKnowledgeBackup, parseKnowledgeBackup,
 } from './knowledge-store.js'
-import { isAutoDepositEnabled, setAutoDepositEnabled, onAutoDepositChange, lastDepositionSummary, depositLatestAssistantMessage } from './knowledge-deposition.js'
+import { lastDepositionSummary, depositLatestAssistantMessage } from './knowledge-deposition.js'
 import {
   KNOWLEDGE_KIND_LABELS, KNOWLEDGE_ENTITY_LABELS, KNOWLEDGE_STATUSES, KNOWLEDGE_STATUS_LABELS,
   KNOWLEDGE_POLARITY_LABELS, CLAIM_RELATION_LABELS,
 } from './lib/knowledge-extract.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
+import { researchCitationHref } from './lib/answer-evidence.js'
 
 const GRAPH_VIEW_MODES = [
   { value: 'all', label: '全部' },
@@ -137,7 +138,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [evidenceProjects, setEvidenceProjects] = React.useState([])
   const [knowledgeNodes, setKnowledgeNodes] = React.useState([])
   const [knowledgeClaims, setKnowledgeClaims] = React.useState([])
-  const [autoDeposit, setAutoDeposit] = React.useState(() => isAutoDepositEnabled())
   const [selectedKnowledgeId, setSelectedKnowledgeId] = React.useState('')
   const [selectedEvidenceNodeId, setSelectedEvidenceNodeId] = React.useState('')
   const [confirmDeleteEvidence, setConfirmDeleteEvidence] = React.useState(false)
@@ -221,7 +221,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       })
   }, [])
   React.useEffect(() => { refreshKnowledge(); return subscribeKnowledge(refreshKnowledge) }, [refreshKnowledge])
-  React.useEffect(() => onAutoDepositChange(value => setAutoDeposit(value)), [])
 
   // 视图状态写回链接：只写焦点、范围模式、路径两端与缩放，不写任何证据内容。
   React.useEffect(() => {
@@ -695,20 +694,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         h(Button, { key: 'export', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照'),
         h(Button, { key: 'link', variant: 'ghost', onClick: copyViewLink }, '复制视图链接'),
         h(Button, {
-          key: 'auto-deposit',
-          variant: autoDeposit ? 'soft' : 'ghost',
-          'aria-pressed': autoDeposit,
-          title: '开启后自动从助手回答提取研究知识并入库（本地完成，全部以待核验状态保存）',
-          onClick: () => {
-            const next = !autoDeposit
-            setAutoDepositEnabled(next)
-            setAutoDeposit(next)
-            setNotice(next
-              ? '已开启自动沉淀：此后每条助手回答完成后，会在本地提取研究问题、发现、假设与引用来源，全部以「待核验」状态进入灵感资产、证据库与本图谱；相同内容自动合并，冲突结论并列保留。'
-              : '已关闭自动沉淀：已保存的知识、证据与灵感资产全部保留，可继续手动操作。')
-          },
-        }, autoDeposit ? '自动沉淀 · 已开启' : '自动沉淀 · 已关闭'),
-        h(Button, {
           key: 'deposit-latest', variant: 'ghost', size: 'sm', icon: 'sparkles', disabled: depositing,
           title: '不开自动开关时，可手动把当前会话最近一条助手回答提取入库（本地完成，待核验起步）',
           onClick: depositLatest,
@@ -784,7 +769,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
           h('span', { key: 'dot', 'aria-hidden': 'true', style: { width: 9, height: 9, borderRadius: 3, background: graphKindColor(kind), display: 'inline-block' } }),
           GRAPH_KIND_LABELS[kind] || kind,
         ])),
-        autoDeposit && lastDeposition ? h('span', {
+        lastDeposition && lastDeposition.sessionId === String(sessionId) ? h('span', {
           key: 'last-deposition',
           title: `会话 ${lastDeposition.sessionId || '本地'} 消息 #${lastDeposition.seq ?? '?'}`,
         }, `最近沉淀：+${lastDeposition.addedNodes} 节点 · +${lastDeposition.addedClaims} 关系 · 证据 ${lastDeposition.savedEvidence} · 资产 ${lastDeposition.savedAssets}（消息 #${lastDeposition.seq ?? '?'}）`) : null,
@@ -837,7 +822,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
           : '尚无可绘制的证据关系',
         hint: (scope !== 'all' || projectFilter)
           ? '调整上方的节点范围或项目筛选；「本会话」只含刷新即消失的记录，「持久沉淀」含证据、灵感资产与自动沉淀知识。'
-          : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可开启右上角「自动沉淀」让图谱随科研对话积累，或点「沉淀最近回答」手动提取当前会话最近一条回答。',
+          : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可打开对话下方的「回答依据」确认保存。',
       }),
     selectedEvidenceEntry ? h(Card, {
       key: 'evidence-detail',
@@ -927,7 +912,11 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         ...selectedKnowledge.evidenceIds.map(id => {
           const entry = visibleSavedEvidence.find(item => item.id === id)
           if (!entry) return h('span', { key: id, style: { color: C.muted } }, '（关联的证据条目不在当前视图，可能已被删除或属于其他项目）')
-          return h('span', { key: id }, entry.title, entry.status ? `（${entry.status === 'verified' ? '已核验' : entry.status === 'unverified' ? '未核验' : entry.status}）` : '')
+          const href = researchCitationHref(entry)
+          return h('span', { key: id }, [
+            href ? h('a', { key: 'source', href, target: '_blank', rel: 'noopener noreferrer', style: { color: C.teal } }, entry.title) : entry.title,
+            entry.status ? `（${entry.status === 'verified' ? '已核验' : entry.status === 'unverified' ? '未核验' : entry.status}）` : '',
+          ])
         }),
       ]) : null,
       selectedKnowledge.assetId ? h('div', { key: 'asset', style: { fontSize: 13 } }, [
