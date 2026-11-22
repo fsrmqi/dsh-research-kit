@@ -85,7 +85,7 @@ const rules = [
   { file: 'docs/DEVELOPMENT.md', re: /当前 (\d+) 条工作流（(\d+) 个类目/, expect: [workflows.length, families], label: '工作流数 / 类目数' },
   { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项技能（`catalog\/skills\/`）与 (\d+) 个数据源/, expect: [skills.length, resources.length], label: '技能数 / 数据源数' },
   { file: 'docs/DEVELOPMENT.md', re: /MCP Server（(\d+) 个 research_\* 工具）/, expect: [toolCount], label: 'MCP 工具数' },
-  { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项目录资产、统一视图五分区/, expect: [total], label: '目录总条目' },
+  { file: 'docs/DEVELOPMENT.md', re: /(\d+) 项目录资产、统一科研工作台/, expect: [total], label: '目录总条目' },
 
   { file: 'docs/MCP-SETUP.md', re: /直接调用 (\d+) 个科研 Tool/, expect: [toolCount], label: 'MCP 工具数' },
   { file: 'docs/MCP-SETUP.md', re: /应列出 (\d+) 个 dsh-research-kit 的 Tool/, expect: [toolCount], label: 'MCP 工具数' },

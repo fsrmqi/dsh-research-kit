@@ -12,7 +12,7 @@
 
 | 依赖 | 版本 | 用途 |
 |------|------|------|
-| Node.js | >= 22.6 | 运行 MCP Server |
+| Node.js | >= 22.19 | 运行 MCP Server（`package.json` 的 `engines.node`） |
 | npm | >= 10 | 安装依赖 |
 | LaTeX（可选） | texlive / MacTeX | 生成图表脚本中的 `text.usetex` |
 

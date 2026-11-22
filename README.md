@@ -66,7 +66,7 @@ Research Kit 把这四点做成可复用的资产。
 覆盖论文与手稿、文献研究、数据分析、基因组学、临床研究、神经科学、生态学、天文与空间科学等 28 个流程族（按分类分片维护于 `catalog/workflows/`）。每条都是参数化、可编辑的 Prompt 模板，内置防编造边界（不得虚构引用、数据、页码、作者意图）与「需人工核验」定位。
 
 **⏲ 限时决策与证据复查**
-新增「限时研究决策」和「待核验证据复查提醒」工作流。前者仅在当前 DSH Agent Preset 已启用 `ask_user_question` 的 timed mode 时使用限时提问，超时后只继续可逆且独立的工作；后者仅在用户明确确认且宿主提供 `schedule_create` 时创建复查提醒。两者都不会把超时当作批准，也不会自动发布、删除或晋升研究资产。
+新增「限时研究决策」和「待核验证据复查提醒」工作流。两者把能力前提写进工作流指令，由当前 Agent 自行判断：限时提问只在 Agent Preset 实际启用 `ask_user_question` 的 timed mode 时调用，超时后只继续可逆且独立的工作；复查提醒只在用户明确确认且 `schedule_create` 实际可用时创建，不可用时输出可复制的提醒正文而不声称已创建。插件本身不探测这两项宿主能力，也不替 Agent 决定是否调用；两条工作流都不会把超时或 pending 当作批准，不会自动发布、删除或晋升研究资产。
 
 **🧩 109 个技能条目：46 个指导模块 + 63 个能力目录**
 指导模块以提示词指导方式生效——科学写作、统计审查、引用核验、证据综合、可重复性检查、评审伦理与保密、数据完整性守护、不确定性表达，以及实验设计、假设生成、科学头脑风暴、科学批判性思维、样本量与统计功效、系统文献综述、科研图表、不确定度与单位、临床报告草案、投稿规范核验、同行评审意见、基金申请书撰写等方法模块，另有农业试验设计、作物基因组与育种证据、生信流程治理三个领域模块，勾选后并入工作流提示词；能力目录以「需宿主能力」状态如实收录 bulk RNA-seq、Nextflow、Benchling/DNAnexus 集成、文献 API 检索、docx/pdf 产出等依赖执行侧的技能——写明所需工具链、凭据与数据外发边界，附使用前提核验清单，不注入提示词、不代为执行。
@@ -84,9 +84,11 @@ Research Kit 把这四点做成可复用的资产。
 | 本次研究 | 查看当前任务、待核验和最近产出，需要管理归属时打开「研究课题」。通过「研究资料」管理资产、证据与论断，通过「证据关系」追溯关联 |
 | 科研工具 | 「选流程」组装科研提示词；「用方法」从对话取材并填充方法卡；「查来源」直接查询或委托 Agent；「我的」维护可重复使用的私人方法和流程模板 |
 
+顶层是上面两个入口；工作台内部由「项目首页」加上发现、构造、沉淀、证据四个分区组成，共用同一套防编造与人工核验纪律。
+
 ![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](docs/assets/research-loop.svg)
 
-性能、搜索、证据分页、文献互操作和统一 Claim 台账的说明见 [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md)。
+性能、搜索、证据分页、文献互操作与统一 Claim 台账之外，综述审核记录导出（`links[].evidenceId` 对应候选表 `id`）和论断的按立场证据回查也在 [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md) 中逐步说明。
 
 **⏱ 组装回放：把 Prompt 是怎么拼出来的放给你看**
 启动工作流后，工作台把 `composeWorkflow` 的**真实组装事实**逐段回放——工作流 → 参数 → 附加技能 → 数据源边界 → 人工核验；每一段都能在生成的 Prompt 文本中定位到对应锚点，回放与正文互相印证。详情栏内嵌紧凑回放，「弹出回放窗口」打开独立的 archify 交互 viewer（四种视觉预设、章节叙事、语义透镜、雷达总览）。回放只呈现**已经发生的组装动作**，不预测执行结果，也不代表 Agent 已执行任何工具；`prefers-reduced-motion` 时降级为静态。
@@ -95,7 +97,7 @@ Research Kit 把这四点做成可复用的资产。
 
 **科研 Claim 与 Context Pack**：MCP 新增显式 Claim 台账。每条 Claim 必须带认识论状态：`extracted`、`inferred`、`ambiguous`、`verified` 或 `rejected`；只有人工提供证据 ID、操作人和评估理由才能写成 `verified`。`research_run_checkpoint_approve` 可附带验证回执，而 `research_context_pack` 只投影 Claim、证据元数据与人工回执，要求用户审阅后再选择注入，绝不把未确认结论改写为事实，也不携带论文全文、笔记或检索词。
 
-**Claim 审阅面板**：研究资产库的「Claim 审阅」子模块直接读取同一份 MCP Claim 台账。可从带 DOI、PMID、arXiv 引用的研究段落提取候选，逐条勾选后登记为 `extracted`，并保留短引用锚点；也可手工登记。使用当前会话模型的「Agent 审阅」会生成独立的状态建议和理由，不改变人工状态。研究者再逐条确认／存疑／驳回、填写评估人和理由并关联当前课题已保存的证据。草稿导出保留状态；发布导出遇到未人工确认或证据缺失的 Claim 会给出阻断清单。界面与导出只携带证据元数据，不含笔记或全文。
+**Claim 审阅面板**：研究资产库的「Claim 审阅」子模块直接读取同一份 MCP Claim 台账。可从带 DOI、PMID、arXiv 引用的研究段落提取候选，逐条勾选后登记为 `extracted`，并保留短引用锚点；也可手工登记。使用当前会话模型的「Agent 审阅」会生成独立的状态建议和理由，不改变人工状态。研究者再逐条确认／存疑／驳回、填写评估人和理由并关联当前课题已保存的证据。卡片上的「查看证据关系」按支持、反驳、证据不足、待评估四种立场回查来源，并列出已记录的原文位置、逐条评估人与来源核验状态，可直接打开原文；无关联的论断会提示补充来源。草稿导出保留状态；发布导出遇到未人工确认或证据缺失的 Claim 会给出阻断清单。界面与导出只携带证据元数据，不含笔记或全文。
 
 <details>
 <summary><strong>更多能力</strong>（点击展开）</summary>
@@ -130,7 +132,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`，当前随附的 Desktop App / CLI 是 `0.2.2-rc.5`。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
+要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`；兼容性矩阵的基线覆盖至 `0.2.2-rc.5`（清单见 `scripts/lib/dsh-baselines.mjs` 与 [COMPATIBILITY.md](docs/COMPATIBILITY.md)）。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -165,9 +167,26 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 有两条入口，通往同一套目录资产。
 
+**界面渲染图（浏览器回归实测）**：下列三张由 `npm run test:browser` 在真实 Chromium 中渲染插件构建产物得到；宿主服务是测试桩（模拟会话、模拟工具数据与本地 HTTP 路由），因此只反映本插件的界面布局与交互入口，不代表真实 DSH profile 的会话外壳，也不含真实研究数据。
+
+![本次研究首页：任务入口、待办收件箱与最近产出](docs/assets/ui-research-home.png)
+
+![Claim 审阅：登记论断、从最近回答提取候选与三种导出](docs/assets/ui-claim-review.png)
+
+![深色主题下的流程选择器：选流程 / 加资源](docs/assets/ui-workflow-picker-dark.png)
+
+**待补真实截图**：目前尚无经真实 profile 验收的界面截图，下表位置不以占位图或合成界面替代；补齐时按列中要求取材并替换上面的浏览器回归图。
+
+| 位置 | 图片要求 |
+| --- | --- |
+| 首屏工作台 | 真实 DSH Web profile 中的科研工作台首页，宽度 ≥ 1280px，同时出现宿主会话标签栏与「本次研究 / 科研工具」入口；不得来自测试桩 |
+| 工作流预览弹窗 | 真实 Web profile 中「选流程 → 预览」状态，展示参数、Prompt 正文与「写入输入框 / 发送到当前会话」按钮；稿件与参数须脱敏 |
+| Claim 审阅与证据关系 | 真实 Web 或 Desktop profile 中至少一条经人工确认的 Claim 及其按立场分组的证据关系；评估人、理由、状态须为研究者真实填写，不得使用测试桩的 `qa-claim-*` 数据 |
+| 证据图谱 | 真实 profile 中含至少一条「资产 → 支撑证据」边的图谱视图；节点题名与 DOI 须可公开或已脱敏 |
+
 **方式一：科研工作台统一视图**
 
-1. 在会话中打开「科研工作台」，默认进入「本次研究」，可选择综述、审稿、结论验证或继续上次工作流。进入「科研工具」按任务选流程、用方法或查来源；
+1. 在会话中打开「科研工作台」，默认进入「本次研究」，可选择综述、审稿、结论验证或继续上次工作流。进入「科研工具」按任务选流程、用方法或查来源，可搜索或按类型筛选 589 项资源；
 2. 选择工作流，查看目的、所需材料与使用限制；
 3. 填写参数；需要材料的工作流请先在 DSH 输入框用 `@文件` 引用文件；
 4. 按需勾选「附加技能指导」，预览实时更新；详情栏可展开**组装回放**，逐段核对 Prompt 是怎么拼出来的；
@@ -269,14 +288,18 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序** |
-| [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿的完整走法：九阶段、三条查询路径、投稿包清单、MCP 操作链 |
+| [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序**（含配图索引） |
+| [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿：九阶段单点工作流表、十阶段八闸门一键流水线、三条查询路径、投稿包清单与 MCP 操作链 |
 | [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 36 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
 | [手工验收清单](docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |
 | [方法工坊嵌入设计](docs/METHOD-WORKSHOP.md) | vendored 工件治理、命名空间纪律、构建器集成规则 |
 | [范围与边界](docs/PRODUCT.md) | 要解决的问题、产品边界、质量与安全原则 |
+| [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md) | 综述恢复、证据分页、文献互操作、Claim 审核与按立场证据关系 |
+| [兼容性矩阵](docs/COMPATIBILITY.md) | 支持的 DSH 基线、宿主契约 seam 与 CI 看守方式 |
+| [App 迁移说明](docs/APP-MIGRATION.md) | 从 Web 本地数据迁移到 Desktop App 的步骤与边界 |
+| [变更记录](CHANGELOG.md) | 按版本的可追溯变更与工具改名对照 |
 
 ## 参与贡献
 
