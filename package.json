@@ -60,6 +60,7 @@
     "build": "node scripts/build-client.mjs",
     "baselines:fetch": "bash scripts/fetch-baselines.sh",
     "check:dsh-app": "node scripts/check-dsh-app.mjs",
+    "check:package": "bash scripts/check-package.sh",
     "check:test-count": "node scripts/check-test-count.mjs",
     "coverage": "node scripts/check-coverage.mjs",
     "coverage:ci": "node scripts/check-coverage.mjs --with-docs",

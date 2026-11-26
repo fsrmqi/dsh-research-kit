@@ -26,7 +26,7 @@
 | 插件生态 | [GitHub topic: dsh-plugin](https://github.com/topics/dsh-plugin) |
 | Node.js | `>= 22.19`（与 DSH 宿主的 `^22.19.0 \|\| >=24.0.0` 对齐） |
 
-> DSH 目前处于 **Developer Preview**，官方明示会快速迭代、可能出现破坏性变更。本插件依赖的 `conversation.view` 槽位与 `inputActions` 契约随 DSH 版本演进——升级 DSH 后请按[手工验收清单](docs/MANUAL-QA.md)复验。
+> DSH 目前处于 **Developer Preview**，官方明示会快速迭代、可能出现破坏性变更。本插件依赖的 `conversation.view` 槽位与 `inputActions` 契约随 DSH 版本演进——升级 DSH 后请按[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)复验。
 
 > **与同类插件共存。** 同一槽位可以注册多个视图，`order` 只决定标签顺序：本插件的科研工作台在 `conversation.view` 的 `order` 是 91，上下文类插件（如 `dsh-context`，`order` 20）可与它同时安装。两者的数据与状态互不共享——本插件不读写其它插件的存储。
 
@@ -52,7 +52,7 @@ Research Kit 把这四点做成可复用的资产。
   → 由当前 DSH 会话的 Agent 与其已配置工具执行
 ```
 
-![dsh-research-kit 全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主](docs/assets/architecture.svg)
+![dsh-research-kit 全局架构：插件只做 Prompt 组装，执行全部交回 DSH 宿主](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/architecture.svg)
 
 关键设计取舍：
 
@@ -86,9 +86,9 @@ Research Kit 把这四点做成可复用的资产。
 
 顶层是上面两个入口；工作台内部由「项目首页」加上发现、构造、沉淀、证据四个分区组成，共用同一套防编造与人工核验纪律。
 
-![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](docs/assets/research-loop.svg)
+![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/research-loop.svg)
 
-性能、搜索、证据分页、文献互操作与统一 Claim 台账之外，综述审核记录导出（`links[].evidenceId` 对应候选表 `id`）和论断的按立场证据回查也在 [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md) 中逐步说明。
+性能、搜索、证据分页、文献互操作与统一 Claim 台账之外，综述审核记录导出（`links[].evidenceId` 对应候选表 `id`）和论断的按立场证据回查也在 [优化与功能说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) 中逐步说明。
 
 **⏱ 组装回放：把 Prompt 是怎么拼出来的放给你看**
 启动工作流后，工作台把 `composeWorkflow` 的**真实组装事实**逐段回放——工作流 → 参数 → 附加技能 → 数据源边界 → 人工核验；每一段都能在生成的 Prompt 文本中定位到对应锚点，回放与正文互相印证。详情栏内嵌紧凑回放，「弹出回放窗口」打开独立的 archify 交互 viewer（四种视觉预设、章节叙事、语义透镜、雷达总览）。回放只呈现**已经发生的组装动作**，不预测执行结果，也不代表 Agent 已执行任何工具；`prefers-reduced-motion` 时降级为静态。
@@ -124,7 +124,7 @@ Research Kit 把这四点做成可复用的资产。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
 - **手动编辑保护** — 手动编辑后变更参数/技能会提示不会自动合并；筛选后详情始终属于当前结果集。
 - **宿主动作降级** — `setDraft`/`submit` 缺失时按钮禁用、灰化并说明原因，视图不崩溃。
-- **MCP 工具集与阶段确认** — 插件同时提供 MCP Server：36 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账与发布检查、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；调用轨迹在 DSH 的活动中查看，科研阶段确认在「本次研究」的待办收件箱处理。研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](docs/MCP-SETUP.md)。
+- **MCP 工具集与阶段确认** — 插件同时提供 MCP Server：36 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账与发布检查、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；调用轨迹在 DSH 的活动中查看，科研阶段确认在「本次研究」的待办收件箱处理。研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md)。
 
 **深色主题与窄屏** — 跟随系统与 DSH 主题切换；880px 以下单列布局；原生 `aria-*` 与焦点环。
 
@@ -132,7 +132,7 @@ Research Kit 把这四点做成可复用的资产。
 
 ## 安装
 
-要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`；兼容性矩阵的基线覆盖至 `0.2.2-rc.5`（清单见 `scripts/lib/dsh-baselines.mjs` 与 [COMPATIBILITY.md](docs/COMPATIBILITY.md)）。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
+要求 Node `>= 22.19`（DSH `0.2.2` 线宿主自身要求 Node `>= 24.9`），以及提供 `conversation.view` / `conversation.input.left` / `conversation.input.overlay` / `conversation.input.right` 四个槽位的 DSH Web profile（依次为：统一视图、输入框左侧入口、浮层选择器、输入框右侧草稿增强器）。Plugins 页的规模徽章、诊断复制与运行状态区另用 `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`；宿主未提供这些槽位时只是不显示，不影响会话内功能。详情页的「回到会话」走宿主的公开会话导航面（`uiWorkspace.openSession`，DSH `0.1.7` 起即有；再尽力用 `uiConversation.binding(id).activate(view)` 激活视图数据源）。**它只保证把主区切回当前会话**：视图标签由宿主会话状态决定，此前停在科研工作台时会一并恢复，否则落在默认对话视图（宿主没有跨页选中视图的公开入口）。工作台的「在新会话开始」需要 DSH `0.2.1-rc.1` 起的草稿预填通道（`startSession` 的 `prompt` + `conversation.input.requestDraftInitialization`；`whenDraftExists` 语义自 `0.2.1-rc.3` 起），`0.1.7` / `0.2.0` 线与更早宿主上该入口不渲染。支持的 DSH 版本由 `engines.dsh`（宿主优先读取）与 `peerDependencies` 共同声明为 `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`；兼容性矩阵的基线覆盖至 `0.2.2-rc.5`（清单见 `scripts/lib/dsh-baselines.mjs` 与 [COMPATIBILITY.md](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md)）。`npm run check:dsh-app -- <dsh 仓库>` 会逐基线核对导航 seam，接线契约由 `npm test` 看守。
 
 **本地目录（当前推荐，尚未发布到 npm）**
 
@@ -161,7 +161,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 `presets/` 提供只覆盖 Research Kit 配置行的启动 overlay：[`research-direct.patch.yml`](presets/research-direct.patch.yml) 禁用 Agent 回退并收紧公开数据库直查的超时与速率；[`research-assisted.patch.yml`](presets/research-assisted.patch.yml) 保留默认的 Agent 回退。它们可与 Memory Center 的隐私 overlay 一同按顺序传给 `dsh --profile web --patch …`；每份文件都重述本插件的完整 `config`，不会意外继承已被其他 patch 替换的字段。已加载插件时，也可在 Plugins 页的 Research Kit 配置区分别点「直连研究」「Agent 辅助」两行右侧的「应用」按钮：一次有修订号保护的配置写入应用同一组字段，不会修改 profile 之外的设置。
 
-**常见坑**：`dsh plugin` 会调用 PATH 上的 `pnpm`，其 store 布局主版本必须与目标 profile 记录一致，否则会以 `ERR_PNPM_UNEXPECTED_STORE` 失败。对照方式见[手工验收清单 §1](docs/MANUAL-QA.md)。
+**常见坑**：`dsh plugin` 会调用 PATH 上的 `pnpm`，其 store 布局主版本必须与目标 profile 记录一致，否则会以 `ERR_PNPM_UNEXPECTED_STORE` 失败。对照方式见[手工验收清单 §1](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
 ## 使用
 
@@ -169,11 +169,11 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 **界面渲染图（浏览器回归实测）**：下列三张由 `npm run test:browser` 在真实 Chromium 中渲染插件构建产物得到；宿主服务是测试桩（模拟会话、模拟工具数据与本地 HTTP 路由），因此只反映本插件的界面布局与交互入口，不代表真实 DSH profile 的会话外壳，也不含真实研究数据。
 
-![本次研究首页：任务入口、待办收件箱与最近产出](docs/assets/ui-research-home.png)
+![本次研究首页：任务入口、待办收件箱与最近产出](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-research-home.png)
 
-![Claim 审阅：登记论断、从最近回答提取候选与三种导出](docs/assets/ui-claim-review.png)
+![Claim 审阅：登记论断、从最近回答提取候选与三种导出](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-claim-review.png)
 
-![深色主题下的流程选择器：选流程 / 加资源](docs/assets/ui-workflow-picker-dark.png)
+![深色主题下的流程选择器：选流程 / 加资源](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-workflow-picker-dark.png)
 
 **待补真实截图**：目前尚无经真实 profile 验收的界面截图，下表位置不以占位图或合成界面替代；补齐时按列中要求取材并替换上面的浏览器回归图。
 
@@ -236,11 +236,11 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 | 论文写作（paper-writing） | 11 |
 | 投稿规范（submission） | 5 |
 
-另有 109 项技能（`catalog/skills/`：core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63）与 129 个数据源条目（`catalog/resources/`：chinese-academic 7 / crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81）。完整定义见 [`catalog/`](catalog/)，数据契约见[架构文档 §4](docs/ARCHITECTURE.md)。
+另有 109 项技能（`catalog/skills/`：core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63）与 129 个数据源条目（`catalog/resources/`：chinese-academic 7 / crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81）。完整定义见 [`catalog/`](catalog/)，数据契约见[架构文档 §4](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md)。
 
 ## 隐私与安全
 
-以 DSH Desktop App 为主使用时，旧 Web 端的本地数据不会自动共享；请使用「科研工作台 → 本次研究 → 研究资料」里的「迁移到 App」完成预览、校验和增量导入。步骤、保留范围与已知限制见 [App 迁移说明](docs/APP-MIGRATION.md)。
+以 DSH Desktop App 为主使用时，旧 Web 端的本地数据不会自动共享；请使用「科研工作台 → 本次研究 → 研究资料」里的「迁移到 App」完成预览、校验和增量导入。步骤、保留范围与已知限制见 [App 迁移说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
 
 | 访问 | 用途 | 说明 |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 四档标注各自的界面行为与保证机制：
 
-![数据源可用性的四档标注：从插件直查到尚未实现的宿主声明](docs/assets/availability-ladder.svg)
+![数据源可用性的四档标注：从插件直查到尚未实现的宿主声明](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/availability-ladder.svg)
 
 ## 兼容性与状态
 
@@ -271,7 +271,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
 
 已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、624 项回归测试（78 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
 
-> 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](docs/MANUAL-QA.md)。
+> 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
 ## 开发
 
@@ -288,17 +288,17 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/README.md](docs/README.md) | **文档索引与推荐阅读顺序**（含配图索引） |
-| [论文工作手册](docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿：九阶段单点工作流表、十阶段八闸门一键流水线、三条查询路径、投稿包清单与 MCP 操作链 |
-| [MCP Server 接入指南](docs/MCP-SETUP.md) | 把 36 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
-| [架构与数据契约](docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
-| [开发指南](docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
-| [手工验收清单](docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |
-| [方法工坊嵌入设计](docs/METHOD-WORKSHOP.md) | vendored 工件治理、命名空间纪律、构建器集成规则 |
-| [范围与边界](docs/PRODUCT.md) | 要解决的问题、产品边界、质量与安全原则 |
-| [优化与功能说明](docs/PRODUCT-IMPROVEMENTS.md) | 综述恢复、证据分页、文献互操作、Claim 审核与按立场证据关系 |
-| [兼容性矩阵](docs/COMPATIBILITY.md) | 支持的 DSH 基线、宿主契约 seam 与 CI 看守方式 |
-| [App 迁移说明](docs/APP-MIGRATION.md) | 从 Web 本地数据迁移到 Desktop App 的步骤与边界 |
+| [docs/README.md](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/README.md) | **文档索引与推荐阅读顺序**（含配图索引） |
+| [论文工作手册](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿：九阶段单点工作流表、十阶段八闸门一键流水线、三条查询路径、投稿包清单与 MCP 操作链 |
+| [MCP Server 接入指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | 把 36 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
+| [架构与数据契约](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
+| [开发指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
+| [手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |
+| [方法工坊嵌入设计](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/METHOD-WORKSHOP.md) | vendored 工件治理、命名空间纪律、构建器集成规则 |
+| [范围与边界](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT.md) | 要解决的问题、产品边界、质量与安全原则 |
+| [优化与功能说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) | 综述恢复、证据分页、文献互操作、Claim 审核与按立场证据关系 |
+| [兼容性矩阵](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md) | 支持的 DSH 基线、宿主契约 seam 与 CI 看守方式 |
+| [App 迁移说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | 从 Web 本地数据迁移到 Desktop App 的步骤与边界 |
 | [变更记录](CHANGELOG.md) | 按版本的可追溯变更与工具改名对照 |
 
 ## 参与贡献

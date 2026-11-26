@@ -26,7 +26,7 @@ This project is a plugin for [DeepSeek Harness](https://github.com/deepseek-ai/d
 | Plugin ecosystem | [GitHub topic: dsh-plugin](https://github.com/topics/dsh-plugin) |
 | Node.js | `>= 22.19` |
 
-> DSH is currently a **Developer Preview** and will iterate quickly, possibly with breaking changes. The `conversation.view` slot and the `inputActions` contract evolve with DSH versions — after upgrading DSH, re-run the [manual QA checklist](docs/MANUAL-QA.md).
+> DSH is currently a **Developer Preview** and will iterate quickly, possibly with breaking changes. The `conversation.view` slot and the `inputActions` contract evolve with DSH versions — after upgrading DSH, re-run the [manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md).
 
 ## The problem it solves
 
@@ -50,7 +50,7 @@ Research capability catalog (589 entries)
   → executed by the current DSH session's agent and its configured tools
 ```
 
-![Architecture: the plugin only assembles prompts; execution stays with the DSH host](docs/assets/architecture.svg)
+![Architecture: the plugin only assembles prompts; execution stays with the DSH host](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/architecture.svg)
 
 Deliberate trade-offs:
 
@@ -84,9 +84,9 @@ Parameter substitution updates the preview live. After manual edits, later param
 
 Inside the workbench the layout is Project Home plus four loop sections — discover, construct, deposit and evidence — sharing one anti-fabrication and human-verification discipline.
 
-![The four research-loop sections: discover, construct, deposit, evidence](docs/assets/research-loop.svg)
+![The four research-loop sections: discover, construct, deposit, evidence](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/research-loop.svg)
 
-Beyond performance, search, evidence pagination, literature interoperability and the unified Claim ledger, [Optimizations & feature notes](docs/PRODUCT-IMPROVEMENTS.md) documents review-record export (`links[].evidenceId` maps to the candidate list `id`) and per-stance evidence lookup for claims (Chinese only).
+Beyond performance, search, evidence pagination, literature interoperability and the unified Claim ledger, [Optimizations & feature notes](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) documents review-record export (`links[].evidenceId` maps to the candidate list `id`) and per-stance evidence lookup for claims (Chinese only).
 
 **⏱ Assembly replay: see how the prompt was put together**
 After you launch a workflow, the workbench replays the **actual assembly facts** from `composeWorkflow` segment by segment — workflow → parameters → attached skills → database boundaries → human verification — and every segment can be located as an anchor in the generated prompt text, so the replay and the prose corroborate each other. A compact replay is embedded in the detail pane; "Open replay window" launches the standalone archify interactive viewer (four visual presets, chapter narrative, semantic lens, radar overview). The replay shows **assembly actions that already happened** — it predicts no execution result and means no tool was run. Under `prefers-reduced-motion` it degrades to a static view.
@@ -119,7 +119,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- **MCP tool set and staged confirmation** — the plugin also ships an MCP Server: 36 `research_*` tools (literature search and verification, evidence inventory and manual assessment, a Claim ledger and publication check, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI. Call trails are visible in DSH activity and staged confirmations are handled in the "This Research" review inbox; the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](docs/MCP-SETUP.md).
+- **MCP tool set and staged confirmation** — the plugin also ships an MCP Server: 36 `research_*` tools (literature search and verification, evidence inventory and manual assessment, a Claim ledger and publication check, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI. Call trails are visible in DSH activity and staged confirmations are handled in the "This Research" review inbox; the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md).
 - **Claim review panel** — in Research Assets, reviewers can extract citation-anchored Claim candidates from a research passage, select drafts to save, and request a preliminary Agent review using the current session model. Agent suggestions are stored separately from human status. Reviewers then mark each Claim verified, ambiguous, or rejected with their name, rationale, and saved evidence. "View evidence relations" on a card groups sources by supporting, refuting, insufficient-evidence and unevaluated stance, showing recorded source locations, per-item reviewers and source verification status; a Claim with no links prompts you to add evidence. Draft exports retain states; publication exports list blockers for unverified Claims or missing evidence. Evidence notes and full text are excluded.
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
@@ -128,7 +128,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 
 ## Installation
 
-Requires Node `>= 22.19` (on the DSH `0.2.2` line the host itself requires Node `>= 24.9`) and a DSH web profile providing four slots: `conversation.view`, `conversation.input.left`, `conversation.input.overlay` and `conversation.input.right` (the unified view, the composer's left entry, the overlay picker, and the draft enhancer on the composer's right). The Plugins-page scale badge, diagnostics copy and status section additionally use `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`; when the host does not provide them they simply do not render, and the in-conversation features are unaffected. The detail page's "Back to conversation" action uses the host's public session navigation (`uiWorkspace.openSession`, available since DSH `0.1.7`, plus a best-effort `uiConversation.binding(id).activate(view)`) and does not render when that channel is missing. It only guarantees returning the main area to the current conversation: the view tab is host-owned session state, so the research workbench is restored only when that session was left on it. The workbench's "Start in a new session" entry needs the draft-initialization channel (`startSession` with `prompt` + `conversation.input.requestDraftInitialization`) shipped in DSH `0.2.1-rc.1` (`whenDraftExists` semantics from `0.2.1-rc.3`), and stays hidden on `0.1.7` / `0.2.0` and older hosts. Supported DSH versions are declared by `engines.dsh` (read first by the host) and `peerDependencies` as `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`; the compatibility matrix covers baselines up to `0.2.2-rc.5` (see `scripts/lib/dsh-baselines.mjs` and the [compatibility matrix](docs/COMPATIBILITY.md)). `npm run check:dsh-app -- <dsh repo>` verifies the navigation seams against every baseline; `npm test` guards the wiring contracts.
+Requires Node `>= 22.19` (on the DSH `0.2.2` line the host itself requires Node `>= 24.9`) and a DSH web profile providing four slots: `conversation.view`, `conversation.input.left`, `conversation.input.overlay` and `conversation.input.right` (the unified view, the composer's left entry, the overlay picker, and the draft enhancer on the composer's right). The Plugins-page scale badge, diagnostics copy and status section additionally use `plugins.detail.badge` / `plugins.detail.actions` / `plugins.detail.section`; when the host does not provide them they simply do not render, and the in-conversation features are unaffected. The detail page's "Back to conversation" action uses the host's public session navigation (`uiWorkspace.openSession`, available since DSH `0.1.7`, plus a best-effort `uiConversation.binding(id).activate(view)`) and does not render when that channel is missing. It only guarantees returning the main area to the current conversation: the view tab is host-owned session state, so the research workbench is restored only when that session was left on it. The workbench's "Start in a new session" entry needs the draft-initialization channel (`startSession` with `prompt` + `conversation.input.requestDraftInitialization`) shipped in DSH `0.2.1-rc.1` (`whenDraftExists` semantics from `0.2.1-rc.3`), and stays hidden on `0.1.7` / `0.2.0` and older hosts. Supported DSH versions are declared by `engines.dsh` (read first by the host) and `peerDependencies` as `>=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0`; the compatibility matrix covers baselines up to `0.2.2-rc.5` (see `scripts/lib/dsh-baselines.mjs` and the [compatibility matrix](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md)). `npm run check:dsh-app -- <dsh repo>` verifies the navigation seams against every baseline; `npm test` guards the wiring contracts.
 
 **Local directory (currently recommended; not published to npm)**
 
@@ -157,7 +157,7 @@ After installing, refresh the browser and open the "Research Workbench" view, or
 
 `presets/` contains startup overlays that replace only the Research Kit configuration row: [`research-direct.patch.yml`](presets/research-direct.patch.yml) disables Agent fallback and uses tighter limits for direct public-database queries; [`research-assisted.patch.yml`](presets/research-assisted.patch.yml) retains the default Agent fallback. Pass either alongside a Memory Center privacy overlay with `dsh --profile web --patch …`; each file restates this plugin's complete `config`, so no field is accidentally inherited from another replacement patch. When the plugin is loaded, its Plugins-page configuration section also lists the Direct and Assisted presets, each with its own Apply button: one revision-guarded write applies the same field group without changing settings outside the profile.
 
-**Common pitfall**: `dsh plugin` calls the `pnpm` on your PATH, and its store-layout major version must match the target profile's record — otherwise the command fails with `ERR_PNPM_UNEXPECTED_STORE`. See [manual QA §1](docs/MANUAL-QA.md) for how to compare.
+**Common pitfall**: `dsh plugin` calls the `pnpm` on your PATH, and its store-layout major version must match the target profile's record — otherwise the command fails with `ERR_PNPM_UNEXPECTED_STORE`. See [manual QA §1](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) for how to compare.
 
 ## Usage
 
@@ -165,11 +165,11 @@ Two entrances, one set of catalog assets.
 
 **UI renders (browser regression)**: the images below were produced by `npm run test:browser` rendering the built plugin in real Chromium against a stub host (simulated sessions, simulated tool data and local HTTP routes). They show this plugin's layout and interaction entry points only — not the real DSH profile shell, and no real research data.
 
-![This Research home: task entries, review inbox and recent outputs](docs/assets/ui-research-home.png)
+![This Research home: task entries, review inbox and recent outputs](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-research-home.png)
 
-![Claim review: register claims, extract candidates from the latest answer, and export](docs/assets/ui-claim-review.png)
+![Claim review: register claims, extract candidates from the latest answer, and export](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-claim-review.png)
 
-![Workflow picker in the dark theme: pick a workflow / add resources](docs/assets/ui-workflow-picker-dark.png)
+![Workflow picker in the dark theme: pick a workflow / add resources](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/ui-workflow-picker-dark.png)
 
 **Real screenshots still needed**: no image from a verified real profile exists yet; no placeholder or synthetic UI is substituted. Capture the following before publishing:
 
@@ -232,7 +232,7 @@ Workflows are maintained as per-family shards under `catalog/workflows/` (one JS
 | Paper writing (paper-writing) | 11 |
 | Submission & venue compliance (submission) | 5 |
 
-Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63) and 129 database entries (`catalog/resources/`: chinese-academic 7 / crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](docs/ARCHITECTURE.md).
+Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1 / host-capabilities 63) and 129 database entries (`catalog/resources/`: chinese-academic 7 / crop-breeding 7 / literature 19 / genomics 8 / omics 7 / general-science 81). Full definitions live in [`catalog/`](catalog/); the data contract is in [architecture §4](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md).
 
 ## Privacy & security
 
@@ -249,7 +249,7 @@ Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1
 
 Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
-With the DSH Desktop App as the primary host, local data from the older Web endpoint is not shared automatically. Use "Research Workbench → This Research → Research Materials → Migrate to App" to preview, validate and import incrementally; steps, retained scope and known limits are in the [App migration guide](docs/APP-MIGRATION.md).
+With the DSH Desktop App as the primary host, local data from the older Web endpoint is not shared automatically. Use "Research Workbench → This Research → Research Materials → Migrate to App" to preview, validate and import incrementally; steps, retained scope and known limits are in the [App migration guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md).
 
 ### Database queries
 
@@ -263,7 +263,7 @@ Current version `0.3.0` (not yet published to npm). Development status and next 
 
 Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 624 regression tests in 78 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 
-> Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](docs/MANUAL-QA.md) after upgrading DSH.
+> Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) after upgrading DSH.
 
 ## Development
 
@@ -280,17 +280,17 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 
 | Document | Contents |
 | --- | --- |
-| [docs/README.md](docs/README.md) | **Documentation index and recommended reading order** (including the figure index) |
-| [Paper workflow handbook](docs/PAPER-WORKFLOW.md) | End-to-end paper work: a nine-stage single-workflow table, a ten-stage pipeline with eight human gates, three search paths, submission packages and the MCP chain (Chinese only) |
-| [MCP server setup guide](docs/MCP-SETUP.md) | Wire the 36 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
-| [Architecture & data contracts](docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
-| [Development guide](docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
-| [Manual QA checklist](docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |
-| [Method Workshop embedding](docs/METHOD-WORKSHOP.md) | Vendored artifact governance, namespace discipline, builder integration |
-| [Scope & boundaries](docs/PRODUCT.md) | Problem statement, product boundaries, quality and safety principles |
-| [Optimizations & feature notes](docs/PRODUCT-IMPROVEMENTS.md) | Review recovery, evidence pagination, literature interoperability, Claim review and per-stance evidence relations (Chinese only) |
-| [Compatibility matrix](docs/COMPATIBILITY.md) | Supported DSH baselines, host seams and how CI guards them (Chinese only) |
-| [App migration guide](docs/APP-MIGRATION.md) | Moving local Web data to the Desktop App: steps and boundaries (Chinese only) |
+| [docs/README.md](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/README.md) | **Documentation index and recommended reading order** (including the figure index) |
+| [Paper workflow handbook](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PAPER-WORKFLOW.md) | End-to-end paper work: a nine-stage single-workflow table, a ten-stage pipeline with eight human gates, three search paths, submission packages and the MCP chain (Chinese only) |
+| [MCP server setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | Wire the 36 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
+| [Architecture & data contracts](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
+| [Development guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
+| [Manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |
+| [Method Workshop embedding](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/METHOD-WORKSHOP.md) | Vendored artifact governance, namespace discipline, builder integration |
+| [Scope & boundaries](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT.md) | Problem statement, product boundaries, quality and safety principles |
+| [Optimizations & feature notes](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) | Review recovery, evidence pagination, literature interoperability, Claim review and per-stance evidence relations (Chinese only) |
+| [Compatibility matrix](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md) | Supported DSH baselines, host seams and how CI guards them (Chinese only) |
+| [App migration guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | Moving local Web data to the Desktop App: steps and boundaries (Chinese only) |
 | [Changelog](CHANGELOG.md) | Versioned changes and the tool-rename cross-reference |
 
 > The in-depth documents are currently **Chinese-only**. English readers can follow the architecture and QA checklists structurally; the code and catalog are the authoritative reference.

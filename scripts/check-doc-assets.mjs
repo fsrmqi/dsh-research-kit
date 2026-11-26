@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const assetsDir = resolve(root, 'docs/assets')
+const repoRawUrl = 'https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/'
 const errors = []
 
 // 读者文档：门面、贡献入口、以及 docs/ 下的中文深入文档
@@ -50,8 +51,11 @@ for (const file of markdownFiles) {
       let m
       while ((m = pattern.exec(line)) !== null) {
         const target = m[1].split('#')[0].split('?')[0]
-        if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue // 外链与 data: 不归本脚本管
-        const resolved = resolve(dir, target)
+        const repoAsset = target.startsWith(repoRawUrl + 'docs/assets/')
+          ? target.slice(repoRawUrl.length)
+          : ''
+        if (!target || (!repoAsset && /^[a-z][a-z0-9+.-]*:/i.test(target))) continue
+        const resolved = repoAsset ? resolve(root, repoAsset) : resolve(dir, target)
         if (!existsSync(resolved)) {
           errors.push(`${file}:${index + 1} 的图片引用指向不存在的文件：${target}`)
           continue

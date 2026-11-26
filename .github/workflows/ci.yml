@@ -33,6 +33,7 @@ jobs:
           DSH_REPO: ${{ github.workspace }}/.tmp/dsh-repo
 
       - run: npm test
+      - run: npm run check:package
 
       - name: DSH compatibility matrix (hard gate)
         run: npm run check:dsh-app -- --require-source
