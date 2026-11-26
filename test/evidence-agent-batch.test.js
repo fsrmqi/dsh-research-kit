@@ -66,13 +66,37 @@ test('批量判断路由要求 POST 与会话 ID', async () => {
   assert.equal(missing.status, 400)
 })
 
-test('批量判断路由允许跨源 OPTIONS 预检，避免真实 POST 被 405 拦截', async () => {
+test('批量判断路由允许回环与同源 OPTIONS 预检，并拒绝不受信任的跨站来源', async () => {
   const route = evidenceAgentAssessRoute({ llm: {}, routes: { get: () => null } })
-  const response = { headers: {}, writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) }, end() { this.ended = true } }
-  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://dsh.example' } }, response)
-  assert.equal(response.status, 204)
-  assert.equal(response.headers['access-control-allow-origin'], 'https://dsh.example')
-  assert.match(response.headers['access-control-allow-methods'], /POST/)
+  const makeResponse = () => ({ headers: {}, writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) }, end(data) { this.ended = true; this.data = data } })
+  const loopback = makeResponse()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'http://localhost:5173', host: '127.0.0.1:3000' } }, loopback)
+  assert.equal(loopback.status, 204)
+  assert.equal(loopback.headers['access-control-allow-origin'], 'http://localhost:5173')
+  assert.match(loopback.headers['access-control-allow-methods'], /POST/)
+
+  const sameHost = makeResponse()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://dsh.example', host: 'dsh.example' } }, sameHost)
+  assert.equal(sameHost.status, 204)
+  assert.equal(sameHost.headers['access-control-allow-origin'], 'https://dsh.example')
+
+  const untrusted = makeResponse()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://evil.example', host: '127.0.0.1:3000' } }, untrusted)
+  assert.equal(untrusted.status, 403)
+  assert.equal(untrusted.headers['access-control-allow-origin'], undefined)
+
+  const invalidInput = makeResponse()
+  const badRequest = {
+    method: 'POST', url: `${EVIDENCE_AGENT_ASSESS_PATH}?session_id=s1`, on() {}, off() {},
+    async *[Symbol.asyncIterator]() { yield JSON.stringify({ entries: [] }) },
+  }
+  await route.handler(badRequest, invalidInput)
+  assert.equal(invalidInput.status, 503)
+
+  const routeWithModel = evidenceAgentAssessRoute({ llm: {}, routes: { get: () => ({ provider: 'test', model: 'm1' }) } })
+  const badPayload = makeResponse()
+  await routeWithModel.handler(badRequest, badPayload)
+  assert.equal(badPayload.status, 400)
 })
 
 test('批量判断路由正常返回结构化 JSON，不会因 response close 误取消', async () => {

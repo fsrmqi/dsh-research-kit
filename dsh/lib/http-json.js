@@ -4,6 +4,27 @@
 // 或已结束就不再写）只有 3 份副本有，no-store 只有 4 份有——「一起改才不出偏差」的
 // 重复，收进这里。各路由自己的契约（上限数值、字节/字符口径、报错文案、空体语义、
 // CORS 来源）仍由调用方显式传入，这里不替任何路由改数值。
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1'])
+
+// 本机 DSH 路由只允许回环来源、与请求 Host 一致的同源来源，或显式配置的白名单来源，
+// 避免任意外部网页通过反射 Origin 跨站访问本机接口。
+export function resolveAllowedCorsOrigin(req, { env = process.env } = {}) {
+  const origin = String(req?.headers?.origin || '').trim()
+  if (!origin) return ''
+  let parsed
+  try { parsed = new URL(origin) } catch { return '' }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return ''
+  if (LOOPBACK_HOSTS.has(parsed.hostname.toLowerCase())) return origin
+  const reqHost = String(req?.headers?.host || '').trim().toLowerCase()
+  if (reqHost && parsed.host.toLowerCase() === reqHost) return origin
+  const allowed = String(env?.DSH_RESEARCH_KIT_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+  if (allowed.includes(origin)) return origin
+  return ''
+}
+
 export function jsonReply(res, status, body, { headers, corsOrigin } = {}) {
   if (res.destroyed || res.writableEnded) return
   res.writeHead(status, {
@@ -38,6 +59,8 @@ export async function readJsonBody(req, {
   try {
     return JSON.parse(emptyBodyAsObject ? (raw || '{}') : raw)
   } catch {
-    throw new Error(invalidJsonMessage)
+    const error = new Error(invalidJsonMessage)
+    error.code = 'invalid_json'
+    throw error
   }
 }

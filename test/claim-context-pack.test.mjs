@@ -191,16 +191,26 @@ test('Claim Agent HTTP：当前会话模型的建议入账，人工状态不变'
   } finally { await new Promise(resolve => server.close(resolve)) }
 })
 
-test('Claim Agent 路由允许跨源预检，且只接受带会话 ID 的 POST', async () => {
-  const route = claimAgentReviewRoute({ llm: {}, routes: { get: () => null } })
+test('Claim Agent 路由只允许回环与同源预检，校验错误返回 400，且只接受带会话 ID 的 POST', async () => {
+  const route = claimAgentReviewRoute({ llm: {}, routes: { get: () => ({ provider: 'test', model: 'm1' }) } })
   const response = () => ({ headers: {}, writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) }, end(data) { this.data = data; this.writableEnded = true } })
-  const preflight = response()
-  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://dsh.example' } }, preflight)
-  assert.equal(preflight.status, 204)
-  assert.equal(preflight.headers['access-control-allow-origin'], 'https://dsh.example')
+  const sameHost = response()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://dsh.example', host: 'dsh.example' } }, sameHost)
+  assert.equal(sameHost.status, 204)
+  assert.equal(sameHost.headers['access-control-allow-origin'], 'https://dsh.example')
+  const untrusted = response()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://evil.example', host: '127.0.0.1:3000' } }, untrusted)
+  assert.equal(untrusted.status, 403)
+  assert.equal(untrusted.headers['access-control-allow-origin'], undefined)
   const missing = response()
   await route.handler({ method: 'POST', url: '/dsh-research-kit/claim-agent-review' }, missing)
   assert.equal(missing.status, 400)
+  const badClaims = response()
+  await route.handler({
+    method: 'POST', url: '/dsh-research-kit/claim-agent-review?session_id=s1',
+    async *[Symbol.asyncIterator]() { yield JSON.stringify({ project: 'demo', claim_ids: [] }) },
+  }, badClaims)
+  assert.equal(badClaims.status, 400)
 })
 
 

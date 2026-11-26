@@ -45,16 +45,6 @@ function sourceSettings(sourceId, env = process.env) {
 }
 
 function cacheKey(dbId, query, limit) { return `${dbId}::${query.trim()}::${limit}` }
-function cacheGet(key) {
-  const hit = CACHE.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.at > CACHE_TTL_MS) { CACHE.delete(key); return null }
-  return hit.result
-}
-function cacheSet(key, result) {
-  CACHE.set(key, { at: Date.now(), result })
-  while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value)
-}
 
 async function waitForSharedQuery(entry, signal) {
   entry.waiters += 1

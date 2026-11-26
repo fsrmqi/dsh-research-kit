@@ -275,8 +275,8 @@ function withRequestGuards(req, res, handler) {
   // 90s：思考型模型推理可占 30s+，30s 会把正常请求掐死在思考阶段。
   const timeout = setTimeout(() => controller.abort(), 90_000)
   // 客户端断开检测必须挂在 res 上：Node ≥26 在 POST body 读完即触发 req 'close'。
-  // res 'close' 在连接提前断开（客户端取消）时才会触发。
-  const abort = () => controller.abort()
+  // Node 的 res 'close' 在正常响应完成后也可能触发，只在响应尚未结束时取消模型调用。
+  const abort = () => { if (!res.writableEnded) controller.abort() }
   // 无事件能力的嵌入式 response 只启用超时。
   let offAbort = () => {}
   if (typeof res.on === 'function' && typeof res.off === 'function') {

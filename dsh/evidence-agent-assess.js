@@ -1,16 +1,24 @@
 import { normalizeAgentEvidenceResult, AGENT_ASSESSMENT_BATCH_SIZE } from '../src/lib/agent-evidence-batch.js'
-import { jsonReply, readJsonBody } from './lib/http-json.js'
+import { jsonReply, readJsonBody, resolveAllowedCorsOrigin } from './lib/http-json.js'
 
 export const EVIDENCE_AGENT_ASSESS_PATH = '/dsh-research-kit/evidence-agent-assess'
 const MAX_BODY_CHARS = 24_000
 const MAX_OUTPUT_CHARS = 18_000
 
-// 本路由的 CORS 来源挂在 res.__agentCorsOrigin（allowPreflight 里从 Origin 头取）。
+// 本路由的 CORS 来源挂在 res.__agentCorsOrigin（只允许回环、同源或白名单 Origin）。
 const reply = (res, status, body) => jsonReply(res, status, body, { corsOrigin: res.__agentCorsOrigin })
 
-function allowPreflight(req, res) {
-  const origin = String(req.headers?.origin || '').trim()
-  if (!origin) return false
+function invalidInput(message) {
+  const error = new Error(message)
+  error.code = 'INVALID_INPUT'
+  return error
+}
+
+function handlePreflight(req, res) {
+  const rawOrigin = String(req.headers?.origin || '').trim()
+  if (!rawOrigin) { reply(res, 400, { ok: false, error: 'origin_required' }); return }
+  const origin = resolveAllowedCorsOrigin(req)
+  if (!origin) { reply(res, 403, { ok: false, error: 'origin_not_allowed' }); return }
   res.__agentCorsOrigin = origin
   res.writeHead(204, {
     'access-control-allow-origin': origin,
@@ -20,7 +28,6 @@ function allowPreflight(req, res) {
     vary: 'Origin',
   })
   res.end()
-  return true
 }
 
 const readBody = req => readJsonBody(req, {
@@ -33,9 +40,9 @@ const readBody = req => readJsonBody(req, {
 function compactEntry(row) {
   const id = String(row?.id || '').trim().slice(0, 120)
   const title = String(row?.title || '').trim().slice(0, 300)
-  if (!id || !title) throw new Error('证据 ID 或标题缺失。')
+  if (!id || !title) throw invalidInput('证据 ID 或标题缺失。')
   const url = String(row.url || '').trim().slice(0, 500)
-  if (url && !/^https?:\/\//i.test(url)) throw new Error('证据链接必须是 http(s)。')
+  if (url && !/^https?:\/\//i.test(url)) throw invalidInput('证据链接必须是 http(s)。')
   return {
     id, title, url,
     identifier: String(row.identifier || '').trim().slice(0, 120),
@@ -54,9 +61,9 @@ function parseOutput(output) {
 
 export async function assessEvidenceBatch({ llm, route, sessionId, entries, signal }) {
   if (!route?.provider || !route?.model) throw new Error('当前会话尚未建立模型路由，请先正常发送一次消息。')
-  if (!Array.isArray(entries) || !entries.length || entries.length > AGENT_ASSESSMENT_BATCH_SIZE) throw new Error('批次条目数量无效。')
+  if (!Array.isArray(entries) || !entries.length || entries.length > AGENT_ASSESSMENT_BATCH_SIZE) throw invalidInput('批次条目数量无效。')
   const rows = entries.map(compactEntry)
-  if (new Set(rows.map(row => row.id)).size !== rows.length) throw new Error('批次中存在重复的证据 ID。')
+  if (new Set(rows.map(row => row.id)).size !== rows.length) throw invalidInput('批次中存在重复的证据 ID。')
   let output = ''
   let finished = false
   for await (const chunk of llm.stream({
@@ -82,9 +89,9 @@ export function evidenceAgentAssessRoute({ llm, routes, logger }) {
   return {
     kind: 'exact', path: EVIDENCE_AGENT_ASSESS_PATH,
     async handler(req, res) {
-      if (req.method === 'OPTIONS') { allowPreflight(req, res); return }
+      if (req.method === 'OPTIONS') { handlePreflight(req, res); return }
       if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST' }); res.end(); return }
-      const origin = String(req.headers?.origin || '').trim()
+      const origin = resolveAllowedCorsOrigin(req)
       if (origin) res.__agentCorsOrigin = origin
       const sessionId = String(new URL(req.url || EVIDENCE_AGENT_ASSESS_PATH, 'http://localhost').searchParams.get('session_id') || '')
       if (!sessionId) { reply(res, 400, { error: 'session_id_required' }); return }
@@ -101,7 +108,10 @@ export function evidenceAgentAssessRoute({ llm, routes, logger }) {
       } catch (error) {
         const message = controller.signal.aborted ? 'Agent 响应超时或请求已取消。' : String(error?.message || error)
         logger?.warn?.(`evidence-agent-assess session=${sessionId} error=${message}`)
-        reply(res, controller.signal.aborted ? 504 : 503, { error: 'evidence_agent_assess_failed', next_action: message })
+        const status = controller.signal.aborted ? 504
+          : error?.code === 'body_too_large' ? 413
+            : error?.code === 'INVALID_INPUT' || error?.code === 'invalid_json' ? 400 : 503
+        reply(res, status, { error: 'evidence_agent_assess_failed', next_action: message })
       } finally {
         clearTimeout(timeout)
         if (typeof res.off === 'function') res.off('close', abort)

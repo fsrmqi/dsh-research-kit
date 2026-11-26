@@ -11,17 +11,27 @@ function response(status, headers = {}) {
   return new Response(status === 200 ? '{}' : 'service unavailable', { status, headers })
 }
 
-test('HTTP 客户端：429 读取 Retry-After 后重试，并携带 User-Agent', async () => {
+test('HTTP 客户端：429 读取 Retry-After 后重试，释放旧响应体并携带 User-Agent', async () => {
   const calls = []
+  let cancelled = 0
   const result = await fetchWithRetry('https://retry.test/api', {
     retries: 1,
     fetchImpl: async (url, init) => {
       calls.push({ url, userAgent: init.headers['User-Agent'] })
-      return response(calls.length === 1 ? 429 : 200, calls.length === 1 ? { 'Retry-After': '0' } : {})
+      if (calls.length === 1) {
+        return {
+          ok: false,
+          status: 429,
+          headers: new Headers({ 'Retry-After': '0' }),
+          body: { cancel: async () => { cancelled += 1 } },
+        }
+      }
+      return response(200)
     },
   })
   assert.equal(result.status, 200)
   assert.equal(calls.length, 2)
+  assert.equal(cancelled, 1)
   assert.equal(calls[0].userAgent, USER_AGENT)
   assert.match(USER_AGENT, /^dsh-research-kit\//)
   // 版本号在 UA 里是硬编码字面量，改版本时容易漏改；绑定 package.json 以防漂移。

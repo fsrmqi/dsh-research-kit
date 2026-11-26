@@ -104,6 +104,9 @@ async function fetchWithRetry(url, {
       return response
     }
 
+    // 非 2xx 响应体不会被调用方读取；重试或抛错前显式释放，避免 Undici 长时间占用连接池。
+    try { await response.body?.cancel?.() } catch {}
+
     if (!RETRYABLE_STATUS.has(response.status) || attempt === retries) {
       if (RETRYABLE_STATUS.has(response.status)) recordCircuitResult(key, false)
       const error = new Error(`外部服务返回 HTTP ${response.status}`)
