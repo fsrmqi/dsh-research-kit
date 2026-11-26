@@ -211,6 +211,12 @@ test('Claim Agent 路由只允许回环与同源预检，校验错误返回 400�
     async *[Symbol.asyncIterator]() { yield JSON.stringify({ project: 'demo', claim_ids: [] }) },
   }, badClaims)
   assert.equal(badClaims.status, 400)
+  const nullBody = response()
+  await route.handler({
+    method: 'POST', url: '/dsh-research-kit/claim-agent-review?session_id=s1',
+    async *[Symbol.asyncIterator]() { yield 'null' },
+  }, nullBody)
+  assert.equal(nullBody.status, 400)
 })
 
 

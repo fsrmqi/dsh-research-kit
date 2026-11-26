@@ -97,6 +97,13 @@ test('批量判断路由允许回环与同源 OPTIONS 预检，并拒绝不受�
   const badPayload = makeResponse()
   await routeWithModel.handler(badRequest, badPayload)
   assert.equal(badPayload.status, 400)
+
+  const nullPayload = makeResponse()
+  await routeWithModel.handler({
+    method: 'POST', url: `${EVIDENCE_AGENT_ASSESS_PATH}?session_id=s1`, on() {}, off() {},
+    async *[Symbol.asyncIterator]() { yield 'null' },
+  }, nullPayload)
+  assert.equal(nullPayload.status, 400)
 })
 
 test('批量判断路由正常返回结构化 JSON，不会因 response close 误取消', async () => {

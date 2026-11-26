@@ -43,6 +43,7 @@ export async function readJsonBody(req, {
   invalidJsonMessage = 'invalid_json',
   emptyBodyAsObject = false,
   destroyOnTooLarge = false,
+  requireObject = false,
 } = {}) {
   // 上限必须显式：无上限读入等于把进程内存交给调用方，不能成为默认。
   if (maxBytes === undefined && maxChars === undefined) throw new Error('readJsonBody 需要显式上限（maxBytes 或 maxChars）')
@@ -56,11 +57,18 @@ export async function readJsonBody(req, {
       throw error
     }
   }
+  let parsed
   try {
-    return JSON.parse(emptyBodyAsObject ? (raw || '{}') : raw)
+    parsed = JSON.parse(emptyBodyAsObject ? (raw || '{}') : raw)
   } catch {
     const error = new Error(invalidJsonMessage)
     error.code = 'invalid_json'
     throw error
   }
+  if (requireObject && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))) {
+    const error = new Error(invalidJsonMessage)
+    error.code = 'invalid_json'
+    throw error
+  }
+  return parsed
 }

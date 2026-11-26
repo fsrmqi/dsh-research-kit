@@ -18,6 +18,7 @@ const readBody = req => readJsonBody(req, {
   tooLargeMessage: '请求过大。',
   invalidJsonMessage: '请求格式无效。',
   emptyBodyAsObject: true,
+  requireObject: true,
 })
 
 function normalizedOutput(output, claims, model) {

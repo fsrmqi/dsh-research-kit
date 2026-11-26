@@ -20,6 +20,8 @@
     "vendor/archify",
     "vendor/vendor-manifest.json",
     "presets",
+    "scripts/render-diagrams.mjs",
+    "scripts/validate-diagrams.mjs",
     "README.md",
     "README.en.md",
     "CONTRIBUTING.md",

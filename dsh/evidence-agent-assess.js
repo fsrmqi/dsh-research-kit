@@ -17,6 +17,7 @@ const readBody = req => readJsonBody(req, {
   tooLargeMessage: '批次内容过大。',
   invalidJsonMessage: '请求格式无效。',
   emptyBodyAsObject: true,
+  requireObject: true,
 })
 
 function compactEntry(row) {
