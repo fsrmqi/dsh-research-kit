@@ -6918,11 +6918,6 @@ const STATUS_COLORS = {
 
 
 
-
-
-
-
-
 function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved }) {
   const detected = React.useMemo(
     () => detectIdentifier(source.identifier, source.title, source.url, source.meta),
@@ -6992,6 +6987,10 @@ function EvidenceSaveForm({ source = {}, databaseName = '', onCancel, onSaved })
     ]),
   ])
 }
+
+
+
+
 
 
 

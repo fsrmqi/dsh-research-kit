@@ -69,6 +69,7 @@ const files = [
   'src/lib/file-evidence-source.js',
   'src/lib/evidence-vault-sync.js',
   // 5. 视图组件
+  'src/evidence-save-form.js',
   'src/research-evidence-vault.js',
   'src/database-query-panel.js',
   'src/composer-launcher.js',
