@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod/v3'
@@ -9,9 +10,11 @@ import { logCall } from './execution/call-logger.js'
 import { toolAnnotations, toolMeta } from './tool-registry.js'
 import { runWithExecutionContext } from './execution/execution-context.js'
 
+const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+
 const server = new McpServer({
   name: 'dsh-research-kit',
-  version: '0.3.0',
+  version: PLUGIN_VERSION,
 }, {
   capabilities: {
     tools: {},

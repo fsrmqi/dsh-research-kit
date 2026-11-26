@@ -1,6 +1,7 @@
-import { crossrefUrl, fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
+import { fetchJsonWithRetry, fetchTextWithRetry } from './http-client.js'
 import { currentExecutionSignal } from './execution-context.js'
 import { createTtlCache } from './ttl-cache.js'
+import { makeSourceRecord as makeSource, SHARED_SOURCE_ADAPTERS } from './source-adapters.js'
 
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
@@ -66,14 +67,6 @@ async function waitForSharedQuery(entry, signal) {
   }
 }
 
-function clean(value, limit = 280) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit)
-}
-
-function makeSource(id, title, url, meta = '', summary = '') {
-  return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) }
-}
-
 // 按数据源计的滑动窗口（阈值由调用方按源传入）。桶数上限 100，超出直接整体清空。
 //
 // 注意：`dsh/database-query.js` 里也有一个 `rateLimitExceeded`，那是**另一套策略**
@@ -104,42 +97,10 @@ function sourceHeaders(adapter, settings) {
 }
 
 const ADAPTERS = {
-  crossref: {
-    url: (q, n) => crossrefUrl(`https://api.crossref.org/works?query=${encodeURIComponent(q)}&rows=${n}&select=DOI,title,author,published-print,published-online,container-title,URL,abstract`),
-    parse: data => (data.message?.items || []).map(item => makeSource(
-      item.DOI, item.title?.[0], item.URL || `https://doi.org/${item.DOI}`,
-      [item.author?.[0]?.family, item['container-title']?.[0], item['published-print']?.['date-parts']?.[0]?.[0] || item['published-online']?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · '),
-      typeof item.abstract === 'string' ? item.abstract.replace(/<[^>]+>/g, '').slice(0, 420) : ''
-    )),
-  },
-  openalex: {
-    auth_query: 'api_key',
-    url: (q, n) => `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=${n}`,
-    parse: data => (data.results || []).map(item => makeSource(
-      item.id, item.title, item.doi || item.id,
-      [item.publication_year, item.primary_location?.source?.display_name, item.cited_by_count ? `被引 ${item.cited_by_count}` : ''].filter(Boolean).join(' · ')
-    )),
-  },
-  'semantic-scholar': {
-    auth_header: 'x-api-key',
-    url: (q, n) => `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=${n}&fields=title,year,authors,venue,abstract,url,citationCount,externalIds`,
-    parse: data => (data.data || []).map(item => makeSource(
-      item.paperId || item.externalIds?.DOI, item.title,
-      item.url || (item.externalIds?.DOI ? `https://doi.org/${item.externalIds.DOI}` : ''),
-      [item.year, item.venue, item.citationCount ? `被引 ${item.citationCount}` : ''].filter(Boolean).join(' · '),
-      item.abstract || ''
-    )),
-  },
-  'europe-pmc': {
-    auth_query: 'apiKey',
-    url: (q, n) => `https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&pageSize=${n}&query=${encodeURIComponent(q)}`,
-    parse: data => (data.resultList?.result || []).map(item => makeSource(
-      item.pmid || item.id, item.title,
-      item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : `https://europepmc.org/article/${item.source || 'MED'}/${item.id}`,
-      [item.authorString, item.journalTitle, item.pubYear].filter(Boolean).join(' · '),
-      item.abstractText || ''
-    )),
-  },
+  crossref: SHARED_SOURCE_ADAPTERS.crossref,
+  openalex: SHARED_SOURCE_ADAPTERS.openalex,
+  'semantic-scholar': SHARED_SOURCE_ADAPTERS['semantic-scholar'],
+  'europe-pmc': SHARED_SOURCE_ADAPTERS['europe-pmc'],
   arxiv: {
     url: (q, n) => `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(q)}&max_results=${n}`,
     parse: xml => {
@@ -155,17 +116,7 @@ const ADAPTERS = {
     },
     isXml: true,
   },
-  clinicaltrials: {
-    url: (q, n) => `https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(q)}&pageSize=${n}&format=json`,
-    parse: data => (data.studies || []).map(item => {
-      const p = item.protocolSection || {}
-      const id = p.identificationModule?.nctId
-      return makeSource(id, p.identificationModule?.briefTitle,
-        id ? `https://clinicaltrials.gov/study/${id}` : '',
-        [p.statusModule?.overallStatus, p.designModule?.studyType].filter(Boolean).join(' · '),
-        p.descriptionModule?.briefSummary || '')
-    }),
-  },
+  clinicaltrials: SHARED_SOURCE_ADAPTERS.clinicaltrials,
 }
 
 const AVAILABILITY_MAP = {

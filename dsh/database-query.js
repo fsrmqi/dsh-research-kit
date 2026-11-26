@@ -2,6 +2,7 @@ export const DATABASE_QUERY_PATH = '/dsh-research-kit/query'
 import { readConfigValue } from './config.js'
 import { jsonReply as reply } from './lib/http-json.js'
 import { createTtlCache } from '../mcp/execution/ttl-cache.js'
+import { adapterRows, makeSourceRecord as source, SHARED_SOURCE_ADAPTERS } from '../mcp/execution/source-adapters.js'
 
 const MAX_QUERY_LENGTH = 300
 const MAX_LIMIT = 10
@@ -77,41 +78,12 @@ function jsonBody(result) {
   const raw = textBody(result)
   try { return JSON.parse(raw) } catch { throw new Error('数据源返回的内容不是可解析 JSON。') }
 }
-function clean(value, limit = 280) { return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit) }
-function source(id, title, url, meta = '', summary = '') { return { id: String(id || url), title: clean(title, 220) || '未命名记录', url: String(url || ''), meta: clean(meta, 180), summary: clean(summary, 420) } }
-
-// 上游把字段从数组改成对象、或返回 null 包体时，`.map` 会抛 TypeError —— 那会变成 502，
-// 用户看到的是「插件坏了」。统一先收敛成「对象数组」：形状不对就当这条来源没返回记录，
-// 由下面的空结果分支交给 Agent 回退，绝不把上游的怪形状升级成插件故障。
-// （本文件是宿主半区，不进浏览器产物，因此不占用产物的全局符号名约束。）
-function adapterRows(value) {
-  return (Array.isArray(value) ? value : []).filter(item => item && typeof item === 'object')
-}
-
 const DIRECT_ADAPTERS = {
-  crossref: {
-    url: (q, n) => `https://api.crossref.org/works?query=${encodeURIComponent(q)}&rows=${n}&select=DOI,title,author,published-print,published-online,container-title,URL`,
-    parse: data => adapterRows(data?.message?.items).map(item => source(item.DOI, item.title?.[0], item.URL || `https://doi.org/${item.DOI}`, [item.author?.[0]?.family, item['container-title']?.[0], item['published-print']?.['date-parts']?.[0]?.[0] || item['published-online']?.['date-parts']?.[0]?.[0]].filter(Boolean).join(' · ')))
-  },
-  openalex: {
-    url: (q, n) => `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=${n}`,
-    parse: data => adapterRows(data?.results).map(item => source(item.id, item.title, item.doi || item.id, [item.publication_year, item.primary_location?.source?.display_name, item.cited_by_count ? `被引 ${item.cited_by_count}` : ''].filter(Boolean).join(' · '), item.abstract_inverted_index ? 'OpenAlex 已返回摘要索引；请打开原文或来源核验细节。' : ''))
-  },
-  'semantic-scholar': {
-    url: (q, n) => `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=${n}&fields=title,year,authors,venue,abstract,url,citationCount,externalIds`,
-    parse: data => adapterRows(data?.data).map(item => source(item.paperId || item.externalIds?.DOI, item.title, item.url || (item.externalIds?.DOI ? `https://doi.org/${item.externalIds.DOI}` : ''), [item.year, item.venue, item.citationCount ? `被引 ${item.citationCount}` : ''].filter(Boolean).join(' · '), item.abstract))
-  },
-  'europe-pmc': {
-    url: (q, n) => `https://www.ebi.ac.uk/europepmc/webservices/rest/search?format=json&pageSize=${n}&query=${encodeURIComponent(q)}`,
-    parse: data => adapterRows(data?.resultList?.result).map(item => source(item.pmid || item.id, item.title, item.pmid ? `https://europepmc.org/article/MED/${item.pmid}` : `https://europepmc.org/article/${item.source || 'MED'}/${item.id}`, [item.authorString, item.journalTitle, item.pubYear].filter(Boolean).join(' · '), item.abstractText))
-  },
-  clinicaltrials: {
-    url: (q, n) => `https://clinicaltrials.gov/api/v2/studies?query.term=${encodeURIComponent(q)}&pageSize=${n}&format=json`,
-    parse: data => adapterRows(data?.studies).map(item => {
-      const p = item.protocolSection || {}, id = p.identificationModule?.nctId
-      return source(id, p.identificationModule?.briefTitle, id ? `https://clinicaltrials.gov/study/${id}` : '', [p.statusModule?.overallStatus, p.designModule?.studyType].filter(Boolean).join(' · '), p.descriptionModule?.briefSummary)
-    })
-  },
+  crossref: SHARED_SOURCE_ADAPTERS.crossref,
+  openalex: SHARED_SOURCE_ADAPTERS.openalex,
+  'semantic-scholar': SHARED_SOURCE_ADAPTERS['semantic-scholar'],
+  'europe-pmc': SHARED_SOURCE_ADAPTERS['europe-pmc'],
+  clinicaltrials: SHARED_SOURCE_ADAPTERS.clinicaltrials,
   openfda: {
     url: (q, n) => `https://api.fda.gov/drug/event.json?search=${encodeURIComponent(q)}&limit=${n}`,
     parse: data => adapterRows(data?.results).map((item, index) => source(`openfda-${index}`, item.patient?.drug?.[0]?.medicinalproduct || '药物不良事件记录', 'https://open.fda.gov/apis/drug/event/', [item.receiptdate, item.serious === '1' ? '严重事件' : ''].filter(Boolean).join(' · '), adapterRows(item.patient?.reaction).map(row => row.reactionmeddrapt).filter(Boolean).join('；')))

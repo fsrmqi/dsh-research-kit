@@ -18,20 +18,84 @@ const buildStats = {
   resources: catalogData.resources.length,
   direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
 }
-const files = ['src/catalog.js', 'src/catalog-storage.js', 'src/research-selection-store.js', 'src/research-context-store.js', 'src/evidence-store.js', 'src/theme.js', 'src/lib/icons.js', 'src/ui.js', 'src/promptkit-loader.js', 'src/catalog-category-filter.js', 'src/lib/enhance-output.js', 'src/lib/vault-core.js', 'src/lib/knowledge-extract.js', 'src/lib/research-taxonomy.js', 'src/lib/deposition-taxonomy.js', 'src/lib/project-organizer.js', 'src/lib/research-claims.js', 'src/lib/asset-evidence-links.js', 'src/lib/evidence-graph-core.js', 'src/lib/evidence-vault-core.js', 'src/lib/agent-evidence-batch.js', 'src/lib/console-sections.js', 'src/lib/overlay-anchor.js', 'src/lib/input-actions.js', 'src/lib/host-navigation.js', 'src/lib/download.js', 'src/lib/idb.js', 'src/host-capabilities-client.js', 'vendor/archify/i18n.mjs', 'src/lib/archify-adapter.js', 'src/evidence-vault-store.js', 'src/knowledge-store.js', 'src/project-organizer.js', 'src/lib/file-evidence-source.js', 'src/lib/evidence-vault-sync.js', 'src/research-evidence-vault.js', 'src/database-query-panel.js', 'src/composer-launcher.js', 'src/composer-overlay.js', 'src/research-claim-review.js', 'src/research-vault.js', 'src/research-evidence-graph.js', 'src/knowledge-deposition.js', 'src/message-deposit-action.js', 'src/composer-deposit-button.js', 'src/route-replay.js', 'src/research-workbench.js', '__generated:tool-registry-data', 'mcp/tool-labels.js', 'src/research-toolview.js', 'dsh/slot-registry.js', 'dsh/prompt-studio-glue.js', 'dsh/prompt-enhancer-glue.js', 'src/plugin-status.js', 'src/research-console.js', 'dsh/standalone-glue.js']
-files.splice(files.indexOf('src/lib/research-claims.js') + 1, 0, 'src/lib/research-ledger.js')
-files.splice(files.indexOf('src/lib/research-taxonomy.js') + 1, 0, 'src/lib/research-workspaces.js')
-files.splice(files.indexOf('src/lib/research-workspaces.js') + 1, 0, 'src/lib/research-quality.js')
-files.splice(files.indexOf('src/knowledge-store.js') + 1, 0, 'src/lib/research-transfer.js')
-files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-transfer-panel.js')
-files.splice(files.indexOf('src/lib/evidence-graph-core.js') + 1, 0, 'src/lib/test-projects.js')
-files.splice(files.indexOf('src/lib/evidence-vault-core.js'), 0, 'src/lib/bibliography.js')
-files.splice(files.indexOf('src/research-console.js'), 0, 'src/research-project-home.js', 'src/lib/literature-review-export.js')
-files.splice(files.indexOf('src/evidence-vault-store.js') + 1, 0, 'src/lib/claim-review-client.js')
-files.splice(files.indexOf('src/composer-overlay.js'), 0, 'src/lib/session-events.js')
-files.splice(files.indexOf('src/lib/knowledge-extract.js') + 1, 0, 'src/lib/answer-evidence.js')
-// 入口形态偏好：必须在 dsh/prompt-enhancer-glue.js（按形态分支）与 src/plugin-status.js（设置项）之前。
-files.splice(files.indexOf('src/promptkit-loader.js') + 1, 0, 'src/entry-mode.js')
+// 显式按拓扑顺序声明客户端模块清单（不再用零散 splice 补丁），便于审阅依赖关系与顺序约束。
+const files = [
+  // 1. 目录、存储与会话上下文
+  'src/catalog.js',
+  'src/catalog-storage.js',
+  'src/research-selection-store.js',
+  'src/research-context-store.js',
+  'src/evidence-store.js',
+  // 2. 主题、基础 UI 与入口形态偏好
+  'src/theme.js',
+  'src/lib/icons.js',
+  'src/ui.js',
+  'src/promptkit-loader.js',
+  'src/entry-mode.js', // 必须在 dsh/prompt-enhancer-glue.js 与 src/plugin-status.js 之前
+  'src/catalog-category-filter.js',
+  // 3. 领域纯函数库
+  'src/lib/enhance-output.js',
+  'src/lib/vault-core.js',
+  'src/lib/knowledge-extract.js',
+  'src/lib/answer-evidence.js',
+  'src/lib/research-taxonomy.js',
+  'src/lib/research-workspaces.js',
+  'src/lib/research-quality.js',
+  'src/lib/deposition-taxonomy.js',
+  'src/lib/project-organizer.js',
+  'src/lib/research-claims.js',
+  'src/lib/research-ledger.js',
+  'src/lib/asset-evidence-links.js',
+  'src/lib/evidence-graph-core.js',
+  'src/lib/test-projects.js',
+  'src/lib/bibliography.js',
+  'src/lib/evidence-vault-core.js',
+  'src/lib/agent-evidence-batch.js',
+  'src/lib/console-sections.js',
+  'src/lib/overlay-anchor.js',
+  'src/lib/input-actions.js',
+  'src/lib/host-navigation.js',
+  'src/lib/download.js',
+  'src/lib/idb.js',
+  'src/host-capabilities-client.js',
+  'vendor/archify/i18n.mjs',
+  'src/lib/archify-adapter.js',
+  // 4. 持久化 Store 与同步层
+  'src/evidence-vault-store.js',
+  'src/lib/claim-review-client.js',
+  'src/knowledge-store.js',
+  'src/lib/research-transfer.js',
+  'src/project-organizer.js',
+  'src/lib/file-evidence-source.js',
+  'src/lib/evidence-vault-sync.js',
+  // 5. 视图组件
+  'src/research-evidence-vault.js',
+  'src/database-query-panel.js',
+  'src/composer-launcher.js',
+  'src/lib/session-events.js',
+  'src/composer-overlay.js',
+  'src/research-claim-review.js',
+  'src/research-vault.js',
+  'src/research-evidence-graph.js',
+  'src/knowledge-deposition.js',
+  'src/message-deposit-action.js',
+  'src/composer-deposit-button.js',
+  'src/route-replay.js',
+  'src/research-workbench.js',
+  '__generated:tool-registry-data',
+  'mcp/tool-labels.js',
+  'src/research-toolview.js',
+  // 6. DSH 槽位与胶水层
+  'dsh/slot-registry.js',
+  'dsh/prompt-studio-glue.js',
+  'dsh/prompt-enhancer-glue.js',
+  'src/plugin-status.js',
+  'src/research-transfer-panel.js',
+  'src/research-project-home.js',
+  'src/lib/literature-review-export.js',
+  'src/research-console.js',
+  'dsh/standalone-glue.js',
+]
 // 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
 // 若 import 跨行则只删掉首行，剩余行会残留成非法语句（产物语法错误）。
 function collapseImports(source) {
@@ -115,16 +179,43 @@ assertSymbolOrder(body)
 // 各定义了一个 stateFor，返回的 state 形状不同（后者没有 ids 字段），覆盖后 state.ids
 // 不可迭代，统一视图与输入框浮层渲染即抛错、整屏空白。故在构建期硬失败。
 //
+function collectPatternNames(pattern, out) {
+  if (!pattern) return
+  if (pattern.type === 'Identifier') { out.push(pattern); return }
+  if (pattern.type === 'AssignmentPattern') { collectPatternNames(pattern.left, out); return }
+  if (pattern.type === 'RestElement') { collectPatternNames(pattern.argument, out); return }
+  if (pattern.type === 'ArrayPattern') {
+    for (const element of pattern.elements) collectPatternNames(element, out)
+    return
+  }
+  if (pattern.type === 'ObjectPattern') {
+    for (const property of pattern.properties) {
+      collectPatternNames(property.type === 'RestElement' ? property.argument : property.value, out)
+    }
+  }
+}
+
 function assertUniqueTopLevelSymbols(entries) {
   const declared = new Map()
+  const record = (file, node) => {
+    const owners = declared.get(node.name) || []
+    owners.push(`${file}:${node.loc.start.line}`)
+    declared.set(node.name, owners)
+  }
   for (const { file, source } of entries) {
-    source.split('\n').forEach((line, index) => {
-      const match = /^(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/.exec(line)
-      if (!match) return
-      const owners = declared.get(match[1]) || []
-      owners.push(`${file}:${index + 1}`)
-      declared.set(match[1], owners)
-    })
+    // 改用 acorn AST 扫描顶层绑定：完整覆盖解构声明（const { a, b } = ...），并避免模板字面量误报。
+    const ast = Parser.parse(source, { ecmaVersion: 'latest', locations: true, allowReturnOutsideFunction: true })
+    for (const stmt of ast.body) {
+      if ((stmt.type === 'FunctionDeclaration' || stmt.type === 'ClassDeclaration') && stmt.id) {
+        record(file, stmt.id)
+      } else if (stmt.type === 'VariableDeclaration') {
+        for (const decl of stmt.declarations) {
+          const names = []
+          collectPatternNames(decl.id, names)
+          for (const node of names) record(file, node)
+        }
+      }
+    }
   }
   const clashes = [...declared].filter(([, owners]) => owners.length > 1)
   if (!clashes.length) return

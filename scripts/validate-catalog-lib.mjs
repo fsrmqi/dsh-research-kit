@@ -107,7 +107,7 @@ export function validateCatalogItems(all, { directQueryIds } = {}) {
 export function readDirectQueryIds(path = resolve(root, 'dsh', 'database-query.js')) {
   const source = readFileSync(path, 'utf8')
   const block = source.match(/const DIRECT_ADAPTERS = \{([\s\S]*?)\n\}/)
-  const ids = block ? [...block[1].matchAll(/^ {2}'?([a-z0-9-]+)'?:\s*\{/gm)].map(match => match[1]) : []
+  const ids = block ? [...block[1].matchAll(/^ {2}'?([a-z0-9-]+)'?:\s*(?:\{|[A-Za-z_$])/gm)].map(match => match[1]) : []
   for (const match of source.matchAll(/database\.id === '([a-z0-9-]+)'/g)) ids.push(match[1])
   return [...new Set(ids)]
 }

@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { currentExecutionSignal } from './execution-context.js'
 
+const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
 const REQUEST_TIMEOUT_MS = 15_000
 const MAX_RETRIES = 2
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504])
@@ -12,8 +14,8 @@ const circuits = new Map()
 
 const contactEmail = String(process.env.DSH_RESEARCH_KIT_CONTACT_EMAIL || '').trim()
 export const USER_AGENT = contactEmail
-  ? `dsh-research-kit/0.3.0 (+https://github.com/fsrmqi/dsh-research-kit; mailto:${contactEmail})`
-  : 'dsh-research-kit/0.3.0 (+https://github.com/fsrmqi/dsh-research-kit)'
+  ? `dsh-research-kit/${PLUGIN_VERSION} (+https://github.com/fsrmqi/dsh-research-kit; mailto:${contactEmail})`
+  : `dsh-research-kit/${PLUGIN_VERSION} (+https://github.com/fsrmqi/dsh-research-kit)`
 
 function circuitKey(url) {
   try {
