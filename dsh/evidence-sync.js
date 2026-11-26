@@ -17,7 +17,7 @@ import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
 
-const readBody = req => readJsonBody(req, { maxChars: 1_048_576, destroyOnTooLarge: true })
+const readBody = req => readJsonBody(req, { maxChars: 1_048_576, destroyOnTooLarge: true, requireObject: true })
 
 function requestProject(value) {
   return safeProjectName(value || 'default')
@@ -89,8 +89,8 @@ export function evidenceSyncRoute({ logger } = {}) {
       } catch (error) {
         try { logger?.warn?.(`evidence-sync error: ${error?.message || error}`) } catch {}
         const status = error?.code === 'INVALID_PROJECT' ? 400
-          : error?.message === 'invalid_json' ? 400
-            : error?.message === 'body_too_large' ? 413 : 500
+          : error?.code === 'invalid_json' || error?.message === 'invalid_json' ? 400
+            : error?.code === 'body_too_large' || error?.message === 'body_too_large' ? 413 : 500
         return reply(res, status, { ok: false, error: error?.code === 'INVALID_PROJECT' ? 'invalid_project' : error?.message || 'internal_error' })
       }
     },

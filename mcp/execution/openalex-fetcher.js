@@ -5,15 +5,29 @@ import { fetchJsonWithRetry } from './http-client.js'
 import { mapWithConcurrency } from './concurrency.js'
 
 const SELECT_FIELDS = 'id,doi,title,display_name,publication_year,authorships,abstract_inverted_index,type,primary_location,cited_by_count,referenced_works'
+const MAX_ABSTRACT_POSITION = 50_000
+
+function openAlexApiKey(env = process.env) {
+  return String(env.DSH_RESEARCH_KIT_SOURCE_OPENALEX_API_KEY || env.OPENALEX_API_KEY || '').trim()
+}
+
+function withOpenAlexAuth(url, env = process.env) {
+  const apiKey = openAlexApiKey(env)
+  return apiKey ? `${url}&api_key=${encodeURIComponent(apiKey)}` : url
+}
 
 function reconstructAbstract(invertedIndex) {
   if (!invertedIndex || typeof invertedIndex !== 'object') return ''
-  const maxPos = Math.max(...Object.values(invertedIndex).flat())
-  const words = new Array(maxPos + 1)
+  const pairs = []
   for (const [word, positions] of Object.entries(invertedIndex)) {
-    for (const pos of positions) words[pos] = word
+    if (!Array.isArray(positions)) continue
+    for (const pos of positions) {
+      if (Number.isInteger(pos) && pos >= 0 && pos < MAX_ABSTRACT_POSITION) pairs.push([pos, word])
+    }
   }
-  return words.filter(Boolean).join(' ')
+  if (!pairs.length) return ''
+  pairs.sort((a, b) => a[0] - b[0])
+  return pairs.map(([, word]) => word).join(' ')
 }
 
 function normalizeWork(work, { includeReferences = false } = {}) {
@@ -36,12 +50,12 @@ function normalizeWork(work, { includeReferences = false } = {}) {
 
 async function fetchOpenAlexWork(doi, { includeReferences = false } = {}) {
   const cleanDoi = String(doi || '').trim().replace(/^https?:\/\/doi\.org\//i, '')
-  const data = await fetchJsonWithRetry(`https://api.openalex.org/works/doi:${encodeURIComponent(cleanDoi)}?select=${SELECT_FIELDS}`)
+  const data = await fetchJsonWithRetry(withOpenAlexAuth(`https://api.openalex.org/works/doi:${encodeURIComponent(cleanDoi)}?select=${SELECT_FIELDS}`))
   return normalizeWork(data, { includeReferences })
 }
 
 async function searchOpenAlex(query, limit = 10, { includeReferences = false } = {}) {
-  const data = await fetchJsonWithRetry(`https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}&select=${SELECT_FIELDS}`)
+  const data = await fetchJsonWithRetry(withOpenAlexAuth(`https://api.openalex.org/works?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}&select=${SELECT_FIELDS}`))
   return (data.results || []).map(work => normalizeWork(work, { includeReferences }))
 }
 

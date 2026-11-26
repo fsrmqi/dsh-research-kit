@@ -1,11 +1,11 @@
 export const EVIDENCE_SOURCE_CHECK_PATH = '/dsh-research-kit/evidence-source-check'
 
-import { jsonReply, readJsonBody } from './lib/http-json.js'
+import { jsonReply, readJsonBody, resolveAllowedCorsOrigin } from './lib/http-json.js'
 
-// 本路由的 CORS 来源挂在 res.__sourceCheckOrigin（handler 里从 Origin 头取）。
+// 本路由的 CORS 来源挂在 res.__sourceCheckOrigin（只允许回环、同源或白名单 Origin）。
 const reply = (res, status, body) => jsonReply(res, status, body, { corsOrigin: res.__sourceCheckOrigin })
 
-const readBody = req => readJsonBody(req, { maxChars: 16_384, destroyOnTooLarge: true })
+const readBody = req => readJsonBody(req, { maxChars: 16_384, destroyOnTooLarge: true, requireObject: true })
 
 const titleKey = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 
@@ -44,26 +44,30 @@ export function evidenceSourceCheckRoute({ web, logger } = {}) {
     kind: 'exact', path: EVIDENCE_SOURCE_CHECK_PATH,
     async handler(req, res) {
       try {
-        const origin = String(req.headers?.origin || '').trim()
-        if (origin) res.__sourceCheckOrigin = origin
+        const rawOrigin = String(req.headers?.origin || '').trim()
+        const allowedOrigin = resolveAllowedCorsOrigin(req)
         if (req.method === 'OPTIONS') {
-          res.writeHead(204, { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', vary: 'Origin' })
+          if (!rawOrigin) return reply(res, 400, { ok: false, error: 'origin_required' })
+          if (!allowedOrigin) return reply(res, 403, { ok: false, error: 'origin_not_allowed' })
+          res.writeHead(204, { 'access-control-allow-origin': allowedOrigin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600', vary: 'Origin' })
           res.end()
           return
         }
+        if (allowedOrigin) res.__sourceCheckOrigin = allowedOrigin
         if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method_not_allowed' })
         const body = await readBody(req)
         const entries = Array.isArray(body?.entries) ? body.entries : []
         if (!entries.length || entries.length > 6) return reply(res, 400, { ok: false, error: 'entries_must_be_1_to_6' })
-        const results = []
-        for (const entry of entries) {
-          try { results.push({ id: entry.id, check: await checkEvidenceSource(web, entry, AbortSignal.timeout(10_000)) }) }
-          catch (error) { results.push({ id: entry.id, error: String(error?.message || error).slice(0, 240) }) }
-        }
+        const results = await Promise.all(entries.map(async entry => {
+          try { return { id: entry?.id, check: await checkEvidenceSource(web, entry, AbortSignal.timeout(10_000)) } }
+          catch (error) { return { id: entry?.id, error: String(error?.message || error).slice(0, 240) } }
+        }))
         return reply(res, 200, { ok: true, results })
       } catch (error) {
         try { logger?.warn?.(`evidence-source-check: ${error?.message || error}`) } catch {}
-        return reply(res, error?.message === 'invalid_json' ? 400 : 500, { ok: false, error: error?.message || 'internal_error' })
+        const status = error?.code === 'body_too_large' ? 413
+          : error?.code === 'invalid_json' || error?.message === 'invalid_json' ? 400 : 500
+        return reply(res, status, { ok: false, error: error?.message || 'internal_error' })
       }
     },
   }

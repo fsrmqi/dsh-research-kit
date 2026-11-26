@@ -58,17 +58,17 @@ async function fetchPubmed(pmid) {
 async function fetchArxiv(arxivId) {
   const cleanId = arxivId.replace(/v\d+$/i, '')
   const xml = await fetchTextWithRetry(`https://export.arxiv.org/api/query?id_list=${cleanId}`, { accept: 'application/xml' })
-  const titleMatch = xml.match(/<title>([^<]+)<\/title>/)
   const entries = xml.split('<entry>').slice(1)
   if (!entries.length) throw new Error('arXiv 未返回该 ID 的记录。')
   const entry = entries[0]
-  const absMatch = entry.match(/<summary>([\s\S]*?)<\/summary>/)
+  const entryTitle = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, ' ').trim() || ''
+  const absMatch = entry.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i)
   const authorMatches = [...entry.matchAll(/<name>([^<]+)<\/name>/g)]
   const doiMatch = entry.match(/<arxiv:doi[^>]*>([^<]+)<\/arxiv:doi>/i)
   return {
     identifier: doiMatch?.[1] || arxivId,
     identifier_type: doiMatch?.[1] ? 'doi' : 'arxiv',
-    title: (titleMatch?.[1] || entry.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '').trim(),
+    title: entryTitle,
     authors: authorMatches.map(m => m[1].trim()),
     journal: 'arXiv preprint',
     year: entry.match(/<published>(\d{4})/)?.[1] ? parseInt(entry.match(/<published>(\d{4})/)[1]) : null,

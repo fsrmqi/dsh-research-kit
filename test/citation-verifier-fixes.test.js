@@ -74,3 +74,26 @@ test('HTTP 错误仍会抛出，不伪装为已核验', async t => {
   mockCrossref(t, {}, 404)
   await assert.rejects(verifyCitation('10.9999/http-error'), /HTTP/)
 })
+
+test('arXiv Atom XML 解析取 entry 内标题而非 feed 查询头，并折叠换行空白', async t => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(
+    `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>ArXiv Query: id_list=2401.99999</title>
+  <entry>
+    <id>http://arxiv.org/abs/2401.99999v1</id>
+    <published>2024-01-15T00:00:00Z</published>
+    <title>
+      Accurate Protein
+      Structure Prediction
+    </title>
+    <summary>Abstract text here.</summary>
+    <author><name>Jane Doe</name></author>
+  </entry>
+</feed>`,
+    { status: 200, headers: { 'Content-Type': 'application/xml' } },
+  ))
+  const result = await verifyCitation('2401.99999')
+  assert.equal(result.exists, true)
+  assert.equal(result.metadata.title, 'Accurate Protein Structure Prediction')
+})

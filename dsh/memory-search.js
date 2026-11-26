@@ -1,4 +1,4 @@
-import { isDeferredMcpLoader } from './host-capabilities.js'
+import { isDeferredMcpLoader, parseMcpToolName } from './host-capabilities.js'
 export const MEMORY_SEARCH_PATH = '/dsh-research-kit/memory-search'
 export const DEFAULT_MEMORY_SERVER = 'memory-center'
 import { readConfigValue } from './config.js'
@@ -106,18 +106,16 @@ async function readRequestBody(req) {
     }
     chunks.push(chunk)
   }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch { return {} }
+  try {
+    const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch { return {} }
 }
 
 let callCounter = 0
 
 function parseServerOf(name) {
-  const raw = String(name || '')
-  if (!raw.startsWith('mcp__')) return null
-  const rest = raw.slice(5)
-  const sep = rest.lastIndexOf('__')
-  if (sep <= 0 || sep >= rest.length - 2) return null
-  return rest.slice(0, sep)
+  return parseMcpToolName(name)?.server ?? null
 }
 
 // 检索路由：POST { query, server?, tool?, limit? }。

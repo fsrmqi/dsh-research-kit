@@ -91,6 +91,7 @@
   },
   "devDependencies": {
     "acorn": "^8.19.0",
+    "esbuild": "^0.28.2",
     "playwright": "1.62.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -99,8 +100,8 @@
     "@deepseek-ai/dsh": ">=0.1.7-0 <0.1.8-0 || >=0.2.0-0 <0.2.3-0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@deepseek-ai/schemastery": "^3.18.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.6.5"
   }
 }

@@ -85,6 +85,6 @@ test('导出收敛守卫：只有 src/lib/download.js 创建下载链，产物�
     && /createObjectURL|revokeObjectURL/.test(readFileSync(resolve(ROOT, file), 'utf8')))
   assert.deepEqual(offenders, [], `导出必须走 src/lib/download.js，禁止各自重写：${offenders.join(', ')}`)
   const bundle = readFileSync(resolve(ROOT, 'ui/client.js'), 'utf8')
-  const anchors = (bundle.match(/document\.createElement\('a'\)/g) || []).length
+  const anchors = (bundle.match(/document\.createElement\(['"]a['"]\)/g) || []).length
   assert.equal(anchors, 1, `产物里创建下载 <a> 的位置应恰好 1 处，实测 ${anchors}`)
 })

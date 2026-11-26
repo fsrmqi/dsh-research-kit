@@ -14,3 +14,50 @@ test('官方 DOI 元数据核对不等于原文核验', async () => {
   await assert.rejects(() => checkEvidenceSource(web, { identifierKind: 'accession', identifier: 'A-5438' }), /仅支持 DOI 或 PMID/)
   assert.equal(evidenceSourceCheckRoute({ web }).path, '/dsh-research-kit/evidence-source-check')
 })
+
+test('元数据核对路由收敛 CORS、并发核对条目并正确映射 400/413 状态码', async () => {
+  let active = 0
+  let maxActive = 0
+  const web = {
+    fetch: async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise(resolve => setTimeout(resolve, 10))
+      active -= 1
+      return { statusCode: 200, body: { content: JSON.stringify({ message: { title: ['Concurrent check'], URL: 'https://doi.org/10.1000/x' } }) } }
+    },
+  }
+  const route = evidenceSourceCheckRoute({ web })
+  const makeRes = () => ({ headers: {}, writeHead(status, headers) { this.status = status; Object.assign(this.headers, headers) }, end(data) { this.data = data; this.writableEnded = true } })
+
+  const untrusted = makeRes()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'https://evil.example', host: '127.0.0.1:3000' } }, untrusted)
+  assert.equal(untrusted.status, 403)
+  assert.equal(untrusted.headers['access-control-allow-origin'], undefined)
+
+  const loopback = makeRes()
+  await route.handler({ method: 'OPTIONS', headers: { origin: 'http://localhost:5173', host: '127.0.0.1:3000' } }, loopback)
+  assert.equal(loopback.status, 204)
+  assert.equal(loopback.headers['access-control-allow-origin'], 'http://localhost:5173')
+
+  const nullBody = makeRes()
+  await route.handler({ method: 'POST', headers: {}, async *[Symbol.asyncIterator]() { yield 'null' } }, nullBody)
+  assert.equal(nullBody.status, 400)
+
+  const tooLarge = makeRes()
+  await route.handler({ method: 'POST', headers: {}, destroy() {}, async *[Symbol.asyncIterator]() { yield 'x'.repeat(20_000) } }, tooLarge)
+  assert.equal(tooLarge.status, 413)
+
+  const ok = makeRes()
+  await route.handler({
+    method: 'POST',
+    headers: {},
+    async *[Symbol.asyncIterator]() {
+      yield JSON.stringify({
+        entries: ['1', '2', '3'].map(id => ({ id, title: 'Concurrent check', identifierKind: 'doi', identifier: `10.1000/c${id}` })),
+      })
+    },
+  }, ok)
+  assert.equal(ok.status, 200)
+  assert.ok(maxActive >= 2, `期望并发核对，实测 maxActive=${maxActive}`)
+})

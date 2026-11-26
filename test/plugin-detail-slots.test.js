@@ -102,8 +102,8 @@ test('产物把目录规模烘焙进常量，且与目录真源、包版本一�
 test('两个新槽位已接入 glue 与产物，并被 seam 清单锁定', () => {
   assert.match(glue, /slots\.inject\('plugins\.detail\.badge'/)
   assert.match(glue, /slots\.inject\('plugins\.detail\.actions'/)
-  assert.ok(bundle.includes("'plugins.detail.badge'"))
-  assert.ok(bundle.includes("'plugins.detail.actions'"))
+  assert.match(bundle, /['"]plugins\.detail\.badge['"]/)
+  assert.match(bundle, /['"]plugins\.detail\.actions['"]/)
   assert.match(seamData, /packages\/client\/ui-plugin-manager\/src\/client\/slot-contract\.ts/)
   assert.match(seamData, /'plugins\.detail\.badge'/)
   assert.match(seamData, /'plugins\.detail\.actions'/)
@@ -138,7 +138,7 @@ test('跳转目标视图 id 与 slot-registry 注册完全一致', () => {
     registry.includes(`slot: 'conversation.view', id: '${RESEARCH_KIT_CONSOLE_VIEW}'`),
     'RESEARCH_KIT_CONSOLE_VIEW 必须与 RESEARCH_SLOTS 的 conversation.view 条目一致，否则导航会指向宿主不认识、因而不予激活的视图',
   )
-  assert.ok(bundle.includes(`const RESEARCH_KIT_CONSOLE_VIEW = '${RESEARCH_KIT_CONSOLE_VIEW}'`))
+  assert.match(bundle, new RegExp(`RESEARCH_KIT_CONSOLE_VIEW\\s*=\\s*['"]${RESEARCH_KIT_CONSOLE_VIEW}['"]`))
 })
 
 test('没有宿主导航通道时不渲染跳转按钮，有通道才渲染', () => {

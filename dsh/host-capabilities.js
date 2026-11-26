@@ -61,7 +61,6 @@ export function probeHostCapabilities({ tools, web, shell, fs, llm, now = Date.n
   const byServer = new Map()
   const totals = new Map()
   const deferred = new Set()
-  let total = 0
   for (const schema of schemas) {
     if (capabilities.toolCount >= MAX_TOTAL_TOOLS) break
     const name = String(schema?.name || '')

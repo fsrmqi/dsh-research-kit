@@ -16,9 +16,10 @@ test('产物包含统一视觉层（theme token、图标、基础组件）', () 
   for (const token of ['--rk-teal', '--rk-shadow-card', '--rk-d-ink', 'rk-btn', 'rk-card', 'rk-scroll']) {
     assert.ok(bundle.includes(token), `产物缺少视觉 token：${token}`)
   }
-  for (const component of ['function Button(', 'function Panel(', 'function Modal(', 'function Segmented(', 'function EmptyState(', 'const Icon =']) {
+  for (const component of ['function Button(', 'function Panel(', 'function Modal(', 'function Segmented(', 'function EmptyState(']) {
     assert.ok(bundle.includes(component), `产物缺少统一组件：${component}`)
   }
+  assert.match(bundle, /\bIcon\s*=/, '产物缺少统一组件：Icon')
 })
 
 test('四个科研视图复用同一组件层，不再各自内联样式常量', () => {

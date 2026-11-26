@@ -6,7 +6,7 @@ import path from 'node:path'
 
 const testHome = await mkdtemp(path.join(os.tmpdir(), 'dsh-openalex-'))
 process.env.DSH_RESEARCH_KIT_HOME = testHome
-const { fetchOpenAlexMetadata } = await import('../mcp/execution/openalex-fetcher.js')
+const { fetchOpenAlexMetadata, reconstructAbstract } = await import('../mcp/execution/openalex-fetcher.js')
 const { listEvidence } = await import('../mcp/execution/evidence-store.js')
 
 test.after(async () => rm(testHome, { recursive: true, force: true }))
@@ -60,5 +60,31 @@ test('OpenAlex 搜索模式启用 save_to_evidence 时会批量保存结果', as
     assert.equal(listed.entries[0].identifier, '10.1000/openalex-search-save')
   } finally {
     globalThis.fetch = originalFetch
+  }
+})
+
+test('reconstructAbstract 安全处理空对象，且配置 OPENALEX_API_KEY 时自动附加参数', async () => {
+  assert.equal(reconstructAbstract(null), '')
+  assert.equal(reconstructAbstract({}), '')
+  assert.equal(reconstructAbstract({ world: [1], hello: [0] }), 'hello world')
+
+  const originalFetch = globalThis.fetch
+  const prevKey = process.env.OPENALEX_API_KEY
+  process.env.OPENALEX_API_KEY = 'oa-secret-key'
+  let requestedUrl = ''
+  globalThis.fetch = async url => {
+    requestedUrl = String(url)
+    return new Response(JSON.stringify({ id: 'https://api.openalex.org/works/W-KEY', doi: 'https://doi.org/10.1000/key', title: 'Auth test', abstract_inverted_index: {} }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })
+  }
+  try {
+    const parsed = await fetchOpenAlexMetadata({ dois: ['10.1000/key'] })
+    assert.equal(parsed.data.results[0].abstract, '')
+    assert.match(requestedUrl, /api_key=oa-secret-key/)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (prevKey === undefined) delete process.env.OPENALEX_API_KEY
+    else process.env.OPENALEX_API_KEY = prevKey
   }
 })

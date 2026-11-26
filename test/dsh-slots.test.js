@@ -81,9 +81,9 @@ test('内联草稿增强入口：触发钮不依赖懒加载工件，面板走�
   assert.match(loader, /promptKitPromise = null/, '失败必须清掉单例，允许重试')
   // 构建产物必须带上同一套接线。
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
-  assert.match(bundle, /launcher: 'inline'/)
+  assert.match(bundle, /launcher:\s*['"]inline['"]/)
   assert.match(bundle, /PROMPTKIT_LOAD_TIMEOUT_MS/)
-  assert.match(bundle, /ENTRY_MODE_INLINE|'inline'/)
+  assert.match(bundle, /ENTRY_MODE_INLINE|['"]inline['"]/)
 })
 
 test('新版 DSH 工具详情卡覆盖全部 research MCP 工具', async () => {
