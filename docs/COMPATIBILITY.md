@@ -79,7 +79,7 @@
 
 客户端注入声明已清理，并由矩阵逐版本核对。
 
-宿主声明 `conversation.session.panel.section` 时，会话面板显示该会话关联的科研项目与待审核论断。宿主提供会话级 `addReferences` 时，项目首页可把工作区内相对文件路径添加到该会话草稿。两个入口独立探测。
+宿主声明 `conversation.session.panel.section` 时，会话面板显示该会话关联的科研项目与待审核论断。宿主声明 `main` 与 `sidebar.panellist` 时，左侧导航栏同步显示「科研工作台」全局入口。宿主提供会话级 `addReferences` 时，项目首页可把工作区内相对文件路径添加到该会话草稿。这些可选入口均经 `ctx.slots.inject` / `ctx.get` 独立软探测，旧宿主自动静默降级。
 
 MCP 按需加载模式下，宿主加载器表明服务器已连接。项目记忆面板需要全局可见的检索工具；可在会话里由 Agent 加载后检索，或把对应服务器设为预加载。
 

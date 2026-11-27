@@ -12,20 +12,20 @@ const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content
 <script src="/react"></script><script src="/react-dom"></script>
 <script>window.__ModuleLoader__={load({factory}){window.plugin=factory(id=>id==='react-dom'?ReactDOM:React)}};</script>
 <script src="/bundle"></script><script>
-const registered={}; window.toolViews={}; window.rowConfigs={};
+const registered={}; window.toolViews={}; window.rowConfigs={}; window.mainPanels={}; window.sidebarPanels={};
 window.testEvents=[{type:'assistant/message',seq:14,time:123,data:{turn:2,message:{id:'review-one',content:[{type:'text',text:'研究表明，Ghd7 促进水稻耐盐性。见 https://doi.org/10.1038/review。'}]}}}];
 window.sessionEventsById={};
 window.testSessions={list:{getSnapshot(){return {current:'qa'}},subscribe(){return ()=>{}}},binding(id){return {eventSource:{getSnapshot(){return {entries:window.sessionEventsById[id] || window.testEvents}},subscribe(){return ()=>{}}}}}};
-// 假 slots 服务必须认三种注册形态：按 key（tool.call.toolview、plugins.row.config）、
-// 按 id（徽章 / 动作 / 输入框）。过去只按 o.id 登记，键控注册一律落到 registered[undefined]——
-// 于是 Plugins 行配置里的预设 UI 在浏览器回归里完全隐形（点不到，也就没人发现点击路径没被覆盖）。
+// 假 slots 服务必须认三种注册形态：按 key（tool.call.toolview、plugins.row.config、main）、
+// 按 id（徽章 / 动作 / 输入框 / sidebar.panellist）。sidebar.panellist 与 conversation.view 共用
+// dsh-research-kit-console，必须分表存放以免侧边栏图标覆盖主控制台组件。
 const native = new URLSearchParams(location.search).has('native');
 if (native) window.testSessions.binding = () => ({ctx:{}});
 const conversation = {input:{for(){return {
  canInsertReferences:()=>true,addReferences(references){window.materialReference=references[0];return true}
 }},requestDraftInitialization(){}}};
 const uiWorkspace = {startSession(_workspace,payload){window.launchDraft=payload}};
-plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else registered[o.id]=c;return ()=>{}}}});
+plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else if(o.name==='main') window.mainPanels[o.key]=c; else if(o.name==='sidebar.panellist') window.sidebarPanels[o.id]=c; else registered[o.id]=c;return ()=>{}}}});
 const actions={setDraft(s){window.draft=s},submit(){}};
 function ComposerHarness(){
  const [sessionId,setSessionId]=React.useState('qa');

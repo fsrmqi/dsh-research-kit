@@ -89,7 +89,6 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
   const [assessmentNotes, setAssessmentNotes] = React.useState({})
-  const [includeHuman, setIncludeHuman] = React.useState(false)
   const [agentBusy, setAgentBusy] = React.useState(false)
   const [agentProgress, setAgentProgress] = React.useState('')
   const [agentStats, setAgentStats] = React.useState(null)
@@ -206,11 +205,10 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   // 选择是用户明确做出的跨筛选状态：以 entries 而非 filtered 为基准，
   // 改筛选只影响「看见什么」，不会悄悄撤销「已选择什么」。
   const selectedEntries = React.useMemo(() => [...new Map([...selectedRows, ...entries].filter(item => selectedIdSet.has(item.id)).map(item => [item.id, item])).values()], [entries, selectedRows, selectedIdSet])
-  React.useEffect(() => {
-    let alive = true
-    store.getMany(selectedIds).then(rows => { if (alive) setSelectedRows(rows) }).catch(error => setNotice(`⚠️ 读取已选证据失败：${error.message}`))
-    return () => { alive = false }
-  }, [store, selectedIds])
+  const selectedAgentEligible = React.useMemo(
+    () => planAgentEvidenceBatch(selectedEntries, { includeHuman: false }).eligible.length,
+    [selectedEntries],
+  )
   const canWrite = canWriteDraft(inputActions)
   // 写入决策走纯逻辑：只有 action === 'write' 才允许碰宿主输入框。
   // 「未选择不注入」由 evidence-vault-core 的回归测试守护，视图不再自行判断。
@@ -225,6 +223,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     setConfirmClear(false)
     setConfirmDeleteId('')
     setSelectedIds([])
+    setRetryIds([])
     setWorkspaceRenameOpen(false)
     setConfirmArchiveWorkspace(false)
   }
@@ -610,14 +609,14 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       const result = await executeAgentEvidenceAssessment({
         entries: requestedEntries,
         sessionId,
-        includeHuman,
+        includeHuman: false,
         store,
         signal: controller.signal,
         onProgress: setAgentProgress,
         onStats: setAgentStats,
       })
       setRetryIds(result.remainingIds || [])
-      setNotice(result.message)
+      setNotice(result.empty ? '所选证据均已人工处理；如需重判，请到「本次研究 → 科研梦境 → 批量初判」勾选「包含人工处理过的」。' : result.message)
     } catch (error) {
       setRetryIds(error.remainingIds || [])
       setNotice(`⚠️ ${error.message}`)
@@ -695,8 +694,12 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     ]),
     selectedEntries.length ? h('div', { key: 'selection-bar', className: 'rk-selection-bar rk-fade', role: 'region', 'aria-label': '已选证据批量操作' }, [
       h('strong', { key: 'count', style: { fontSize: 12, color: C.teal } }, `已选 ${selectedEntries.length} 条`),
-      h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
-        agentBusy ? (agentProgress || '初判中…') : `AI 初判（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
+      h(Button, {
+        key: 'assess-selected', size: 'sm', variant: 'soft',
+        disabled: agentBusy || loading || !selectedAgentEligible || !sessionId,
+        title: !sessionId ? '当前无活跃会话，暂不可调用 Agent 模型' : !selectedAgentEligible ? '所选条目均已人工处理；如需重判请到「科研梦境 → 批量初判」勾选包含人工处理过的' : undefined,
+        onClick: () => runAgentAssessment(selectedEntries),
+      }, agentBusy ? (agentProgress || '初判中…') : `AI 初判（${selectedAgentEligible}/${selectedEntries.length}）`),
       agentBusy ? h(Button, { key: 'cancel-agent', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
       h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对来源（${selectedEntries.length}）`),
       h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选（${selectedEntries.length}）`),

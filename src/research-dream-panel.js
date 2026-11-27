@@ -94,6 +94,10 @@ export function ResearchDreamPanel({
     } catch { /* 本地证据库不可读时保持空列表 */ }
   }, [project])
   React.useEffect(() => {
+    setBatchRetryIds([])
+    setBatchStats(null)
+  }, [project])
+  React.useEffect(() => {
     if (!batchOpen) return undefined
     loadBatchScope()
     return subscribeEvidenceVault(loadBatchScope)
@@ -503,6 +507,7 @@ export function ResearchDreamPanel({
         h(Button, {
           key: 'run', size: 'sm', variant: 'primary',
           disabled: batchBusy || !batchEntries.length || !sessionId,
+          title: !sessionId ? '当前无活跃会话，请先打开或切回一个会话后再运行' : undefined,
           onClick: () => runBatchAssessment(),
         }, batchBusy ? (batchProgress || '判断中…') : `用 Agent 判断完整范围（${batchEntries.length}）`),
         batchBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => batchAbort.current?.abort() }, '取消') : null,

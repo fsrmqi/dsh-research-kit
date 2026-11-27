@@ -4,7 +4,16 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-> 当前版本 `0.3.10`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+> 当前版本 `0.3.11`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+
+## [0.3.11]
+
+### 修复
+
+- **修复 Agent 批量初判误报「继续未完成」**：`src/lib/evidence-agent-runner.js` 的 `remainingIds` 原先按全部条目初始化，未勾选「包含人工处理过的」时被跳过的人工条目会留在未完成集合中，导致执行成功后仍误显示「继续未完成」重试按钮；现改为仅追踪 `plan.eligible`。
+- **修复浏览器回归测试槽位覆盖**：`scripts/browser-regression.cjs` 的模拟 `slots.register` 未区分 `sidebar.panellist` 与 `conversation.view`，导致侧栏图标覆盖 `registered['dsh-research-kit-console']`；现分表登记 `main` 与 `sidebar.panellist`。
+- **同步兼容矩阵槽位冻结清单**：在 `test/dsh-compat-matrix.test.mjs` 的 `DECLARED_SLOT_NAMES` 与 `docs/COMPATIBILITY.md` 中补齐 `main` 与 `sidebar.panellist` 可选槽位声明，修复 `npm test` 矩阵断言失败。
+- **修复证据库与梦境批量初判状态残留**：证据库移除残留死状态 `includeHuman` 与重复的 `store.getMany` 副作用，所选条目全为人工处理时禁用「AI 初判」并提示前往「科研梦境 → 批量初判」；切换课题时清理证据库 `retryIds` 与梦境 `batchRetryIds`/`batchStats`，并在无活跃会话时补充按钮禁用说明。
 
 ## [0.3.10]
 

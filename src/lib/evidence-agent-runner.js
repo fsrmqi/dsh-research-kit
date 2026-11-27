@@ -13,8 +13,8 @@ export async function executeAgentEvidenceAssessment({
   onProgress,
   onStats,
 }) {
-  const remainingIds = new Set((entries || []).map(row => row.id))
   const plan = planAgentEvidenceBatch(entries, { includeHuman })
+  const remainingIds = new Set(plan.eligible.map(row => row.id))
   if (!plan.eligible.length) {
     return {
       empty: true,

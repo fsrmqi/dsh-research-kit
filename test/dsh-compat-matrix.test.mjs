@@ -87,10 +87,12 @@ const DECLARED_SLOT_NAMES = [
   'conversation.input.right',
   'conversation.session.panel.section',
   'conversation.view',
+  'main',
   'plugins.detail.actions',
   'plugins.detail.badge',
   'plugins.detail.section',
   'plugins.row.config',
+  'sidebar.panellist',
   'tool.call.toolview',
 ]
 // 产物侧（与宿主无关）：插件生成的工厂固定只 require 这两个平台模块。
