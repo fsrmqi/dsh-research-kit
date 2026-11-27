@@ -116,7 +116,7 @@ test('分层原则：分区级常驻操作下沉到吸顶带，封面只留标�
   // 而导出/恢复备份是一次性维护动作，留在封面即可，不该占用常驻高度。
   const cases = [
     { file: 'research-workbench.js', toolbar: 'toolbar', marker: "'科研模式',", headKeeps: null },
-    { file: 'research-vault.js', toolbar: 'filters', marker: "'新建资产'", headKeeps: '导出备份' },
+    { file: 'research-vault.js', toolbar: 'filters', marker: "'新建资产'", headKeeps: null },
   ]
   for (const { file, toolbar, marker, headKeeps } of cases) {
     const source = read(`src/${file}`)
@@ -125,7 +125,7 @@ test('分层原则：分区级常驻操作下沉到吸顶带，封面只留标�
     if (headKeeps) {
       assert.ok(head.includes(headKeeps), `${file} 的低频动作被误移出封面`)
     } else {
-      assert.doesNotMatch(head, /actions:\s*\[/, `${file} 的分区封面仍渲染操作，操作应全部下沉到吸顶带`)
+      assert.doesNotMatch(head, /actions:\s*\[\s*[^\]\s]/, `${file} 的分区封面仍渲染操作，操作应全部下沉到吸顶带`)
     }
     assert.ok(toolbarBlock(source, toolbar).includes(marker), `${file} 的常驻控件未放进二级吸顶带`)
   }

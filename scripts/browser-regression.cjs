@@ -104,7 +104,13 @@ const server = http.createServer((req,res)=>{
      return res.end(JSON.stringify({ok:true,ready:true,payload:{kind:'research-evidence',mode:input.mode,claims:claimRecords},blockers:[]}));
     }
     const previous=claimRecords.find(item=>item.id===input.claim_id);
-    const claim={...previous,...input,id:input.claim_id||'qa-claim-1'};
+    if(input.expected_revision && input.expected_revision !== previous?.revision){
+     res.statusCode=409;return res.end(JSON.stringify({ok:false,error:'论断已更新'}));
+    }
+    const evidenceIds=input.evidence_ids||previous?.evidence_ids||[];
+    const links=(input.links||previous?.links||[]).filter(link=>evidenceIds.includes(link.evidenceId));
+    const claim={...previous,...input,id:input.claim_id||'qa-claim-1',revision:(previous?.revision||0)+1,
+      evidence_ids:evidenceIds,links:[...links,...evidenceIds.filter(id=>!links.some(link=>link.evidenceId===id)).map(evidenceId=>({evidenceId,stance:'unassessed'}))]};
     claimRecords=claimRecords.filter(item=>item.id!==claim.id).concat(claim);
     res.end(JSON.stringify({ok:true,claim,updated:Boolean(previous)}));
    });
@@ -210,6 +216,17 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.getByRole('button',{name:'保存审阅'}).click();
   await page.getByText('已人工确认',{exact:true}).waitFor();
   assert.deepEqual(claimRecords[0].evidence_ids,['qa-evidence-1']);
+  claimRecords[0].links=[{evidenceId:'qa-evidence-1',stance:'supports'}];
+  await page.getByLabel('论断审阅',{exact:true}).getByRole('button',{name:'刷新',exact:true}).click();
+  await page.getByRole('button',{name:'查看证据关系'}).click();
+  await page.getByRole('group',{name:'支持',exact:true}).waitFor();
+  await page.getByRole('button',{name:'逐条审阅'}).click();
+  await page.getByRole('button',{name:'存疑',exact:true}).click();
+  await page.getByLabel('关联证据：人工核对的文献').uncheck();
+  await page.getByRole('button',{name:'保存审阅'}).click();
+  await page.getByLabel('操作反馈').getByRole('status').filter({hasText:'论断已更新为「存疑」。'}).getByRole('button',{name:'撤销',exact:true}).click();
+  await page.getByText('已撤销上次审阅。',{exact:true}).waitFor();
+  assert.deepEqual(claimRecords[0].links,[{evidenceId:'qa-evidence-1',stance:'supports'}]);
   await page.getByRole('button',{name:'添加论断'}).click();
   await page.getByLabel('待提取的研究段落').fill('候选 Claim 显示研究结果 [1](https://doi.org/10.9999/qa)。');
   await page.getByRole('button',{name:'提取候选'}).click();
@@ -802,10 +819,10 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
     return link;
   });
   await page.getByRole('button',{name:'备份与恢复',exact:true}).click();
-  const transfer=page.locator('strong').filter({hasText:/^备份与恢复$/});
+  const transfer=page.locator('strong').filter({hasText:/^时空囊 · 备份与恢复$/});
   await transfer.waitFor();
   const exportWait=page.waitForEvent('download');
-  await page.getByRole('button',{name:'导出完整备份'}).click();
+  await page.getByRole('button',{name:'封存完整备份'}).click();
   const migration=await exportWait;
   assert.match(migration.suggestedFilename(),/^research-kit-backup-/);
   const migrationText=fs.readFileSync(await migration.path(),'utf8');
@@ -823,19 +840,38 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   console.log('完整备份导出、校验预览、恢复前备份与重复数据跳过：通过');
   const isolated=await browser.newContext();
   const appPage=await isolated.newPage();
+  let releasePromptKit;
+  const promptKitGate=new Promise(resolve=>{releasePromptKit=resolve;});
+  await appPage.route('**/dsh-research-kit/promptkit-client',async route=>{await promptKitGate;await route.continue();});
   await appPage.goto('http://127.0.0.1:'+server.address().port);
-  await appPage.getByRole('tab',{name:'资料库',exact:true}).click();
   await appPage.getByRole('button',{name:'备份与恢复',exact:true}).click();
+  await appPage.getByText('正在准备备份与恢复……').waitFor();
+  await appPage.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
+  releasePromptKit();
   await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
   await appPage.getByLabel('选择 Research Kit 备份文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
   await appPage.getByText('恢复预览（总数／预计新增／本端已有）').waitFor();
   await appPage.getByText(/^灵感资产：\d+／\d+／0$/).waitFor();
   await appPage.getByText('资产关联：1／1／0',{exact:true}).waitFor();
-  const isolatedBackupWait=appPage.waitForEvent('download');
-  await appPage.getByRole('button',{name:'先下载恢复前备份'}).click();
-  await isolatedBackupWait;
-  await appPage.getByRole('button',{name:'确认增量恢复'}).click();
+  await appPage.evaluate(()=>{
+    const open=indexedDB.open;
+    indexedDB.open=function(name,...args){
+      if(name==='dsh-research-kit-recovery') throw new Error('快照存储已禁用');
+      return open.call(this,name,...args);
+    };
+    window.restoreSnapshotStorage=()=>{indexedDB.open=open;};
+  });
+  await appPage.getByRole('button',{name:'自动快照并恢复'}).click();
+  await appPage.getByText(/恢复前快照保存失败，未写入研究资料/).waitFor();
+  await appPage.evaluate(()=>window.restoreSnapshotStorage());
+  await appPage.getByRole('button',{name:'自动快照并恢复'}).click();
   await appPage.getByText(/恢复完成：/).waitFor();
+  await appPage.reload();
+  await appPage.getByRole('button',{name:'备份与恢复',exact:true}).click();
+  const snapshotWait=appPage.waitForEvent('download');
+  await appPage.getByRole('button',{name:'下载最近恢复前快照'}).click();
+  const snapshot=JSON.parse(fs.readFileSync(await (await snapshotWait).path(),'utf8'));
+  assert.equal(snapshot.payload.assets.length,0,'恢复前快照应存下写入前的数据，并在重载后可下载');
   await appPage.getByRole('button',{name:'关闭',exact:true}).click();
   await appPage.getByRole('tab',{name:'资料库',exact:true}).click();
   const restoredAsset = appPage.locator('.rk-card').filter({ has: appPage.getByText('水稻耐盐性研究',{exact:true}) }).first();

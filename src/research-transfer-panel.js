@@ -8,7 +8,6 @@ import { synchronizeClaimScopes } from './lib/claim-review-client.js'
 import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup, parseKnowledgeBackup } from './knowledge-store.js'
 import { serializeEvidenceBackup, parseEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
 import { serializeResearchTransfer, parseResearchTransfer, previewResearchTransfer } from './lib/research-transfer.js'
-import { pushToast } from './lib/toast.js'
 import { listResearchRuns, importResearchRuns, MAX_RESEARCH_RUNS } from './research-context-store.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
@@ -104,6 +103,28 @@ async function applyResearchTransfer(incoming, current, assetProvider, progress)
     skippedRelated, existingSources: synced.existingSources || 0 }
 }
 
+async function recoverySnapshot(value) {
+  const db = await new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.open('dsh-research-kit-recovery', 1)
+    request.onupgradeneeded = () => request.result.createObjectStore('snapshots')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+    request.onblocked = () => reject(new Error('快照存储正被另一窗口占用。'))
+  })
+  try {
+    return await new Promise((resolve, reject) => {
+      const writing = value !== undefined
+      const tx = writing
+        ? db.transaction('snapshots', 'readwrite', { durability: 'strict' })
+        : db.transaction('snapshots', 'readonly')
+      const store = tx.objectStore('snapshots')
+      const request = writing ? store.put(value, 'before-restore') : store.get('before-restore')
+      tx.oncomplete = () => resolve(writing ? value : request.result)
+      tx.onabort = () => reject(tx.error || new Error('无法保存恢复前快照。'))
+    })
+  } finally { db.close() }
+}
+
 export function ResearchTransferPanel({ assetProvider, onClose }) {
   const [incoming, setIncoming] = React.useState(null)
   const [preview, setPreview] = React.useState(null)
@@ -112,6 +133,29 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
   const [progress, setProgress] = React.useState('')
+  const [snapshotAvailable, setSnapshotAvailable] = React.useState(false)
+  const operation = React.useRef(false)
+  React.useEffect(() => {
+    let active = true
+    recoverySnapshot().then(result => { if (active && result) setSnapshotAvailable(true) }).catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const preserveCurrent = async current => {
+    const snapshot = await recoverySnapshot({ text: await serializeResearchTransfer(current), at: Date.now() })
+    setSnapshotAvailable(true)
+    return snapshot
+  }
+  const downloadSnapshot = snapshot => {
+    if (!transferDownload(snapshot.text, `research-kit-before-import-${snapshot.at}.json`)) throw new Error('当前客户端无法发起下载。')
+  }
+  const exportSnapshot = async () => {
+    try {
+      const snapshot = await recoverySnapshot()
+      if (!snapshot) throw new Error('本机没有恢复前快照。')
+      downloadSnapshot(snapshot)
+    } catch (error) { setNotice(`下载快照失败：${error.message}`) }
+  }
 
   // 自动识别整包、证据库、知识星图与灵感资产四类 JSON 备份，无需用户区分入口。
   const parseAnyBackup = async raw => {
@@ -165,9 +209,8 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     setBusy(true)
     try {
       const data = await captureResearchTransfer(assetProvider)
-      transferDownload(await serializeResearchTransfer(data), `research-kit-backup-${Date.now()}.json`)
-      const msg = '已封存时空囊完整备份。'
-      setNotice(msg); pushToast({ message: msg })
+      if (!transferDownload(await serializeResearchTransfer(data), `research-kit-backup-${Date.now()}.json`)) throw new Error('当前客户端无法发起下载。')
+      setNotice('已发起完整备份下载。')
     } catch (error) { setNotice(`导出失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
@@ -192,39 +235,39 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     try {
       const current = await captureResearchTransfer(assetProvider)
       if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，请重新选择备份文件并预览。')
-      transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
+      downloadSnapshot(await preserveCurrent(current))
       setBackupReady(true)
       setNotice('已生成本端恢复前快照，可点击确认恢复。')
     } catch (error) { setBackupReady(false); setNotice(`备份失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
   const apply = async () => {
-    if (!incoming) return
+    if (!incoming || operation.current) return
+    operation.current = true
     setBusy(true)
     try {
       const current = await captureResearchTransfer(assetProvider)
       if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，未导入；请重新选择备份文件并预览。')
       if (current.runs.length + preview.runs.add > MAX_RESEARCH_RUNS) throw new Error(`合并后研究运行超过 ${MAX_RESEARCH_RUNS} 条上限，已停止；请先备份并整理旧运行。`)
-      if (!backupReady) {
-        transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
-        setBackupReady(true)
-      }
+      try { await preserveCurrent(current) }
+      catch (error) { throw new Error(`恢复前快照保存失败，未写入研究资料：${error.message}`) }
       const result = await applyResearchTransfer(incoming, current, assetProvider, setProgress)
       const msg = `恢复完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条${result.invalidEvidence ? `，忽略无效 ${result.invalidEvidence} 条` : ''}。`
-      setNotice(msg); pushToast({ message: msg })
+      setNotice(msg + (result.skippedRelated ? ` 跳过 ${result.skippedRelated} 条缺少关联端点的记录。` : '') + ' 可下载恢复前快照，在独立配置中还原恢复前资料。')
       setIncoming(null); setPreview(null); setBackupReady(false)
     } catch (error) { setNotice(`恢复未完成：${error?.message || error}。原数据未清空，可重新预览后继续。`) }
-    finally { setBusy(false); setProgress('') }
+    finally { operation.current = false; setBusy(false); setProgress('') }
   }
 
   return h(Card, { className: 'rk-reveal', style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 10, maxWidth: 780 } }, [
     h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
       h('strong', { key: 'title' }, '时空囊 · 备份与恢复'),
-      h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: onClose }, '关闭'),
+      h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: onClose, disabled: busy }, '关闭'),
     ]),
     h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '一键封存全部课题、证据、论断、灵感与知识星图；恢复时自动识别整包或单库 JSON 文件，增量合并、不覆盖现有记录。'),
     h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
       h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: busy, onClick: exportCurrent }, '封存完整备份'),
+      snapshotAvailable ? h(Button, { key: 'snapshot', size: 'sm', variant: 'ghost', disabled: busy, onClick: exportSnapshot }, '下载最近恢复前快照') : null,
       h('label', { key: 'file', style: { display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12, color: C.ink } }, [
         '从备份恢复', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 备份文件' }),
       ]),

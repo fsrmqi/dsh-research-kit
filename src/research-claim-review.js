@@ -87,11 +87,9 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const [notice, setNoticeRaw] = React.useState('')
   const setNotice = React.useCallback((message, options = {}) => {
     const text = String(message || '')
-    setNoticeRaw(text)
-    if (text) {
-      const isErr = /失败|请填写|至少|未通过/.test(text)
-      pushToast({ message: text, tone: options.tone || (isErr ? 'warn' : 'info'), actionLabel: options.actionLabel, onAction: options.onAction })
-    }
+    const needsCorrection = /失败|请填写|至少|未通过/.test(text)
+    setNoticeRaw(needsCorrection ? text : '')
+    if (text && !needsCorrection) pushToast({ ...options, message: text })
   }, [])
   const [addOpen, setAddOpen] = React.useState(false)
   const [exportMenuOpen, setExportMenuOpen] = React.useState(false)
@@ -250,7 +248,10 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     if (busy) return
     if (!reviewer.trim() || !draft.reason.trim()) return setNotice('请填写评估人和评估理由。')
     if (draft.state === 'verified' && !draft.evidenceIds.length) return setNotice('确认论断前至少关联一条已保存证据。')
-    const previous = { state: claim.state, reason: claim.assessment_reason || '', evidenceIds: claim.evidence_ids || [], assessedBy: claim.assessed_by || reviewer.trim() }
+    const previous = {
+      state: claim.state, reason: claim.assessment_reason || '', evidenceIds: claim.evidence_ids || [],
+      links: claim.links || [], assessedBy: claim.assessed_by || '',
+    }
     setBusy(true)
     try {
       const saved = await claimReviewRequest(project, {
@@ -266,12 +267,12 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
           try {
             await claimReviewRequest(project, {
               project, claim_id: claim.id, statement: claim.statement, state: previous.state,
-              expected_revision: nextRev, evidence_ids: previous.evidenceIds,
+              expected_revision: nextRev, evidence_ids: previous.evidenceIds, links: previous.links,
               assessed_by: previous.assessedBy, assessment_reason: previous.reason,
             })
             setNotice('已撤销上次审阅。')
             await refresh()
-          } catch (error) { setNotice(`撤销失败：${error.message}`) }
+          } catch (error) { pushToast({ message: `撤销失败：${error.message}`, tone: 'warn' }) }
         },
       })
       await refresh()

@@ -240,7 +240,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 
 ## 隐私与安全
 
-在 DSH Desktop 中，打开「科研工作台 → 本次研究 → 研究资料 → 备份与恢复」导出本地完整备份。换电脑、重装或重建配置后，可从同一入口预览并增量恢复。以往的迁移包也可在这里打开。详见 [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
+在 DSH Desktop 中，打开「科研工作台 → 本次研究 → 备份与恢复」导出本地完整备份。换电脑、重装或重建配置后，可从同一入口预览并增量恢复。以往的迁移包也可在这里打开。详见 [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
 
 | 访问 | 用途 | 说明 |
 | --- | --- | --- |

@@ -10,6 +10,9 @@ const PROMPTKIT_RAW_MAX = 580_000
 const client = readFileSync(new URL('../ui/client.js', import.meta.url))
 const catalog = readFileSync(new URL('../ui/catalog-data.json', import.meta.url))
 const promptKit = readFileSync(new URL('../ui/promptkit.js', import.meta.url))
+const packageVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+const buildStats = /^const RESEARCH_KIT_BUILD_STATS = (\{[^\r\n]+\})$/m.exec(client.toString('utf8'))
+const clientVersion = buildStats ? JSON.parse(buildStats[1]).version : ''
 const measurements = {
   clientRaw: client.length,
   clientGzip: gzipSync(client).length,
@@ -18,6 +21,7 @@ const measurements = {
 }
 
 const failures = [
+  clientVersion !== packageVersion && `客户端版本 ${clientVersion || '缺失'} 与 package.json 的 ${packageVersion} 不一致，请运行 npm run build。`,
   measurements.clientRaw > CLIENT_RAW_MAX && `client.js 原始体积 ${measurements.clientRaw} > ${CLIENT_RAW_MAX}`,
   measurements.clientGzip > CLIENT_GZIP_MAX && `client.js gzip 体积 ${measurements.clientGzip} > ${CLIENT_GZIP_MAX}`,
   measurements.catalogRaw > CATALOG_RAW_MAX && `catalog-data.json 体积 ${measurements.catalogRaw} > ${CATALOG_RAW_MAX}`,

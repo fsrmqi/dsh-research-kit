@@ -256,8 +256,10 @@ export function ResearchConsole(props) {
   const [catalogType, setCatalogType] = React.useState('workflow')
   const [mine, setMine] = React.useState(false)
   const [transferOpen, setTransferOpen] = React.useState(false)
+  const [promptKitAttempt, retryPromptKit] = React.useState(0)
   const current = findConsoleSection(section, RESEARCH_CONSOLE_SECTIONS)
-  const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets') || transferOpen
+  const needsPromptKit = current.id === 'methods' || (current.id === 'vault' && vaultTab === 'assets')
+  const shouldLoadPromptKit = needsPromptKit || transferOpen
   const navRef = React.useRef(null)
   React.useLayoutEffect(() => {
     navRef.current?.parentElement?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
@@ -289,14 +291,15 @@ export function ResearchConsole(props) {
     return () => { active = false; dispose() }
   }, [])
   React.useEffect(() => {
-    if (!needsPromptKit || promptKitLoaded) return undefined
+    if (!shouldLoadPromptKit || promptKitLoaded) return undefined
     let active = true
+    setPromptKitError('')
     loadPromptKit().then(PromptKit => {
       ensureResearchProviders(PromptKit)
       if (active) { setPromptKitLoaded(true); setPromptKitError('') }
     }).catch(error => { if (active) setPromptKitError(error?.message || String(error)) })
     return () => { active = false }
-  }, [needsPromptKit, promptKitLoaded])
+  }, [shouldLoadPromptKit, promptKitLoaded, promptKitAttempt])
   const select = (id, options = {}) => {
     if (id === 'catalog') {
       setCatalogType(options.type || 'workflow')
@@ -344,11 +347,17 @@ export function ResearchConsole(props) {
           ariaLabel: '科研工作台分区',
         }),
         inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '时空囊'),
+          h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '备份与恢复'),
         ]),
       ]),
     ]),
-    transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
+    transferOpen ? promptKitLoaded
+      ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) })
+      : h(Card, { key: 'transfer-loading', style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 8 } }, [
+        promptKitError ? h(Notice, { key: 'error', tone: 'error' }, `备份暂不可用：${promptKitError}`) : h(Spinner, { key: 'loading', text: '正在准备备份与恢复……' }),
+        promptKitError ? h(Button, { key: 'retry', size: 'sm', onClick: () => retryPromptKit(value => value + 1) }, '重试') : null,
+      ])
+      : null,
     h(ToastHost, { key: 'toast-host' }),
     h('div', { key: `section:${current.id}`, className: 'rk-section-enter', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
