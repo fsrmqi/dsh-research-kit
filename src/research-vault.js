@@ -87,7 +87,8 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     }
   }, [])
   const [tab, setTab] = React.useState(initialTab)
-  // 删除是不可逆的：与「清空课题」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）；4 秒无操作自动复位。
+  const [moreCardId, setMoreCardId] = React.useState('')
+  // 删除是不可逆的：与「清空课题」「清空临时记录」同款两段式确认（首次点变「确认删除？」）；4 秒无操作自动复位。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
   React.useEffect(() => {
     if (!confirmDeleteId) return undefined
@@ -312,10 +313,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
         ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「待核验」。'
         : tab === 'claims' ? '逐条审阅研究论断，记录评估人、理由和关联证据。'
           : '灵感资产沉淀研究问题与假设；证据库存放公开来源；论断审阅记录结论的人工判断。',
-      actions: tab !== 'assets' ? [] : [
-        h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
-        h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
-      ],
+      actions: [],
     }),
     h('div', { key: 'subnav', style: { marginTop: 14 } }, [
       h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: value => { setTab(value); onTabChange?.(value) }, ariaLabel: '沉淀层子模块' }),
@@ -374,14 +372,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       ]),
       h(Segmented, { key: 'tabs', value: filter, options: filterTabs, onChange: setFilter, ariaLabel: '资产筛选' }),
       h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
-      projects.length ? h(Select, {
-        key: 'projects',
-        value: '',
-        onChange: value => { if (value) setQuery(value) },
-        ariaLabel: '按项目筛选',
-        options: [{ value: '', label: `项目：${projects.join('、')}` }, ...projects.map(project => ({ value: project, label: project }))],
-        style: { width: 'auto' },
-      }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
     tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, onNavigate, focusEvidenceIds: focus?.evidenceIds || [] }) : null,
@@ -397,7 +387,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     tab === 'assets' ? h(MemoizedAssetList, {
       key: 'list',
       items: displayedAssets,
-      dependencies: [compareId, compareItem, linkAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
+      dependencies: [compareId, compareItem, linkAssetId, moreCardId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
       renderItem: item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.__displayKey || item.id,
       interactive: true,
@@ -433,18 +423,26 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
         h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
         h(Button, { key: 'edit', size: 'sm', variant: 'ghost', icon: 'edit', onClick: () => openEdit(item) }, '编辑'),
-        h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
-        item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
-        item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
         h(Button, {
           key: 'links', size: 'sm', variant: linkAssetId === item.id ? 'soft' : 'ghost', icon: 'link',
           onClick: () => setLinkAssetId(current => current === item.id ? '' : item.id),
         }, `关联证据（${linksForAsset(item.id).length}）`),
         h(Button, { key: 'copy', size: 'sm', variant: 'ghost', icon: 'copy', onClick: () => copyBody(item) }, '复制'),
+        h(Button, {
+          key: 'more', size: 'sm', variant: moreCardId === item.id ? 'soft' : 'quiet',
+          'aria-expanded': moreCardId === item.id,
+          onClick: () => setMoreCardId(current => current === item.id ? '' : item.id),
+        }, moreCardId === item.id ? '收起 ▴' : '更多 ⋯'),
+      ]),
+      moreCardId === item.id ? h('div', { key: 'more-actions', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
+        item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
+        h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
+        item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
+        h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
         confirmDeleteId === item.id
           ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；同时解除该资产的全部证据关联', onClick: () => remove(item) }, '确认删除？')
           : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复；将同时解除该资产的全部证据关联', onClick: () => requestRemove(item) }, '删除'),
-      ]),
+      ]) : null,
       compareId === item.id && compareItem ? h('div', { key: 'diff', className: 'rk-diff', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
         h('div', { key: 'old' }, [
           h('strong', { key: 'l', style: { fontSize: 12, color: C.muted } }, `来源：${compareItem.title}`),
@@ -507,10 +505,10 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       })()) : null,
     ]),
     }) : null,
-    tab === 'assets' && notice ? h(Notice, {
+    tab === 'assets' && notice && notice.startsWith('⚠️') ? h(Notice, {
       key: 'notice',
-      tone: notice.startsWith('⚠️') ? 'warn' : 'info',
-      icon: notice.startsWith('⚠️') ? 'shield' : 'check',
+      tone: 'warn',
+      icon: 'shield',
       style: { marginTop: 16 },
     }, notice.replace(/^⚠️\s*/, '')) : null,
   ]

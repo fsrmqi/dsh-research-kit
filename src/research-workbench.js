@@ -152,7 +152,14 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
   const [editedPrompt, setEditedPrompt] = React.useState(null)
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNoticeRaw] = React.useState('')
+  const setNotice = React.useCallback((message, options = {}) => {
+    const text = String(message || '')
+    setNoticeRaw(text)
+    if (text && !options.silent) {
+      pushToast({ message: text, tone: /失败|无法|为空/.test(text) ? 'warn' : 'info' })
+    }
+  }, [])
   const [attachedSkills, setAttachedSkills] = React.useState([])
   // 科研模式：null 关闭；值为当前研究任务预设 key。
   const [scienceMode, setScienceMode] = React.useState(null)

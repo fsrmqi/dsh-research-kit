@@ -5,9 +5,10 @@ import {
   evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles, invalidateEvidenceSync,
 } from './lib/evidence-vault-sync.js'
 import { synchronizeClaimScopes } from './lib/claim-review-client.js'
-import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup } from './knowledge-store.js'
-import { serializeEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
+import { knowledgeStore, publishKnowledge, serializeKnowledgeBackup, parseKnowledgeBackup } from './knowledge-store.js'
+import { serializeEvidenceBackup, parseEvidenceBackup, mergeEntries } from './lib/evidence-vault-core.js'
 import { serializeResearchTransfer, parseResearchTransfer, previewResearchTransfer } from './lib/research-transfer.js'
+import { pushToast } from './lib/toast.js'
 import { listResearchRuns, importResearchRuns, MAX_RESEARCH_RUNS } from './research-context-store.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 
@@ -112,12 +113,61 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
   const [notice, setNotice] = React.useState('')
   const [progress, setProgress] = React.useState('')
 
+  // 自动识别整包、证据库、知识星图与灵感资产四类 JSON 备份，无需用户区分入口。
+  const parseAnyBackup = async raw => {
+    try {
+      return { kind: 'full', label: '完整时空囊备份', data: await parseResearchTransfer(raw) }
+    } catch { /* 继续嗅探单库备份格式 */ }
+    try {
+      const ev = parseEvidenceBackup(raw)
+      return {
+        kind: 'evidence',
+        label: '证据库备份',
+        data: {
+          evidence: { entries: ev.entries, claims: ev.claims, links: ev.links, ledger: ev.ledger, workspaces: ev.workspaces },
+          knowledge: { nodes: [], claims: [] },
+          assets: [],
+          runs: [],
+        },
+      }
+    } catch { /* 继续嗅探 */ }
+    try {
+      const kn = parseKnowledgeBackup(raw)
+      return {
+        kind: 'knowledge',
+        label: '知识星图备份',
+        data: {
+          evidence: { entries: [], claims: [], links: [], ledger: [], workspaces: [] },
+          knowledge: { nodes: kn.nodes, claims: kn.claims },
+          assets: [],
+          runs: [],
+        },
+      }
+    } catch { /* 继续嗅探 */ }
+    const parsed = JSON.parse(raw)
+    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.assets) ? parsed.assets : Array.isArray(parsed?.items) ? parsed.items : null
+    if (rows && rows.every(item => item && typeof item === 'object' && typeof item.body === 'string')) {
+      return {
+        kind: 'assets',
+        label: '灵感资产备份',
+        data: {
+          evidence: { entries: [], claims: [], links: [], ledger: [], workspaces: [] },
+          knowledge: { nodes: [], claims: [] },
+          assets: rows,
+          runs: [],
+        },
+      }
+    }
+    throw new Error('未能识别的备份格式；请选择时空囊、证据库、灵感资产或知识星图导出的 JSON 文件。')
+  }
+
   const exportCurrent = async () => {
     setBusy(true)
     try {
       const data = await captureResearchTransfer(assetProvider)
       transferDownload(await serializeResearchTransfer(data), `research-kit-backup-${Date.now()}.json`)
-      setNotice('已生成完整备份。请妥善保管；它包含笔记、灵感资产及来源摘录。')
+      const msg = '已封存时空囊完整备份。'
+      setNotice(msg); pushToast({ message: msg })
     } catch (error) { setNotice(`导出失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
@@ -128,12 +178,12 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     if (file.size > 30_000_000) return setNotice('备份文件超过 30 MB，无法在此恢复。')
     setBusy(true)
     try {
-      const data = await parseResearchTransfer(await file.text())
+      const detected = await parseAnyBackup(await file.text())
       const current = await captureResearchTransfer(assetProvider)
-      setIncoming(data)
-      setPreview(previewResearchTransfer(data, current))
+      setIncoming(detected.data)
+      setPreview(previewResearchTransfer(detected.data, current))
       setBaseline(JSON.stringify(current))
-      setNotice('校验通过。请检查预览，先下载恢复前备份，再确认增量恢复。已有 ID 不覆盖。')
+      setNotice(`已识别为「${detected.label}」。核对预览后点击恢复，系统会自动先留一份本端快照，已有记录不覆盖。`)
     } catch (error) { setNotice(`预览失败：${error?.message || error}`) }
     finally { setBusy(false); event.target.value = '' }
   }
@@ -144,7 +194,7 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
       if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，请重新选择备份文件并预览。')
       transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
       setBackupReady(true)
-      setNotice('已生成本端恢复前备份。确认文件已保存后，再点击“确认增量恢复”。')
+      setNotice('已生成本端恢复前快照，可点击确认恢复。')
     } catch (error) { setBackupReady(false); setNotice(`备份失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
@@ -160,30 +210,31 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
         setBackupReady(true)
       }
       const result = await applyResearchTransfer(incoming, current, assetProvider, setProgress)
-      setNotice(`恢复完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条，拒收无效 ${result.invalidEvidence} 条，未恢复关联 ${result.skippedRelated} 条。${result.existingSources ? `文件侧已有同源证据 ${result.existingSources} 条，未覆盖原记录；` : ''}其余数据按稳定 ID 增量合并，请刷新核对。`)
+      const msg = `恢复完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条${result.invalidEvidence ? `，忽略无效 ${result.invalidEvidence} 条` : ''}。`
+      setNotice(msg); pushToast({ message: msg })
       setIncoming(null); setPreview(null); setBackupReady(false)
-    } catch (error) { setNotice(`恢复未完成：${error?.message || error}。原数据未清空；可用恢复前备份核对，重新预览后续导。`) }
+    } catch (error) { setNotice(`恢复未完成：${error?.message || error}。原数据未清空，可重新预览后继续。`) }
     finally { setBusy(false); setProgress('') }
   }
 
-  return h(Card, { style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 10, maxWidth: 780 } }, [
-    h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
-      h('strong', { key: 'title' }, '备份与恢复'),
+  return h(Card, { className: 'rk-reveal', style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 10, maxWidth: 780 } }, [
+    h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+      h('strong', { key: 'title' }, '时空囊 · 备份与恢复'),
       h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: onClose }, '关闭'),
     ]),
-    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '导出当前客户端的完整研究资料。换电脑、重装或重建客户端配置后，可选择备份文件预览并增量恢复。'),
-    h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-      h(Button, { key: 'export', size: 'sm', disabled: busy, onClick: exportCurrent }, '导出完整备份'),
-      h('label', { key: 'file', style: { display: 'inline-grid', gap: 4, fontSize: 12, color: C.ink } }, [
-        '选择备份文件', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 备份文件' }),
+    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '一键封存全部课题、证据、论断、灵感与知识星图；恢复时自动识别整包或单库 JSON 文件，增量合并、不覆盖现有记录。'),
+    h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
+      h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: busy, onClick: exportCurrent }, '封存完整备份'),
+      h('label', { key: 'file', style: { display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12, color: C.ink } }, [
+        '从备份恢复', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 备份文件' }),
       ]),
     ]),
     preview ? h('div', { key: 'preview', role: 'status', style: { display: 'grid', gap: 4, fontSize: 12 } }, [
       h('strong', { key: 'label' }, '恢复预览（总数／预计新增／本端已有）'),
       ...TRANSFER_SECTIONS.map(([key, label]) => h('div', { key }, `${label}：${preview[key].total}／${preview[key].add}／${preview[key].existing}${preview[key].invalid ? `（无效 ${preview[key].invalid}）` : ''}`)),
       h('div', { key: 'confirm', style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 } }, [
-        h(Button, { key: 'backup', size: 'sm', variant: 'ghost', disabled: busy, onClick: backupCurrent }, '先下载恢复前备份'),
-        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy, onClick: apply }, backupReady ? '确认增量恢复' : '自动备份并增量恢复'),
+        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy, onClick: apply }, backupReady ? '确认增量恢复' : '自动快照并恢复'),
+        !backupReady ? h(Button, { key: 'backup', size: 'sm', variant: 'ghost', disabled: busy, onClick: backupCurrent }, '先下载恢复前备份') : null,
       ]),
     ]) : null,
     progress ? h('span', { key: 'progress', role: 'status', style: { color: C.teal } }, progress) : null,

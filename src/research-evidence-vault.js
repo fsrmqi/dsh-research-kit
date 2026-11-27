@@ -491,7 +491,8 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const previewCitations = () => {
     try {
       const result = parseBibliography(citationText)
-      setCitationPreviewRows(result.entries); setCitationWarnings(result.warnings); setCitationPicked([])
+      setCitationPreviewRows(result.entries); setCitationWarnings(result.warnings)
+      setCitationPicked(result.entries.map((_, index) => index))
     } catch (error) { setNotice(`⚠️ ${error.message}`) }
   }
   const importCitations = async () => {
@@ -661,7 +662,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     retryIds.length ? h(Button, { key: 'retry-agent', size: 'sm', disabled: agentBusy, onClick: async () => { try { await runAgentAssessment(await store.getMany(retryIds)) } catch (error) { setNotice(`⚠️ ${error.message}`) } } }, `继续未完成判断（${retryIds.length}）`) : null,
     degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
       '当前环境未提供可用的 IndexedDB，证据暂存在内存中，刷新页面后会丢失。') : null,
-    notice ? h(Notice, { key: 'notice', tone: notice.startsWith('⚠️') ? 'warn' : 'info', icon: notice.startsWith('⚠️') ? 'shield' : 'check' },
+    notice && notice.startsWith('⚠️') ? h(Notice, { key: 'notice', tone: 'warn', icon: 'shield' },
       notice.replace(/^⚠️\s*/, '')) : null,
 
     // 项目与维护动作：一次性操作，不随滚动吸顶（分层原则见 docs/ARCHITECTURE.md §2.3）。

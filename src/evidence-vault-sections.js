@@ -50,11 +50,10 @@ export function EvidenceVaultTopCards({
         h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
       ]) : null,
       ioOpen ? h('div', { key: 'io-panel', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
-        h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !canExportBackup }, '导出备份'),
-        h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
-        h(Button, { key: 'bibtex', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
+        h(Button, { key: 'bibtex', size: 'sm', variant: 'soft', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
         h(Button, { key: 'ris', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('ris') }, '导出 RIS'),
         h(Button, { key: 'export-pack', size: 'sm', variant: 'ghost', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
+        h('span', { key: 'capsule-hint', style: { marginLeft: 'auto', fontSize: 11, color: C.muted } }, '整库备份与恢复请使用顶栏「时空囊」'),
       ]) : null,
       manageOpen ? h('div', { key: 'manage-panel', className: 'rk-reveal', style: { display: 'grid', gap: 10, padding: 12, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
         h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
@@ -215,40 +214,34 @@ export function EvidenceVaultActionPanels({
       ]),
       h('span', { key: 'note', style: { fontSize: 12, color: C.muted } }, '这一判断仅记录所选证据与当前论断的关系，不会改变来源核验状态；支持／反驳须填写可定位的原文位置。'),
     ]) : null,
-    claims.length ? h(Card, { key: 'research-claims', style: { display: 'grid', gap: 8 } }, [
-      h('strong', { key: 'title', style: { fontSize: 13 } }, `研究论断（${claims.length}）`),
-      ...claims.slice(0, 20).map(claim => h('div', { key: claim.id, style: { borderTop: `1px solid ${C.line}`, paddingTop: 8, fontSize: 12 } }, [
-        claim.question ? h('div', { key: 'question', style: { color: C.muted } }, `问题：${claim.question}`) : null,
-        h('strong', { key: 'statement' }, claim.statement),
-        h('div', { key: 'links', style: { color: C.muted, marginTop: 3 } }, `关联证据 ${claim.links.length} 条：${claim.links.map(link => ({ unassessed: '待评估', supports: '支持', refutes: '反驳', insufficient: '不足' })[link.stance] || '待评估').join('、')}`),
-      ])),
-      claims.length > 20 ? h('span', { key: 'more', style: { fontSize: 12, color: C.muted } }, '仅展示最近 20 条；其余仍保存在本地证据库。') : null,
-    ]) : null,
-    h(Card, { key: 'research-ledger', style: { display: 'grid', gap: 8 } }, [
-      h('div', { key: 'head', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h('strong', { key: 'title', style: { fontSize: 13 } }, '科研账本与复现链'),
-        h('span', { key: 'summary', style: { fontSize: 12, color: C.muted } }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
-        h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        h(Button, { key: 'review-export', size: 'sm', onClick: exportLiteratureReview }, '导出当前项目综述与审核记录'),
-        h(Button, { key: 'screen-report', size: 'sm', disabled: !counts.all, onClick: exportScreeningReport }, '导出 PRISMA 计数与排除理由'),
-        h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
-        h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
+    h('details', { key: 'research-ledger', style: { padding: '8px 12px', borderRadius: 10, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+      h('summary', { key: 'sum', style: { cursor: 'pointer', fontSize: 12, color: C.muted, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+        h('strong', { key: 't', style: { color: C.ink } }, '科研账本与综述导出'),
+        h('span', { key: 's' }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
       ]),
-      artifactOpen ? h('div', { key: 'artifact-form', style: { display: 'grid', gap: 6 } }, [
-        h(Input, { key: 'title', value: artifactTitle, onChange: setArtifactTitle, placeholder: '图表、报告或分析产出名称', ariaLabel: '研究产出名称' }),
-        h(Input, { key: 'dataset', value: artifactDataset, onChange: setArtifactDataset, placeholder: '数据集编号／版本（可选）', ariaLabel: '数据集编号' }),
-        h(Input, { key: 'code', value: artifactCode, onChange: setArtifactCode, placeholder: '代码 commit／版本（可选）', ariaLabel: '代码版本' }),
-        h(Input, { key: 'params', value: artifactParameters, onChange: setArtifactParameters, placeholder: '参数（可选）', ariaLabel: '运行参数' }),
-        h(Input, { key: 'env', value: artifactEnvironment, onChange: setArtifactEnvironment, placeholder: '环境（可选）', ariaLabel: '执行环境' }),
-        h(Input, { key: 'output', value: artifactOutput, onChange: setArtifactOutput, placeholder: '产出文件／链接（可选）', ariaLabel: '产出位置' }),
-        h(Input, { key: 'execution', value: artifactExecution, onChange: setArtifactExecution, placeholder: '实际执行日志／工具调用 ID；留空记为草稿', ariaLabel: '执行依据' }),
-        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !artifactTitle.trim(), onClick: saveArtifact }, '保存研究产出'),
-      ]) : null,
-      ...ledger.slice(0, 12).map(item => h('div', { key: item.id, style: { borderTop: `1px solid ${C.line}`, paddingTop: 6, fontSize: 12, color: C.muted } },
-        item.kind === 'search' ? `检索 · ${item.database} · ${item.query} · 当前返回 ${item.resultCount} 条`
-          : item.kind === 'screening' ? `筛选 · ${item.decision === 'include' ? '纳入' : item.decision === 'exclude' ? '排除' : '待定'} · ${entries.find(row => row.id === item.evidenceId)?.title || item.evidenceId}${item.reason ? ` · ${item.reason}` : ''}`
-            : `产出 · ${item.title} · ${item.state === 'verified-execution' ? '执行已核验' : item.executionRef ? '执行引用待核对' : '草稿'}`)),
-      ledger.length > 12 ? h('span', { key: 'more', style: { color: C.muted, fontSize: 12 } }, `显示最近 12 条；完整 ${ledger.length} 条可导出。`) : null,
+      h('div', { key: 'body', style: { display: 'grid', gap: 8, marginTop: 10 } }, [
+        h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+          h(Button, { key: 'review-export', size: 'sm', variant: 'soft', onClick: exportLiteratureReview }, '导出当前课题综述与审核记录'),
+          h(Button, { key: 'screen-report', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: exportScreeningReport }, '导出 PRISMA 计数'),
+          h(Button, { key: 'export', size: 'sm', variant: 'ghost', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
+          h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
+        ]),
+        artifactOpen ? h('div', { key: 'artifact-form', style: { display: 'grid', gap: 6 } }, [
+          h(Input, { key: 'title', value: artifactTitle, onChange: setArtifactTitle, placeholder: '图表、报告或分析产出名称', ariaLabel: '研究产出名称' }),
+          h(Input, { key: 'dataset', value: artifactDataset, onChange: setArtifactDataset, placeholder: '数据集编号／版本（可选）', ariaLabel: '数据集编号' }),
+          h(Input, { key: 'code', value: artifactCode, onChange: setArtifactCode, placeholder: '代码 commit／版本（可选）', ariaLabel: '代码版本' }),
+          h(Input, { key: 'params', value: artifactParameters, onChange: setArtifactParameters, placeholder: '参数（可选）', ariaLabel: '运行参数' }),
+          h(Input, { key: 'env', value: artifactEnvironment, onChange: setArtifactEnvironment, placeholder: '环境（可选）', ariaLabel: '执行环境' }),
+          h(Input, { key: 'output', value: artifactOutput, onChange: setArtifactOutput, placeholder: '产出文件／链接（可选）', ariaLabel: '产出位置' }),
+          h(Input, { key: 'execution', value: artifactExecution, onChange: setArtifactExecution, placeholder: '实际执行日志／工具调用 ID；留空记为草稿', ariaLabel: '执行依据' }),
+          h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !artifactTitle.trim(), onClick: saveArtifact }, '保存研究产出'),
+        ]) : null,
+        ...ledger.slice(0, 12).map(item => h('div', { key: item.id, style: { borderTop: `1px solid ${C.line}`, paddingTop: 6, fontSize: 12, color: C.muted } },
+          item.kind === 'search' ? `检索 · ${item.database} · ${item.query} · 当前返回 ${item.resultCount} 条`
+            : item.kind === 'screening' ? `筛选 · ${item.decision === 'include' ? '纳入' : item.decision === 'exclude' ? '排除' : '待定'} · ${entries.find(row => row.id === item.evidenceId)?.title || item.evidenceId}${item.reason ? ` · ${item.reason}` : ''}`
+              : `产出 · ${item.title} · ${item.state === 'verified-execution' ? '执行已核验' : item.executionRef ? '执行引用待核对' : '草稿'}`)),
+        ledger.length > 12 ? h('span', { key: 'more', style: { color: C.muted, fontSize: 12 } }, `显示最近 12 条；完整 ${ledger.length} 条可导出。`) : null,
+      ]),
     ]),
   ])
 }

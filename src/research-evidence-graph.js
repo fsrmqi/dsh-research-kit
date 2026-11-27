@@ -35,6 +35,7 @@ import {
 } from './lib/knowledge-extract.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 import { researchCitationHref } from './lib/answer-evidence.js'
+import { pushToast } from './lib/toast.js'
 import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 
 const GRAPH_VIEW_MODES = [
@@ -91,7 +92,17 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [cleaning, setCleaning] = React.useState(false)
   const [view, setView] = React.useState(() => decodeGraphView(typeof window === 'undefined' ? '' : window.location.hash))
   const [pan, setPan] = React.useState({ x: 0, y: 0 })
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNoticeRaw] = React.useState('')
+  const setNotice = React.useCallback(message => {
+    const text = String(message || '')
+    setNoticeRaw(text)
+    if (text) pushToast({ message: text.replace(/^⚠️\s*/, ''), tone: text.startsWith('⚠️') ? 'warn' : 'info' })
+  }, [])
+  React.useEffect(() => {
+    if (!confirmClear) return undefined
+    const timer = window.setTimeout(() => setConfirmClear(false), 4000)
+    return () => window.clearTimeout(timer)
+  }, [confirmClear])
   const [exportOpen, setExportOpen] = React.useState(false)
   const evidenceRefreshVersion = React.useRef(0)
   const assetRefreshVersion = React.useRef(0)
@@ -460,35 +471,22 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
-      title: '研究证据图谱',
+      title: '证据星图',
       lead: '展示当前课题的来源、论断与知识关联，点击节点可追溯原文。',
-      actions: [
-        h(Button, { key: 'motion', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停链路流动' : '播放链路流动'),
-        h(Button, { key: 'export', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照'),
-        h(Button, { key: 'link', variant: 'ghost', onClick: copyViewLink }, '复制视图链接'),
-        h(Button, {
-          key: 'deposit-latest', variant: 'ghost', size: 'sm', icon: 'sparkles', disabled: depositing,
-          title: '不开自动开关时，可手动把当前会话最近一条助手回答提取入库（本地完成，待核验起步）',
-          onClick: depositLatest,
-        }, depositing ? '正在沉淀…' : '沉淀最近回答'),
-        h(Button, {
-          key: 'knowledge-export', variant: 'ghost', size: 'sm', icon: 'download',
-          disabled: !knowledgeNodes.length,
-          title: '把自动沉淀的知识节点与关系导出为 JSON 备份',
-          onClick: exportKnowledgeBackup,
-        }, '导出知识'),
-        h(Button, {
-          key: 'knowledge-import', variant: 'ghost', size: 'sm', icon: 'upload',
-          title: '从 JSON 备份增量恢复知识节点与关系',
-          onClick: () => setKnowledgeBackupOpen(value => !value),
-        }, '恢复知识'),
+      actions: graph.nodes.length ? [
+        hasCanvas ? h(Button, { key: 'motion', size: 'sm', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停流动' : '播放流动') : null,
+        hasCanvas ? h(Button, { key: 'export', size: 'sm', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照') : null,
+        hasCanvas ? h(Button, { key: 'link', size: 'sm', variant: 'ghost', onClick: copyViewLink }, '复制视图链接') : null,
         confirmClear
-          ? h(Button, {
-            key: 'clear-confirm', variant: 'danger', icon: 'trash',
-            onClick: () => { evidence.clear(); setConfirmClear(false); setNotice('已清空本会话的查询、工作流与计划记录；已保存证据、灵感资产与自动沉淀知识不受影响。') },
-          }, '确认清空临时记录')
-          : h(Button, { key: 'clear', variant: 'ghost', onClick: () => setConfirmClear(true), title: '只清除本会话的查询、工作流与计划记录，不影响持久化数据' }, '清空本会话临时记录'),
-      ]
+          ? h(React.Fragment, { key: 'clear-confirm-group' }, [
+            h(Button, {
+              key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash',
+              onClick: () => { evidence.clear(); setConfirmClear(false); setNotice('已清空本会话临时记录；已保存的证据、灵感与知识不受影响。') },
+            }, '确认清空？'),
+            h(Button, { key: 'clear-cancel', size: 'sm', variant: 'ghost', onClick: () => setConfirmClear(false) }, '取消'),
+          ])
+          : h(Button, { key: 'clear', size: 'sm', variant: 'ghost', onClick: () => setConfirmClear(true), title: '只清除本会话的查询、工作流与计划记录，不影响持久化数据' }, '清空临时记录'),
+      ].filter(Boolean) : [],
     }),
     // 筛选生效时即使图为空也要保留工具栏，否则用户会被困在筛选状态里出不来。
     (graph.nodes.length || scope !== 'all' || projectFilter) ? h(Toolbar, { key: 'summary', sticky: true }, [

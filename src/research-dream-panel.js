@@ -481,16 +481,9 @@ export function ResearchDreamPanel({
           pendingProposals.length ? h(Badge, { key: 'pending', color: C.amber }, `待审 ${pendingProposals.length}`) : null,
         ]),
         h('small', { key: 'hint', style: { color: C.muted, lineHeight: 1.5 } },
-          `${currentModeMeta.hint}。仅给出提案，不改写已有记录。`),
+          `${currentModeMeta.label} · ${currentModeMeta.hint}`),
       ]),
       h('div', { key: 'controls', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
-        h(Segmented, {
-          key: 'mode',
-          value: mode,
-          options: DREAM_MODES.map(item => ({ value: item.value, label: item.label })),
-          onChange: changeMode,
-          ariaLabel: '梦境模式',
-        }),
         h(Button, {
           key: 'run',
           variant: 'primary',
@@ -554,21 +547,36 @@ export function ResearchDreamPanel({
       ]) : null,
       h('small', { key: 'note', style: { color: C.muted, lineHeight: 1.5 } }, '逐条写入元数据初判（与人工评估分开保存，不改变核验状态）；选中单条也可在证据库内局部初判。'),
     ]) : null,
-    prefsOpen ? h('label', {
-      key: 'auto-opt',
+    prefsOpen ? h('div', {
+      key: 'prefs-panel',
       className: 'rk-reveal',
-      style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content', padding: '8px 10px', borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` },
+      style: { display: 'grid', gap: 10, padding: '10px 12px', borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` },
     }, [
-      h('input', {
-        key: 'auto',
-        type: 'checkbox',
-        checked: autoEnabled,
-        onChange: event => {
-          const enabled = setDreamAutoEnabled(event.target.checked)
-          setAutoEnabled(enabled)
-        },
-      }),
-      '有新材料时自动整理（距上次至少 6 小时，无新材料不调用模型）',
+      h('div', { key: 'mode-row', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+        h('span', { key: 'l', style: { fontSize: 12, color: C.muted } }, '梦境模式'),
+        h(Segmented, {
+          key: 'mode',
+          value: mode,
+          options: DREAM_MODES.map(item => ({ value: item.value, label: item.label })),
+          onChange: changeMode,
+          ariaLabel: '梦境模式',
+        }),
+      ]),
+      h('label', {
+        key: 'auto-opt',
+        style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content' },
+      }, [
+        h('input', {
+          key: 'auto',
+          type: 'checkbox',
+          checked: autoEnabled,
+          onChange: event => {
+            const enabled = setDreamAutoEnabled(event.target.checked)
+            setAutoEnabled(enabled)
+          },
+        }),
+        '有新材料时自动整理（至少间隔 6 小时）',
+      ]),
     ]) : null,
     running ? h(Spinner, { key: 'spin', text: '正在扫描当前课题的证据、论断与知识节点并压缩高信号提案……' }) : null,
     feedback ? h(Notice, { key: 'feedback', tone: 'info' }, feedback) : null,

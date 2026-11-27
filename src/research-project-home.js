@@ -199,7 +199,7 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
         ]),
       ]) : null,
     ]) : null,
-    insertMaterialReference ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
+    insertMaterialReference && hasActivity ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
     !data ? h(Spinner, { key: 'loading', text: '正在读取课题进度……' }) : !hasActivity ? h('div', { key: 'quiet-status', className: 'rk-home-quiet-bar' }, [
       h('span', { key: 'summary' }, '当前课题暂无进行中的任务 · 证据 0 · 论断 0'),
       h('div', { key: 'links', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
@@ -279,16 +279,16 @@ function ResearchMaterialReferenceForm({ insert }) {
   const [path, setPath] = React.useState('')
   const [feedback, setFeedback] = React.useState('')
   return h('form', {
-    style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 },
+    style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
     onSubmit: event => {
       event.preventDefault()
       try { insert(path); setPath(''); setFeedback('已添加到会话草稿。') }
       catch (error) { setFeedback(error.message) }
     },
   }, [
-    h('input', { key: 'path', value: path, 'aria-label': '工作区文件路径', placeholder: '工作区相对文件路径',
-      onChange: event => { setPath(event.target.value); setFeedback('') } }),
-    h('button', { key: 'insert', type: 'submit', disabled: !path.trim() }, '添加材料引用'),
-    feedback ? h('span', { key: 'feedback', role: 'status' }, feedback) : null,
+    h(Input, { key: 'path', value: path, ariaLabel: '工作区文件路径', placeholder: '添加工作区文件引用，例：文献/论文.pdf', style: { flex: '1 1 220px', maxWidth: 360 },
+      onChange: value => { setPath(value); setFeedback('') } }),
+    h(Button, { key: 'insert', type: 'submit', size: 'sm', variant: 'soft', disabled: !path.trim() }, '添加材料引用'),
+    feedback ? h('span', { key: 'feedback', role: 'status', style: { fontSize: 12, color: C.teal } }, feedback) : null,
   ])
 }

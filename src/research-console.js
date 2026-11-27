@@ -44,7 +44,7 @@ const RESEARCH_MAIN_TABS = [
   { value: 'home', label: '本次研究' },
   { value: 'catalog', label: '科研工具' },
   { value: 'vault', label: '资料库' },
-  { value: 'evidence', label: '证据图谱' },
+  { value: 'evidence', label: '证据星图' },
 ]
 const RESEARCH_TOOL_TABS = [
   { value: 'workflow', label: '选流程' }, { value: 'methods', label: '用方法' },
@@ -261,7 +261,7 @@ export function ResearchConsole(props) {
   const navRef = React.useRef(null)
   React.useLayoutEffect(() => {
     navRef.current?.parentElement?.scrollIntoView?.({ block: 'start', behavior: 'instant' })
-  }, [current.id, vaultTab])
+  }, [current.id])
   // 折行会改变导航高度，按实际 border-box 更新子分区的吸顶位置。
   React.useEffect(() => {
     const nav = navRef.current
@@ -343,9 +343,9 @@ export function ResearchConsole(props) {
           onChange: id => id === 'vault' ? select('vault', { tab: vaultTab || 'assets' }) : select(id),
           ariaLabel: '科研工作台分区',
         }),
-        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : (current.id === 'vault' || current.id === 'evidence') ? h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '备份与恢复'),
-        ]) : null,
+        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '时空囊'),
+        ]),
       ]),
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,

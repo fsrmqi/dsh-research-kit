@@ -6,6 +6,7 @@ import { currentResearchContext, activeResearchRun, subscribeResearchContext } f
 import { evidenceVaultStore, publishEvidenceVault, syncEvidenceVaultWithFiles } from './lib/evidence-vault-sync.js'
 import { requestResearchClaims, synchronizeResearchClaims } from './lib/claim-review-client.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
+import { pushToast } from './lib/toast.js'
 
 const CLAIM_REVIEW_API = '/dsh-research-kit/claim-review'
 const CLAIM_AGENT_REVIEW_API = '/dsh-research-kit/claim-agent-review'
@@ -83,7 +84,17 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const [loading, setLoading] = React.useState(true)
   const [syncWarning, setSyncWarning] = React.useState('')
   const [busy, setBusy] = React.useState(false)
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNoticeRaw] = React.useState('')
+  const setNotice = React.useCallback((message, options = {}) => {
+    const text = String(message || '')
+    setNoticeRaw(text)
+    if (text) {
+      const isErr = /失败|请填写|至少|未通过/.test(text)
+      pushToast({ message: text, tone: options.tone || (isErr ? 'warn' : 'info'), actionLabel: options.actionLabel, onAction: options.onAction })
+    }
+  }, [])
+  const [addOpen, setAddOpen] = React.useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = React.useState(false)
   const [statement, setStatement] = React.useState('')
   const [sourceText, setSourceText] = React.useState('')
   const [candidates, setCandidates] = React.useState([])
@@ -91,6 +102,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const [reviewer, setReviewerRaw] = React.useState(() => {
     try { return window.localStorage.getItem('dsh-research-kit.reviewer.v1') || '' } catch { return '' }
   })
+  const [editingReviewer, setEditingReviewer] = React.useState(false)
   const setReviewer = React.useCallback(value => {
     setReviewerRaw(value)
     try { window.localStorage.setItem('dsh-research-kit.reviewer.v1', value) } catch { /* 忽略 */ }
@@ -117,7 +129,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       setEvidence(result.evidence)
       setLimits({ claims: result.claim_limit_reached, evidence: result.evidence_limit_reached })
     } catch (error) {
-      if (version === requestVersion.current) setNotice(`读取 Claim 失败：${error.message}`)
+      if (version === requestVersion.current) setNotice(`读取论断失败：${error.message}`)
     } finally {
       if (version === requestVersion.current) setLoading(false)
     }
@@ -134,7 +146,8 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
         statement: statement.trim(), state: 'extracted',
       })
       setStatement('')
-      setNotice('Claim 草稿已登记，等待逐条审阅。')
+      setAddOpen(false)
+      setNotice('论断草稿已登记，等待审阅。')
       await refresh()
     } catch (error) { setNotice(`登记失败：${error.message}`) }
     finally { setBusy(false) }
@@ -147,16 +160,18 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     try {
       const result = await claimReviewRequest(project, { action: 'extract', project, text: targetText })
       setCandidates(result.drafts)
-      setPickedCandidates([])
-      setNotice(result.drafts.length ? `找到 ${result.drafts.length} 条带引用的论断候选；请勾选要登记的条目。` : '未找到带 DOI、PMID 或 arXiv 引用的可定位论断。')
+      setPickedCandidates(result.drafts.map((_, index) => index))
+      setAddOpen(true)
+      setNotice(result.drafts.length ? `已提取 ${result.drafts.length} 条论断候选（已默认勾选）。` : '未找到带 DOI、PMID 或 arXiv 引用的可定位论断。')
     } catch (error) { setNotice(`候选提取失败：${error.message}`) }
     finally { setBusy(false) }
   }
   const extractFromLatestAnswer = () => {
     const found = readLatestResearchAnswer(sessionId)
-    if (!found) return setNotice('当前会话没有可读取的助手回答；可手动粘贴研究段落。')
+    if (!found) return setNotice('当前会话没有可读取的助手回答；可展开「添加论断」手动粘贴段落。')
     const text = found.text.slice(0, 12000)
     setSourceText(text); setCandidates([]); setPickedCandidates([])
+    setAddOpen(true)
     void extract(text)
   }
 
@@ -167,10 +182,11 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       const run = activeResearchRun()
       const result = await claimReviewRequest(project, { action: 'save_drafts', project, text: sourceText,
         selected_indices: pickedCandidates, run_id: run?.project === context.project ? run.id : '' })
-      setNotice(`已登记 ${result.saved.length} 条 Claim 草稿；${result.duplicates.length} 条重复候选已跳过。`)
+      setNotice(`已登记 ${result.saved.length} 条论断草稿${result.duplicates.length ? `，跳过 ${result.duplicates.length} 条重复` : ''}。`)
       setCandidates([])
       setPickedCandidates([])
       setSourceText('')
+      setAddOpen(false)
       await refresh()
     } catch (error) { setNotice(`候选登记失败：${error.message}`) }
     finally { setBusy(false) }
@@ -178,7 +194,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
 
   const agentReview = async claimIds => {
     if (busy || !claimIds.length) return
-    if (!sessionId) return setNotice('当前会话没有 session ID，无法调用 Agent 审阅。')
+    if (!sessionId) return setNotice('当前无活跃会话，暂不可调用 Agent 审阅。')
     setBusy(true)
     try {
       const response = await fetch(`${CLAIM_AGENT_REVIEW_API}?session_id=${encodeURIComponent(sessionId)}`, {
@@ -187,7 +203,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       })
       const result = await response.json()
       if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
-      setNotice(`Agent 已审阅 ${result.reviewed} 条 Claim；建议已单独记录，等待研究者核对。`)
+      setNotice(`Agent 已审阅 ${result.reviewed} 条论断，建议已单独记录。`)
       await refresh()
     } catch (error) { setNotice(`Agent 审阅失败：${error.message}`) }
     finally { setBusy(false) }
@@ -201,12 +217,12 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
         body: JSON.stringify({ action: 'export', project, mode }) })
       const result = await response.json()
       if (result.ready === false) {
-        setNotice(`发布检查未通过：${result.blockers.length} 条 Claim 需要处理。${result.blockers.slice(0, 2).map(item => ` ${item.claim_id}：${item.reason}`).join('')}`)
+        setNotice(`发布检查未通过：${result.blockers.length} 条论断需要处理。${result.blockers.slice(0, 2).map(item => ` ${item.claim_id}：${item.reason}`).join('')}`)
         return
       }
       if (!response.ok || !result.ok) throw new Error(result.error || `HTTP ${response.status}`)
       downloadJsonFile(JSON.stringify(result.payload, null, 2) + '\n', `research-evidence-${mode}.json`)
-      setNotice(mode === 'publication' ? '发布检查通过，已导出带人工判断的研究证据。' : '已导出带状态标注的 Claim 草稿。')
+      setNotice(mode === 'publication' ? '发布检查通过，已导出研究证据。' : '已导出带状态标注的论断草稿。')
     } catch (error) { setNotice(`导出失败：${error.message}`) }
     finally { setBusy(false) }
   }
@@ -218,7 +234,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       reason: claim.assessment_reason || '',
       evidenceIds: Array.isArray(claim.evidence_ids) ? claim.evidence_ids : [],
     })
-    setNotice('')
+    setNoticeRaw('')
   }
   const appliedClaimFocus = React.useRef('')
   React.useEffect(() => {
@@ -233,15 +249,31 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const saveReview = async claim => {
     if (busy) return
     if (!reviewer.trim() || !draft.reason.trim()) return setNotice('请填写评估人和评估理由。')
-    if (draft.state === 'verified' && !draft.evidenceIds.length) return setNotice('确认 Claim 前至少关联一条已保存证据。')
+    if (draft.state === 'verified' && !draft.evidenceIds.length) return setNotice('确认论断前至少关联一条已保存证据。')
+    const previous = { state: claim.state, reason: claim.assessment_reason || '', evidenceIds: claim.evidence_ids || [], assessedBy: claim.assessed_by || reviewer.trim() }
     setBusy(true)
     try {
-      await claimReviewRequest(project, {
+      const saved = await claimReviewRequest(project, {
         project, claim_id: claim.id, statement: claim.statement, state: draft.state, expected_revision: claim.revision,
         evidence_ids: draft.evidenceIds, assessed_by: reviewer.trim(), assessment_reason: draft.reason.trim(),
       })
       setEditingId('')
-      setNotice(`Claim 已更新为「${CLAIM_REVIEW_LABELS[draft.state]}」。`)
+      setEditingReviewer(false)
+      const nextRev = saved?.claim?.revision ?? ((claim.revision || 0) + 1)
+      setNotice(`论断已更新为「${CLAIM_REVIEW_LABELS[draft.state]}」。`, {
+        actionLabel: '撤销',
+        onAction: async () => {
+          try {
+            await claimReviewRequest(project, {
+              project, claim_id: claim.id, statement: claim.statement, state: previous.state,
+              expected_revision: nextRev, evidence_ids: previous.evidenceIds,
+              assessed_by: previous.assessedBy, assessment_reason: previous.reason,
+            })
+            setNotice('已撤销上次审阅。')
+            await refresh()
+          } catch (error) { setNotice(`撤销失败：${error.message}`) }
+        },
+      })
       await refresh()
     } catch (error) { setNotice(`审阅失败：${error.message}`) }
     finally { setBusy(false) }
@@ -255,56 +287,53 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const pendingForAgent = claims.filter(claim => !['verified', 'rejected'].includes(claim.state) && !claim.agent_review).slice(0, 6)
 
   return h('section', { 'aria-label': '论断审阅', style: { display: 'grid', gap: 12, marginTop: 16 } }, [
-    h(Card, { key: 'intro', style: { display: 'grid', gap: 10 } }, [
-      h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' } }, [
-        h('div', { key: 'text' }, [
-          h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '登记与人工审核'),
-          h('p', { key: 'hint', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.6 } },
-            `当前课题：${context.project || '默认课题'}。确认论断须由研究者填写理由，并关联本课题已保存的证据。`),
-        ]),
-        h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', disabled: loading || busy, onClick: refresh }, '刷新台账'),
+    h(Card, { key: 'toolbar', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+      h(Button, { key: 'add', size: 'sm', variant: addOpen ? 'soft' : 'primary', icon: 'plus', 'aria-expanded': addOpen, onClick: () => setAddOpen(open => !open) }, addOpen ? '收起添加' : '添加论断'),
+      h(Button, { key: 'latest-answer', size: 'sm', variant: 'soft', disabled: busy, onClick: extractFromLatestAnswer }, '从最近回答提取'),
+      pendingForAgent.length ? h(Button, { key: 'agent', size: 'sm', variant: 'ghost', disabled: busy || !sessionId, title: !sessionId ? '当前无活跃会话，暂不可调用 Agent' : undefined,
+        onClick: () => agentReview(pendingForAgent.map(item => item.id)) }, `Agent 审阅待核验 ${pendingForAgent.length} 条`) : null,
+      h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
+      claims.length ? h(Button, { key: 'export-toggle', size: 'sm', variant: exportMenuOpen ? 'soft' : 'ghost', 'aria-expanded': exportMenuOpen, onClick: () => setExportMenuOpen(open => !open) }, '导出 ▾') : null,
+      h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', disabled: loading || busy, onClick: refresh }, '刷新'),
+    ]),
+    exportMenuOpen && claims.length ? h('div', { key: 'export-menu', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 12px', borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+      h(Button, { key: 'publication-export', size: 'sm', variant: 'primary', disabled: busy || limits.claims, onClick: () => exportClaims('publication') }, '发布检查并导出'),
+      h(Button, { key: 'draft-export', size: 'sm', variant: 'ghost', disabled: busy || limits.claims, onClick: () => exportClaims('draft') }, '导出带状态草稿'),
+    ]) : null,
+    addOpen ? h(Card, { key: 'add-drawer', className: 'rk-reveal', style: { display: 'grid', gap: 14, border: `1px solid ${C.tealLine}` } }, [
+      h('div', { key: 'manual', style: { display: 'grid', gap: 8 } }, [
+        h(Field, { key: 'statement', label: '登记单条论断', hint: '写一句可检验的短结论，默认以「摘取待核验」入库。' },
+          h(Textarea, { value: statement, onChange: setStatement, rows: 2, maxLength: 800, ariaLabel: '新建论断内容', placeholder: '例如：在指定样本与条件下，干预 A 改善结果 B。' })),
+        h(Button, { key: 'create', size: 'sm', variant: 'primary', disabled: busy || !statement.trim(), onClick: create, style: { justifySelf: 'start' } }, '登记草稿'),
       ]),
-      h(Field, { key: 'statement', label: '新建论断草稿', hint: '只写一句可检验的短声明；创建后状态为「摘取待核验」。' },
-        h(Textarea, { value: statement, onChange: setStatement, rows: 2, maxLength: 800, ariaLabel: '新建 Claim 内容', placeholder: '例如：在指定样本与条件下，干预 A 改善结果 B。' })),
-      h(Button, { key: 'create', size: 'sm', variant: 'primary', disabled: busy || !statement.trim(), onClick: create, style: { justifySelf: 'start' } }, '登记草稿'),
-    ]),
-    h(Card, { key: 'extract', style: { display: 'grid', gap: 10 } }, [
-      h('h3', { key: 'title', style: { margin: 0, fontSize: 14 } }, '从研究段落提取候选'),
-      h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '粘贴带 DOI、PMID 或 arXiv 引用的段落；先预览并勾选，再登记为待核验 Claim。原文不会整篇保存。'),
-      h(Button, { key: 'latest-answer', size: 'sm', variant: 'soft', disabled: busy, onClick: extractFromLatestAnswer, style: { justifySelf: 'start' } }, '从最近回答开始'),
-      h(Textarea, { key: 'input', value: sourceText, onChange: value => { setSourceText(value); setCandidates([]); setPickedCandidates([]) }, rows: 4,
-        maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '例如：在某研究条件下，干预 A 改善结局 B [1](https://doi.org/10.1000/example)。' }),
-      h(Button, { key: 'extract-button', size: 'sm', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
-      candidates.length ? h('div', { key: 'candidates', role: 'group', 'aria-label': 'Claim 候选列表', style: { display: 'grid', gap: 8 } }, [
-        ...candidates.map((candidate, index) => h('label', { key: index, style: { display: 'flex', gap: 8, padding: 9, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 12, lineHeight: 1.5 } }, [
-          h('input', { key: 'checkbox', type: 'checkbox', checked: pickedCandidates.includes(index),
-            onChange: () => setPickedCandidates(current => current.includes(index) ? current.filter(item => item !== index) : [...current, index]),
-            'aria-label': `登记候选 ${index + 1}` }),
-          h('span', { key: 'text' }, [
-            h('strong', { key: 'statement', style: { display: 'block', overflowWrap: 'anywhere' } }, candidate.statement),
-            h('span', { key: 'source', style: { color: C.muted } }, `${candidate.source_ref.citation_type.toUpperCase()}：${candidate.source_ref.citation} · ${candidate.source_ref.locator} · ${candidate.matched_evidence ? '已匹配证据库' : '证据库未匹配'}`),
-          ]),
-        ])),
-        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: busy || !pickedCandidates.length,
-          onClick: saveCandidates, style: { justifySelf: 'start' } }, `登记所选 ${pickedCandidates.length} 条`),
-      ]) : null,
-    ]),
-    h(Card, { key: 'review-actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-      h(Button, { key: 'agent', size: 'sm', disabled: busy || !pendingForAgent.length,
-        onClick: () => agentReview(pendingForAgent.map(item => item.id)) }, `Agent 审阅待核验 ${pendingForAgent.length} 条`),
-      h(Button, { key: 'draft-export', size: 'sm', variant: 'ghost', disabled: busy || !claims.length || limits.claims,
-        onClick: () => exportClaims('draft') }, '导出带状态草稿'),
-      h(Button, { key: 'publication-export', size: 'sm', variant: 'soft', disabled: busy || !claims.length || limits.claims,
-        onClick: () => exportClaims('publication') }, '发布检查并导出'),
-    ]),
-    notice ? h(Notice, { key: 'notice', tone: /失败|请填写|至少/.test(notice) ? 'error' : 'info' }, notice) : null,
+      h('div', { key: 'extract', style: { display: 'grid', gap: 8, paddingTop: 12, borderTop: `1px solid ${C.line}` } }, [
+        h('strong', { key: 'title', style: { fontSize: 13 } }, '或从带引用的研究段落批量提取'),
+        h(Textarea, { key: 'input', value: sourceText, onChange: value => { setSourceText(value); setCandidates([]); setPickedCandidates([]) }, rows: 3,
+          maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '粘贴含 DOI、PMID 或 arXiv 引用的段落……' }),
+        h(Button, { key: 'extract-button', size: 'sm', variant: 'soft', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
+        candidates.length ? h('div', { key: 'candidates', role: 'group', 'aria-label': '论断候选列表', style: { display: 'grid', gap: 8 } }, [
+          ...candidates.map((candidate, index) => h('label', { key: index, style: { display: 'flex', gap: 8, padding: 9, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 12, lineHeight: 1.5, cursor: 'pointer' } }, [
+            h('input', { key: 'checkbox', type: 'checkbox', checked: pickedCandidates.includes(index),
+              onChange: () => setPickedCandidates(current => current.includes(index) ? current.filter(item => item !== index) : [...current, index]),
+              'aria-label': `登记候选 ${index + 1}` }),
+            h('span', { key: 'text' }, [
+              h('strong', { key: 'statement', style: { display: 'block', overflowWrap: 'anywhere' } }, candidate.statement),
+              h('span', { key: 'source', style: { color: C.muted } }, `${candidate.source_ref.citation_type.toUpperCase()}：${candidate.source_ref.citation} · ${candidate.source_ref.locator} · ${candidate.matched_evidence ? '已匹配证据库' : '证据库未匹配'}`),
+            ]),
+          ])),
+          h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: busy || !pickedCandidates.length,
+            onClick: saveCandidates, style: { justifySelf: 'start' } }, `登记所选 ${pickedCandidates.length} 条`),
+        ]) : null,
+      ]),
+    ]) : null,
+    notice && /失败|请填写|至少|未通过/.test(notice) ? h(Notice, { key: 'notice', tone: 'error' }, notice) : null,
     limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
     syncWarning ? h(Notice, { key: 'sync-warning', tone: 'warn' }, syncWarning) : null,
-    loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
+    loading ? h(Spinner, { key: 'loading', text: '正在读取论断台账……' }) : null,
     !loading && !claims.length ? h(EmptyState, {
       key: 'empty',
       text: '当前课题还没有论断。',
-      hint: '可直接从最近一条助手回答中提取候选，或在上方登记一条研究论断。',
+      hint: '可直接从最近一条助手回答中提取候选，或点上方「添加论断」手动登记。',
       action: h(Button, { size: 'sm', variant: 'primary', disabled: busy, onClick: extractFromLatestAnswer }, '从最近回答提取'),
     }) : null,
     claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
@@ -340,17 +369,22 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
         ]),
       ]),
       relationId === claim.id ? h(ClaimEvidenceRelations, { key: 'relations', claim, evidenceById }) : null,
-      editingId === claim.id ? h('div', { key: 'editor', style: { display: 'grid', gap: 11, borderTop: `1px solid ${C.line}`, paddingTop: 12 } }, [
-        h('div', { key: 'actions', role: 'group', 'aria-label': 'Claim 审阅结论', style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
+      editingId === claim.id ? h('div', { key: 'editor', className: 'rk-reveal', style: { display: 'grid', gap: 11, borderTop: `1px solid ${C.line}`, paddingTop: 12 } }, [
+        h('div', { key: 'actions', role: 'group', 'aria-label': '论断审阅结论', style: { display: 'flex', gap: 7, flexWrap: 'wrap' } },
           [['verified', '确认'], ['ambiguous', '存疑'], ['rejected', '驳回']].map(([state, label]) => h(Button, {
             key: state, size: 'sm', variant: draft.state === state ? 'primary' : 'ghost',
             'aria-pressed': draft.state === state, onClick: () => setDraft(current => ({ ...current, state })),
           }, label))),
-        h(Field, { key: 'reviewer', label: '评估人', required: true },
-          h(Input, { value: reviewer, onChange: setReviewer, maxLength: 120, ariaLabel: 'Claim 评估人', placeholder: '姓名或研究角色' })),
+        reviewer.trim() && !editingReviewer
+          ? h('div', { key: 'reviewer-compact', style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, color: C.muted } }, [
+            h('span', { key: 'who' }, `评估人：${reviewer.trim()}`),
+            h(Button, { key: 'change', size: 'sm', variant: 'quiet', onClick: () => setEditingReviewer(true) }, '修改'),
+          ])
+          : h(Field, { key: 'reviewer', label: '评估人', required: true },
+            h(Input, { value: reviewer, onChange: setReviewer, maxLength: 120, ariaLabel: '论断评估人', placeholder: '姓名或研究角色（填一次会自动记住）' })),
         h(Field, { key: 'reason', label: '评估理由', required: true },
           h(Textarea, { value: draft.reason, onChange: reason => setDraft(current => ({ ...current, reason })),
-            maxLength: 500, rows: 3, ariaLabel: 'Claim 评估理由', placeholder: '写明来源位置、研究条件和判断依据。' })),
+            maxLength: 500, rows: 3, ariaLabel: '论断评估理由', placeholder: '写明来源位置、研究条件和判断依据。' })),
         h('fieldset', { key: 'evidence-list', style: { border: `1px solid ${C.line}`, borderRadius: 8, padding: 10, maxHeight: 220, overflow: 'auto' } }, [
           h('legend', { key: 'legend', style: { fontSize: 12, fontWeight: 700 } }, `关联已保存证据${draft.state === 'verified' ? '（确认时至少一条）' : '（可选）'}`),
           ...evidence.map(item => h('label', { key: item.id, style: { display: 'flex', gap: 8, alignItems: 'start', padding: '5px 0', fontSize: 12, overflowWrap: 'anywhere' } }, [
