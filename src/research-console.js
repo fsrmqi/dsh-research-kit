@@ -92,6 +92,7 @@ function ResearchPersonalTemplates({ inputActions }) {
   const save = async event => {
     event.preventDefault()
     if (!draft?.title.trim() || !draft.prompt.trim() || busy) return
+    invalidatePendingCopy()
     setBusy(true)
     const fields = {
       title: draft.title, category: draft.category, purpose: draft.purpose, outcome: draft.outcome,
@@ -181,8 +182,8 @@ function ResearchPersonalTemplates({ inputActions }) {
       query && !sourceWorkflows.length && !sourceMethods.length ? h('small', { key: 'empty', style: { color: C.muted } }, '未找到匹配的流程或方法。') : null,
     ])) : null,
     draft ? h(Card, { key: 'form' }, h('form', { onSubmit: save, className: 'rk-template-form' }, [
-      h(Input, { key: 'title', value: draft.title, ariaLabel: '模板名称', placeholder: '模板名称', required: true, onChange: title => setDraft({ ...draft, title }) }),
-      h(Textarea, { key: 'body', value: draft.prompt, ariaLabel: '模板内容', placeholder: '填写要交给 Agent 的提示词或研究步骤', rows: 8, required: true, onChange: prompt => setDraft({ ...draft, prompt }) }),
+      h(Input, { key: 'title', value: draft.title, ariaLabel: '模板名称', placeholder: '模板名称', required: true, onChange: title => { invalidatePendingCopy(); setDraft({ ...draft, title }) } }),
+      h(Textarea, { key: 'body', value: draft.prompt, ariaLabel: '模板内容', placeholder: '填写要交给 Agent 的提示词或研究步骤', rows: 8, required: true, onChange: prompt => { invalidatePendingCopy(); setDraft({ ...draft, prompt }) } }),
       h('div', { key: 'actions', className: 'rk-compose-actions' }, [
         h(Button, { key: 'save', type: 'submit', variant: 'primary', disabled: busy || !draft.title.trim() || !draft.prompt.trim() }, '保存模板'),
         h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { invalidatePendingCopy(); setDraft(null) } }, '取消'),
