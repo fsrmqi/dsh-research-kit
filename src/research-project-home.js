@@ -6,10 +6,11 @@ import { supportsSafeInsert } from './lib/input-actions.js'
 import { itemById } from './catalog.js'
 import { evidenceVaultStore, subscribeEvidenceVault, syncEvidenceVaultWithFiles } from './lib/evidence-vault-sync.js'
 import { synchronizeResearchClaims } from './lib/claim-review-client.js'
+import { ResearchDreamPanel } from './research-dream-panel.js'
 
 const HOME_RUN_LABELS = { draft: '提示词草稿', active: '已发送到会话', waiting_review: '待人工审核', completed: '已完成', failed: '失败' }
 
-export function ResearchProjectHome({ onNavigate, insertMaterialReference, inputActions }) {
+export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterialReference, inputActions }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const [loaded, setData] = React.useState(null)
   const [error, setError] = React.useState('')
@@ -202,6 +203,14 @@ export function ResearchProjectHome({ onNavigate, insertMaterialReference, input
         ...(outputs.length ? outputs.map(output => h('span', { key: output.id }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : activityOutputs.length ? [] : [h('span', { key: 'empty', style: { color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
       ]),
     ]),
+    h(ResearchDreamPanel, {
+      key: 'dream',
+      project: context.project,
+      sessionId,
+      claims: data?.claims || [],
+      onNavigate,
+      inputActions,
+    }),
   ])
 }
 

@@ -120,6 +120,14 @@ const server = http.createServer((req,res)=>{
   });
   return;
  }
+ if(req.url?.startsWith('/dsh-research-kit/research-dream')){
+  res.setHeader('Content-Type','application/json; charset=utf-8');
+  let body='';req.on('data',chunk=>{body+=chunk});req.on('end',()=>{
+   const input=JSON.parse(body||'{}');
+   res.end(JSON.stringify({ok:true,mode:input.mode||'full',model:'qa-dream',counts:input.snapshot?.counts||{},digest:'已扫描 0 条证据 · 0 条论断 · 0 个知识节点，提炼出 0 条高信号提案',proposals:[]}));
+  });
+  return;
+ }
  const files={'/react':'node_modules/react/umd/react.development.js','/react-dom':'node_modules/react-dom/umd/react-dom.development.js','/bundle':'ui/client.js'};
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
@@ -168,6 +176,11 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(await page.getByRole('button',{name:/Agent 活动/}).count(),0);
   await page.screenshot({path:path.join(artifacts,'conversation-research-home.png')});
   assert.equal(promptKitRequests,0,'首页不得提前加载 PromptKit');
+  const dreamPanel=page.getByRole('region',{name:'科研梦境',exact:true});
+  await dreamPanel.getByRole('tab',{name:'巩固梦',exact:true}).click();
+  await dreamPanel.getByRole('button',{name:'开始一次梦境',exact:true}).click();
+  await dreamPanel.getByText(/已扫描 .*提炼出 .*条高信号提案/).waitFor();
+  assert.equal(promptKitRequests,0,'触发科研梦境不得提前加载 PromptKit');
   await page.getByRole('button',{name:'证据关系',exact:true}).click();
   await page.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
   assert.equal(promptKitRequests,0,'独立图谱不得等待 PromptKit');

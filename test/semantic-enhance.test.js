@@ -9,6 +9,7 @@ import { MEMORY_SEARCH_PATH } from '../dsh/memory-search.js'
 import { EVIDENCE_SYNC_PATH } from '../dsh/evidence-sync.js'
 import { CLAIM_REVIEW_PATH } from '../dsh/claim-review.js'
 import { CLAIM_AGENT_REVIEW_PATH } from '../dsh/claim-agent-review.js'
+import { RESEARCH_DREAM_PATH } from '../dsh/research-dream.js'
 import { EVIDENCE_SOURCE_CHECK_PATH } from '../dsh/evidence-source-check.js'
 import { AGENT_ACTIVITY_PATH } from '../dsh/agent-activity.js'
 import { CATALOG_DATA_PATH, CATALOG_ITEM_PATH, CATALOG_SEARCH_PATH } from '../dsh/catalog-data.js'
@@ -48,6 +49,7 @@ test('index.js 统一注册科研路由且不使用 dsh-promptkit 路径', () =>
     EVIDENCE_SYNC_PATH,
     CLAIM_REVIEW_PATH,
     CLAIM_AGENT_REVIEW_PATH,
+    RESEARCH_DREAM_PATH,
     EVIDENCE_SOURCE_CHECK_PATH,
     AGENT_ACTIVITY_PATH,
     CATALOG_DATA_PATH,

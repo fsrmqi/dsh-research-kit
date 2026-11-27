@@ -17,7 +17,7 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  home: props => h(ResearchProjectHome, { onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
+  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
   catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, initialType: props.catalogType, launchSession: props.launchSession, embedded: true }),
   methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
