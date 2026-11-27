@@ -4,11 +4,16 @@ import {
   Page, PageHead, Toolbar, Button, Card, EmptyState, Notice, Segmented, Badge, Select,
 } from './ui.js'
 import { EvidenceGraphDetailPanels } from './evidence-graph-panels.js'
+import { EvidenceGraphCanvas } from './evidence-graph-canvas.js'
 import {
-  buildEvidenceGraph, EVIDENCE_NODE_COLORS, splitEvidenceGraphByConnectivity, summarizeEvidenceProjects,
+  GRAPH_EXPORT_SCOPE, graphKindColor, nodeStrokeColor,
+  exportEvidenceGraphFile, knowledgeBackupStamp, downloadKnowledgeJson,
+} from './evidence-graph-export.js'
+import {
+  buildEvidenceGraph, splitEvidenceGraphByConnectivity, summarizeEvidenceProjects,
   layoutEvidenceGraph, routeEvidenceEdges, evidenceNeighborhood, findEvidencePath,
   encodeGraphView, decodeGraphView, clampGraphScale,
-  GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT, GRAPH_SCALE_RANGE
+  GRAPH_SCALE_RANGE
 } from './lib/evidence-graph-core.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
 import { createEvidenceStore } from './evidence-store.js'
@@ -52,80 +57,7 @@ const GRAPH_SCOPE_MODES = [
   { value: 'persistent', label: '持久沉淀' },
 ]
 
-const GRAPH_EXPORT_SCOPE = '仅含图上已显示的节点标题、来源库、稳定标识符、核验状态与关系；不含笔记、全文、检索词、附件或输入框草稿。'
-const GRAPH_FRAME_HEIGHT = 520
 const GRAPH_RENDER_NODE_LIMIT = 300
-
-function graphKindColor(kind) { return EVIDENCE_NODE_COLORS[kind] || C.lineStrong }
-
-const GRADE_NODE_COLORS = { empirical: '#27AE60', inference: '#F39C12', missing: '#E74C3C' }
-const GRADE_STROKE_DASH = { inference: '4,2', missing: '2,2' }
-
-function nodeStrokeColor(node) {
-  if (node.kind === 'evidence' && node.grade && GRADE_NODE_COLORS[node.grade]) return GRADE_NODE_COLORS[node.grade]
-  return graphKindColor(node.kind)
-}
-
-function nodeStrokeDash(node) {
-  if (node.kind === 'evidence' && node.grade && GRADE_STROKE_DASH[node.grade]) return GRADE_STROKE_DASH[node.grade]
-  return null
-}
-
-function graphEscape(value) {
-  return String(value ?? '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]))
-}
-
-function graphLabel(value, max = 18) {
-  const text = String(value ?? '')
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
-}
-
-// 导出到独立文件后 CSS 变量不再有定义，必须先把当前主题解析成真实色值，
-// 否则导出物里的 fill="var(--rk-surface)" 会退化成黑块。
-function readGraphTheme() {
-  const fallback = { surface: '#ffffff', ink: '#17212b', line: '#b6c6d1', canvas: '#f4f7f9' }
-  if (typeof window === 'undefined' || typeof document === 'undefined' || typeof getComputedStyle !== 'function') return fallback
-  const style = getComputedStyle(document.documentElement)
-  const read = (name, backup) => (style.getPropertyValue(name) || '').trim() || backup
-  return {
-    surface: read('--rk-surface', fallback.surface),
-    ink: read('--rk-ink', fallback.ink),
-    line: read('--rk-line-strong', fallback.line),
-    canvas: read('--rk-canvas', fallback.canvas)
-  }
-}
-
-function buildGraphSvgMarkup(layout, routes, theme) {
-  const edges = routes.map(route => `<path d="${route.d}" fill="none" stroke="${theme.line}" stroke-width="1.5" marker-end="url(#rk-arrow)"/>`).join('\n  ')
-  const nodes = layout.nodes.map(node => {
-    const color = nodeStrokeColor(node)
-    const dash = nodeStrokeDash(node)
-    const agentBadge = node.agentProduced ? `<circle cx="${GRAPH_NODE_WIDTH - 12}" cy="10" r="4" fill="#3498DB"/>` : ''
-    return `<g transform="translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})">`
-      + `<rect width="${GRAPH_NODE_WIDTH}" height="${GRAPH_NODE_HEIGHT}" rx="9" fill="${theme.surface}" stroke="${color}" stroke-width="1.5"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`
-      + `<text x="10" y="22" font-size="12" fill="${theme.ink}">${graphEscape(graphLabel(node.label))}</text>`
-      + `<text x="10" y="40" font-size="10" fill="${color}">${graphEscape(node.kind)}</text>`
-      + agentBadge + `</g>`
-  }).join('\n  ')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${layout.width} ${layout.height}" width="${layout.width}" height="${layout.height}" role="img" aria-label="研究证据图谱">`
-    + `<title>研究证据图谱</title>`
-    + `<defs><marker id="rk-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="${theme.line}"/></marker></defs>`
-    + `<rect width="${layout.width}" height="${layout.height}" fill="${theme.canvas}"/>`
-    + `\n  ${edges}\n  ${nodes}\n</svg>`
-}
-
-function downloadGraphFile(text, type, filename) {
-  return downloadText(text, type, filename)
-}
-function knowledgeBackupStamp() {
-  const now = new Date()
-  const pad = value => String(value).padStart(2, '0')
-  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-}
-
-function downloadKnowledgeJson(text, filename) {
-  downloadGraphFile(text, 'application/json', filename)
-}
 
 export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onNavigate }) {
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
@@ -161,8 +93,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [pan, setPan] = React.useState({ x: 0, y: 0 })
   const [notice, setNotice] = React.useState('')
   const [exportOpen, setExportOpen] = React.useState(false)
-  const frameRef = React.useRef(null)
-  const dragRef = React.useRef(null)
   const evidenceRefreshVersion = React.useRef(0)
   const assetRefreshVersion = React.useRef(0)
   const knowledgeRefreshVersion = React.useRef(0)
@@ -374,48 +304,15 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
 
   const resetView = () => { setPan({ x: 0, y: 0 }); applyView({ scale: 1 }) }
 
-  const onPointerDown = event => {
-    if (event.button !== 0) return
-    dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan }, pending: { ...pan }, frame: 0 }
-    if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
+  const onSelectNode = node => {
+    activateNode(node.id)
+    setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '')
+    if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
+    else setSelectedEvidenceNodeId('')
+    setConfirmDeleteEvidence(false)
   }
-  const onPointerMove = event => {
-    const drag = dragRef.current
-    if (!drag) return
-    const rect = frameRef.current && frameRef.current.getBoundingClientRect()
-    if (!rect || !rect.width) return
-    const unit = viewWidth / rect.width
-    drag.pending = clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale)
-    const paint = () => {
-      drag.frame = 0
-      const next = drag.pending
-      frameRef.current?.setAttribute('viewBox', `${next.x} ${next.y} ${viewWidth} ${viewHeight}`)
-    }
-    if (!drag.frame) {
-      if (typeof requestAnimationFrame === 'function') drag.frame = requestAnimationFrame(paint)
-      else paint()
-    }
-  }
-  const onPointerUp = event => {
-    const drag = dragRef.current
-    if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
-    if (drag?.pending) setPan(drag.pending)
-    dragRef.current = null
-    if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-  }
-  const onWheel = event => {
-    if (!(event.ctrlKey || event.metaKey)) return
-    event.preventDefault()
-    zoomBy(event.deltaY < 0 ? 1.15 : 1 / 1.15)
-  }
-  const onMinimapClick = event => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-    const x = ((event.clientX - rect.left) / rect.width) * layout.width
-    const y = ((event.clientY - rect.top) / rect.height) * layout.height
-    setPan(clampPanFor({ x: x - viewWidth / 2, y: y - viewHeight / 2 }, scale))
+  const onDoubleClickNode = node => {
+    if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
   }
 
   const activateNode = nodeId => {
@@ -463,145 +360,12 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       .catch(error => setNotice(`更新核验状态失败：${error?.message || error}`))
   }
 
-  const minimapWidth = 148
-  const minimapHeight = Math.min(180, Math.max(70, Math.round((minimapWidth * layout.height) / Math.max(1, layout.width))))
-  const frameHeight = Math.min(GRAPH_FRAME_HEIGHT, Math.max(320, layout.height))
-
-  // 迷你地图密度模式：节点 > 50 时用聚合色块代替逐节点矩形，
-  // 避免 193 个节点挤在一起变成无信息量的实心色墙。
-  const nodeCount = layout.nodes.length
-  const useDensityMode = nodeCount > 50
-  const densityGridSize = 12
-  const densityCells = useDensityMode ? (() => {
-    const cellW = layout.width / densityGridSize
-    const cellH = layout.height / Math.max(1, Math.ceil(densityGridSize * layout.height / layout.width))
-    const grid = new Map()
-    for (const node of layout.nodes) {
-      const cx = Math.floor((node.x - GRAPH_NODE_WIDTH / 2) / cellW)
-      const cy = Math.floor(node.y / cellH)
-      const key = `${cx},${cy}`
-      grid.set(key, (grid.get(key) || 0) + 1)
-    }
-    const maxCount = Math.max(...grid.values())
-    return { cellW, cellH, grid, maxCount }
-  })() : null
-
-  const canvas = h('svg', {
-    key: 'canvas',
-    ref: frameRef,
-    viewBox: `${pan.x} ${pan.y} ${viewWidth} ${viewHeight}`,
-    width: '100%',
-    height: frameHeight,
-    role: 'img',
-    'aria-label': '研究证据图谱',
-    preserveAspectRatio: 'xMidYMid meet',
-    onPointerDown,
-    onPointerMove,
-    onPointerUp,
-    onPointerCancel: onPointerUp,
-    onWheel,
-    style: { display: 'block', touchAction: 'none', cursor: 'grab', background: C.surfaceAlt, borderRadius: 12 }
-  }, [
-    ...routes.map(route => h('path', {
-      key: route.key,
-      className: flowing ? 'rk-graph-edge rk-graph-edge-flow' : 'rk-graph-edge',
-      d: route.d,
-      fill: 'none',
-      stroke: C.lineStrong,
-      strokeWidth: 1.5,
-      markerEnd: 'url(#rk-arrow)',
-      opacity: highlighted && !(highlighted.has(route.from) && highlighted.has(route.to)) ? 0.18 : 1
-    })),
-    h('defs', { key: 'defs' }, h('marker', { id: 'rk-arrow', markerWidth: 8, markerHeight: 8, refX: 7, refY: 3, orient: 'auto' }, h('path', { d: 'M0,0 L0,6 L7,3 z', fill: C.lineStrong }))),
-    ...layout.nodes.map(node => {
-      const marked = view.focus === node.id || node.id === view.from || node.id === view.to
-      const dim = highlighted ? !highlighted.has(node.id) : false
-      return h('a', {
-        key: node.id,
-        href: '#research-evidence-graph',
-        className: `rk-graph-node${marked ? ' rk-graph-node-focus' : ''}`,
-        opacity: dim ? 0.25 : 1,
-        'aria-label': `聚焦 ${node.label}`,
-        onPointerDown: event => event.stopPropagation(),
-        onClick: event => {
-          event.preventDefault()
-          activateNode(node.id)
-          setSelectedKnowledgeId(node.id.startsWith(KNOWLEDGE_NODE_ID_PREFIX) ? node.id : '')
-          if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
-          else setSelectedEvidenceNodeId('')
-          setConfirmDeleteEvidence(false)
-        }
-        , onDoubleClick: event => {
-          event.preventDefault()
-          if (node.kind === 'evidence') setSelectedEvidenceNodeId(node.id.replace('evidence:', ''))
-        }
-      }, h('g', { transform: `translate(${node.x - GRAPH_NODE_WIDTH / 2},${node.y})` }, [
-        h('title', { key: 'accessible-title' }, `聚焦 ${node.label}`),
-        h('rect', {
-          key: 'box', width: GRAPH_NODE_WIDTH, height: GRAPH_NODE_HEIGHT, rx: 9, fill: C.surface,
-          stroke: nodeStrokeColor(node), strokeWidth: 1.5,
-          ...(nodeStrokeDash(node) ? { strokeDasharray: nodeStrokeDash(node) } : {}),
-        }),
-        h('text', { key: 'title', x: 10, y: 22, fill: C.ink, fontSize: 12, fontWeight: 700 }, graphLabel(node.label)),
-        h('text', { key: 'kind', x: 10, y: 40, fill: nodeStrokeColor(node), fontSize: 10 }, node.kind),
-        ...(node.agentProduced ? [h('circle', { key: 'agent-badge', cx: GRAPH_NODE_WIDTH - 12, cy: 10, r: 4, fill: '#3498DB' })] : []),
-      ]))
-    })
-  ])
-
-  const minimap = h('div', {
-    key: 'minimap',
-    style: { position: 'absolute', right: 14, bottom: 14, padding: 6, border: `1px solid ${C.line}`, borderRadius: 10, background: C.surface, boxShadow: C.shadowCard }
-  }, h('svg', {
-    viewBox: `0 0 ${layout.width} ${layout.height}`,
-    width: minimapWidth,
-    height: minimapHeight,
-    role: 'img',
-    'aria-label': '图谱迷你地图',
-    onClick: onMinimapClick,
-    style: { display: 'block', cursor: 'crosshair' }
-  }, [
-    h('rect', { key: 'bg', width: layout.width, height: layout.height, fill: C.surfaceAlt, rx: 6 }),
-    ...(useDensityMode && densityCells
-      ? [...densityCells.grid.entries()].map(([key, count]) => {
-          const [cx, cy] = key.split(',').map(Number)
-          const intensity = count / densityCells.maxCount
-          return h('rect', {
-            key: `density-${key}`,
-            x: cx * densityCells.cellW,
-            y: cy * densityCells.cellH,
-            width: densityCells.cellW,
-            height: densityCells.cellH,
-            rx: 2,
-            fill: C.teal,
-            opacity: 0.15 + intensity * 0.65,
-          })
-        })
-      : layout.nodes.map(node => h('rect', {
-      key: node.id,
-      x: node.x - GRAPH_NODE_WIDTH / 2,
-      y: node.y,
-      width: GRAPH_NODE_WIDTH,
-      height: GRAPH_NODE_HEIGHT,
-      rx: 6,
-      fill: graphKindColor(node.kind),
-      opacity: highlighted && !highlighted.has(node.id) ? 0.25 : 0.75
-      }))),
-    h('rect', { key: 'viewport', x: pan.x, y: pan.y, width: viewWidth, height: viewHeight, fill: 'none', stroke: C.accent, strokeWidth: Math.max(3, layout.width / 140) })
-  ]), useDensityMode ? h('div', {
-    key: 'density-label',
-    style: { position: 'absolute', bottom: 4, left: 8, fontSize: 9, color: C.muted, pointerEvents: 'none' },
-  }, `${nodeCount} 节点 · 密度视图`) : null)
-
   const exportGraph = format => {
-    const theme = readGraphTheme()
     // 导出与当前视图一致：默认不含未关联节点；若因渲染上限少画了节点，导出仍给出全部有关联部分。
     const exportSource = renderLimitedCount ? displayGraph : interactiveGraph
     const exportLayout = layoutEvidenceGraph(exportSource)
     const exportRoutes = routeEvidenceEdges(exportSource, exportLayout)
-    const svg = buildGraphSvgMarkup(exportLayout, exportRoutes, theme)
-    if (format === 'svg') downloadGraphFile(svg, 'image/svg+xml', 'research-evidence-chain.svg')
-    else downloadGraphFile(`<!doctype html><meta charset="utf-8"><title>科研证据链路</title><style>body{margin:0;padding:28px;background:${theme.canvas};color:${theme.ink};font:14px system-ui}h1{font-size:17px;margin:0 0 6px}p{margin:0 0 18px;opacity:.7}</style><h1>科研证据链路</h1><p>${GRAPH_EXPORT_SCOPE}</p>${svg}`, 'text/html', 'research-evidence-chain.html')
+    exportEvidenceGraphFile(format, exportLayout, exportRoutes)
     setExportOpen(false)
     setNotice(format === 'svg' ? '已导出 SVG 快照。' : '已导出 HTML 快照。')
   }
@@ -779,7 +543,10 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     graph.nodes.length
       ? (hasCanvas
         ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
-            h('div', { style: { position: 'relative' } }, [canvas, minimap]))
+            h(EvidenceGraphCanvas, {
+              layout, routes, view, pan, setPan, scale, clampPanFor, zoomBy,
+              flowing, highlighted, onSelectNode, onDoubleClickNode,
+            }))
         : h(Card, { key: 'no-relations', style: { margin: '18px var(--rk-gutter) 14px', padding: 18, display: 'grid', gap: 12 } }, [
             h(EmptyState, {
               key: 'summary',

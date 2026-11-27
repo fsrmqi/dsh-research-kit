@@ -225,9 +225,9 @@ test('零关系图默认不画网格：组件在布局前拆分连通性，孤�
 
 test('导出只消费图上已显示的布局与路由，不读取证据原文', async () => {
   const { readFile } = await import('node:fs/promises')
-  const source = await readFile(new URL('../src/research-evidence-graph.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function buildGraphSvgMarkup')
-  const end = source.indexOf('function downloadGraphFile')
+  const source = await readFile(new URL('../src/evidence-graph-export.js', import.meta.url), 'utf8')
+  const start = source.indexOf('export function buildGraphSvgMarkup')
+  const end = source.indexOf('export function downloadGraphFile')
   assert.ok(start > 0 && end > start, '未能定位导出构建函数')
   const body = source.slice(start, end)
   assert.ok(body.includes('layout.nodes'), '导出应遍历布局节点')
