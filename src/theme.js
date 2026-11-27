@@ -94,6 +94,12 @@ body[data-ds-dark-theme] {
   --pk-teal-line-active: var(--rk-teal-line-active); --pk-teal-tint: var(--rk-teal-tint);
   --pk-teal-tint-deep: var(--rk-teal-tint-deep); --pk-action-bg: var(--rk-teal-strong); --pk-action-fg: var(--rk-on-ink);
 }
+/* 内联增强器按输入卡片边界停靠，覆盖工件里以固定像素计算的垂直偏移。 */
+.rk-enhancer-theme[data-inline-placement] section[role="dialog"][aria-label="对话增强器"] {
+  top: var(--rk-enhancer-top) !important;
+  bottom: var(--rk-enhancer-bottom) !important;
+  max-height: var(--rk-enhancer-max-height) !important;
+}
 .rk-console-main, .rk-compose-actions, .rk-personal-head {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
 }

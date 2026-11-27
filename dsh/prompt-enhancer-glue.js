@@ -151,6 +151,36 @@ function LoadedResearchDraftEnhancerHost(props) {
   // anchorRef / open / onOpenChange 由 ResearchDraftEnhancerHost 传入：触发钮由插件自绘
   // （ResearchDraftEnhancerTrigger），工件只负责「嵌在工具条里的面板」。
   const { sessionId, input, useInput, useChat, inputActions, anchorRef, open, onOpenChange, floating } = props
+  const [panelPlacement, setPanelPlacement] = React.useState(null)
+  React.useLayoutEffect(() => {
+    if (!open || floating) return undefined
+    const anchor = anchorRef?.current
+    const composerCard = anchor?.closest('[data-composer-card]')
+    if (!composerCard) return undefined
+    const updatePlacement = () => {
+      const bounds = composerCard.getBoundingClientRect()
+      const height = window.innerHeight
+      const gap = 12
+      const above = Math.max(0, Math.min(height, bounds.top) - 2 * gap)
+      const below = Math.max(0, height - Math.max(0, bounds.bottom) - 2 * gap)
+      const placeAbove = above >= below
+      const maxHeight = Math.min(640, placeAbove ? above : below)
+      const top = placeAbove ? 'auto' : `${Math.max(0, bounds.bottom) + gap}px`
+      const bottom = placeAbove ? `${height - Math.min(height, bounds.top) + gap}px` : 'auto'
+      setPanelPlacement(current => current?.top === top && current?.bottom === bottom && current?.maxHeight === maxHeight
+        ? current : { top, bottom, maxHeight })
+    }
+    updatePlacement()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(updatePlacement) : null
+    observer?.observe(composerCard)
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [anchorRef, floating, open])
   const zonedDraft = input?.draft
   const hookedInput = useInput ? useInput(value => value) : undefined
   const draft = zonedDraft !== undefined ? zonedDraft : hookedInput?.draft
@@ -212,7 +242,19 @@ function LoadedResearchDraftEnhancerHost(props) {
   const launcherProps = floating
     ? { open, onOpenChange }
     : { launcher: 'inline', renderLauncher: () => null, anchorRef, open, onOpenChange }
-  return React.createElement('div', { className: 'rk-enhancer-theme', style: { display: 'contents' } }, React.createElement(PromptKit.QuickEnhancer, {
+  const inlinePlacement = !floating && panelPlacement
+  const enhancerNode = React.createElement('div', {
+    className: 'rk-enhancer-theme',
+    'data-inline-placement': inlinePlacement ? '' : undefined,
+    style: {
+      display: 'contents',
+      ...(inlinePlacement && {
+        '--rk-enhancer-top': panelPlacement.top,
+        '--rk-enhancer-bottom': panelPlacement.bottom,
+        '--rk-enhancer-max-height': `${panelPlacement.maxHeight}px`,
+      }),
+    },
+  }, React.createElement(PromptKit.QuickEnhancer, {
     key: 'promptkit-quick-enhancer',
     methodProvider: researchMethodProvider,
     assetProvider: researchAssetProvider,
@@ -223,6 +265,12 @@ function LoadedResearchDraftEnhancerHost(props) {
     storagePrefix: 'dsh-research-kit.promptkit.',
     ...launcherProps,
   }))
+  // fixed 浮层必须挂到 body：DSH 0.2.2-rc.1+ 的 composer seat（will-change: transform）
+  // 会成为 fixed 后代的 containing block，导致按视口坐标算出的 panelLeft 叠加偏移后溢出右屏。
+  return React.createElement(React.Fragment, null, [
+    React.createElement(GlobalStyle, { key: 'style' }),
+    bodyPortal(enhancerNode, 'enhancer'),
+  ])
 }
 
 // 悬浮形态下的加载兜底。工件没就绪时右下角不能什么都不留，否则又回到

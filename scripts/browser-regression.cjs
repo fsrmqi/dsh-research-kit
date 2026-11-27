@@ -594,10 +594,33 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.evaluate(()=>window.setComposerDraft('请做一个关于水稻耐盐性的文献综述。'));
   await page.waitForTimeout(850);
   assert.equal(await suggestion.count(),0);
+  const composerCardStyle = await page.locator('#composer').getAttribute('style');
+  await page.locator('#composer').evaluate(card => {
+    card.style.willChange = 'transform';
+    card.style.minHeight = '136px';
+  });
   await page.locator('#composer').getByRole('button',{name:'科研辅助',exact:true}).click();
   await dialog.getByRole('button',{name:'整理当前提问'}).click();
   await page.getByRole('button',{name:'应用增强到消息框'}).waitFor();
+  const enhancer = page.getByRole('dialog', { name: '对话增强器', exact: true });
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 620 }]) {
+    await page.setViewportSize(viewport);
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('section[aria-label="对话增强器"]');
+      const composer = document.querySelector('#composer').getBoundingClientRect();
+      const bounds = panel?.getBoundingClientRect();
+      return bounds && !panel.closest('#composer') && bounds.width > 0 && bounds.height > 0
+        && bounds.left >= 0 && bounds.right <= innerWidth + 1
+        && bounds.top >= 0 && bounds.bottom <= innerHeight + 1
+        && (bounds.bottom <= composer.top || bounds.top >= composer.bottom);
+    }, null, { timeout: 5000 });
+  }
+  await enhancer.getByRole('button', { name: '关闭', exact: true }).click({ trial: true });
+  if (process.env.RK_ENHANCER_SCREENSHOT) await page.screenshot({ path: process.env.RK_ENHANCER_SCREENSHOT, animations: 'disabled' });
   await page.keyboard.press('Escape');
+  await enhancer.waitFor({ state: 'hidden' });
+  await page.locator('#composer').evaluate((card, style) => card.setAttribute('style', style), composerCardStyle);
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   const firstPrompt='请核对遮阴对地表温度的影响。';
   await page.evaluate(()=>{

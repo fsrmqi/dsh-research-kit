@@ -146,7 +146,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball (offline / audit)**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.0.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.1.tgz
 ```
 
 > The generated `ui/client.js`, `ui/catalog-data.json`, and `ui/promptkit.js` artifacts are committed, so a clone installs without building.
@@ -259,7 +259,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 ## Compatibility & status
 
-Current version `0.3.0` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
+Current version `0.3.1` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
 Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 627 regression tests in 78 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
 

@@ -4,7 +4,7 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-> 当前版本 `0.3.0`，**尚未发布到 npm**；下述变更均在 `main` 分支上。安装方式见 [README](README.md)。
+> 当前版本 `0.3.1`，**尚未发布到 npm**；下述变更均在 `main` 分支上。安装方式见 [README](README.md)。
 
 ## [0.3.0] - 2026-09-28
 
