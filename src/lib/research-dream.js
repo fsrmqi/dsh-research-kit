@@ -28,7 +28,21 @@ export const DREAM_SNAPSHOT_LIMITS = {
   claims: 50,
   knowledgeNodes: 60,
   knowledgeClaims: 50,
+  assets: 40,
+  runs: 12,
 }
+
+// 每次做梦只带「新变化」和「仍未决的锚点」，不把已经核实的历史整库再送一遍。
+export const DREAM_WINDOW_LIMITS = {
+  evidence: { delta: 24, anchor: 12 },
+  claims: { delta: 16, anchor: 10 },
+  knowledgeNodes: { delta: 16, anchor: 10 },
+  knowledgeClaims: { delta: 12, anchor: 8 },
+  assets: { delta: 12, anchor: 8 },
+  runs: { delta: 6, anchor: 3 },
+}
+export const DREAM_AUTO_COOLDOWN_MS = 6 * 60 * 60 * 1000
+export const DREAM_COLD_QUOTA = 4
 
 const ASSOCIATIVE_KINDS = new Set(['gap_clue', 'bridge_insight', 'hypothesis_draft'])
 const CONSOLIDATION_KINDS = new Set(['duplicate_evidence', 'conflict_alert', 'link_suggestion', 'stale_review'])
@@ -104,6 +118,7 @@ function makeSignature(kind, refs = {}, extra = '') {
     [...(refs.claimIds || [])].sort().join(','),
     [...(refs.nodeIds || [])].sort().join(','),
     [...(refs.knowledgeClaimIds || [])].sort().join(','),
+    [...(refs.assetIds || [])].sort().join(','),
     String(extra || '').trim().toLowerCase(),
   ]
   return parts.join('|')
@@ -130,6 +145,7 @@ function withRecordFocus(proposal) {
     options.evidenceIds = evidenceIds
   }
   if (refs.nodeIds?.[0]) options.nodeId = String(refs.nodeIds[0])
+  if (refs.assetIds?.[0]) options.assetId = String(refs.assetIds[0])
   return { ...proposal, action: { ...action, options } }
 }
 
@@ -163,12 +179,219 @@ function selectDreamProposals(items, mode, maxProposals) {
 /**
  * 构建有界梦境快照：只携带元数据、短标题与状态，绝不携带论文全文或原始响应。
  */
+function dreamRecordTime(row, kind) {
+  if (!row) return 0
+  if (kind === 'claims') return Date.parse(row.updated_at || '') || Number(row.updatedAt || 0) || 0
+  return Number(row.updatedAt || row.savedAt || row.createdAt || 0) || 0
+}
+
+function dreamRecordText(row, kind) {
+  if (kind === 'evidence') return `${row.title || ''} ${(row.tags || []).join(' ')} ${row.reason || ''}`
+  if (kind === 'claims') return row.statement || ''
+  if (kind === 'knowledgeNodes') return `${row.label || ''} ${row.excerpt || ''}`
+  if (kind === 'knowledgeClaims') return `${row.relation || ''} ${row.polarity || ''}`
+  if (kind === 'assets') return `${row.title || ''} ${(row.tags || []).join(' ')} ${row.note || ''}`
+  return `${row.workflowName || row.workflowId || ''} ${row.status || ''}`
+}
+
+function isDreamAnchor(row, kind) {
+  if (!row?.id) return false
+  if (kind === 'evidence') return String(row.status || 'unverified') === 'unverified'
+  if (kind === 'claims') return !['verified', 'rejected'].includes(String(row.state || 'extracted'))
+  if (kind === 'knowledgeNodes' || kind === 'knowledgeClaims') return String(row.status || 'to_verify') !== 'verified'
+  if (kind === 'assets') {
+    const epistemic = String(row.epistemicStatus || '')
+    const verification = String(row.verification?.status || '')
+    return epistemic === 'to_verify' || epistemic === 'inferred' || verification === 'pending'
+  }
+  return !['completed', 'failed'].includes(String(row.status || 'draft'))
+}
+
+export function fingerprintDreamAnchors(buckets = {}) {
+  const ids = []
+  for (const kind of Object.keys(DREAM_WINDOW_LIMITS)) {
+    for (const row of buckets[kind] || []) {
+      if (isDreamAnchor(row, kind)) ids.push(`${kind}:${row.id}`)
+    }
+  }
+  ids.sort()
+  let hash = 2166136261
+  const text = ids.join('|')
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `${ids.length}:${(hash >>> 0).toString(36)}`
+}
+
+function openColdQueue(buckets, selected) {
+  const queue = []
+  for (const kind of Object.keys(DREAM_WINDOW_LIMITS)) {
+    const chosen = new Set((selected[kind] || []).map(row => row.id))
+    for (const row of buckets[kind] || []) {
+      if (!row?.id || chosen.has(row.id) || !isDreamAnchor(row, kind)) continue
+      queue.push({ kind, row, time: dreamRecordTime(row, kind) })
+    }
+  }
+  queue.sort((a, b) => a.time - b.time || String(a.row.id).localeCompare(String(b.row.id)))
+  return queue
+}
+
+/**
+ * 把持续增长的课题压成一次梦境能看完的窗口：
+ * 新变化优先；另外每次只带几条最久没回顾的冷记录，看完就往后挪。
+ * 已核实的记录留在主库。冷记录不删除，采纳或忽略之后不再重复推同一条。
+ */
+export function composeDreamInputs({
+  evidence = [],
+  claims = [],
+  knowledgeNodes = [],
+  knowledgeClaims = [],
+  assets = [],
+  runs = [],
+  watermark = null,
+  anchorCursor = 0,
+  force = false,
+} = {}) {
+  const buckets = { evidence, claims, knowledgeNodes, knowledgeClaims, assets, runs }
+  const at = Number(watermark?.at) || 0
+  const selected = {}
+  let deltaCount = 0
+  const deltaTokens = new Set()
+  for (const kind of Object.keys(DREAM_WINDOW_LIMITS)) {
+    const fresh = (buckets[kind] || [])
+      .filter(row => row && row.id && (!at || dreamRecordTime(row, kind) > at))
+      .sort((a, b) => dreamRecordTime(b, kind) - dreamRecordTime(a, kind))
+      .slice(0, DREAM_WINDOW_LIMITS[kind].delta)
+    selected[kind] = fresh
+    deltaCount += fresh.length
+    for (const row of fresh) {
+      for (const token of tokenizeDreamText(dreamRecordText(row, kind))) deltaTokens.add(token)
+    }
+  }
+  const anchorFingerprint = fingerprintDreamAnchors(buckets)
+  let cursor = Number(watermark?.coldCursor ?? anchorCursor) || 0
+  if (watermark?.anchorFingerprint && watermark.anchorFingerprint !== anchorFingerprint) cursor = 0
+  const queue = openColdQueue(buckets, selected)
+  if (deltaCount > 0 && deltaTokens.size) {
+    const linked = queue
+      .map(item => ({
+        ...item,
+        overlap: sharedTokens(tokenizeDreamText(dreamRecordText(item.row, item.kind)), deltaTokens).length,
+      }))
+      .filter(item => item.overlap > 0)
+      .sort((a, b) => b.overlap - a.overlap || a.time - b.time)
+      .slice(0, 4)
+    for (const item of linked) selected[item.kind].push(item.row)
+  }
+  const pending = openColdQueue(buckets, selected)
+  if (force && cursor >= pending.length && pending.length) cursor = 0
+  const start = Math.min(Math.max(0, cursor), pending.length)
+  const coldSlice = pending.slice(start, start + DREAM_COLD_QUOTA)
+  for (const item of coldSlice) selected[item.kind].push(item.row)
+  const nextColdCursor = start + coldSlice.length
+  return {
+    ...selected,
+    deltaCount,
+    coldCount: pending.length,
+    coldTaken: coldSlice.length,
+    coldCursor: start,
+    anchorFingerprint,
+    nextAnchorCursor: nextColdCursor,
+    nextColdCursor,
+    totals: {
+      evidence: (evidence || []).length,
+      claims: (claims || []).length,
+      knowledgeNodes: (knowledgeNodes || []).length,
+      knowledgeClaims: (knowledgeClaims || []).length,
+      assets: (assets || []).length,
+      runs: (runs || []).length,
+    },
+  }
+}
+
+export function shouldSkipDream({
+  deltaCount = 0,
+  anchorFingerprint = '',
+  coldCount = 0,
+  coldCursor = 0,
+  watermark = null,
+  now = Date.now(),
+  force = false,
+  auto = false,
+  cooldownMs = DREAM_AUTO_COOLDOWN_MS,
+} = {}) {
+  if (force) return { skip: false, reason: '' }
+  if (!watermark?.lastDreamAt) return { skip: false, reason: '' }
+  if (auto && now - Number(watermark.lastDreamAt) < cooldownMs) return { skip: true, reason: 'cooldown' }
+  const cursor = Number.isFinite(Number(coldCursor)) ? Number(coldCursor) : Number(watermark.coldCursor) || 0
+  const remainingCold = Math.max(0, Number(coldCount) || 0) - cursor
+  if (deltaCount === 0 && remainingCold <= 0 && anchorFingerprint === watermark.anchorFingerprint) {
+    return { skip: true, reason: 'unchanged' }
+  }
+  return { skip: false, reason: '' }
+}
+
+export function buildWakeBrief({ pending = [], run = null, report = null } = {}) {
+  const rows = Array.isArray(pending) ? pending : []
+  return {
+    stoppedAt: run ? `${run.workflowName || run.workflowId || '研究运行'} · ${run.status || 'draft'}` : '',
+    pendingCount: rows.length,
+    conflictCount: rows.filter(item => item.kind === 'conflict_alert' || item.kind === 'duplicate_evidence').length,
+    clueCount: rows.filter(item => item.unverifiedInference).length,
+    top: rows.slice(0, 3).map(item => ({ id: item.id, title: item.title, kind: item.kind })),
+    digest: report?.digest || '',
+  }
+}
+
+export function planDreamAccept(proposal = {}) {
+  const refs = proposal.refs || {}
+  const evidenceIds = (refs.evidenceIds || []).map(String).filter(Boolean).slice(0, 4)
+  const assetIds = (refs.assetIds || []).map(String).filter(Boolean).slice(0, 2)
+  const ops = []
+  if (proposal.category === 'associative') {
+    ops.push({
+      type: 'save_asset',
+      label: '存为灵感',
+      evidenceIds,
+      asset: {
+        title: clampText(proposal.title, 80),
+        body: clampText(`${proposal.summary || ''}\n\n${proposal.promptDraft || ''}\n\n[梦境推论 · 待核验]`, 2000),
+        type: 'insight',
+        thinkingKind: 'assumption',
+        epistemicStatus: 'to_verify',
+        verification: { status: 'pending', evidence: '', checkedAt: 0 },
+        tags: ['梦境推论', '待核验'],
+        note: `科研梦境提案，待核验。证据：${evidenceIds.join('、') || '无'}`,
+        provenance: { kind: 'research-dream', evidenceIds },
+      },
+    })
+    const statement = clampText(`【梦境推论 · 待核验】${proposal.title}。${proposal.summary || ''}`, 800)
+    if (statement) {
+      ops.push({
+        type: 'register_claim',
+        label: '登记待核验 Claim',
+        claim: { statement, state: 'extracted', evidence_ids: evidenceIds },
+      })
+    }
+  }
+  if (assetIds.length && evidenceIds.length) {
+    ops.push({
+      type: 'link_evidence',
+      label: '建立证据互链',
+      pairs: assetIds.flatMap(assetId => evidenceIds.map(evidenceId => ({ assetId, evidenceId }))).slice(0, 4),
+    })
+  }
+  return ops
+}
+
 export function buildDreamSnapshot({
   project = '',
   evidence = [],
   claims = [],
   knowledgeNodes = [],
   knowledgeClaims = [],
+  assets = [],
   runs = [],
 } = {}) {
   const scopedEvidence = (Array.isArray(evidence) ? evidence : [])
@@ -234,6 +457,32 @@ export function buildDreamSnapshot({
     updatedAt: Number(item.updatedAt || item.createdAt || 0),
   }))
 
+  const scopedAssets = (Array.isArray(assets) ? assets : [])
+    .filter(item => item && item.id)
+    .sort((a, b) => (Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0)))
+  const assetSlice = scopedAssets.slice(0, DREAM_SNAPSHOT_LIMITS.assets).map(item => ({
+    id: String(item.id),
+    title: clampText(item.title, 80),
+    type: String(item.type || 'insight'),
+    thinkingKind: String(item.thinkingKind || ''),
+    epistemicStatus: String(item.epistemicStatus || ''),
+    verification: String(item.verification?.status || ''),
+    tags: (Array.isArray(item.tags) ? item.tags : String(item.tags || '').split(/[,，]/)).map(tag => clampText(tag, 32)).filter(Boolean).slice(0, 6),
+    note: clampText(item.note, 140),
+    updatedAt: Number(item.updatedAt || item.createdAt || 0),
+  }))
+
+  const scopedRuns = (Array.isArray(runs) ? runs : [])
+    .filter(item => item && item.id)
+    .sort((a, b) => (Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0)))
+  const runSlice = scopedRuns.slice(0, DREAM_SNAPSHOT_LIMITS.runs).map(item => ({
+    id: String(item.id),
+    workflowId: String(item.workflowId || ''),
+    workflowName: clampText(item.workflowName, 80),
+    status: String(item.status || 'draft'),
+    updatedAt: Number(item.updatedAt || item.createdAt || 0),
+  }))
+
   return {
     project: String(project || ''),
     scannedAt: Date.now(),
@@ -242,12 +491,17 @@ export function buildDreamSnapshot({
       claims: scopedClaims.length,
       knowledgeNodes: scopedNodes.length,
       knowledgeClaims: scopedKnowledgeClaims.length,
-      runs: Array.isArray(runs) ? runs.length : 0,
+      assets: scopedAssets.length,
+      runs: scopedRuns.length,
+      corpusEvidence: scopedEvidence.length,
+      delta: scopedEvidence.length,
     },
     evidence: evSlice,
     claims: claimSlice,
     knowledgeNodes: nodeSlice,
     knowledgeClaims: kcSlice,
+    assets: assetSlice,
+    runs: runSlice,
   }
 }
 
@@ -255,17 +509,23 @@ export function formatDreamCompressionSummary(counts, proposalCount) {
   const ev = Number(counts?.evidence) || 0
   const cl = Number(counts?.claims) || 0
   const kn = Number(counts?.knowledgeNodes) || 0
-  return `已扫描 ${ev} 条证据 · ${cl} 条论断 · ${kn} 个知识节点，提炼出 ${proposalCount} 条高信号提案`
+  const corpus = Number(counts?.corpusEvidence)
+  const extra = Number.isFinite(corpus) && corpus > ev
+    ? `（课题累计 ${corpus} 条，本次新增 ${Number(counts?.delta) || 0} 条）`
+    : ''
+  return `已扫描 ${ev} 条证据 · ${cl} 条论断 · ${kn} 个知识节点${extra}，提炼出 ${proposalCount} 条高信号提案`
 }
 
 function buildRefLabels(refs, snapshot) {
   const evMap = new Map((snapshot.evidence || []).map(item => [item.id, item.title || item.id]))
   const claimMap = new Map((snapshot.claims || []).map(item => [item.id, item.statement || item.id]))
   const nodeMap = new Map((snapshot.knowledgeNodes || []).map(item => [item.id, item.label || item.id]))
+  const assetMap = new Map((snapshot.assets || []).map(item => [item.id, item.title || item.id]))
   const labels = []
   for (const id of refs.evidenceIds || []) if (evMap.has(id)) labels.push(`证据：${clampText(evMap.get(id), 44)}`)
   for (const id of refs.claimIds || []) if (claimMap.has(id)) labels.push(`论断：${clampText(claimMap.get(id), 44)}`)
   for (const id of refs.nodeIds || []) if (nodeMap.has(id)) labels.push(`节点：${clampText(nodeMap.get(id), 44)}`)
+  for (const id of refs.assetIds || []) if (assetMap.has(id)) labels.push(`灵感：${clampText(assetMap.get(id), 44)}`)
   return labels.slice(0, 4)
 }
 
@@ -457,6 +717,39 @@ function generateConsolidationProposals(snapshot, now) {
       status: 'pending',
       unverifiedInference: false,
     })
+  }
+
+  const assets = snapshot.assets || []
+  if (assets.length && evidence.length) {
+    const evTokens = evidence.map(item => ({
+      item,
+      tokens: tokenizeDreamText(`${item.title} ${(item.tags || []).join(' ')} ${item.reason}`),
+    }))
+    for (const asset of assets) {
+      if (proposals.filter(item => item.kind === 'link_suggestion' && item.refs.assetIds?.length).length >= 2) break
+      const tokens = tokenizeDreamText(`${asset.title} ${(asset.tags || []).join(' ')} ${asset.note}`)
+      const matched = evTokens
+        .map(entry => ({ item: entry.item, overlap: sharedTokens(tokens, entry.tokens) }))
+        .filter(entry => entry.overlap.length >= 2)
+        .sort((a, b) => b.overlap.length - a.overlap.length)[0]
+      if (!matched) continue
+      const refs = { evidenceIds: [matched.item.id], claimIds: [], nodeIds: [], knowledgeClaimIds: [], assetIds: [asset.id] }
+      const signature = makeSignature('link_suggestion', refs)
+      proposals.push({
+        id: proposalIdFromSignature(signature),
+        signature,
+        kind: 'link_suggestion',
+        category: 'consolidation',
+        priority: 80,
+        title: `灵感「${clampText(asset.title, 24)}」可挂到已有证据`,
+        summary: `这条待核验灵感与证据「${clampText(matched.item.title, 40)}」共享 ${matched.overlap.slice(0, 3).join('、')}。确认后可建立互链，不会自动改写两边的正文。`,
+        refs,
+        refLabels: buildRefLabels(refs, snapshot),
+        action: { type: 'navigate', target: 'vault', options: { tab: 'assets' }, label: '去灵感资产' },
+        status: 'pending',
+        unverifiedInference: false,
+      })
+    }
   }
 
   return proposals
@@ -687,6 +980,7 @@ export function parseDreamLlmProposals(parsed, snapshot, {
   const validClaims = new Set((snapshot?.claims || []).map(item => item.id))
   const validNodes = new Set((snapshot?.knowledgeNodes || []).map(item => item.id))
   const validKClaims = new Set((snapshot?.knowledgeClaims || []).map(item => item.id))
+  const validAssets = new Set((snapshot?.assets || []).map(item => item.id))
 
   const rows = Array.isArray(parsed?.proposals) ? parsed.proposals : []
   const out = []
@@ -709,19 +1003,22 @@ export function parseDreamLlmProposals(parsed, snapshot, {
     const claimDeclared = declaredIds(rawRefs.claimIds)
     const nodeDeclared = declaredIds(rawRefs.nodeIds)
     const knowledgeDeclared = declaredIds(rawRefs.knowledgeClaimIds)
+    const assetDeclared = declaredIds(rawRefs.assetIds)
     const everyAnchored = (ids, valid) => ids.every(id => valid.has(id))
     if (!everyAnchored(evidenceDeclared, validEvidence)
       || !everyAnchored(claimDeclared, validClaims)
       || !everyAnchored(nodeDeclared, validNodes)
-      || !everyAnchored(knowledgeDeclared, validKClaims)) continue
+      || !everyAnchored(knowledgeDeclared, validKClaims)
+      || !everyAnchored(assetDeclared, validAssets)) continue
 
     const evidenceIds = [...new Set(evidenceDeclared)].slice(0, 4)
     const claimIds = [...new Set(claimDeclared)].slice(0, 4)
     const nodeIds = [...new Set(nodeDeclared)].slice(0, 4)
     const knowledgeClaimIds = [...new Set(knowledgeDeclared)].slice(0, 4)
-    if (evidenceIds.length + claimIds.length + nodeIds.length + knowledgeClaimIds.length === 0) continue
+    const assetIds = [...new Set(assetDeclared)].slice(0, 4)
+    if (evidenceIds.length + claimIds.length + nodeIds.length + knowledgeClaimIds.length + assetIds.length === 0) continue
 
-    const refs = { evidenceIds, claimIds, nodeIds, knowledgeClaimIds }
+    const refs = { evidenceIds, claimIds, nodeIds, knowledgeClaimIds, assetIds }
     const signature = makeSignature(kind, refs, title.slice(0, 24))
     if (handled.has(signature) || seen.has(signature)) continue
     seen.add(signature)

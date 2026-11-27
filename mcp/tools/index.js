@@ -6,6 +6,7 @@ import { literatureTools } from './literature.js'
 import { literatureDiscoveryTools, literatureLinkTools, literatureMetadataTools } from './literature-search.js'
 import { observabilityTools } from './observability.js'
 import { reviewCoreTools, reviewFocusedTools } from './review.js'
+import { dreamMemoryTools } from './dream.js'
 import { runCheckpointTools, runLifecycleTools } from './runs.js'
 
 const tools = [
@@ -23,6 +24,7 @@ const tools = [
   ...literatureLinkTools,
   ...reviewFocusedTools,
   ...literatureMetadataTools,
+  ...dreamMemoryTools,
 ]
 
 export { tools, DISCOVERY_ROUTES }

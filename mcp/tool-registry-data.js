@@ -311,4 +311,20 @@ export const TOOL_REGISTRY = [
     example: "{}",
     artifactKind: '',
   },
+  {
+    name: 'research_dream_memory',
+    category: 'evidence', tier: 'entry', access: 'read-only', requiresConfirmation: false,
+    helpRoute: null, labelZh: '读取梦境记忆',
+    summaryZh: '读取课题的主题摘要和记忆卡；传入 id 可展开回原记录编号，不删除原文',
+    example: "{ project: 'demo' }",
+    artifactKind: '',
+  },
+  {
+    name: 'research_dream_memory_record',
+    category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
+    helpRoute: null, labelZh: '写入梦境记忆',
+    summaryZh: '记录已确认的记忆卡，或把已有记忆卡收成主题摘要；只保存短摘要和来源编号',
+    example: "{ project: 'demo', layer: 'card', gist: '这几条证据重复', judgment: 'duplicate', covers: { evidenceIds: ['ev-1'] } }",
+    artifactKind: '',
+  },
 ]

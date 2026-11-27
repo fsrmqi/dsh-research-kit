@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
-> 面向 DeepSeek Harness 的科研工作台与跨宿主 MCP 工具集：351 条人工审核的工作流、109 个技能条目、129 个科学数据源，以及 36 个研究工具。
+> 面向 DeepSeek Harness 的科研工作台与跨宿主 MCP 工具集：351 条人工审核的工作流、109 个技能条目、129 个科学数据源，以及 38 个研究工具。
 
 在 DSH 中，它把反复执行的科研任务变成**参数化、可编辑、发送前可见**的提示词；通过独立 stdio MCP Server，它也可向 Codex、Claude Code、Zed 等宿主提供文献检索、证据管理、研究运行与审阅工具。所有研究判断仍需研究者核验。
 
@@ -124,7 +124,7 @@ Research Kit 把这四点做成可复用的资产。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
 - **手动编辑保护** — 手动编辑后变更参数/技能会提示不会自动合并；筛选后详情始终属于当前结果集。
 - **宿主动作降级** — `setDraft`/`submit` 缺失时按钮禁用、灰化并说明原因，视图不崩溃。
-- **MCP 工具集与阶段确认** — 插件同时提供 MCP Server：36 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账与发布检查、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；调用轨迹在 DSH 的活动中查看，科研阶段确认在「本次研究」的待办收件箱处理。研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md)。
+- **MCP 工具集与阶段确认** — 插件同时提供 MCP Server：38 个 `research_*` 工具（文献检索与核验、证据盘点与人工评估、显式 Claim 台账与发布检查、科研 Context Pack、多面板图表生成、声明/异常/写作审阅、AI 披露生成、运行状态与检查点审批），宿主 Agent 可直接调用而无需经过 UI；调用轨迹在 DSH 的活动中查看，科研阶段确认在「本次研究」的待办收件箱处理。研究运行护照支持导入/导出以跨会话恢复。完整工具清单与接入方式见 [MCP Server 跨平台配置指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md)。
 
 **深色主题与窄屏** — 跟随系统与 DSH 主题切换；880px 以下单列布局；原生 `aria-*` 与焦点环。
 
@@ -269,7 +269,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 
 当前版本 `0.3.3`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、635 项回归测试（79 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、639 项回归测试（79 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
@@ -278,7 +278,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（635 项 / 79 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（639 项 / 79 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 
@@ -290,7 +290,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | --- | --- |
 | [docs/README.md](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/README.md) | **文档索引与推荐阅读顺序**（含配图索引） |
 | [论文工作手册](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PAPER-WORKFLOW.md) | 从选题、检索到投稿：九阶段单点工作流表、十阶段八闸门一键流水线、三条查询路径、投稿包清单与 MCP 操作链 |
-| [MCP Server 接入指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | 把 36 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
+| [MCP Server 接入指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | 把 38 个 `research_*` 工具接进 Codex / Claude Code / Zed / DSH，含按任务组织的最短路径与参数示例 |
 | [架构与数据契约](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md) | 模块职责、数据流、DSH 宿主边界、目录 schema |
 | [开发指南](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/DEVELOPMENT.md) | 本地启动、实现顺序、测试策略、交付检查单 |
 | [手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) | 为什么不能用单测替代、逐项验收步骤、失败定位树 |

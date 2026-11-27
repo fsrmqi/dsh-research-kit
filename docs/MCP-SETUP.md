@@ -1,6 +1,6 @@
 # MCP Server 跨平台配置指南
 
-本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 36 个科研 Tool（文献检索、引用验证、证据管理、人工评估、Claim 台账与发布检查、Context Pack、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
+本文说明如何将 `dsh-research-kit` 的 MCP Server 接入 Codex、Claude Code、Zed 与 DSH 四种宿主。接入后，Agent 可以直接调用 38 个科研 Tool（文献检索、引用验证、证据管理、人工评估、Claim 台账与发布检查、Context Pack、图表生成、写作质量检查、AI 披露生成等），不需要通过 UI 手动操作。
 
 接进来能拿到什么，先看一张图：四类宿主连的是同一个 stdio 服务，工具按能力域分组；绝大多数只读或外呼，只有两个能力域会改变仓库状态，调用前需要显式确认。工具会同时暴露 MCP annotations（只读、外呼、幂等提示），业务错误统一带 `isError`，大结果默认使用紧凑 JSON。
 
@@ -89,7 +89,7 @@ args = ["/absolute/path/to/dsh-research-kit/mcp/server.js"]
 
 ### 验证
 
-在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 36 个 dsh-research-kit 的 Tool。
+在 Codex 会话中输入：列出所有可用的 MCP 工具。Agent 应列出 38 个 dsh-research-kit 的 Tool。
 
 ---
 
@@ -289,4 +289,6 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 | `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据；引用列表默认只返回数量，需显式开启才返回全量 |
 | `research_usage_stats` | 工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据） |
+| `research_dream_memory` | 读取课题的主题摘要和记忆卡；传入 id 可展开回原记录编号，不删除原文（默认入口） |
+| `research_dream_memory_record` | 记录已确认的记忆卡，或把已有记忆卡收成主题摘要；只保存短摘要和来源编号 |
 <!-- tool-table:end -->

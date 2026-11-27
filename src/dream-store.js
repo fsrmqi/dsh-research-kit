@@ -7,6 +7,7 @@
 import { normalizeDreamMode } from './lib/research-dream.js'
 
 export const DREAM_STORE_KEY = 'dsh-research-kit.dream-reports.v1'
+export const DREAM_ASSET_STORAGE_KEY = 'dsh-research-kit.promptkit.vault.assets.v1'
 export const DREAM_MAX_REPORTS = 12
 export const DREAM_MAX_HANDLED_SIGNATURES = 300
 
@@ -18,6 +19,8 @@ function emptyState() {
     preferredMode: 'full',
     reports: [],
     handledByProject: {},
+    watermarkByProject: {},
+    auto: { enabled: false },
   }
 }
 
@@ -36,6 +39,8 @@ function readState() {
       preferredMode: normalizeDreamMode(parsed?.preferredMode),
       reports: Array.isArray(parsed?.reports) ? parsed.reports : [],
       handledByProject: parsed?.handledByProject && typeof parsed.handledByProject === 'object' ? parsed.handledByProject : {},
+      watermarkByProject: parsed?.watermarkByProject && typeof parsed.watermarkByProject === 'object' ? parsed.watermarkByProject : {},
+      auto: { enabled: parsed?.auto?.enabled === true },
     }
   } catch {
     return emptyState()
@@ -101,6 +106,51 @@ export function getHandledDreamSignatures(project = '') {
   const key = projectKey(project)
   const list = readState().handledByProject[key]
   return Array.isArray(list) ? list : []
+}
+
+export function getDreamWatermark(project = '') {
+  const row = readState().watermarkByProject[projectKey(project)]
+  return row && typeof row === 'object' ? row : null
+}
+
+export function setDreamWatermark(project = '', watermark = {}) {
+  const state = readState()
+  const key = projectKey(project)
+  writeState({
+    ...state,
+    watermarkByProject: {
+      ...state.watermarkByProject,
+      [key]: {
+        at: Number(watermark.at) || Date.now(),
+        lastDreamAt: Number(watermark.lastDreamAt) || Date.now(),
+        anchorFingerprint: String(watermark.anchorFingerprint || ''),
+        anchorCursor: Number(watermark.anchorCursor) || 0,
+        coldCursor: Number(watermark.coldCursor ?? watermark.anchorCursor) || 0,
+      },
+    },
+  })
+}
+
+export function listStoredDreamAssets() {
+  try {
+    const raw = typeof window !== 'undefined' && window.localStorage
+      ? window.localStorage.getItem(DREAM_ASSET_STORAGE_KEY)
+      : null
+    const rows = JSON.parse(raw || '[]')
+    return Array.isArray(rows) ? rows : []
+  } catch {
+    return []
+  }
+}
+
+export function getDreamAutoEnabled() {
+  return readState().auto.enabled === true
+}
+
+export function setDreamAutoEnabled(enabled) {
+  const state = readState()
+  writeState({ ...state, auto: { enabled: enabled === true } })
+  return enabled === true
 }
 
 export function saveDreamReport(report) {

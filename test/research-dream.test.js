@@ -3,10 +3,15 @@ import assert from 'node:assert/strict'
 import {
   DREAM_MAX_PROPOSALS,
   buildDreamSnapshot,
+  buildWakeBrief,
+  composeDreamInputs,
+  fingerprintDreamAnchors,
   mergeDreamProposals,
   parseDreamLlmProposals,
+  planDreamAccept,
   runLocalDream,
   scopeDreamRecords,
+  shouldSkipDream,
 } from '../src/lib/research-dream.js'
 import {
   clearDreamStoreForTest,
@@ -20,6 +25,9 @@ import {
   updateDreamProposalStatus,
 } from '../src/dream-store.js'
 import { RESEARCH_DREAM_PATH, researchDreamRoute } from '../dsh/research-dream.js'
+import {
+  coverIndex, expandDreamMemory, hotDreamMemory, memoryCardFromProposal, retireCoveredRecords, themeFromCards,
+} from '../src/lib/dream-memory.js'
 
 function sampleData() {
   const now = Date.now()
@@ -148,6 +156,13 @@ test('parseDreamLlmProposals：丢弃编造 ID 的幻觉提案，保留真实锚
         refs: { evidenceIds: ['ev-1', 'ev-3'], claimIds: ['cl-gap'], nodeIds: [] },
       },
       {
+        kind: 'hypothesis_draft',
+        priority: 87,
+        title: '混入捏造灵感',
+        summary: '证据是真的，但灵感 ID 不存在，应整条拒绝',
+        refs: { evidenceIds: ['ev-1'], assetIds: ['asset-missing'] },
+      },
+      {
         kind: 'duplicate_evidence',
         priority: 99,
         title: '巩固类在联想模式应被过滤',
@@ -168,6 +183,127 @@ test('parseDreamLlmProposals：丢弃编造 ID 的幻觉提案，保留真实锚
     proposals: [{ kind: 'hypothesis_draft', priority: 80, title: '无来源假说', summary: '快照为空时也不应放行', refs: {} }],
   }, empty, { mode: 'full' })
   assert.equal(sourceless.length, 0)
+})
+
+test('composeDreamInputs：新材料带上未决锚点，已核实的旧记录留在主库', () => {
+  const watermark = { at: 1_000, lastDreamAt: 1_000, anchorFingerprint: 'stale' }
+  const composed = composeDreamInputs({
+    evidence: [
+      { id: 'old-verified', status: 'verified', title: 'settled paper', updatedAt: 100 },
+      { id: 'old-open', status: 'unverified', title: 'barley tapetum backlog', updatedAt: 200 },
+      { id: 'new-ev', status: 'unverified', title: 'barley tapetum heat', updatedAt: 2_000 },
+    ],
+    claims: [
+      { id: 'done', state: 'verified', statement: '已确认', updated_at: new Date(100).toISOString() },
+      { id: 'open', state: 'extracted', statement: '待核验 barley tapetum', updated_at: new Date(150).toISOString() },
+    ],
+    watermark,
+  })
+  assert.equal(composed.deltaCount, 1)
+  assert.deepEqual(composed.evidence.map(item => item.id).sort(), ['new-ev', 'old-open'])
+  assert.deepEqual(composed.claims.map(item => item.id), ['open'])
+  const crowded = composeDreamInputs({
+    evidence: Array.from({ length: 30 }, (_, index) => ({
+      id: `new-${index}`, status: 'verified', title: `paper ${index}`, updatedAt: 5_000 + index,
+    })),
+    watermark,
+  })
+  assert.equal(crowded.evidence.length, 24)
+  assert.equal(crowded.deltaCount, 24)
+})
+
+test('梦境记忆：记忆卡盖住冷记录，主题摘要对外只暴露热层', async () => {
+  const cardA = memoryCardFromProposal({
+    id: 'p-a', kind: 'duplicate_evidence', title: '两条证据重复', summary: '同一篇文献保存了两次',
+    refs: { evidenceIds: ['ev-old-1', 'ev-old-2'] },
+  })
+  const cardB = memoryCardFromProposal({
+    id: 'p-b', kind: 'stale_review', title: '一条旧论断还没核', summary: '先核这一条',
+    refs: { claimIds: ['cl-old'] },
+  })
+  const cardC = memoryCardFromProposal({
+    id: 'p-c', kind: 'gap_clue', title: '旧缺口仍在', summary: '新证据还没对上',
+    refs: { evidenceIds: ['ev-gap'], claimIds: ['cl-gap'] },
+  })
+  assert.equal(cardA.judgment, 'duplicate')
+  const retired = retireCoveredRecords([
+    { id: 'ev-old-1', status: 'unverified', updatedAt: 10 },
+    { id: 'ev-new', status: 'unverified', updatedAt: Date.now() + 60_000 },
+  ], 'evidence', coverIndex({ cards: [{ ...cardA, updatedAt: '2026-01-02T00:00:00.000Z' }], themes: [] }))
+  assert.deepEqual(retired.map(item => item.id), ['ev-new'])
+
+  const { mkdtemp, rm } = await import('node:fs/promises')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const home = await mkdtemp(join(tmpdir(), 'dream-memory-'))
+  process.env.DSH_RESEARCH_KIT_HOME = home
+  try {
+    const store = await import(`../mcp/state/dream-memory.js?home=${Date.now()}`)
+    let memory = await store.recordDreamMemoryCard('demo', cardA)
+    memory = await store.recordDreamMemoryCard('demo', cardB)
+    memory = await store.recordDreamMemoryCard('demo', cardC)
+    const theme = themeFromCards(memory.cards)
+    memory = await store.recordDreamMemoryTheme('demo', theme)
+    const hot = hotDreamMemory(memory)
+    assert.equal(hot.themes.length, 1)
+    assert.equal(hot.cards.length, 0)
+    assert.equal(hot.foldedCardCount, 3)
+    const expanded = expandDreamMemory(memory, hot.themes[0].id)
+    assert.equal(expanded.layer, 'theme')
+    assert.ok(expanded.theme.covers.evidenceIds.includes('ev-old-1'))
+    const view = await store.dreamMemoryView('demo', { id: cardA.id })
+    assert.equal(view.layer, 'card')
+    assert.deepEqual(view.card.covers.evidenceIds, ['ev-old-1', 'ev-old-2'])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('shouldSkipDream：没有新材料且未决项未变时跳过，第一次和手动强制不跳过', () => {
+  const buckets = { evidence: [{ id: 'old-open', status: 'unverified', updatedAt: 10 }] }
+  const fingerprint = fingerprintDreamAnchors(buckets)
+  const watermark = { at: 100, lastDreamAt: 100, anchorFingerprint: fingerprint }
+  assert.equal(shouldSkipDream({ deltaCount: 0, anchorFingerprint: fingerprint, watermark }).skip, true)
+  assert.equal(shouldSkipDream({ deltaCount: 0, anchorFingerprint: fingerprint, watermark: null }).skip, false)
+  assert.equal(shouldSkipDream({ deltaCount: 0, anchorFingerprint: fingerprint, watermark, force: true }).skip, false)
+  assert.equal(shouldSkipDream({ deltaCount: 1, anchorFingerprint: fingerprint, watermark }).skip, false)
+  const cooled = shouldSkipDream({
+    deltaCount: 1,
+    anchorFingerprint: 'changed',
+    watermark: { lastDreamAt: Date.now(), anchorFingerprint: fingerprint },
+    auto: true,
+    now: Date.now(),
+  })
+  assert.equal(cooled.skip, true)
+  assert.equal(cooled.reason, 'cooldown')
+})
+
+test('planDreamAccept：联想只登记为待核验，不写成已证实', () => {
+  const ops = planDreamAccept({
+    category: 'associative',
+    title: '高温调控绒毡层',
+    summary: '需要对照实验。',
+    refs: { evidenceIds: ['ev-1'], assetIds: ['asset-1'] },
+  })
+  const claim = ops.find(op => op.type === 'register_claim')
+  assert.equal(claim.claim.state, 'extracted')
+  assert.match(claim.claim.statement, /梦境推论 · 待核验/)
+  assert.deepEqual(claim.claim.evidence_ids, ['ev-1'])
+  assert.equal(ops.find(op => op.type === 'save_asset').asset.epistemicStatus, 'to_verify')
+  assert.equal(ops.find(op => op.type === 'link_evidence').pairs[0].assetId, 'asset-1')
+  const brief = buildWakeBrief({
+    pending: [
+      { id: '1', title: '冲突', kind: 'conflict_alert' },
+      { id: '2', title: '线索', kind: 'gap_clue', unverifiedInference: true },
+      { id: '3', title: '第三条', kind: 'stale_review' },
+      { id: '4', title: '超出', kind: 'stale_review' },
+    ],
+    run: { workflowName: '文献综述', status: 'waiting_review' },
+  })
+  assert.equal(brief.top.length, 3)
+  assert.equal(brief.stoppedAt, '文献综述 · waiting_review')
+  assert.equal(brief.conflictCount, 1)
+  assert.equal(brief.clueCount, 1)
 })
 
 test('mergeDreamProposals：完整梦保留本地冲突，不被单条联想覆盖', () => {

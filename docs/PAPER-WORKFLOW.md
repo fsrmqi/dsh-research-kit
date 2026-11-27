@@ -239,7 +239,7 @@ MCP 运行产生待确认阶段后，可在「本次研究」的待办收件箱�
 | `research_disclosure_generate` | 按期刊 AI 政策生成合规披露声明 |
 | `research_disclosure_list_policies` | 列出支持的期刊 AI 披露政策 |
 
-插件同时提供 36 个 `research_*` 工具，宿主清单、接入步骤与按任务组织的最短路径见 [MCP-SETUP.md](MCP-SETUP.md)。
+插件同时提供 38 个 `research_*` 工具，宿主清单、接入步骤与按任务组织的最短路径见 [MCP-SETUP.md](MCP-SETUP.md)。
 
 ## 6. 四条硬边界
 

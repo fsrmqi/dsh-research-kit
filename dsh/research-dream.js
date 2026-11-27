@@ -14,14 +14,14 @@ const SYSTEM_PROMPT = `你是科研工作台的「科研梦境」高信号提炼
 你的目标：用户积累了很多研究资料，根本不会逐条重看；请把零散积累高度压缩为最值得立即看的 2 至 5 条高信号提案，绝不铺陈长列表。
 
 严格规则：
-1. 只能引用输入 snapshot 中真实存在的 id（evidenceIds / claimIds / nodeIds / knowledgeClaimIds），绝不编造任何 ID、文献、实验数据或页码。
+1. 只能引用输入 snapshot 中真实存在的 id（evidenceIds / claimIds / nodeIds / knowledgeClaimIds / assetIds），绝不编造任何 ID、文献、实验数据或页码。输入只是新变化加上仍未核实的少量锚点，不是课题全库。
 2. 不得声称已核验全文或已证实结论；所有跨文献联想与假说必须定位为「待核验推论」。
 3. 提案类型 kind 只能取：
    - 巩固类（consolidation）：duplicate_evidence（疑似重复证据）、conflict_alert（正反立场冲突）、link_suggestion（未关联论断/节点与已有证据的潜在关联）、stale_review（最值得优先清理的积压待核验项）
    - 联想类（associative）：gap_clue（新证据回应旧缺口）、bridge_insight（跨文献弱连接/共同机制）、hypothesis_draft（可检验的研究假说方向）
 4. 按请求的 mode 严格筛选：mode=consolidation 只输出巩固类；mode=associative 只输出联想类；mode=full 两者兼顾且总数不超过 5 条。
 5. 仅输出严格 JSON 对象，格式如下：
-{"proposals":[{"kind":"bridge_insight","priority":90,"title":"简短中文标题（不超过40字）","summary":"简体中文、具体说明为什么值得看以及下一步动作（不超过120字）","refs":{"evidenceIds":[],"claimIds":[],"nodeIds":[],"knowledgeClaimIds":[]},"promptDraft":"可选：可直接写入输入框继续研究的简短提示词"}]}
+{"proposals":[{"kind":"bridge_insight","priority":90,"title":"简短中文标题（不超过40字）","summary":"简体中文、具体说明为什么值得看以及下一步动作（不超过120字）","refs":{"evidenceIds":[],"claimIds":[],"nodeIds":[],"knowledgeClaimIds":[],"assetIds":[]},"promptDraft":"可选：可直接写入输入框继续研究的简短提示词"}]}
 仅输出 JSON，不要输出任何额外解释。`
 
 function invalidInput(message) {
@@ -56,6 +56,8 @@ export async function runResearchDreamWithAgent({ llm, route, sessionId, mode, s
       claims: Array.isArray(snapshot.claims) ? snapshot.claims.slice(0, 40) : [],
       knowledgeNodes: Array.isArray(snapshot.knowledgeNodes) ? snapshot.knowledgeNodes.slice(0, 40) : [],
       knowledgeClaims: Array.isArray(snapshot.knowledgeClaims) ? snapshot.knowledgeClaims.slice(0, 40) : [],
+      assets: Array.isArray(snapshot.assets) ? snapshot.assets.slice(0, 24) : [],
+      runs: Array.isArray(snapshot.runs) ? snapshot.runs.slice(0, 8) : [],
     },
   }
   const output = await collectLlmText({

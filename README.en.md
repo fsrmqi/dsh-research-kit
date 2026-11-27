@@ -119,7 +119,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Manageable resource picks** — the overlay footer lists selected resources as removable chips.
 - **Manual-edit protection** — editing the prompt by hand switches to an explicit manual state with a one-click restore; the detail pane always belongs to the current filter result.
 - **Host-action degradation** — when `setDraft`/`submit` are absent, buttons disable with an explanation and the view does not crash.
-- **MCP tool set and staged confirmation** — the plugin also ships an MCP Server: 36 `research_*` tools (literature search and verification, evidence inventory and manual assessment, a Claim ledger and publication check, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI. Call trails are visible in DSH activity and staged confirmations are handled in the "This Research" review inbox; the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md).
+- **MCP tool set and staged confirmation** — the plugin also ships an MCP Server: 38 `research_*` tools (literature search and verification, evidence inventory and manual assessment, a Claim ledger and publication check, a research Context Pack, multi-panel figure generation, claim/anomaly/writing review, AI-disclosure generation, run status and checkpoint approval) that a host agent can call directly without the UI. Call trails are visible in DSH activity and staged confirmations are handled in the "This Research" review inbox; the run passport imports/exports for cross-session recovery. Full tool list and setup: [MCP Server cross-platform setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md).
 - **Claim review panel** — in Research Assets, reviewers can extract citation-anchored Claim candidates from a research passage, select drafts to save, and request a preliminary Agent review using the current session model. Agent suggestions are stored separately from human status. Reviewers then mark each Claim verified, ambiguous, or rejected with their name, rationale, and saved evidence. "View evidence relations" on a card groups sources by supporting, refuting, insufficient-evidence and unevaluated stance, showing recorded source locations, per-item reviewers and source verification status; a Claim with no links prompts you to add evidence. Draft exports retain states; publication exports list blockers for unverified Claims or missing evidence. Evidence notes and full text are excluded.
 
 **Dark theme & narrow screens** — follows the system and DSH theme; single column below 880px; native `aria-*` attributes and focus rings.
@@ -261,7 +261,7 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 Current version `0.3.3` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 635 regression tests in 79 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. Backup export and preview were verified in a real Desktop profile. Incremental restore still needs verification in an isolated Desktop profile.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 639 regression tests in 79 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. Backup export and preview were verified in a real Desktop profile. Incremental restore still needs verification in an isolated Desktop profile.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -270,7 +270,7 @@ Verified so far: catalog contract validation (589 entries, 589 unique IDs, shard
 ```bash
 npm run build   # generate client.js, catalog-data.json, and promptkit.js (committed; do not hand-edit)
 npm run check   # catalog contract validation + syntax checks
-npm test        # pure-logic, contract and render-level regression tests (635 / 79 files)
+npm test        # pure-logic, contract and render-level regression tests (639 / 79 files)
 npm run test:browser  # real-Chromium interaction regression (run `npx playwright install chromium` first)
 ```
 
@@ -282,7 +282,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | --- | --- |
 | [docs/README.md](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/README.md) | **Documentation index and recommended reading order** (including the figure index) |
 | [Paper workflow handbook](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PAPER-WORKFLOW.md) | End-to-end paper work: a nine-stage single-workflow table, a ten-stage pipeline with eight human gates, three search paths, submission packages and the MCP chain (Chinese only) |
-| [MCP server setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | Wire the 36 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
+| [MCP server setup guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MCP-SETUP.md) | Wire the 38 `research_*` tools into Codex / Claude Code / Zed or DSH, with task-based shortest paths and parameter examples |
 | [Architecture & data contracts](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/ARCHITECTURE.md) | Module responsibilities, data flow, DSH host boundaries, catalog schema |
 | [Development guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/DEVELOPMENT.md) | Local setup, implementation order, test strategy, delivery checklist |
 | [Manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) | Why unit tests are not enough, step-by-step acceptance, failure triage tree |

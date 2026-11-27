@@ -124,7 +124,7 @@ dsh-research-kit/
 │       ├── console-sections.js      # 统一容器的分区契约（名称/定位/用途/边界/独占数据）
 │       ├── overlay-anchor.js        # 输入卡片浮层的锚定与可用高度解算（纯函数）
 │       └── archify-adapter.js       # IR / trace → archify data-* 契约 + 哨兵槽位替换（纯函数，衔接 vendor/archify）
-├── mcp/                           # MCP Server：36 个 research_* 工具的注册、实现与执行层
+├── mcp/                           # MCP Server：38 个 research_* 工具的注册、实现与执行层
 │   ├── server.js                  # MCP 进程入口：注册工具与 annotations、统一错误语义、转发调用
 │   ├── tool-registry-data.js      # 工具元数据唯一事实源（名称/分类/层级/访问级/帮助路由/中文名），表格与文档由此派生
 │   ├── tool-labels.js             # 浏览器侧标签函数（toolLabel / artifactKindLabel）与名称索引；客户端产物只带它 + 投影数据
@@ -230,7 +230,7 @@ dsh-research-kit/
 │       ├── doc-test-count.mjs       # 文档测试数字的规范句式（check-doc-stats 与 check-test-count 共用）
 │       ├── manual-qa-count.mjs      # MANUAL-QA 章节「N 项」的自洽判定（条目可写为表格行或小节标题；含章节数/条目总数下限）
 │       └── tap-summary.mjs          # TAP 汇总行解析（两个门禁共用；要求汇总行唯一，锁住「Node 会转义用例输出」这层隐形依赖）
-├── test/                            # 635 项测试（79 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
+├── test/                            # 639 项测试（79 个测试文件 + helpers 下的 IndexedDB 与 DOM 桩：纯逻辑 + 渲染级降级断言 + 宿主契约矩阵 + 源码/产物文本断言）
 ├── docs/                            # 读者文档，索引见 docs/README.md
 ├── index.js                         # Node half：仅注册受控路由
 ├── coverage-baseline.json           # 覆盖率地板（棘轮记录值，按 Node 主版本分别记录；另记 span＝测试文件数/用例数，两者都只许涨）

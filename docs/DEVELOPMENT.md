@@ -2,7 +2,7 @@
 
 本文面向需要改动 `dsh-research-kit` 的开发者：环境准备、模块登记规则、测试策略与交付检查单。
 
-当前仓库处于**可用状态**——589 项目录资产、统一科研工作台、公开数据源直查、方法工坊与草稿增强器、MCP Server（36 个 research_* 工具）与研究阶段确认均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
+当前仓库处于**可用状态**——589 项目录资产、统一科研工作台、公开数据源直查、方法工坊与草稿增强器、MCP Server（38 个 research_* 工具）与研究阶段确认均已实现，并通过两轮真实 DSH profile 烟测。本文描述**现状**与必须遵守的约束；未完成事项见根目录 [ROADMAP.md](../ROADMAP.md)。
 
 ## 1. 开始前
 
@@ -21,7 +21,7 @@ npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏�
 npm run check   # 目录契约校验 + 源码语法检查
 npm run check:research-suggestions -- development #查看调参集的提示与误报
 npm run check:performance # 目录搜索与大证据图谱的合成性能门禁
-npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（635 项 / 79 个测试文件）
+npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（639 项 / 79 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
@@ -138,7 +138,7 @@ npm run build && npm run check && npm test && node --check ui/client.js && node 
 
 > **逐项步骤、失败定位树与证据模板见 [`MANUAL-QA.md`](MANUAL-QA.md)**，本文不重复。
 
-**本项无法由单元测试替代。** 仓库内 635 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
+**本项无法由单元测试替代。** 仓库内 639 项测试覆盖纯逻辑断言、渲染级初始状态与源码/构建产物的文本断言（`test/dsh-slots.test.js` 直接调用注册表、slots 服务为模拟对象），能证明「产物能注册槽位」「降级时按钮真的带 disabled」，但不能证明目标 DSH 版本的 props 形状与之一致。宿主侧的**源码契约**（哪个文件定义了哪个槽位与事件）由 `npm run check:dsh-app` 对照基线 tag 逐条核查，见 [COMPATIBILITY.md](COMPATIBILITY.md)——它能把「宿主换了 API」提前到 CI，但同样不能替代 profile 里的真实交互验收。
 
 **升级 DSH 版本后必须重跑 [`MANUAL-QA.md`](MANUAL-QA.md) 的完整清单**——此前那次走查证明的只是当时那个 DSH build 的 props 形状。
 
