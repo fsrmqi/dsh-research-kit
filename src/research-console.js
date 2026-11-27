@@ -22,8 +22,8 @@ const SECTION_VIEWS = {
   methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, embedded: true }),
-  evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, focus: props.recordFocus, embedded: true }),
+  evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate, focusNodeId: props.recordFocus?.nodeId || '' }),
 }
 
 function readStoredSection() {
@@ -238,6 +238,7 @@ export function ResearchConsole(props) {
   const [catalogError, setCatalogError] = React.useState('')
   const [promptKitError, setPromptKitError] = React.useState('')
   const [vaultTab, setVaultTab] = React.useState('assets')
+  const [recordFocus, setRecordFocus] = React.useState(null)
   const [initialWorkflowId, setInitialWorkflowId] = React.useState('')
   const [catalogType, setCatalogType] = React.useState('workflow')
   const [mine, setMine] = React.useState(false)
@@ -290,6 +291,15 @@ export function ResearchConsole(props) {
     }
     if (id === 'methods') setMine(Boolean(options.mine))
     if (options.tab) setVaultTab(options.tab)
+    const evidenceIds = Array.isArray(options.evidenceIds) ? options.evidenceIds.map(String).filter(Boolean) : []
+    const evidenceId = String(options.evidenceId || evidenceIds[0] || '')
+    const nodeId = String(options.nodeId || (id === 'evidence' && evidenceId ? `evidence:${evidenceId}` : ''))
+    const claimId = String(options.claimId || '')
+    if (claimId || evidenceId || nodeId) {
+      setRecordFocus({ claimId, evidenceId, evidenceIds: evidenceIds.length ? evidenceIds : (evidenceId ? [evidenceId] : []), nodeId })
+    } else if (id === 'vault' || id === 'evidence' || id === 'home' || id === 'catalog' || id === 'methods') {
+      setRecordFocus(null)
+    }
     setSection(normalizeConsoleSection(id))
     persistSection(id)
   }
@@ -324,7 +334,7 @@ export function ResearchConsole(props) {
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
-        view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, onVaultTabChange: setVaultTab, onNavigate: select }))
+        view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),

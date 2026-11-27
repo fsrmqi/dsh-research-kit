@@ -59,7 +59,7 @@ const GRAPH_SCOPE_MODES = [
 
 const GRAPH_RENDER_NODE_LIMIT = 300
 
-export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onNavigate }) {
+export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = false, onNavigate, focusNodeId = '' }) {
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
   const [resourceIds, setResourceIds] = React.useState(() => selection.get())
@@ -159,6 +159,14 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   }, [view])
 
   const applyView = React.useCallback(patch => setView(previous => ({ ...previous, ...patch })), [])
+  const appliedNodeFocus = React.useRef('')
+  React.useEffect(() => {
+    if (!focusNodeId || appliedNodeFocus.current === focusNodeId) return
+    appliedNodeFocus.current = focusNodeId
+    if (String(focusNodeId).startsWith(KNOWLEDGE_NODE_ID_PREFIX)) setSelectedKnowledgeId(focusNodeId)
+    else if (String(focusNodeId).startsWith('evidence:')) setSelectedEvidenceNodeId(String(focusNodeId).slice('evidence:'.length))
+    applyView({ focus: focusNodeId })
+  }, [focusNodeId, applyView])
   const resources = React.useMemo(() => resourceIds.map(itemById).filter(Boolean), [resourceIds])
   // 项目筛选只作用于持久数据（证据/资产/知识都带 project）；会话记录本就属于当前会话，不参与。
   const visibleSavedEvidence = React.useMemo(
@@ -607,6 +615,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   return embedded ? h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, content) : h(Page, null, content)
 }
 
-export function ResearchEvidenceGraphHost({ sessionId, embedded = false, onNavigate }) {
-  return h(ResearchEvidenceGraph, { sessionId, assetProvider: researchAssetProvider, embedded, onNavigate })
+export function ResearchEvidenceGraphHost({ sessionId, embedded = false, onNavigate, focusNodeId = '' }) {
+  return h(ResearchEvidenceGraph, { sessionId, assetProvider: researchAssetProvider, embedded, onNavigate, focusNodeId })
 }

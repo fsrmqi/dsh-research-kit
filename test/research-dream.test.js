@@ -1,17 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { EventEmitter } from 'node:events'
 import {
   DREAM_MAX_PROPOSALS,
   buildDreamSnapshot,
+  mergeDreamProposals,
   parseDreamLlmProposals,
   runLocalDream,
+  scopeDreamRecords,
 } from '../src/lib/research-dream.js'
 import {
   clearDreamStoreForTest,
   getHandledDreamSignatures,
   getPreferredDreamMode,
   latestDreamReport,
+  listDreamReports,
+  pendingDreamInbox,
   saveDreamReport,
   setPreferredDreamMode,
   updateDreamProposalStatus,
@@ -79,6 +82,22 @@ test('巩固梦：检测重复证据、立场冲突与未关联论断，并压�
   assert.ok(kinds.has('duplicate_evidence'))
   assert.ok(kinds.has('conflict_alert'))
   assert.ok(report.proposals.every(p => p.category === 'consolidation' && p.unverifiedInference === false))
+  const conflict = report.proposals.find(p => p.kind === 'conflict_alert' && p.refs.claimIds.includes('cl-conflict'))
+  assert.equal(conflict.action.options.claimId, 'cl-conflict')
+  const duplicate = report.proposals.find(p => p.kind === 'duplicate_evidence')
+  assert.deepEqual(duplicate.action.options.evidenceIds, ['ev-1', 'ev-2'])
+})
+
+test('scopeDreamRecords：默认课题与命名课题互不纳入对方的知识', () => {
+  const rows = [
+    { id: 'default-node', project: '' },
+    { id: 'missing-project' },
+    { id: 'named-node', project: 'barley-fertility' },
+    { id: 'other-node', project: 'wheat-stress' },
+  ]
+  assert.deepEqual(scopeDreamRecords(rows, '').map(row => row.id), ['default-node', 'missing-project'])
+  assert.deepEqual(scopeDreamRecords(rows, 'barley-fertility').map(row => row.id), ['named-node'])
+  assert.deepEqual(scopeDreamRecords(rows, 'wheat-stress').map(row => row.id), ['other-node'])
 })
 
 test('联想梦：识别缺口线索与跨文献桥接，全部标注为待核验推论', () => {
@@ -116,10 +135,17 @@ test('parseDreamLlmProposals：丢弃编造 ID 的幻觉提案，保留真实锚
       {
         kind: 'bridge_insight',
         priority: 90,
-        title: '真实跨文献桥接',
-        summary: '结合 ev-1 与 ev-3 检验高温下绒毡层表型',
+        title: '混入捏造 ID 的提案',
+        summary: '同时引用真实和捏造证据，应整条拒绝',
         refs: { evidenceIds: ['ev-1', 'ev-3', 'ev-hallucinated'], claimIds: [], nodeIds: [] },
         promptDraft: '请对比 ev-1 和 ev-3。',
+      },
+      {
+        kind: 'hypothesis_draft',
+        priority: 88,
+        title: '真实锚定假说',
+        summary: '只引用快照中存在的证据与缺口论断',
+        refs: { evidenceIds: ['ev-1', 'ev-3'], claimIds: ['cl-gap'], nodeIds: [] },
       },
       {
         kind: 'duplicate_evidence',
@@ -132,9 +158,46 @@ test('parseDreamLlmProposals：丢弃编造 ID 的幻觉提案，保留真实锚
   }
   const associative = parseDreamLlmProposals(raw, snapshot, { mode: 'associative' })
   assert.equal(associative.length, 1)
-  assert.equal(associative[0].title, '真实跨文献桥接')
+  assert.equal(associative[0].title, '真实锚定假说')
   assert.deepEqual(associative[0].refs.evidenceIds, ['ev-1', 'ev-3'])
+  assert.deepEqual(associative[0].refs.claimIds, ['cl-gap'])
   assert.equal(associative[0].unverifiedInference, true)
+
+  const empty = buildDreamSnapshot({ project: 'empty', evidence: [], claims: [], knowledgeNodes: [], knowledgeClaims: [] })
+  const sourceless = parseDreamLlmProposals({
+    proposals: [{ kind: 'hypothesis_draft', priority: 80, title: '无来源假说', summary: '快照为空时也不应放行', refs: {} }],
+  }, empty, { mode: 'full' })
+  assert.equal(sourceless.length, 0)
+})
+
+test('mergeDreamProposals：完整梦保留本地冲突，不被单条联想覆盖', () => {
+  const snapshot = buildDreamSnapshot(sampleData())
+  const local = runLocalDream({ snapshot, mode: 'full' })
+  const conflict = local.proposals.find(item => item.kind === 'conflict_alert')
+  const host = [{
+    ...conflict,
+    id: 'host-conflict',
+    signature: `${conflict.signature}|rewritten`,
+    priority: 100,
+    title: '模型改写后的冲突结论',
+    summary: '这条不应替换规则已经发现的正反证据。',
+  }, {
+    id: 'host-bridge',
+    signature: 'bridge_insight|ev-3,ev-4',
+    kind: 'bridge_insight',
+    category: 'associative',
+    priority: 99,
+    title: '一条新的跨文献联想',
+    summary: '只应占联想名额。',
+    refs: { evidenceIds: ['ev-3', 'ev-4'], claimIds: [], nodeIds: [], knowledgeClaimIds: [] },
+    status: 'pending',
+    unverifiedInference: true,
+  }]
+  const merged = mergeDreamProposals({ local: local.proposals, host, mode: 'full' })
+  assert.ok(merged.length <= DREAM_MAX_PROPOSALS)
+  assert.equal(merged.filter(item => item.kind === 'conflict_alert' && item.refs.claimIds?.includes('cl-conflict')).length, 1)
+  assert.equal(merged.find(item => item.kind === 'conflict_alert' && item.refs.claimIds?.includes('cl-conflict')).title, conflict.title)
+  assert.ok(merged.some(item => item.kind === 'bridge_insight'))
 })
 
 test('dream-store：持久化偏好模式、按课题存取简报并记录已处理 signature', () => {
@@ -159,6 +222,17 @@ test('dream-store：持久化偏好模式、按课题存取简报并记录已处
   updateDreamProposalStatus({ reportId: 'dream-r1', proposalId: 'p1', status: 'dismissed', project: 'proj-a' })
   assert.deepEqual(getHandledDreamSignatures('proj-a'), ['sig-1'])
   assert.equal(latestDreamReport('proj-a').proposals[0].status, 'dismissed')
+
+  saveDreamReport({
+    id: 'dream-r2',
+    project: 'proj-a',
+    mode: 'full',
+    digest: '第二次梦境',
+    proposals: [
+      { id: 'p3', signature: 'sig-3', title: '新提案', status: 'pending' },
+    ],
+  })
+  assert.deepEqual(pendingDreamInbox(listDreamReports('proj-a')).map(item => item.signature), ['sig-3', 'sig-2'])
   clearDreamStoreForTest()
 })
 
@@ -180,7 +254,7 @@ test('researchDreamRoute：校验路由参数并在宿主模型返回合法 JSON
           ],
         }),
       }
-      yield { type: 'finish', finishReason: 'stop' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
     },
   }
   const routes = new Map([['sess-1', { provider: 'mock', model: 'mock-dream-v1' }]])
@@ -188,9 +262,14 @@ test('researchDreamRoute：校验路由参数并在宿主模型返回合法 JSON
   assert.equal(route.path, RESEARCH_DREAM_PATH)
 
   const invoke = (method, url, body) => new Promise(resolve => {
-    const req = new EventEmitter()
-    req.method = method
-    req.url = url
+    const payload = body === undefined ? '' : (typeof body === 'string' ? body : JSON.stringify(body))
+    const req = {
+      method,
+      url,
+      on() {},
+      off() {},
+      async *[Symbol.asyncIterator]() { if (payload) yield payload },
+    }
     let statusCode = 0
     let responseBody = ''
     const res = {
@@ -198,10 +277,6 @@ test('researchDreamRoute：校验路由参数并在宿主模型返回合法 JSON
       end(chunk = '') { responseBody += chunk; resolve({ statusCode, json: JSON.parse(responseBody || '{}') }) },
     }
     route.handler(req, res)
-    if (body !== undefined) {
-      req.emit('data', Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)))
-    }
-    req.emit('end')
   })
 
   const noRoute = await invoke('POST', `${RESEARCH_DREAM_PATH}?session_id=missing`, { mode: 'full', snapshot })

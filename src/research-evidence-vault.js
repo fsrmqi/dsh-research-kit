@@ -33,7 +33,7 @@ import {
 // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
 // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
 // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null }) {
+export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null, focusEvidenceIds = [] }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
   const [counts, setCounts] = React.useState({ all: 0 })
@@ -62,6 +62,15 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [groupByTopic, setGroupByTopic] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState([])
   const [notice, setNotice] = React.useState('')
+  const appliedEvidenceFocus = React.useRef('')
+  const focusEvidenceKey = (Array.isArray(focusEvidenceIds) ? focusEvidenceIds : []).map(String).filter(Boolean).slice(0, 4).join('\u0001')
+  React.useEffect(() => {
+    if (!focusEvidenceKey || appliedEvidenceFocus.current === focusEvidenceKey) return
+    appliedEvidenceFocus.current = focusEvidenceKey
+    const ids = focusEvidenceKey.split('\u0001')
+    setSelectedIds(ids)
+    setNotice(`已定位提案中的 ${ids.length} 条证据，可直接筛选、建立论断或写入 Prompt。`)
+  }, [focusEvidenceKey])
   const [newProject, setNewProject] = React.useState('')
   const [newProjectOpen, setNewProjectOpen] = React.useState(false)
   const [backup, setBackup] = React.useState('')
@@ -741,8 +750,9 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       h('span', { key: 'page', role: 'status', style: { fontSize: 12 } }, `第 ${pageHistory.length + 1} 页 · 本页 ${entries.length} 条 · 完整范围 ${counts.all} 条`),
       h(Button, { key: 'next', size: 'sm', disabled: !nextCursor || loading, onClick: () => { setPageHistory(rows => [...rows, pageCursor]); setPageCursor(nextCursor) } }, '下一页'),
     ]),
-    h('div', { key: 'list', style: { display: 'grid', gap: 12 } }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
+    h('div', { key: 'list', style: { display: 'grid', gap: 12 }     }, displayedEntries.map(item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.__displayKey || item.id,
+      'data-dream-focus': item.id,
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
     }, [

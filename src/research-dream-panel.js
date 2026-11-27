@@ -63,9 +63,20 @@ export function ResearchDreamPanel({
   const reports = React.useMemo(() => listDreamReports(project), [project, revision])
   const latest = reports[0] || latestDreamReport(project)
   const pendingProposals = React.useMemo(() => pendingDreamInbox(reports), [reports])
-  const handledProposals = reports.flatMap(report => (report.proposals || [])
-    .filter(item => item.status !== 'pending')
-    .map(item => ({ ...item, reportId: report.id })))
+  const handledProposals = React.useMemo(() => {
+    const seen = new Set()
+    const items = []
+    for (const report of reports) {
+      for (const item of report.proposals || []) {
+        if (!item || item.status === 'pending') continue
+        const key = String(item.signature || item.id || '')
+        if (!key || seen.has(key)) continue
+        seen.add(key)
+        items.push(item)
+      }
+    }
+    return items
+  }, [reports])
   const currentModeMeta = DREAM_MODES.find(item => item.value === mode) || DREAM_MODES[0]
 
   const changeMode = next => {

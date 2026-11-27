@@ -58,7 +58,7 @@ const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderI
   && previous.dependencies.length === next.dependencies.length
   && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, embedded = false }) {
+export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, embedded = false, focus = null }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -344,8 +344,8 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
-    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider }) : null,
-    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId }) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, focusEvidenceIds: focus?.evidenceIds || [] }) : null,
+    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId, focusClaimId: focus?.claimId || '' }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
@@ -481,6 +481,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange })
+export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange, focus = null }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange, focus })
 }

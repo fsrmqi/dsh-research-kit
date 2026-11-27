@@ -235,7 +235,7 @@ export const PLUGIN_CONTRACTS = [
     id: 'claim-app-session',
     label: 'Claim App 的会话传递',
     file: 'src/research-vault.js',
-    tokens: ["h(ResearchClaimReview, { key: 'claim-review', sessionId })"],
+    tokens: ["h(ResearchClaimReview, { key: 'claim-review', sessionId, focusClaimId: focus?.claimId || '' })"],
   },
   {
     id: 'claim-app-request',
