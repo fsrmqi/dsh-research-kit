@@ -66,7 +66,7 @@ export async function bundleClient({ write = false } = {}) {
     direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
   }
 
-  // 使用 esbuild 真正打包模块依赖图：保留组件与顶层标识符名称（兼顾 React DevTools 与运行期可读堆栈；
+  // 使用 esbuild 真正打包模块依赖图：保留运行时函数和组件名称（兼顾 React DevTools 与运行期可读堆栈；
   // charset: 'utf8' 保留中文文案原样，外层模块工厂与 catalog 空壳保持宿主 seam 契约）。
   const result = await build({
     entryPoints: [ENTRY_POINT],
@@ -81,7 +81,8 @@ export async function bundleClient({ write = false } = {}) {
     charset: 'utf8',
     minifyWhitespace: true,
     minifySyntax: true,
-    minifyIdentifiers: false,
+    minifyIdentifiers: true,
+    keepNames: true,
     plugins: [createResearchKitPlugin()],
   })
 

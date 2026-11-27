@@ -1,6 +1,6 @@
 import { readJsonBody, jsonReply as reply } from './lib/http-json.js'
-import { dreamMemoryView, recordDreamMemoryCard, recordDreamMemoryTheme } from '../mcp/state/dream-memory.js'
-import { DREAM_MEMORY_PATH, memoryCardFromProposal, themeFromCards } from '../src/lib/dream-memory.js'
+import { changeDreamMemory, dreamMemoryView, recordDreamMemoryCard, recordDreamMemoryTheme } from '../mcp/state/dream-memory.js'
+import { DREAM_MEMORY_PATH, hotDreamMemory, memoryCardFromProposal, themeFromCards } from '../src/lib/dream-memory.js'
 
 export { DREAM_MEMORY_PATH }
 
@@ -25,15 +25,23 @@ export function dreamMemoryRoute({ logger } = {}) {
         if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method_not_allowed' })
         const body = await readBody(req)
         const scope = body.project || project
+        if (body.action === 'revoke_proposal' && typeof body.proposalId === 'string' && body.proposalId) {
+          const memory = await changeDreamMemory(scope, { proposalId: body.proposalId })
+          return reply(res, 200, { ok: true, memory: hotDreamMemory(memory) })
+        }
+        if (body.action === 'review_draft' && typeof body.id === 'string' && ['confirm', 'dismiss'].includes(body.decision)) {
+          const memory = await changeDreamMemory(scope, { id: body.id, decision: body.decision })
+          return reply(res, 200, { ok: true, memory: hotDreamMemory(memory) })
+        }
         if (body.action === 'record_card') {
           const card = body.card || memoryCardFromProposal(body.proposal || {}, { project: scope })
           const memory = await recordDreamMemoryCard(scope, card)
-          return reply(res, 200, { ok: true, memory })
+          return reply(res, 200, { ok: true, memory: hotDreamMemory(memory) })
         }
         if (body.action === 'record_theme') {
           const theme = body.theme || themeFromCards(body.cards || [], { gist: body.gist || '' })
           const memory = await recordDreamMemoryTheme(scope, theme)
-          return reply(res, 200, { ok: true, memory })
+          return reply(res, 200, { ok: true, memory: hotDreamMemory(memory) })
         }
         return reply(res, 400, { ok: false, error: '未知的梦境记忆操作。' })
       } catch (error) {

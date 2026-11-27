@@ -41,7 +41,7 @@ test('工具投影：客户端消费方不得读取被裁字段（否则运行�
   }
 })
 
-test('工具投影：产物里 36 个工具的中文名与摘要都在，服务端专用字段不在', () => {
+test('工具投影：产物里所有工具的中文名与摘要都在，服务端专用字段不在', () => {
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
   for (const tool of TOOL_REGISTRY) {
     assert.ok(bundle.includes(JSON.stringify(tool.name)), `产物缺工具 ${tool.name}`)
@@ -53,6 +53,5 @@ test('工具投影：产物里 36 个工具的中文名与摘要都在，服务�
   assert.ok(sentinel.length > 30, '注册表 example 字段应足够长，才能当哨兵')
   assert.ok(!bundle.includes(sentinel.slice(0, 40)), 'example 是服务端字段，不得进入客户端产物')
   // 浏览器只消费 TOOL_REGISTRY；未被引用的 mcp/tool-labels.js 辅助函数由 esbuild 正常 tree-shake。
-  assert.match(bundle, /TOOL_REGISTRY=\[/)
-  assert.match(bundle, /function ResearchToolView\(/)
+  assert.match(bundle, /"ResearchToolView"/)
 })

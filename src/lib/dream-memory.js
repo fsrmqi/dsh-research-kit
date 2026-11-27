@@ -69,13 +69,14 @@ export function normalizeMemoryCard(input, now = new Date().toISOString()) {
   return {
     id: clamp(input.id, 80) || `memcard-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     layer: 'card',
-    status: input.status === 'folded' ? 'folded' : 'active',
+    status: input.status === 'pending' || !(input.confirmed === true || input.sourceProposalId) ? 'pending' : input.status === 'folded' ? 'folded' : 'active',
+    confirmed: input.confirmed === true || Boolean(input.sourceProposalId),
     judgment,
     gist,
     covers,
     sourceProposalId: clamp(input.sourceProposalId, 80),
     createdAt: clamp(input.createdAt, 40) || now,
-    updatedAt: now,
+    updatedAt: clamp(input.updatedAt, 40) || now,
   }
 }
 
@@ -88,14 +89,14 @@ export function normalizeMemoryTheme(input, now = new Date().toISOString()) {
   return {
     id: clamp(input.id, 80) || `memtheme-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     layer: 'theme',
-    status: 'active',
+    status: input.status === 'pending' ? 'pending' : 'active',
     gist,
     openConflicts: clamp(input.openConflicts, 300),
     gaps: clamp(input.gaps, 300),
     cardIds,
     covers,
     createdAt: clamp(input.createdAt, 40) || now,
-    updatedAt: now,
+    updatedAt: clamp(input.updatedAt, 40) || now,
   }
 }
 
@@ -108,6 +109,7 @@ export function judgmentForProposal(proposal = {}) {
 
 export function memoryCardFromProposal(proposal = {}, { project = '' } = {}) {
   return normalizeMemoryCard({
+    id: proposal.id ? `memory-${proposal.id}` : undefined,
     project,
     judgment: judgmentForProposal(proposal),
     gist: `${proposal.title || ''}。${proposal.summary || ''}`,
@@ -117,7 +119,7 @@ export function memoryCardFromProposal(proposal = {}, { project = '' } = {}) {
 }
 
 function activeCards(memory) {
-  return (memory?.cards || []).filter(card => card.status !== 'folded')
+  return (memory?.cards || []).filter(card => card.status === 'active')
 }
 
 export function looseMemoryCards(memory) {
@@ -136,9 +138,32 @@ export function coverIndex(memory) {
       }
     }
   }
-  for (const card of memory?.cards || []) if (card.status !== 'folded') stamp(card)
-  for (const theme of memory?.themes || []) if (theme.status === 'active') stamp(theme)
+  for (const card of memory?.cards || []) if (card.status === 'active') stamp(card)
+  const confirmed = new Map([...(memory?.cards || []), ...(memory?.coveredCards || [])].filter(card => card.status !== 'pending').map(card => [card.id, card]))
+  for (const theme of memory?.themes || []) {
+    if (theme.status !== 'active') continue
+    for (const id of theme.cardIds) {
+      const card = confirmed.get(id)
+      if (card?.status === 'folded') stamp(card)
+    }
+  }
   return index
+}
+
+export function removeDreamProposalMemory(memory, proposalId) {
+  const removed = new Set(memory.cards.filter(card => card.sourceProposalId === proposalId).map(card => card.id))
+  const themes = memory.themes.filter(theme => !theme.cardIds.some(id => removed.has(id)))
+  const folded = new Set(themes.filter(theme => theme.status === 'active').flatMap(theme => theme.cardIds))
+  const cards = memory.cards.filter(card => !removed.has(card.id)).map(card =>
+    card.status === 'folded' && !folded.has(card.id) ? { ...card, status: 'active' } : card)
+  return { ...memory, themes, cards }
+}
+
+export function dreamMemoryRefsExist(refs, records) {
+  return COVER_KEYS.every(key => {
+    const ids = new Set((records[key] || []).map(record => String(record.id)))
+    return (refs[key] || []).every(id => ids.has(id))
+  }) && hasCover(cleanCovers(refs))
 }
 
 export function isRetiredRecord(row, kind, index) {
@@ -177,9 +202,11 @@ export function foldCardsIntoTheme(memory, theme) {
   if (!normalized) return next
   const known = new Set(next.cards.map(card => card.id))
   if (normalized.cardIds.some(id => !known.has(id))) return next
+  if (normalized.status === 'active' && next.cards.some(card => normalized.cardIds.includes(card.id) && card.status === 'pending')) return next
   next.themes = [normalized, ...next.themes.filter(item => item.id !== normalized.id)].slice(0, MEMORY_THEME_LIMIT)
+  if (normalized.status === 'pending') return next
   const folded = new Set(normalized.cardIds)
-  next.cards = next.cards.map(card => folded.has(card.id) ? { ...card, status: 'folded', updatedAt: normalized.updatedAt } : card)
+  next.cards = next.cards.map(card => folded.has(card.id) ? { ...card, status: 'folded' } : card)
   return next
 }
 
@@ -208,6 +235,7 @@ function publicTheme(theme) {
   return {
     id: theme.id,
     layer: 'theme',
+    status: theme.status,
     gist: theme.gist,
     openConflicts: theme.openConflicts,
     gaps: theme.gaps,
@@ -227,6 +255,8 @@ export function hotDreamMemory(memory) {
     project: normalized.project,
     themes,
     cards,
+    coveredCards: normalized.cards.filter(card => card.status === 'folded').map(publicCard),
+    pending: [...normalized.cards.filter(card => card.status === 'pending').map(publicCard), ...normalized.themes.filter(theme => theme.status === 'pending').map(publicTheme)],
     foldedCardCount: normalized.cards.filter(card => card.status === 'folded').length,
     coveredCount: index.size,
     note: '热记忆只含主题摘要和尚未收进主题的记忆卡。展开某张卡可取回原记录编号；原文仍在证据库和 Claim 台账，这里不删除它们。',

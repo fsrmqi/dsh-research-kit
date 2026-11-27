@@ -751,6 +751,27 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await secondAssessment;
   await dreamBatch.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human'],['qa-agent-new','qa-agent-human']]);
+  let releaseOldBatch;
+  const oldBatchGate = new Promise(resolve => { releaseOldBatch = resolve; });
+  await page.route('**/dsh-research-kit/evidence-agent-assess?**', async route => {
+    await oldBatchGate;
+    await route.fulfill({ status: 503, json: { error: '上一课题的请求失败' } }).catch(() => {});
+  });
+  const oldBatchRequest = page.waitForRequest(request => request.url().includes('/evidence-agent-assess?'));
+  await dreamBatch.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).click();
+  await oldBatchRequest;
+  await page.getByRole('button',{name:'研究课题',exact:true}).click();
+  await page.getByLabel('研究课题名称').fill('初判隔离课题');
+  const cancelled = page.waitForEvent('requestfailed', request => request.url().includes('/evidence-agent-assess?'));
+  await page.getByRole('button',{name:'切换课题',exact:true}).click();
+  await cancelled;
+  releaseOldBatch();
+  await dreamBatch.getByRole('button',{name:'批量初判 ▾',exact:true}).click();
+  assert.equal(await dreamBatch.getByRole('button',{name:/继续未完成/}).count(),0);
+  await page.getByRole('button',{name:'课题 · 初判隔离课题',exact:true}).click();
+  await page.getByLabel('研究课题名称').fill('');
+  await page.getByRole('button',{name:'切换课题',exact:true}).click();
+  console.log('切换课题会取消在途初判且不保留旧课题重试：通过');
   await page.getByRole('tab',{name:'资料库',exact:true}).click();
   await page.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
   await page.waitForFunction(()=>Array.from(document.querySelectorAll('*')).filter(node=>node.children.length===0&&/Agent 最新判断 · qa-model/.test(node.textContent)).length===2);

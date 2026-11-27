@@ -33,7 +33,7 @@ export const dreamMemoryTools = [
   },
   {
     name: 'research_dream_memory_record',
-    description: 'Record an accepted dream memory card or fold existing cards into a theme summary. Stores only a short gist and source IDs. Never deletes the underlying evidence, claims, nodes, or assets.',
+    description: 'Submit a draft memory card or theme for human review in DSH. Stores only a short gist and source IDs. Never deletes the underlying evidence, claims, nodes, or assets.',
     inputSchema: {
       project: z.string().optional().default('default').describe('Project name'),
       layer: z.enum(['card', 'theme']).describe('card stores one accepted gist; theme folds existing cards'),
@@ -49,6 +49,7 @@ export const dreamMemoryTools = [
         const memory = input.layer === 'theme'
           ? await recordDreamMemoryTheme(input.project, {
             gist: input.gist,
+            status: 'pending',
             cardIds: input.card_ids || [],
             covers: input.covers || {},
             openConflicts: input.open_conflicts || '',
@@ -56,13 +57,14 @@ export const dreamMemoryTools = [
           })
           : await recordDreamMemoryCard(input.project, {
             gist: input.gist,
+            status: 'pending',
             judgment: input.judgment || 'unresolved',
             covers: input.covers || {},
           })
         return contract({ project: memory.project, cards: memory.cards.length, themes: memory.themes.length }, {
           source: 'research-dream-memory',
           confidence: 'unverified',
-          disclaimer: '写入的是摘要和编号，不是对原文的核实或删除。',
+          disclaimer: '已提交待审草稿。人工确认前不会改变梦境扫描范围。',
         })
       } catch (error) { return err(`写入梦境记忆失败：${error.message}`) }
     },

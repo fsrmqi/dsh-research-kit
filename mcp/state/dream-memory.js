@@ -5,7 +5,7 @@ import { dataPath } from '../paths.js'
 import { safeProjectName } from '../execution/evidence-store.js'
 import { acquireFileLock, releaseFileLock } from '../execution/file-lock.js'
 import {
-  addMemoryCard, emptyDreamMemory, expandDreamMemory, foldCardsIntoTheme, hotDreamMemory, normalizeDreamMemory,
+  addMemoryCard, emptyDreamMemory, expandDreamMemory, foldCardsIntoTheme, hotDreamMemory, normalizeDreamMemory, removeDreamProposalMemory,
 } from '../../src/lib/dream-memory.js'
 
 const MEMORY_DIR = dataPath('dream')
@@ -61,6 +61,26 @@ export async function recordDreamMemoryTheme(project = 'default', theme) {
     if (next.themes.length === current.themes.length && next.themes[0]?.id === current.themes[0]?.id) {
       throw new Error('主题摘要至少要收进两张已有记忆卡。')
     }
+    return writeMemory(name, next)
+  })
+}
+
+export async function changeDreamMemory(project, { id, proposalId, decision }) {
+  return withLock(project, async name => {
+    const current = await readDreamMemory(name)
+    if (proposalId) return writeMemory(name, removeDreamProposalMemory(current, proposalId))
+    const card = current.cards.find(item => item.id === id && item.status === 'pending')
+    const theme = current.themes.find(item => item.id === id && item.status === 'pending')
+    if (!card && !theme) throw new Error('待审记忆已变化，请刷新。')
+    if (decision === 'dismiss') return writeMemory(name, {
+      ...current,
+      cards: current.cards.filter(item => item !== card),
+      themes: current.themes.filter(item => item !== theme),
+    })
+    const updatedAt = new Date().toISOString()
+    if (card) return writeMemory(name, addMemoryCard(current, { ...card, status: 'active', confirmed: true, updatedAt }))
+    const next = foldCardsIntoTheme(current, { ...theme, status: 'active', updatedAt })
+    if (!next.themes.some(item => item.id === id && item.status === 'active')) throw new Error('主题所需记忆卡尚未确认。')
     return writeMemory(name, next)
   })
 }

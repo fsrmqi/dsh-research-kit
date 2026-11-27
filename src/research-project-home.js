@@ -237,7 +237,7 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
       ]),
     ]),
     h(ResearchDreamPanel, {
-      key: 'dream',
+      key: JSON.stringify(['dream', context.project, sessionId]),
       project: context.project,
       sessionId,
       claims: data?.claims || [],

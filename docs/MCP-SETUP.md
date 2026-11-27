@@ -290,5 +290,5 @@ DSH 的独特优势是 UI 和 MCP 同时可用：
 | `research_metadata_openalex_fetch` | 通过 DOI 或检索词获取 OpenAlex 完整元数据；引用列表默认只返回数量，需显式开启才返回全量 |
 | `research_usage_stats` | 工具使用可观测性：调用次数、失败率与链路中断位置（仅脱敏元数据） |
 | `research_dream_memory` | 读取课题的主题摘要和记忆卡；传入 id 可展开回原记录编号，不删除原文（默认入口） |
-| `research_dream_memory_record` | 记录已确认的记忆卡，或把已有记忆卡收成主题摘要；只保存短摘要和来源编号 |
+| `research_dream_memory_record` | 提交记忆卡或主题摘要草稿，人工确认后才纳入梦境记忆覆盖范围 |
 <!-- tool-table:end -->

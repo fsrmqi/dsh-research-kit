@@ -76,6 +76,7 @@ export async function executeAgentEvidenceAssessment({
         if (signal?.aborted) break
         const original = batch.find(row => row.id === result.id)
         const current = (await store.getMany([result.id]))[0]
+        if (signal?.aborted) break
         if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) {
           remainingIds.delete(result.id)
           skippedChanged++

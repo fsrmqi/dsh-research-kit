@@ -323,7 +323,7 @@ export const TOOL_REGISTRY = [
     name: 'research_dream_memory_record',
     category: 'evidence', tier: 'fine', access: 'writes', requiresConfirmation: true,
     helpRoute: null, labelZh: '写入梦境记忆',
-    summaryZh: '记录已确认的记忆卡，或把已有记忆卡收成主题摘要；只保存短摘要和来源编号',
+    summaryZh: '提交记忆卡或主题摘要草稿，人工确认后才纳入梦境记忆覆盖范围',
     example: "{ project: 'demo', layer: 'card', gist: '这几条证据重复', judgment: 'duplicate', covers: { evidenceIds: ['ev-1'] } }",
     artifactKind: '',
   },

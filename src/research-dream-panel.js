@@ -35,7 +35,7 @@ import { requestResearchClaims } from './lib/claim-review-client.js'
 import { planAgentEvidenceBatch } from './lib/agent-evidence-batch.js'
 import { executeAgentEvidenceAssessment } from './lib/evidence-agent-runner.js'
 import {
-  DREAM_MEMORY_PATH, coverIndex, looseMemoryCards, memoryCardFromProposal, retireCoveredRecords, themeFromCards,
+  DREAM_MEMORY_PATH, coverIndex, dreamMemoryRefsExist, looseMemoryCards, memoryCardFromProposal, retireCoveredRecords, themeFromCards,
 } from './lib/dream-memory.js'
 import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 import { knowledgeStore } from './knowledge-store.js'
@@ -81,6 +81,12 @@ export function ResearchDreamPanel({
   const [batchStats, setBatchStats] = React.useState(null)
   const [batchRetryIds, setBatchRetryIds] = React.useState([])
   const batchAbort = React.useRef(null)
+  const mounted = React.useRef(false)
+  const memoryBusy = React.useRef(false)
+  React.useLayoutEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; batchAbort.current?.abort() }
+  }, [])
   const [memory, setMemory] = React.useState(() => ({ schemaVersion: 1, project, cards: [], themes: [] }))
   const [running, setRunning] = React.useState(false)
   const dreamLock = React.useRef(false)
@@ -90,12 +96,8 @@ export function ResearchDreamPanel({
   const loadBatchScope = React.useCallback(async () => {
     try {
       const rows = await evidenceVaultStore().list({ project: project || undefined })
-      setBatchEntries(rows || [])
+      if (mounted.current) setBatchEntries(rows || [])
     } catch { /* 本地证据库不可读时保持空列表 */ }
-  }, [project])
-  React.useEffect(() => {
-    setBatchRetryIds([])
-    setBatchStats(null)
   }, [project])
   React.useEffect(() => {
     if (!batchOpen) return undefined
@@ -107,36 +109,38 @@ export function ResearchDreamPanel({
     [batchEntries, includeHuman],
   )
   const runBatchAssessment = async requestedEntries => {
-    if (batchBusy) return
-    const store = evidenceVaultStore()
-    let target = requestedEntries
-    if (!target) {
-      try { target = await store.list({ project: project || undefined }) } catch (error) { setFeedback(`读取证据失败：${error.message}`); return }
-    }
+    if (!mounted.current || batchAbort.current) return
     const controller = new AbortController()
     batchAbort.current = controller
+    const store = evidenceVaultStore()
     setBatchBusy(true)
     setFeedback('')
     try {
+      const target = requestedEntries
+        ? await store.getMany(requestedEntries)
+        : await store.list({ project: project || undefined })
+      if (controller.signal.aborted) return
       const result = await executeAgentEvidenceAssessment({
-        entries: target,
+        entries: project ? scopeDreamRecords(target, project) : target,
         sessionId,
         includeHuman,
         store,
         signal: controller.signal,
-        onProgress: setBatchProgress,
-        onStats: setBatchStats,
+        onProgress: value => { if (mounted.current) setBatchProgress(value) },
+        onStats: value => { if (mounted.current) setBatchStats(value) },
       })
+      if (!mounted.current) return
       setBatchRetryIds(result.remainingIds || [])
       setFeedback(result.message)
       pushToast({ message: result.message })
     } catch (error) {
+      if (!mounted.current) return
       setBatchRetryIds(error.remainingIds || [])
       setFeedback(error.message)
       pushToast({ message: error.message, tone: 'warn' })
     } finally {
       batchAbort.current = null
-      setBatchBusy(false)
+      if (mounted.current) setBatchBusy(false)
       setBatchProgress('')
     }
   }
@@ -178,14 +182,8 @@ export function ResearchDreamPanel({
     try {
       const now = Date.now()
       let activeMemory = memory
-      try {
-        const response = await fetch(`${DREAM_MEMORY_PATH}?project=${encodeURIComponent(project || 'default')}`, { signal: AbortSignal.timeout(3000) })
-        const payload = await response.json()
-        if (response.ok && payload?.ok) {
-          activeMemory = { schemaVersion: 1, project: payload.project || project, cards: payload.cards || [], themes: payload.themes || [] }
-          setMemory(activeMemory)
-        }
-      } catch { /* 记忆服务不可达时沿用本页已确认的卡 */ }
+      try { activeMemory = await loadMemory() } catch { /* 沿用当前课题已读取的记忆 */ }
+      if (!mounted.current) return
       const retired = coverIndex(activeMemory)
       const store = evidenceVaultStore()
       const kStore = knowledgeStore()
@@ -285,6 +283,7 @@ export function ResearchDreamPanel({
         }
       }
 
+      if (!mounted.current) return
       saveDreamReport(finalReport)
       setDreamWatermark(project, {
         at: now,
@@ -329,20 +328,17 @@ export function ResearchDreamPanel({
             await linkAssetToEvidence({ assetId: saved.id, evidenceId, project })
           }
         }
-        markProposal(proposal, 'accepted')
-        setFeedback('已存为待核验灵感，并挂上提案里的证据。正文仍待你核对。')
+        await markProposal(proposal, 'accepted')
         return
       }
       if (op.type === 'register_claim') {
         await requestResearchClaims(project || 'default', { ...op.claim, project: project || 'default' })
-        markProposal(proposal, 'accepted')
-        setFeedback('已登记为待核验 Claim，没有标成已证实。')
+        await markProposal(proposal, 'accepted')
         return
       }
       if (op.type === 'link_evidence') {
         for (const pair of op.pairs || []) await linkAssetToEvidence({ ...pair, project })
-        markProposal(proposal, 'accepted')
-        setFeedback('已建立灵感与证据的互链，没有改写原文。')
+        await markProposal(proposal, 'accepted')
       }
     } catch (error) {
       setFeedback(error?.message || '这条提案还没写进主库，可稍后再试。')
@@ -357,7 +353,6 @@ export function ResearchDreamPanel({
           const ok = inputActions.insertText(proposal.promptDraft, inputActions.captureInsertion()) === true
           if (ok) {
             markProposal(proposal, 'accepted')
-            setFeedback('已将梦境研究草稿写入会话输入框，并标记为已采纳。')
             return
           }
         } catch (error) {
@@ -375,9 +370,14 @@ export function ResearchDreamPanel({
     }
   }
 
-  const restoreProposalTargets = targets => {
-    for (const target of targets) updateDreamProposalStatus({ ...target, status: 'pending', project })
-    setFeedback('已恢复该提案到待处理收件箱。')
+  const restoreProposalTargets = async (targets, proposal, wasAccepted) => {
+    try {
+      if (wasAccepted) await writeMemory({ action: 'revoke_proposal', proposalId: proposal.id })
+      for (const target of targets) updateDreamProposalStatus({ ...target, status: 'pending', project })
+      setFeedback(wasAccepted
+        ? '已恢复待审并撤回记忆卡。此前写入的灵感、论断或关联可在对应库中管理。'
+        : '已恢复该提案到待处理收件箱。')
+    } catch (error) { setFeedback(`恢复待审失败：${error.message}`) }
   }
   const restoreHandledProposal = proposal => {
     const signature = proposal?.signature || ''
@@ -386,63 +386,83 @@ export function ResearchDreamPanel({
       .map(item => ({ reportId: report.id, proposalId: item.id })))
     const targets = matches.length ? matches : (proposal?.reportId ? [{ reportId: proposal.reportId, proposalId: proposal.id }] : [])
     if (!targets.length) return
-    restoreProposalTargets(targets)
-    pushToast({ message: `已恢复「${proposal.title}」到待审收件箱。` })
+    return restoreProposalTargets(targets, proposal, proposal.status === 'accepted')
   }
-  const markProposal = (proposal, status) => {
-    const signature = proposal?.signature || ''
-    const matches = reports.flatMap(report => (report.proposals || [])
-      .filter(item => item.status === 'pending' && (signature ? item.signature === signature : item.id === proposal?.id))
-      .map(item => ({ reportId: report.id, proposalId: item.id })))
-    const targets = matches.length ? matches : (proposal?.reportId ? [{ reportId: proposal.reportId, proposalId: proposal.id }] : [])
-    if (!targets.length) return
-    for (const target of targets) updateDreamProposalStatus({ ...target, status, project })
-    if (status === 'accepted') rememberProposal(proposal)
-    const msg = status === 'accepted' ? '已标记采纳，并写入一张可展开的记忆卡。原文仍在库里。' : '已忽略该提案，后续梦境不再重复提示。'
-    setFeedback(msg)
-    pushToast({
-      message: status === 'accepted' ? `已采纳「${proposal.title}」。` : `已忽略「${proposal.title}」。`,
-      actionLabel: '撤销',
-      onAction: () => restoreProposalTargets(targets),
-    })
+  const memoryUrl = `${DREAM_MEMORY_PATH}?project=${encodeURIComponent(project || 'default')}`
+  const loadMemory = async () => {
+    const response = await fetch(memoryUrl, { signal: AbortSignal.timeout(3000) })
+    const payload = await response.json()
+    if (!response.ok || !payload?.ok) throw new Error('读取梦境记忆失败。')
+    if (mounted.current) setMemory(payload)
+    return payload
   }
+  React.useEffect(() => { loadMemory().catch(() => {}) }, [memoryUrl])
 
-  const rememberProposal = async proposal => {
-    const card = memoryCardFromProposal(proposal, { project: project || 'default' })
-    if (!card) return
+  const writeMemory = async body => {
+    if (memoryBusy.current) throw new Error('记忆正在更新，请稍后重试。')
+    memoryBusy.current = true
     try {
-      const response = await fetch(`${DREAM_MEMORY_PATH}?project=${encodeURIComponent(project || 'default')}`, {
+      const response = await fetch(memoryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'record_card', project: project || 'default', card }),
-        signal: AbortSignal.timeout(5000),
+        body: JSON.stringify(body),
       })
       const payload = await response.json()
-      if (!response.ok || !payload?.ok) throw new Error(payload?.error || '记忆卡没有写入')
-      setMemory(payload.memory)
-    } catch (error) {
-      setMemory(current => ({ ...current, cards: [card, ...(current.cards || [])] }))
-      setFeedback(`提案已采纳。记忆卡先留在本页，文件同步未完成：${error?.message || error}`)
-    }
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || '记忆更新失败。')
+      if (mounted.current) setMemory(payload.memory)
+    } finally { memoryBusy.current = false }
+  }
+
+  const markProposal = async (proposal, status) => {
+    const signature = proposal?.signature || ''
+    const targets = reports.flatMap(report => (report.proposals || [])
+      .filter(item => item.status === 'pending' && (signature ? item.signature === signature : item.id === proposal?.id))
+      .map(item => ({ reportId: report.id, proposalId: item.id })))
+    if (!targets.length) return
+    try {
+      if (status === 'accepted') {
+        const card = memoryCardFromProposal(proposal, { project: project || 'default' })
+        if (card) await writeMemory({ action: 'record_card', card })
+      }
+      for (const target of targets) updateDreamProposalStatus({ ...target, status, project })
+      setFeedback(status === 'accepted' ? '已采纳提案。' : '已忽略该提案。')
+      pushToast({
+        message: status === 'accepted' ? `已采纳「${proposal.title}」。` : `已忽略「${proposal.title}」。`,
+        actionLabel: status === 'accepted' ? '恢复待审并撤回记忆' : '撤销忽略',
+        onAction: () => restoreProposalTargets(targets, proposal, status === 'accepted'),
+      })
+    } catch (error) { setFeedback(`记忆卡写入失败：${error.message}。提案仍待审，可重试标记采纳。`) }
+  }
+
+  const reviewMemory = async (item, decision) => {
+    try {
+      if (decision === 'confirm') {
+        const store = evidenceVaultStore()
+        const knowledge = knowledgeStore()
+        const [evidence, currentClaims, nodes, edges, assets] = await Promise.all([
+          store.list({ project }), store.listResearchClaims(), knowledge.listNodes(), knowledge.listClaims(),
+          researchAssetProvider?.list().catch(listStoredDreamAssets) ?? listStoredDreamAssets(),
+        ])
+        const records = {
+          evidenceIds: evidence,
+          claimIds: scopeDreamRecords(currentClaims, project),
+          nodeIds: scopeDreamRecords(nodes, project), knowledgeClaimIds: scopeDreamRecords(edges, project),
+          assetIds: scopeDreamRecords(assets, project),
+        }
+        if (!dreamMemoryRefsExist(item.covers, records)) throw new Error('请核对来源：有记录已删除或不属于当前课题。')
+      }
+      await writeMemory({ action: 'review_draft', id: item.id, decision })
+      setFeedback(decision === 'confirm' ? '已确认记忆。' : '已忽略记忆草稿。')
+    } catch (error) { setFeedback(error.message) }
   }
 
   const foldTheme = async () => {
     const theme = themeFromCards(looseMemoryCards(memory))
     if (!theme) return
     try {
-      const response = await fetch(`${DREAM_MEMORY_PATH}?project=${encodeURIComponent(project || 'default')}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'record_theme', project: project || 'default', theme }),
-        signal: AbortSignal.timeout(5000),
-      })
-      const payload = await response.json()
-      if (!response.ok || !payload?.ok) throw new Error(payload?.error || '主题摘要没有写入')
-      setMemory(payload.memory)
-      setFeedback('已把记忆卡收成主题摘要。以后默认读这张摘要，展开仍能回到原来的编号。')
-    } catch (error) {
-      setFeedback(error?.message || '主题摘要还没写入。')
-    }
+      await writeMemory({ action: 'record_theme', theme })
+      setFeedback('已将记忆卡合成主题摘要。')
+    } catch (error) { setFeedback(error.message) }
   }
 
   return h(Card, {
@@ -513,9 +533,7 @@ export function ResearchDreamPanel({
         batchBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => batchAbort.current?.abort() }, '取消') : null,
         batchRetryIds.length && !batchBusy ? h(Button, {
           key: 'retry', size: 'sm', variant: 'soft',
-          onClick: async () => {
-            try { await runBatchAssessment(await evidenceVaultStore().getMany(batchRetryIds)) } catch (error) { setFeedback(error.message) }
-          },
+          onClick: () => runBatchAssessment(batchRetryIds),
         }, `继续未完成（${batchRetryIds.length}）`) : null,
         h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink, cursor: 'pointer' } }, [
           h('input', {
@@ -554,6 +572,12 @@ export function ResearchDreamPanel({
     ]) : null,
     running ? h(Spinner, { key: 'spin', text: '正在扫描当前课题的证据、论断与知识节点并压缩高信号提案……' }) : null,
     feedback ? h(Notice, { key: 'feedback', tone: 'info' }, feedback) : null,
+    ...(memory.pending || []).map(item => h('div', { key: item.id, className: 'rk-compose-actions' }, [
+      h('span', { key: 'text' }, `待审记忆：${item.gist}`),
+      h('small', { key: 'refs' }, Object.values(item.covers || {}).flat().join('、')),
+      h(Button, { key: 'confirm', size: 'sm', onClick: () => reviewMemory(item, 'confirm') }, '确认记忆'),
+      h(Button, { key: 'dismiss', size: 'sm', variant: 'quiet', onClick: () => reviewMemory(item, 'dismiss') }, '忽略草稿'),
+    ])),
     latest ? h('div', { key: 'report', style: { display: 'grid', gap: 10 } }, [
       h('div', {
         key: 'digest',

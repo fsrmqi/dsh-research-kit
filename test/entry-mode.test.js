@@ -64,7 +64,7 @@ test('入口形态接线：槽位按偏好二选一，设置项挂在 Plugins �
   assert.match(status, /h\(EntryModeSetting, \{ key: 'entry-mode' \}\)/)
   // 构建产物必须带上整条链路（模块入序错误只有运行期才炸）。
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
-  for (const symbol of ['dsh-research-kit.entry-mode.v1', 'ENTRY_MODE_FLOATING', 'EntryModeSetting']) {
+  for (const symbol of ['dsh-research-kit.entry-mode.v1', '悬浮伴生钮', 'EntryModeSetting']) {
     assert.ok(bundle.includes(symbol), `构建产物必须包含 ${symbol}`)
   }
 })

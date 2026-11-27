@@ -43,12 +43,11 @@ test('生成产物包含新模块并使用 research-kit 命名空间', () => {
   assert.match(source, /dsh-research-kit-console/)
   assert.match(source, /dsh-research-kit\/semantic-enhance/)
   // 合并后的分区契约与四个分区的实现都必须拼入产物。
-  assert.match(source, /RESEARCH_CONSOLE_SECTIONS/)
-  assert.match(source, /function ResearchConsole\(/)
-  assert.match(source, /function ResearchWorkbench\(/)
-  assert.match(source, /function ResearchVault\(/)
-  assert.match(source, /function ResearchEvidenceGraph\(/)
-  assert.match(source, /function ResearchPromptStudioHost\(/)
+  assert.match(source, /"ResearchConsole"/)
+  assert.match(source, /"ResearchWorkbench"/)
+  assert.match(source, /"ResearchVault"/)
+  assert.match(source, /"ResearchEvidenceGraph"/)
+  assert.match(source, /"ResearchPromptStudioHost"/)
   // 不得出现 PromptKit 独立仓库的路径或默认 storage 前缀泄漏。
   assert.ok(!source.includes('/dsh-promptkit/semantic-enhance'), '浏览器端不得回退到 PromptKit 独立插件路由')
   assert.ok(!source.includes("storagePrefix: 'promptkit.'"), '不得使用 PromptKit 默认 storage 前缀')
@@ -82,7 +81,7 @@ test('内联草稿增强入口：触发钮不依赖懒加载工件，面板走�
   // 构建产物必须带上同一套接线。
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
   assert.match(bundle, /launcher:\s*['"]inline['"]/)
-  assert.match(bundle, /PROMPTKIT_LOAD_TIMEOUT_MS/)
+  assert.match(bundle, /ResearchDraftEnhancerTrigger/)
   assert.match(bundle, /ENTRY_MODE_INLINE|['"]inline['"]/)
 })
 

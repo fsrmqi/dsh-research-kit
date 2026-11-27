@@ -45,6 +45,8 @@ const EXPECTED_TOOL_ORDER = [
   'research_disclosure_list_policies',
   'research_review_hedging',
   'research_metadata_openalex_fetch',
+  'research_dream_memory',
+  'research_dream_memory_record',
 ]
 
 test('MCP 工具顺序保持稳定', () => {
