@@ -15,6 +15,7 @@ import {
 } from './ui.js'
 import { RESEARCH_COMPOSER_EVENT, RESEARCH_ORGANIZE_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
 import { canWriteDraft, supportsSafeInsert, writeDraftText } from './lib/input-actions.js'
+import { pushToast } from './lib/toast.js'
 
 const COMPOSER_TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
 import { WORKBENCH_CATEGORY_COLORS, workbenchFallbackCategoryColor } from './catalog-category-filter.js'
@@ -35,6 +36,7 @@ function SearchInput({ value, onChange, placeholder, ariaLabel }) {
 function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, originalDraft, originalRevision, onClose }) {
   const [values, setValues] = React.useState({})
   const [editedPrompt, setEditedPrompt] = React.useState(null)
+  const [promptOpen, setPromptOpen] = React.useState(false)
   const [missing, setMissing] = React.useState([])
   const [notice, setNotice] = React.useState('')
   const [detailVersion, setDetailVersion] = React.useState(0)
@@ -152,8 +154,16 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     }, field.multiline
       ? h(Textarea, { value: values[field.key] || '', onChange: value => update(field.key, value), rows: 3, placeholder: field.hint || '', ariaLabel: field.label, style: missingSet.has(field.label) ? { borderColor: C.red } : undefined })
       : h(Input, { value: values[field.key] || '', onChange: value => update(field.key, value), placeholder: field.hint || '', ariaLabel: field.label, invalid: missingSet.has(field.label) }))),
-    h(Field, { key: 'prompt', label: '提示词预览（可编辑）' },
-      h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 10, mono: true, ariaLabel: '提示词预览' })),
+    h('div', { key: 'prompt-head', style: { display: 'flex', alignItems: 'center', gap: 8 } }, [
+      h(Button, {
+        key: 'toggle-prompt', variant: 'ghost', size: 'sm',
+        'aria-expanded': promptOpen,
+        onClick: () => setPromptOpen(open => !open),
+      }, promptOpen ? '收起提示词预览 ▴' : '展开提示词预览 ▾'),
+      !promptOpen && editedPrompt === null ? h('span', { key: 'ready', style: { fontSize: 12, color: C.muted } }, '已按参数自动组装') : null,
+    ]),
+    (promptOpen || editedPrompt !== null) ? h(Field, { key: 'prompt', label: '提示词预览（可编辑）' },
+      h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 9, mono: true, ariaLabel: '提示词预览' })) : null,
     attachedResources.length ? h('details', {
       key: 'resources',
       style: { padding: '9px 11px', border: `1px solid ${C.tealLine}`, borderRadius: 9, color: C.muted, fontSize: 13, lineHeight: 1.55 },
@@ -386,6 +396,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
       id: suggestionWorkflow.id, name: suggestionWorkflow.name,
       resourceIds: unique(resourceIds),
     })
+    pushToast({ message: `已插入「${suggestionWorkflow.name}」科研步骤。` })
     dismissSuggestion()
   }
   // 目录可能由默认工作台先加载完成；浮层关闭时也要订阅版本变化，否则首次打开时
@@ -509,17 +520,23 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
         ]),
         h('div', { key: 'actions', className: 'rk-compose-actions' }, [
           h(Button, { key: 'adopt', variant: 'primary', size: 'sm', onClick: adoptSuggestion, title: '在光标处插入科研步骤，保留原文与引用' }, '采用'),
-          h(Button, { key: 'preview', variant: 'ghost', size: 'sm', onClick: () => setPreview(true) }, '预览改动'),
+          h(Button, { key: 'preview', variant: 'ghost', size: 'sm', 'aria-expanded': preview, onClick: () => setPreview(open => !open) }, preview ? '收起预览' : '预览改动'),
           h(Button, { key: 'skip', variant: 'ghost', size: 'sm', onClick: dismissSuggestion }, '略过'),
         ]),
-        assistNotice ? h('div', { key: 'notice', role: 'status' }, assistNotice) : null,
+        preview && suggestedText ? h('div', {
+          key: 'inline-preview', role: 'dialog', 'aria-label': '预览科研建议',
+          style: { display: 'grid', gap: 8, marginTop: 4, paddingTop: 8, borderTop: `1px solid ${C.line}` },
+        }, [
+          h('p', { key: 'description', style: { margin: 0, color: C.muted, fontSize: 12 } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),
+          h(Textarea, { key: 'text', value: suggestedText, readOnly: true, ariaLabel: '将插入的科研步骤', rows: 6 }),
+          h('div', { key: 'preview-actions', style: { display: 'flex', gap: 8 } }, [
+            h(Button, { key: 'apply', size: 'sm', variant: 'primary', onClick: adoptSuggestion }, '采用并插入'),
+            h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: () => setPreview(false) }, '收起'),
+          ]),
+          assistNotice ? h(Notice, { key: 'notice', tone: 'warn' }, assistNotice) : null,
+        ]) : null,
+        !preview && assistNotice ? h('div', { key: 'notice', role: 'status' }, assistNotice) : null,
       ]) : null),
-    preview && !mode && suggestedText ? h(Modal, { key: 'preview', title: '预览科研建议', onClose: () => setPreview(false) }, [
-      h('p', { key: 'description', style: { color: C.muted } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),
-      h(Textarea, { key: 'text', value: suggestedText, readOnly: true, ariaLabel: '将插入的科研步骤', rows: 9 }),
-      h(Button, { key: 'apply', variant: 'primary', onClick: adoptSuggestion }, '采用并插入'),
-      assistNotice ? h(Notice, { key: 'notice', tone: 'warn' }, assistNotice) : null,
-    ]) : null,
     mode ? h('section', {
       key: 'popover',
       ref: popoverRef,
@@ -587,6 +604,16 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
         ]),
       ]),
       h('div', { key: 'rows', className: 'rk-picker-results', 'aria-label': '科研选择结果' }, [
+        mode === 'workflows' && !deferredQuery.trim() && workflowCategory === 'all' ? (() => {
+          const quickIds = unique([...(storage.getFavorites?.() || []), ...(storage.getHistory?.() || []).map(row => row.id)])
+          const quickWorkflows = quickIds.map(itemById).filter(item => item?.type === 'workflow').slice(0, 3)
+          return quickWorkflows.length ? h('div', { key: 'quick', className: 'rk-picker-selected' }, [
+            h('span', { key: 'label' }, '常用'),
+            ...quickWorkflows.map(wf => h('button', {
+              key: wf.id, type: 'button', className: 'rk-picker-text-action', onClick: () => selectWorkflow(wf),
+            }, wf.name)),
+          ]) : null
+        })() : null,
         selectedOnly?.length ? h('div', { key: 'selected', className: 'rk-picker-selected' }, [
           h('span', { key: 'count' }, `已选 ${resourceIds.length} 项`),
           h('button', { key: 'clear', type: 'button', className: 'rk-picker-text-action', onClick: () => selection.clear() }, '清空'),

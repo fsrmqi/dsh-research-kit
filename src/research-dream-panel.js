@@ -39,6 +39,7 @@ import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 import { knowledgeStore } from './knowledge-store.js'
 import { listResearchRuns } from './research-context-store.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
+import { pushToast } from './lib/toast.js'
 
 const MODE_LABELS = Object.fromEntries(DREAM_MODES.map(item => [item.value, item.label]))
 const KIND_LABELS = {
@@ -68,8 +69,8 @@ export function ResearchDreamPanel({
   inputActions,
 }) {
   const [mode, setMode] = React.useState(getPreferredDreamMode)
-  const [useHostModel, setUseHostModel] = React.useState(true)
   const [autoEnabled, setAutoEnabled] = React.useState(getDreamAutoEnabled)
+  const [prefsOpen, setPrefsOpen] = React.useState(false)
   const [memory, setMemory] = React.useState(() => ({ schemaVersion: 1, project, cards: [], themes: [] }))
   const [running, setRunning] = React.useState(false)
   const dreamLock = React.useRef(false)
@@ -157,13 +158,13 @@ export function ResearchDreamPanel({
         coldCursor: composed.coldCursor,
         watermark,
         now,
-        force,
+        force: force || !auto,
         auto,
       })
       if (decision.skip) {
         setFeedback(decision.reason === 'cooldown'
-          ? '距上次自动梦境不足 6 小时，已跳过。可以手动再整理一次。'
-          : '这一轮冷记录已经看过。它们还在库里，没有删除；有新材料，或再点「整理未决项」，才会继续往后整合。')
+          ? '距上次自动整理不足 6 小时，已跳过。'
+          : '当前课题的较早记录均已看过，有新材料后会继续整理。')
         return
       }
       const snapshot = buildDreamSnapshot({
@@ -188,7 +189,7 @@ export function ResearchDreamPanel({
       const modelWorthCalling = composed.deltaCount > 0
         && (snapshot.counts.evidence + snapshot.counts.claims + snapshot.counts.knowledgeNodes + snapshot.counts.assets > 0)
 
-      if (sessionId && useHostModel && modelWorthCalling) {
+      if (sessionId && modelWorthCalling) {
         try {
           const query = new URLSearchParams({ session_id: sessionId })
           const response = await fetch(`/dsh-research-kit/research-dream?${query}`, {
@@ -311,6 +312,20 @@ export function ResearchDreamPanel({
     }
   }
 
+  const restoreProposalTargets = targets => {
+    for (const target of targets) updateDreamProposalStatus({ ...target, status: 'pending', project })
+    setFeedback('已恢复该提案到待处理收件箱。')
+  }
+  const restoreHandledProposal = proposal => {
+    const signature = proposal?.signature || ''
+    const matches = reports.flatMap(report => (report.proposals || [])
+      .filter(item => item.status !== 'pending' && (signature ? item.signature === signature : item.id === proposal?.id))
+      .map(item => ({ reportId: report.id, proposalId: item.id })))
+    const targets = matches.length ? matches : (proposal?.reportId ? [{ reportId: proposal.reportId, proposalId: proposal.id }] : [])
+    if (!targets.length) return
+    restoreProposalTargets(targets)
+    pushToast({ message: `已恢复「${proposal.title}」到待审收件箱。` })
+  }
   const markProposal = (proposal, status) => {
     const signature = proposal?.signature || ''
     const matches = reports.flatMap(report => (report.proposals || [])
@@ -320,7 +335,13 @@ export function ResearchDreamPanel({
     if (!targets.length) return
     for (const target of targets) updateDreamProposalStatus({ ...target, status, project })
     if (status === 'accepted') rememberProposal(proposal)
-    setFeedback(status === 'accepted' ? '已标记采纳，并写入一张可展开的记忆卡。原文仍在库里。' : '已忽略该提案，后续梦境不再重复提示。')
+    const msg = status === 'accepted' ? '已标记采纳，并写入一张可展开的记忆卡。原文仍在库里。' : '已忽略该提案，后续梦境不再重复提示。'
+    setFeedback(msg)
+    pushToast({
+      message: status === 'accepted' ? `已采纳「${proposal.title}」。` : `已忽略「${proposal.title}」。`,
+      actionLabel: '撤销',
+      onAction: () => restoreProposalTargets(targets),
+    })
   }
 
   const rememberProposal = async proposal => {
@@ -373,11 +394,11 @@ export function ResearchDreamPanel({
       h('div', { key: 'title-group', style: { display: 'grid', gap: 4, minWidth: 0 } }, [
         h('div', { key: 'row', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
           h('strong', { key: 't', style: { fontSize: 15 } }, '科研梦境'),
-          h(Badge, { key: 'b', color: C.teal }, '高信号压缩 · Top 5'),
+          h(Badge, { key: 'b', color: C.teal }, '重点提炼 · Top 5'),
           pendingProposals.length ? h(Badge, { key: 'pending', color: C.amber }, `待审 ${pendingProposals.length}`) : null,
         ]),
         h('small', { key: 'hint', style: { color: C.muted, lineHeight: 1.5 } },
-          `${currentModeMeta.hint}。绝不静默改写已有证据或论断。`),
+          `${currentModeMeta.hint}。仅给出提案，不改写已有记录。`),
       ]),
       h('div', { key: 'controls', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
         h(Segmented, {
@@ -392,32 +413,20 @@ export function ResearchDreamPanel({
           variant: 'primary',
           size: 'sm',
           disabled: running,
-          onClick: () => runDream(),
-        }, running ? '正在整理梦境…' : '开始一次梦境'),
-        h(Button, {
-          key: 'force',
-          variant: 'quiet',
-          size: 'sm',
-          disabled: running,
           onClick: () => runDream({ force: true }),
-        }, '整理未决项'),
+        }, running ? '正在整理…' : '开始一次梦境'),
+        h(Button, {
+          key: 'prefs',
+          variant: prefsOpen ? 'soft' : 'ghost',
+          size: 'sm',
+          'aria-expanded': prefsOpen,
+          onClick: () => setPrefsOpen(open => !open),
+        }, '偏好 ▾'),
       ]),
     ]),
-    sessionId ? h('label', {
-      key: 'llm-opt',
-      style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content' },
-    }, [
-      h('input', {
-        key: 'chk',
-        type: 'checkbox',
-        checked: useHostModel,
-        onChange: event => setUseHostModel(event.target.checked),
-      }),
-      '优先使用当前会话模型深度提炼（只在有新材料时调用；不可用时自动降级到本地规则引擎）',
-    ]) : null,
-    h('label', {
+    prefsOpen ? h('label', {
       key: 'auto-opt',
-      style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content' },
+      style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content', padding: '8px 10px', borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` },
     }, [
       h('input', {
         key: 'auto',
@@ -428,8 +437,8 @@ export function ResearchDreamPanel({
           setAutoEnabled(enabled)
         },
       }),
-      '有新材料时自动做梦（默认关闭，距上次至少 6 小时，无新材料不调用模型）',
-    ]),
+      '有新材料时自动整理（距上次至少 6 小时，无新材料不调用模型）',
+    ]) : null,
     running ? h(Spinner, { key: 'spin', text: '正在扫描当前课题的证据、论断与知识节点并压缩高信号提案……' }) : null,
     feedback ? h(Notice, { key: 'feedback', tone: 'info' }, feedback) : null,
     latest ? h('div', { key: 'report', style: { display: 'grid', gap: 10 } }, [
@@ -462,7 +471,7 @@ export function ResearchDreamPanel({
         key: 'memory',
         style: { display: 'grid', gap: 6, fontSize: 12, color: C.ink, lineHeight: 1.5 },
       }, [
-        h('strong', { key: 'label' }, `长期记忆 · 主题 ${memory.themes?.length || 0} · 未收拢的卡 ${looseMemoryCards(memory).length}`),
+        h('strong', { key: 'label' }, `长期记忆 · 主题 ${memory.themes?.length || 0} · 待归档笔记 ${looseMemoryCards(memory).length}`),
         ...(memory.themes || []).slice(0, 2).map(theme => h('span', { key: theme.id }, `主题：${theme.gist}`)),
         ...looseMemoryCards(memory).slice(0, 3).map(card => h('span', { key: card.id }, `记忆卡 · ${card.judgment}：${card.gist}`)),
         looseMemoryCards(memory).length >= 3 ? h(Button, {
@@ -527,8 +536,10 @@ export function ResearchDreamPanel({
         h('summary', { key: 'sum', style: { cursor: 'pointer', fontSize: 12, color: C.muted } },
           `查看已处理提案（${handledProposals.length}）与历史梦境（${reports.length}）`),
         h('div', { key: 'body', style: { display: 'grid', gap: 6, marginTop: 8, fontSize: 12, color: C.muted } }, [
-          ...handledProposals.map(item => h('div', { key: item.id },
-            `[${item.status === 'accepted' ? '已采纳' : '已忽略'}] ${item.title}`)),
+          ...handledProposals.map(item => h('div', { key: item.id, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
+            h('span', { key: 'label' }, `[${item.status === 'accepted' ? '已采纳' : '已忽略'}] ${item.title}`),
+            h(Button, { key: 'restore', size: 'sm', variant: 'quiet', onClick: () => restoreHandledProposal(item) }, '恢复待审'),
+          ])),
           ...reports.slice(1, 5).map(rep => h('div', { key: rep.id },
             `${formatDreamTime(rep.createdAt)} · ${MODE_LABELS[rep.mode] || rep.mode} · ${rep.digest}`)),
         ]),

@@ -1,6 +1,8 @@
+import React from 'react'
 import { h, C } from './theme.js'
 import { bodyPortal } from './lib/overlay-anchor.js'
 import { Icon } from './lib/icons.js'
+import { getToasts, subscribeToasts, dismissToast } from './lib/toast.js'
 
 // 统一基础组件层。所有科研视图（工作台 / 资源选择器 / 研究资产库 / 数据库面板 / 输入框入口）
 // 只从这里取组件，保证与 dsh-promptkit「研究方法工厂对话增强器」的视觉与交互一致：
@@ -269,7 +271,7 @@ export function GroupLabel({ children, count }) {
   }, [children, count !== undefined ? `　${count}` : null])
 }
 
-export function EmptyState({ icon = 'search', text, hint, style }) {
+export function EmptyState({ icon = 'search', text, hint, action, style }) {
   return h('div', {
     style: {
       display: 'grid', gap: 8, justifyItems: 'center', textAlign: 'center',
@@ -280,6 +282,7 @@ export function EmptyState({ icon = 'search', text, hint, style }) {
     h('span', { key: 'i', style: { color: C.tealLineStrong } }, h(Icon, { name: icon, size: 22 })),
     h('p', { key: 't', style: { margin: 0 } }, text),
     hint ? h('p', { key: 'h', style: { margin: 0, fontSize: 12, color: C.muted, opacity: .85 } }, hint) : null,
+    action ? h('div', { key: 'a', style: { marginTop: 4 } }, action) : null,
   ])
 }
 
@@ -372,6 +375,46 @@ export function Toolbar({ children, style, sticky = false, innerRef }) {
     className: sticky ? 'rk-sticky-toolbar' : undefined,
     style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: sticky ? 0 : '18px 0 14px', ...style },
   }, children)
+}
+
+export function ToastHost() {
+  const [items, setItems] = React.useState(getToasts)
+  React.useEffect(() => subscribeToasts(setItems), [])
+  if (typeof document === 'undefined' || !items.length) return null
+  return bodyPortal(h('div', {
+    className: 'rk-toast-stack',
+    role: 'region',
+    'aria-label': '操作反馈',
+    'aria-live': 'polite',
+  }, items.map(item => {
+    const palette = NOTICE_TONES[item.tone] || NOTICE_TONES.info
+    const iconName = item.tone === 'error' || item.tone === 'warn' ? 'shield' : 'check'
+    return h('div', {
+      key: item.id,
+      role: 'status',
+      className: 'rk-pop rk-toast',
+      style: {
+        borderColor: palette.line,
+        background: C.surface,
+        color: C.ink,
+      },
+    }, [
+      h('span', { key: 'icon', style: { color: palette.color, display: 'inline-flex', flexShrink: 0 } }, h(Icon, { name: iconName, size: 14 })),
+      h('span', { key: 'msg', style: { flex: 1, minWidth: 0, lineHeight: 1.45 } }, item.message),
+      item.onAction && item.actionLabel ? h(Button, {
+        key: 'action', size: 'sm', variant: 'soft',
+        onClick: () => {
+          dismissToast(item.id)
+          try { item.onAction() } catch { /* 撤销异常不阻塞关闭 */ }
+        },
+      }, item.actionLabel) : null,
+      h(IconButton, {
+        key: 'close', name: 'close', size: 13, label: '关闭提示',
+        onClick: () => dismissToast(item.id),
+        style: { width: 22, height: 22, border: 0, background: 'transparent' },
+      }),
+    ])
+  })))
 }
 
 export { C, Icon }

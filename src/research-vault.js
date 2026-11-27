@@ -16,6 +16,7 @@ import {
 import { knowledgeStore } from './knowledge-store.js'
 import { ResearchClaimReview } from './research-claim-review.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
+import { pushToast } from './lib/toast.js'
 import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
@@ -39,7 +40,7 @@ const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '�
 const VAULT_TABS = [
   { value: 'assets', label: '灵感资产' },
   { value: 'evidence', label: '证据库' },
-  { value: 'claims', label: 'Claim 审阅' },
+  { value: 'claims', label: '论断审阅' },
 ]
 
 function formatAssetTime(at) {
@@ -58,7 +59,7 @@ const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderI
   && previous.dependencies.length === next.dependencies.length
   && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, embedded = false, focus = null }) {
+export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, onNavigate, embedded = false, focus = null }) {
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -67,13 +68,32 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
   const [groupByTopic, setGroupByTopic] = React.useState(true)
   const [form, setForm] = React.useState(EMPTY_FORM)
   const [formOpen, setFormOpen] = React.useState(false)
+  const [formMoreOpen, setFormMoreOpen] = React.useState(false)
   const [compareId, setCompareId] = React.useState('')
   const [backup, setBackup] = React.useState('')
   const [backupOpen, setBackupOpen] = React.useState(false)
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNoticeRaw] = React.useState('')
+  const setNotice = React.useCallback((message, options = {}) => {
+    const text = String(message || '')
+    setNoticeRaw(text)
+    if (text) {
+      const isWarn = text.startsWith('⚠️')
+      pushToast({
+        message: text.replace(/^⚠️\s*/, ''),
+        tone: options.tone || (isWarn ? 'warn' : 'info'),
+        actionLabel: options.actionLabel,
+        onAction: options.onAction,
+      })
+    }
+  }, [])
   const [tab, setTab] = React.useState(initialTab)
-  // 删除是不可逆的：与「清空项目」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）。
+  // 删除是不可逆的：与「清空课题」「清空本会话临时记录」同款两段式确认（首次点变「确认删除？」）；4 秒无操作自动复位。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
+  React.useEffect(() => {
+    if (!confirmDeleteId) return undefined
+    const timer = setTimeout(() => setConfirmDeleteId(''), 4000)
+    return () => clearTimeout(timer)
+  }, [confirmDeleteId])
   const setError = message => setNotice(`⚠️ ${message}`)
   // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
   // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
@@ -130,7 +150,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     : filtered, [filtered, groupByTopic])
   const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
-  const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setCompareId(''); setConfirmDeleteId('') }
+  const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setFormMoreOpen(false); setCompareId(''); setConfirmDeleteId('') }
   const openEdit = item => {
     setForm({
       id: item.id, title: item.title || '', body: item.body || '', tags: visibleDepositionTags(item).join(', '),
@@ -249,12 +269,20 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       setNotice('已导出研究灵感资产备份（JSON）。')
     } catch (error) { setError(error?.message || error) }
   }
-  const importJson = async () => {
+  const importJsonText = async raw => {
     try {
-      const rows = await assetProvider.import(backup)
+      const rows = await assetProvider.import(raw)
       setBackup(''); setBackupOpen(false)
       setNotice(`已恢复 ${rows?.length || 0} 条研究灵感资产。`)
     } catch (error) { setError(error?.message || error) }
+  }
+  const importJson = () => importJsonText(backup)
+  const importJsonFile = async event => {
+    const file = event.target?.files?.[0]
+    if (!file) return
+    try {
+      await importJsonText(await file.text())
+    } finally { if (event.target) event.target.value = '' }
   }
   const copyBody = async item => {
     try { await navigator.clipboard.writeText(item.body); await assetProvider?.markUsed?.(item.id); setNotice('已复制资产内容。') }
@@ -279,11 +307,11 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     h(PageHead, {
       key: 'head',
       kicker: 'Research Kit',
-      title: tab === 'evidence' ? '研究证据库' : tab === 'claims' ? '科研 Claim 审阅' : '研究资产库',
+      title: tab === 'evidence' ? '证据库' : tab === 'claims' ? '论断审阅' : '资料库',
       lead: tab === 'evidence'
-        ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「未核验」。'
-        : tab === 'claims' ? '逐条审阅科研结论，记录评估人、理由和关联证据。'
-          : '灵感资产沉淀研究问题与假设；证据库存放公开来源；Claim 审阅记录结论的人工判断。',
+        ? '沉淀逐条明确保存、可追溯的外部来源；保存不等于认可，新条目默认「待核验」。'
+        : tab === 'claims' ? '逐条审阅研究论断，记录评估人、理由和关联证据。'
+          : '灵感资产沉淀研究问题与假设；证据库存放公开来源；论断审阅记录结论的人工判断。',
       actions: tab !== 'assets' ? [] : [
         h(Button, { key: 'export', variant: 'soft', icon: 'download', onClick: exportJson }, '导出备份'),
         h(Button, { key: 'import', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
@@ -293,11 +321,17 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: value => { setTab(value); onTabChange?.(value) }, ariaLabel: '沉淀层子模块' }),
     ]),
     tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
-      h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的 JSON 备份（增量合并，不覆盖现有资产）'),
-      h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
-      h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
-        h(Button, { key: 'go', variant: 'primary', disabled: !backup.trim(), onClick: importJson }, '恢复'),
-        h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
+      h('strong', { key: 't', style: { fontSize: 13 } }, '恢复灵感资产备份（增量合并，不覆盖现有资产）'),
+      h('input', { key: 'file', type: 'file', accept: '.json,application/json', 'aria-label': '选择灵感资产备份文件', onChange: importJsonFile, style: { fontSize: 12 } }),
+      h('details', { key: 'paste-box' }, [
+        h('summary', { key: 's', style: { cursor: 'pointer', fontSize: 12, color: C.muted } }, '或直接粘贴 JSON 备份内容'),
+        h('div', { key: 'inner', style: { display: 'grid', gap: 8, marginTop: 8 } }, [
+          h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
+          h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
+            h(Button, { key: 'go', variant: 'primary', disabled: !backup.trim(), onClick: importJson }, '恢复'),
+            h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
+          ]),
+        ]),
       ]),
     ]) : null,
     tab === 'assets' && formOpen ? h(Card, {
@@ -307,17 +341,23 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       h('strong', { key: 't', style: { fontSize: 14 } }, form.id ? `编辑「${form.title || '未命名资产'}」` : '新建研究灵感资产'),
       field('标题（留空自动取正文首行）', 'title', { placeholder: '例：单细胞批次效应的待验证假设' }),
       field('内容', 'body', { multiline: true, placeholder: '只保存可复用的提示词、研究问题或假设；不要粘贴原始数据、患者信息或完整查询结果。' }),
-      h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 } }, [
-        field('标签（逗号分隔）', 'tags', { placeholder: '主题:植物科学, 批次效应；主题标签可人工改写' }),
-        field('项目（可选）', 'project', { placeholder: '例：肿瘤队列分析' }),
-        select('类型', 'type', Object.entries(VAULT_TYPE_LABELS).map(([value, label]) => ({ value, label }))),
-        select('认识分类', 'thinkingKind', Object.entries(THINKING_LABELS).map(([value, label]) => ({ value, label }))),
-        select('认识状态', 'epistemicStatus', Object.entries(EPISTEMIC_LABELS).map(([value, label]) => ({ value, label }))),
-        select('验证状态', 'verificationStatus', Object.entries(VERIFICATION_LABELS).map(([value, label]) => ({ value, label }))),
+      h('div', { key: 'more-toggle', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
+        h(Button, { key: 'btn', size: 'sm', variant: 'ghost', onClick: () => setFormMoreOpen(value => !value), 'aria-expanded': formMoreOpen },
+          formMoreOpen ? '收起更多属性 ▴' : '更多属性（标签、课题、核验状态等） ▾'),
       ]),
-      field('为什么重要（可选）', 'rationale', { multiline: true }),
-      field('下一步（可选；可直接写入会话输入框）', 'nextAction', { multiline: true }),
-      field('验证证据（可选）', 'verificationEvidence', { multiline: true }),
+      formMoreOpen ? h('div', { key: 'more-fields', style: { display: 'grid', gap: 12 } }, [
+        h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 } }, [
+          field('标签（逗号分隔）', 'tags', { placeholder: '主题:植物科学, 批次效应；主题标签可人工改写' }),
+          field('课题（可选）', 'project', { placeholder: '例：肿瘤队列分析' }),
+          select('类型', 'type', Object.entries(VAULT_TYPE_LABELS).map(([value, label]) => ({ value, label }))),
+          select('认识分类', 'thinkingKind', Object.entries(THINKING_LABELS).map(([value, label]) => ({ value, label }))),
+          select('认识状态', 'epistemicStatus', Object.entries(EPISTEMIC_LABELS).map(([value, label]) => ({ value, label }))),
+          select('验证状态', 'verificationStatus', Object.entries(VERIFICATION_LABELS).map(([value, label]) => ({ value, label }))),
+        ]),
+        field('为什么重要（可选）', 'rationale', { multiline: true }),
+        field('下一步（可选；可直接写入会话输入框）', 'nextAction', { multiline: true }),
+        field('验证证据（可选）', 'verificationEvidence', { multiline: true }),
+      ]) : null,
       form.parentId ? h('p', { key: 'parent', style: { margin: 0, color: C.muted, fontSize: 12 } }, `派生自：${byId.get(form.parentId)?.title || form.parentId}（保存后可在列表中做版本对比）`) : null,
       h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
         h(Button, { key: 'save', variant: 'primary', icon: 'check', onClick: save }, form.id ? '保存修改' : '保存资产'),
@@ -344,14 +384,15 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       }) : null,
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
-    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, focusEvidenceIds: focus?.evidenceIds || [] }) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, onNavigate, focusEvidenceIds: focus?.evidenceIds || [] }) : null,
     tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId, focusClaimId: focus?.claimId || '' }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
       icon: 'bookmark',
       text: assets.length ? '没有匹配的资产。' : '还没有灵感资产。',
-      hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或点击「新建资产」。',
+      hint: assets.length ? '调整搜索或筛选条件。' : '在草稿增强或方法工坊中保存，或现在新建一条。',
+      action: assets.length ? null : h(Button, { variant: 'primary', size: 'sm', icon: 'plus', onClick: openCreate }, '新建第一条灵感'),
     }) : null,
     tab === 'assets' ? h(MemoizedAssetList, {
       key: 'list',
@@ -367,10 +408,9 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
           h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
           h(Badge, { key: 'type', color: C.teal }, VAULT_TYPE_LABELS[item.type] || item.type),
           h(Badge, { key: 'kind', color: C.slate }, THINKING_LABELS[item.thinkingKind] || '结论'),
-          h(Badge, { key: 'epistemic', color: EPISTEMIC_COLORS[item.epistemicStatus] || C.statusInferred }, EPISTEMIC_LABELS[item.epistemicStatus] || '推断'),
           item.verification?.status && item.verification.status !== 'pending'
-            ? h(Badge, { key: 'verification', color: VERIFICATION_COLORS[item.verification.status] || C.muted }, `验证：${VERIFICATION_LABELS[item.verification.status]}`)
-            : null,
+            ? h(Badge, { key: 'status', color: VERIFICATION_COLORS[item.verification.status] || C.muted }, VERIFICATION_LABELS[item.verification.status] || '已核实')
+            : h(Badge, { key: 'status', color: EPISTEMIC_COLORS[item.epistemicStatus] || C.statusInferred }, EPISTEMIC_LABELS[item.epistemicStatus] || '推断'),
         ]),
         h(StarButton, {
           key: 'star',
@@ -481,6 +521,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange, focus = null }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange, focus })
+export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus = null }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus })
 }

@@ -1,6 +1,7 @@
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
-import { Page, Segmented, Spinner, Notice, Button, Input, Textarea, Card } from './ui.js'
+import { Page, Segmented, Spinner, Notice, Button, Input, Textarea, Card, ToastHost } from './ui.js'
+import { pushToast } from './lib/toast.js'
 import { catalogIndexMode, catalogReady, composeWorkflow, itemDetailReady, loadBrowserCatalog, loadCatalogItemDetail, searchCatalog, searchCatalogRemote, subscribeCatalog } from './catalog.js'
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
@@ -22,7 +23,7 @@ const SECTION_VIEWS = {
   methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, focus: props.recordFocus, embedded: true }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, onNavigate: props.onNavigate, focus: props.recordFocus, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate, focusNodeId: props.recordFocus?.nodeId || '' }),
 }
 
@@ -39,7 +40,12 @@ function persistSection(id) {
   try { window.localStorage.setItem(SECTION_STORAGE_KEY, id) } catch { /* 忽略：持久化失败不影响导航 */ }
 }
 
-const RESEARCH_HOME_TABS = [{ value: 'home', label: '本次研究' }, { value: 'catalog', label: '科研工具' }]
+const RESEARCH_MAIN_TABS = [
+  { value: 'home', label: '本次研究' },
+  { value: 'catalog', label: '科研工具' },
+  { value: 'vault', label: '资料库' },
+  { value: 'evidence', label: '证据图谱' },
+]
 const RESEARCH_TOOL_TABS = [
   { value: 'workflow', label: '选流程' }, { value: 'methods', label: '用方法' },
   { value: 'database', label: '查来源' }, { value: 'mine', label: '我的' },
@@ -115,15 +121,22 @@ function ResearchPersonalTemplates({ inputActions }) {
       }
       setDraft(null)
       await reload()
-      setNotice(savedHistory ? '已保存到我的模板。' : '模板已保存，客户端未能保留上一版本。')
-    } catch (error) { setNotice(error.message) }
+      const msg = savedHistory ? '已保存到我的模板。' : '模板已保存，客户端未能保留上一版本。'
+      setNotice(msg)
+      pushToast({ message: msg, tone: savedHistory ? 'info' : 'warn' })
+    } catch (error) { setNotice(error.message); pushToast({ message: error.message, tone: 'error' }) }
     finally { setBusy(false) }
   }
   const use = item => {
-    if (!supportsSafeInsert(inputActions)) return setNotice('当前客户端无法安全插入，请从编辑框复制。')
+    if (!supportsSafeInsert(inputActions)) {
+      const msg = '当前客户端无法安全插入，请从编辑框复制。'
+      setNotice(msg); pushToast({ message: msg, tone: 'warn' }); return
+    }
     const span = inputActions.captureInsertion()
     const ok = inputActions.insertText(`\n\n${item.prompt}\n\n`, { ...span, start: span.end })
-    setNotice(ok ? '已插入当前会话草稿。' : '草稿已变化，请重新尝试。')
+    const msg = ok ? '已插入当前会话。' : '草稿已变化，请重新尝试。'
+    setNotice(msg)
+    pushToast({ message: msg, tone: ok ? 'info' : 'warn' })
   }
   const openCopy = () => {
     if (copyOpen) invalidatePendingCopy()
@@ -202,7 +215,7 @@ function ResearchPersonalTemplates({ inputActions }) {
           h(Button, { key: 'edit', size: 'sm', onClick: () => { invalidatePendingCopy(); setNotice(''); setDraft({ ...item }) } }, '查看或编辑'),
           h(Button, { key: 'copy', size: 'sm', variant: 'ghost', onClick: () => newDraft(item.category, item) }, '复制为新模板'),
           h(Button, { key: 'history', size: 'sm', variant: 'ghost', 'aria-expanded': selectedHistory === item.id, onClick: () => setSelectedHistory(current => current === item.id ? '' : item.id) }, '版本记录'),
-          h(Button, { key: 'use', size: 'sm', variant: 'primary', onClick: () => use(item) }, '插入草稿'),
+          h(Button, { key: 'use', size: 'sm', variant: 'primary', onClick: () => use(item) }, '插入对话'),
         ]),
       ]),
       selectedHistory === item.id ? h('div', { key: 'versions', className: 'rk-template-form' }, [
@@ -323,15 +336,20 @@ export function ResearchConsole(props) {
       },
     }, [
       h('div', { key: 'main', className: 'rk-console-main' }, [
-        h(Segmented, { key: 'tabs', value: inTools ? 'catalog' : 'home', options: RESEARCH_HOME_TABS, onChange: id => select(id), ariaLabel: '科研工作台分区' }),
-        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'materials', size: 'sm', variant: 'ghost', onClick: () => select('vault', { tab: 'assets' }) }, '研究资料'),
-          h(Button, { key: 'evidence', size: 'sm', variant: 'ghost', onClick: () => select('evidence') }, '证据关系'),
-          current.id === 'vault' ? h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '备份与恢复') : null,
-        ]),
+        h(Segmented, {
+          key: 'tabs',
+          value: inTools ? 'catalog' : current.id,
+          options: RESEARCH_MAIN_TABS,
+          onChange: id => id === 'vault' ? select('vault', { tab: vaultTab || 'assets' }) : select(id),
+          ariaLabel: '科研工作台分区',
+        }),
+        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : (current.id === 'vault' || current.id === 'evidence') ? h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
+          h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '备份与恢复'),
+        ]) : null,
       ]),
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
+    h(ToastHost, { key: 'toast-host' }),
     h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
         view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))

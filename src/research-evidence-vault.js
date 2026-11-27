@@ -26,6 +26,7 @@ import {
 } from './lib/agent-evidence-batch.js'
 import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
 import { latestResearchScreening, researchLedgerSummary } from './lib/research-ledger.js'
+import { pushToast } from './lib/toast.js'
 import {
   STATUS_COLORS, clearEvidenceEntriesFromFile, evidenceVaultStore, formatEvidenceTime, getActiveProject, invalidateEvidenceSync, listAssetEvidenceLinks, persistEvidenceEntryToFile, publishEvidenceVault, removeEvidenceEntryFromFile, saveEvidenceEntry, setActiveProject, stamp, subscribeEvidenceVault, syncEvidenceVaultWithFiles,
 } from './lib/evidence-vault-sync.js'
@@ -33,7 +34,7 @@ import {
 // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
 // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
 // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null, focusEvidenceIds = [] }) {
+export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null, focusEvidenceIds = [], onNavigate = null }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
   const [counts, setCounts] = React.useState({ all: 0 })
@@ -61,7 +62,20 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [filter, setFilter] = React.useState('all')
   const [groupByTopic, setGroupByTopic] = React.useState(true)
   const [selectedIds, setSelectedIds] = React.useState([])
-  const [notice, setNotice] = React.useState('')
+  const [notice, setNoticeRaw] = React.useState('')
+  const setNotice = React.useCallback((message, options = {}) => {
+    const text = String(message || '')
+    setNoticeRaw(text)
+    if (text) {
+      const isWarn = text.startsWith('⚠️')
+      pushToast({
+        message: text.replace(/^⚠️\s*/, ''),
+        tone: options.tone || (isWarn ? 'warn' : 'info'),
+        actionLabel: options.actionLabel,
+        onAction: options.onAction,
+      })
+    }
+  }, [])
   const appliedEvidenceFocus = React.useRef('')
   const focusEvidenceKey = (Array.isArray(focusEvidenceIds) ? focusEvidenceIds : []).map(String).filter(Boolean).slice(0, 4).join('\u0001')
   React.useEffect(() => {
@@ -69,7 +83,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     appliedEvidenceFocus.current = focusEvidenceKey
     const ids = focusEvidenceKey.split('\u0001')
     setSelectedIds(ids)
-    setNotice(`已定位提案中的 ${ids.length} 条证据，可直接筛选、建立论断或写入 Prompt。`)
+    setNotice(`已定位提案中的 ${ids.length} 条证据，可直接筛选、建立论断或插入对话。`)
   }, [focusEvidenceKey])
   const [newProject, setNewProject] = React.useState('')
   const [newProjectOpen, setNewProjectOpen] = React.useState(false)
@@ -111,13 +125,19 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [claimLimitations, setClaimLimitations] = React.useState('')
   const [classificationEditId, setClassificationEditId] = React.useState('')
   const [classificationDraft, setClassificationDraft] = React.useState('')
+  const [expandedAssessId, setExpandedAssessId] = React.useState('')
   const agentAbort = React.useRef(null)
   // 反查（入口 B，只读）：每条证据被哪些灵感资产引用，随订阅刷新。
   const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
   const [confirmClear, setConfirmClear] = React.useState(false)
-  // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式。
+  // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式；4 秒无操作自动复位。
   const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
+  React.useEffect(() => {
+    if (!confirmDeleteId) return undefined
+    const timer = setTimeout(() => setConfirmDeleteId(''), 4000)
+    return () => clearTimeout(timer)
+  }, [confirmDeleteId])
   const refreshVersion = React.useRef(0)
   React.useEffect(() => {
     let current = true
@@ -709,18 +729,22 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     // 二级吸顶带：检索与状态筛选是「随时要用的操作」，分层原则见 docs/ARCHITECTURE.md §2.3。
     h(Toolbar, { key: 'filters', sticky: true }, [
       h('div', { key: 'search', style: { position: 'relative', flex: '1 1 240px', minWidth: 180 } }, [
-        h(Input, { key: 'i', value: query, onChange: value => { resetPages(); setQuery(value) }, placeholder: '搜索标题、来源、标识符、项目、标签……', ariaLabel: '搜索证据条目' }),
+        h(Input, { key: 'i', value: query, onChange: value => { resetPages(); setQuery(value) }, placeholder: '搜索标题、来源、标识符、课题、标签……', ariaLabel: '搜索证据条目' }),
       ]),
       h(Segmented, { key: 'tabs', value: filter, options: filterOptions, onChange: value => { resetPages(); setFilter(value) }, ariaLabel: '证据核验状态筛选' }),
       h(Button, { key: 'pending', size: 'sm', variant: pendingOnly ? 'soft' : 'ghost', 'aria-pressed': pendingOnly, onClick: () => { resetPages(); setPendingOnly(value => !value) } }, '待筛选队列'),
       h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
-      h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
-        `Agent 判断选中（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
-      h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对选中来源（${selectedEntries.length}）`),
-      h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选选中（${selectedEntries.length}）`),
-      h(Button, { key: 'claim', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setClaimFormOpen(value => !value) }, `建立论断（${selectedEntries.length}）`),
-      h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `写入 Prompt（${selectedEntries.length}）`),
     ]),
+    selectedEntries.length ? h('div', { key: 'selection-bar', className: 'rk-selection-bar rk-fade', role: 'region', 'aria-label': '已选证据批量操作' }, [
+      h('strong', { key: 'count', style: { fontSize: 12, color: C.teal } }, `已选 ${selectedEntries.length} 条`),
+      h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
+        `AI 初判（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
+      h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对来源（${selectedEntries.length}）`),
+      h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选（${selectedEntries.length}）`),
+      h(Button, { key: 'claim', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setClaimFormOpen(value => !value) }, `建立论断（${selectedEntries.length}）`),
+      h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `插入对话（${selectedEntries.length}）`),
+      h(Button, { key: 'clear-sel', size: 'sm', variant: 'quiet', onClick: () => setSelectedIds([]), style: { marginLeft: 'auto' } }, '取消选择'),
+    ]) : null,
     h(EvidenceVaultActionPanels, {
       key: 'action-panels',
       screeningOpen, setScreeningOpen, selectedEntries, screeningDecision, setScreeningDecision,
@@ -742,8 +766,9 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
       icon: 'database',
-      text: entries.length ? '没有匹配的证据条目。' : (project ? `项目「${project}」还没有证据。` : '证据库还是空的。'),
-      hint: entries.length ? '调整搜索或筛选条件。' : '在「资源与工作流」里查询公开数据源，逐条点「保存到证据库」。',
+      text: entries.length ? '没有匹配的证据条目。' : (project ? `课题「${project}」还没有证据。` : '证据库还是空的。'),
+      hint: entries.length ? '调整搜索或筛选条件。' : '在「科研工具 → 查来源」中查询公开数据源，逐条点「保存到证据库」。',
+      action: !entries.length && typeof onNavigate === 'function' ? h(Button, { size: 'sm', variant: 'primary', onClick: () => onNavigate('catalog', { type: 'database' }) }, '去查文献') : null,
     }) : null,
     h('nav', { key: 'pagination', 'aria-label': '证据分页', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
       h(Button, { key: 'previous', size: 'sm', disabled: !pageHistory.length || loading, onClick: () => { setPageCursor(pageHistory.at(-1)); setPageHistory(rows => rows.slice(0, -1)) } }, '上一页'),
@@ -758,7 +783,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
-          h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `选择「${item.title}」用于 Agent 判断或写入 Prompt`, style: { accentColor: C.teal } }),
+          h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `选择「${item.title}」用于批量处理或插入对话`, style: { accentColor: C.teal } }),
           item.url
             ? h('a', { key: 'title', href: item.url, target: '_blank', rel: 'noreferrer noopener', style: { fontSize: 15, fontWeight: 700, color: C.teal, lineHeight: 1.45 } }, item.title)
             : h('strong', { key: 'title', style: { fontSize: 15 } }, item.title),
@@ -783,11 +808,28 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
           setClassificationEditId(current => current === item.id ? '' : item.id)
           setClassificationDraft((item.classification?.topics || []).map(topic => `${topic.primary}/${topic.secondary}`).join('；'))
         } }, item.classification?.reviewed ? '修改人工分类' : '确认／修正自动分类'),
-        classificationEditId === item.id ? h('div', { key: 'form', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
-          h(Input, { key: 'input', value: classificationDraft, onChange: setClassificationDraft, placeholder: '一级主题/二级主题；一级主题/二级主题', ariaLabel: `修正「${item.title}」的主题分类`, style: { flex: '1 1 220px' } }),
-          h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveClassification(item) }, '保存人工分类'),
-        ]) : null,
-        classificationEditId === item.id ? h('span', { key: 'options', style: { fontSize: 11, color: C.muted } }, `可选：${RESEARCH_TOPIC_OPTIONS.map(topic => `${topic.primary}/${topic.secondary}`).join('；')}`) : null,
+        classificationEditId === item.id ? (() => {
+          const picked = new Set(classificationDraft.split(/[;；\n]/).map(part => part.trim()).filter(Boolean))
+          const toggleTopic = key => {
+            const next = new Set(picked)
+            if (next.has(key)) next.delete(key); else next.add(key)
+            setClassificationDraft([...next].join('；'))
+          }
+          return h('div', { key: 'form', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+            h('div', { key: 'chips', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, RESEARCH_TOPIC_OPTIONS.map(topic => {
+              const key = `${topic.primary}/${topic.secondary}`
+              const active = picked.has(key)
+              return h(Button, {
+                key, size: 'sm', variant: active ? 'primary' : 'ghost', 'aria-pressed': active,
+                onClick: () => toggleTopic(key),
+              }, `${topic.primary} · ${topic.secondary}`)
+            })),
+            h('div', { key: 'save-row', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
+              h(Button, { key: 'save', size: 'sm', variant: 'primary', onClick: () => saveClassification(item) }, '保存人工分类'),
+              h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => setClassificationEditId('') }, '取消'),
+            ]),
+          ])
+        })() : null,
       ]),
       // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
       citedByIndex.get(item.id)?.length
@@ -797,6 +839,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         ])
         : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 } }, [
+        item.status === 'unverified' ? h(Button, { key: 'quick-verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => changeStatus(item, 'verified') }, '标记已核验') : null,
         h('span', { key: 'label', style: { fontSize: 12, color: C.muted } }, '核验状态'),
         h(Select, {
           key: 'status',
@@ -806,12 +849,17 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
           ariaLabel: `设置「${item.title}」的核验状态`,
           style: { width: 'auto', minWidth: 96 },
         }),
+        h(Button, {
+          key: 'assess-toggle', size: 'sm', variant: expandedAssessId === item.id ? 'soft' : 'ghost',
+          'aria-expanded': expandedAssessId === item.id,
+          onClick: () => setExpandedAssessId(current => current === item.id ? '' : item.id),
+        }, expandedAssessId === item.id ? '收起细评 ▴' : `细评 · ${EVIDENCE_DIMENSION_LABELS.strength[item.strength || 'ungraded']} ▾`),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
         confirmDeleteId === item.id
           ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
           : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
       ]),
-      h('div', { key: 'assessment', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
+      expandedAssessId === item.id ? h('div', { key: 'assessment', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
         h(Field, { key: 'traceability', label: '来源可追溯性' }, h(Select, {
           value: item.traceability || 'identified', options: EVIDENCE_TRACEABILITY.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.traceability[value] })),
           onChange: value => changeAssessment(item, 'traceability', value), ariaLabel: `设置「${item.title}」的来源可追溯性`,
@@ -835,7 +883,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         }),
         h(Button, { key: 'save', size: 'sm', variant: 'soft', onClick: () => saveAssessmentReason(item) }, '保存依据'),
       ])),
-      ]),
+      ]) : null,
       item.agentAssessment ? h('div', { key: 'agent-result', style: { display: 'grid', gap: 4, padding: 10, marginTop: 8, background: C.tealTint, borderRadius: 8, fontSize: 12, lineHeight: 1.5 } }, [
         h('strong', { key: 'title' }, `Agent 最新判断 · ${item.agentAssessment.model || '当前模型'} · ${formatEvidenceTime(item.agentAssessment.at)}`),
         h('span', { key: 'dimensions' }, `来源：${EVIDENCE_DIMENSION_LABELS.traceability[item.agentAssessment.traceability]} · 类型：${EVIDENCE_DIMENSION_LABELS.studyType[item.agentAssessment.studyType]} · 声明支持：${EVIDENCE_DIMENSION_LABELS.claimSupport[item.agentAssessment.claimSupport]} · 强度：${EVIDENCE_DIMENSION_LABELS.strength[item.agentAssessment.strength]}`),

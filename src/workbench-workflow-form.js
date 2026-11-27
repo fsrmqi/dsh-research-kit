@@ -12,6 +12,9 @@ export function WorkbenchWorkflowForm({
   replayOpen, onToggleReplay, composed, finalPrompt, editedPrompt,
   onEditPrompt, onRestoreGeneratedPrompt, missingNow,
 }) {
+  const [promptOpen, setPromptOpen] = React.useState(false)
+  React.useEffect(() => { if (editedPrompt !== null) setPromptOpen(true) }, [editedPrompt])
+  React.useEffect(() => { setPromptOpen(false) }, [workflow?.id])
   return h(React.Fragment, null, [
     h('div', { key: 'meta', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
       h(Chip, { key: 'cat', color: C.teal }, selectedCategory),
@@ -31,7 +34,7 @@ export function WorkbenchWorkflowForm({
       h('div', { key: 'deliverables', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, `预期交付：${taskPlan.deliverables.join('、')}。所有阶段均需人工确认，不代表已执行。`),
       h(Button, { key: 'plan', size: 'sm', variant: 'soft', icon: 'layers', disabled: !hasDraftAction, onClick: writeTaskPlan, style: { marginTop: 10 } }, activePlan ? '研究计划已写入' : '写入研究与交付计划'),
     ]) : null,
-    sessionResources.length ? h(Notice, { key: 'session', tone: 'info', icon: 'layers' }, `本会话已附加资源（${sessionResources.length}）：${sessionResources.map(item => item.name).join('、')}。可在输入框的“资源”入口调整。`) : null,
+    sessionResources.length ? h(Notice, { key: 'session', tone: 'info', icon: 'layers' }, `本会话已附加资源（${sessionResources.length}）：${sessionResources.map(item => item.name).join('、')}。可在输入框的「科研辅助 → 加资源」中调整。`) : null,
     ...(workflow.placeholders || []).map(field => h(Field, {
       key: field.key,
       label: field.label,
@@ -59,7 +62,12 @@ export function WorkbenchWorkflowForm({
       ]))),
     ]) : null,
     h('div', { key: 'promptHead', style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } }, [
-      h('span', { key: 'label', style: { fontSize: 12, fontWeight: 600, color: C.muted } }, '提示词预览（可编辑）'),
+      h(Button, {
+        key: 'toggle-prompt', variant: 'ghost', size: 'sm',
+        'aria-expanded': promptOpen,
+        onClick: () => setPromptOpen(open => !open),
+      }, promptOpen ? '收起提示词预览 ▴' : '展开提示词预览 ▾'),
+      !promptOpen && editedPrompt === null ? h('span', { key: 'ready', style: { fontSize: 12, color: C.muted } }, '已按参数自动组装') : null,
       h('span', { key: 'sp', style: { flex: 1 } }),
       h(Button, { key: 'replay', variant: 'quiet', size: 'sm', icon: 'gauge', onClick: onToggleReplay }, replayOpen ? '收起回放' : '组装回放'),
     ]),
@@ -68,12 +76,12 @@ export function WorkbenchWorkflowForm({
         ? h(Notice, { key: 'replay-edited', tone: 'warn' }, '提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。')
         : h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
       : null,
-    h(Field, { key: 'prompt', label: '' },
-      h(Textarea, { value: finalPrompt, onChange: onEditPrompt, rows: 12, mono: true, ariaLabel: '提示词预览' })),
+    promptOpen ? h(Field, { key: 'prompt', label: '' },
+      h(Textarea, { value: finalPrompt, onChange: onEditPrompt, rows: 10, mono: true, ariaLabel: '提示词预览' })) : null,
     editedPrompt !== null ? h(Notice, { key: 'edited', tone: 'warn', icon: 'edit' }, [
       '当前为手动编辑版本；字段和技能变更不会自动改写正文。',
       h(Button, { key: 'restore', variant: 'quiet', size: 'sm', icon: 'undo', onClick: onRestoreGeneratedPrompt, style: { marginLeft: 4 } }, '恢复自动生成'),
     ]) : null,
-    missingNow.length ? h(Notice, { key: 'missing', tone: 'warn', icon: 'gauge' }, `尚未填写必填项：${missingNow.join('、')}；写入或发送前需要补齐。`) : null,
+    missingNow.length ? h(Notice, { key: 'missing', tone: 'warn', icon: 'gauge' }, `尚未填写必填项：${missingNow.join('、')}；插入或发送前需要补齐。`) : null,
   ])
 }

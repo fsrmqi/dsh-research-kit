@@ -22,49 +22,92 @@ export function EvidenceVaultTopCards({
   citationPreviewRows, setCitationPreviewRows, citationPicked, setCitationPicked,
   previewCitations, citationWarnings, importCitations,
 }) {
+  const [manageOpen, setManageOpen] = React.useState(false)
+  const [ioOpen, setIoOpen] = React.useState(false)
+  const [clearConfirmText, setClearConfirmText] = React.useState('')
+  React.useEffect(() => { setClearConfirmText('') }, [project, confirmClear])
+  const clearExpected = project ? (activeWorkspace?.name || project) : '清空全部'
+  const clearUnlocked = clearConfirmText.trim() === clearExpected
+  const hasQualityIssues = Boolean(
+    quality.missingIdentifier || quality.unverified || quality.staleOrMissing
+    || quality.duplicateGroups.length || quality.orphanLinks.length,
+  )
+  const hasUndoableOrganizer = Boolean(organizerJournal?.fileId && !['undone', 'failed', 'finalized'].includes(organizerJournal.status))
+  const canExportBackup = Boolean(entries.length || claims.length || ledger.length || workspaces.some(item => (!project || item.projectKey === project) && (item.origin === 'user' || item.updatedAt > 0)))
+
   return h(React.Fragment, null, [
     h(Card, { key: 'project-bar', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h('strong', { key: 'label', style: { fontSize: 13 } }, '当前课题'),
-        h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换项目', style: { width: 'auto', minWidth: 140 } }),
-        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value) }, '新建课题'),
-        project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
-        project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
-        confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认：只归档，不删除数据') : null,
-        h(Button, { key: 'archived-toggle', size: 'sm', variant: 'ghost', onClick: () => setShowArchivedWorkspaces(value => !value) }, showArchivedWorkspaces ? '隐藏已归档' : '显示已归档'),
+        h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换课题', style: { width: 'auto', minWidth: 140 } }),
+        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value), 'aria-expanded': newProjectOpen }, '新建课题'),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !entries.length && !claims.length && !ledger.length && !workspaces.some(item => (!project || item.projectKey === project) && (item.origin === 'user' || item.updatedAt > 0)) }, '导出备份'),
-        h(Button, { key: 'export-pack', size: 'sm', variant: 'soft', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
-        h(Button, { key: 'citations', size: 'sm', onClick: () => setCitationOpen(value => !value) }, '导入文献引用'),
-        h(Button, { key: 'bibtex', size: 'sm', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
-        h(Button, { key: 'ris', size: 'sm', disabled: !counts.all, onClick: () => exportCitations('ris') }, '导出 RIS'),
-        h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
-        confirmClear
-          ? h(Button, { key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash', onClick: clearScope },
-            project ? `确认删除「${project}」全部` : '确认删除全部项目')
-          : h(Button, { key: 'clear', size: 'sm', variant: 'ghost', icon: 'trash', onClick: () => setConfirmClear(true), disabled: !entries.length },
-            project ? '清空本项目' : '清空全部'),
+        h(Button, { key: 'citations', size: 'sm', variant: 'soft', onClick: () => setCitationOpen(value => !value), 'aria-expanded': citationOpen }, '导入引用'),
+        h(Button, { key: 'io', size: 'sm', variant: ioOpen ? 'soft' : 'ghost', 'aria-expanded': ioOpen, onClick: () => { setIoOpen(value => !value); setManageOpen(false) } }, ioOpen ? '收起导入导出' : '导入导出 ▾'),
+        h(Button, { key: 'manage', size: 'sm', variant: manageOpen ? 'soft' : 'ghost', 'aria-expanded': manageOpen, onClick: () => { setManageOpen(value => !value); setIoOpen(false) } }, manageOpen ? '收起课题管理' : '课题管理 ▾'),
       ]),
       newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-        h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '稳定课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
+        h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
         h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
       ]) : null,
-      workspaceRenameOpen ? h('div', { key: 'rename-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-        h(Input, { key: 'input', value: workspaceNameDraft, onChange: setWorkspaceNameDraft, placeholder: '新的课题显示名', ariaLabel: '课题显示名', style: { flex: '1 1 200px' } }),
-        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !workspaceNameDraft.trim(), onClick: renameProject }, '保存显示名'),
+      ioOpen ? h('div', { key: 'io-panel', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+        h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !canExportBackup }, '导出备份'),
+        h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
+        h(Button, { key: 'bibtex', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
+        h(Button, { key: 'ris', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('ris') }, '导出 RIS'),
+        h(Button, { key: 'export-pack', size: 'sm', variant: 'ghost', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
       ]) : null,
-      h('div', { key: 'organizer-actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || (organizerJournal && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)), onClick: previewOrganizer }, '一键整理项目'),
-        organizerJournal?.fileId && !['undone', 'failed', 'finalized'].includes(organizerJournal.status)
-          ? h(Button, { key: 'undo', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: undoOrganizer }, '撤销上次整理') : null,
-        organizerJournal?.status === 'applied'
-          ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
+      manageOpen ? h('div', { key: 'manage-panel', style: { display: 'grid', gap: 10, padding: 12, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+        h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+          project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
+          project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
+          confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认：只归档，不删除数据') : null,
+          h(Button, { key: 'archived-toggle', size: 'sm', variant: 'ghost', onClick: () => setShowArchivedWorkspaces(value => !value) }, showArchivedWorkspaces ? '隐藏已归档' : '显示已归档'),
+          h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || hasUndoableOrganizer, onClick: previewOrganizer }, '一键整理课题'),
+          hasUndoableOrganizer ? h(Button, { key: 'undo', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: undoOrganizer }, '撤销上次整理') : null,
+          organizerJournal?.status === 'applied' ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
+        ]),
+        workspaceRenameOpen ? h('div', { key: 'rename-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+          h(Input, { key: 'input', value: workspaceNameDraft, onChange: setWorkspaceNameDraft, placeholder: '新的课题显示名', ariaLabel: '课题显示名', style: { flex: '1 1 200px' } }),
+          h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !workspaceNameDraft.trim(), onClick: renameProject }, '保存显示名'),
+        ]) : null,
+        h('div', { key: 'danger', className: 'rk-danger-zone' }, [
+          h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+            h('strong', { key: 't', style: { fontSize: 12, color: C.red } }, '危险操作 · 清空后不可恢复'),
+            !confirmClear ? h(Button, {
+              key: 'clear', size: 'sm', variant: 'danger', icon: 'trash',
+              disabled: !entries.length,
+              onClick: () => setConfirmClear(true),
+            }, project ? '清空本课题证据' : '清空全部课题证据') : null,
+          ]),
+          confirmClear ? h('div', { key: 'confirm-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+            h(Input, {
+              key: 'input', value: clearConfirmText, onChange: setClearConfirmText,
+              placeholder: `输入「${clearExpected}」以解锁删除`,
+              ariaLabel: '输入确认文字以清空证据',
+              style: { flex: '1 1 200px', borderColor: C.red },
+            }),
+            h(Button, {
+              key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash',
+              disabled: !clearUnlocked,
+              onClick: clearScope,
+            }, project ? `确认清空「${clearExpected}」` : '确认清空全部'),
+            h(Button, {
+              key: 'clear-cancel', size: 'sm', variant: 'ghost',
+              onClick: () => { setConfirmClear(false); setClearConfirmText('') },
+            }, '取消'),
+          ]) : null,
+        ]),
+      ]) : null,
+      (!manageOpen && (organizerBusy || hasUndoableOrganizer)) ? h('div', { key: 'organizer-status', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+        hasUndoableOrganizer ? h(Button, { key: 'undo', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: undoOrganizer }, '撤销上次整理') : null,
+        organizerJournal?.status === 'applied' ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
         organizerBusy ? h('span', { key: 'progress', role: 'status', style: { fontSize: 12, color: C.muted } }, organizerProgress || '正在整理…') : null,
-      ]),
+      ]) : null,
       organizerLog.length ? h('div', { key: 'organizer-log', role: 'status', style: { maxHeight: 100, overflowY: 'auto', fontSize: 11, color: C.muted, display: 'grid', gap: 3 } },
         organizerLog.slice(-10).map((line, index) => h('span', { key: `${index}:${line}` }, line))) : null,
       organizerPlan ? h('div', { key: 'organizer-preview', style: { display: 'grid', gap: 8, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 8 } }, [
-        h('strong', { key: 'title', style: { fontSize: 13 } }, '项目归类预览 · 确认前不会修改数据'),
+        h('strong', { key: 'title', style: { fontSize: 13 } }, '课题归类预览 · 确认前不会修改数据'),
         ...organizerPlan.map((item, index) => h('label', { key: item.from, style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 } }, [
           h('input', { key: 'check', type: 'checkbox', checked: item.selected, disabled: organizerBusy, onChange: event => setOrganizerPlan(rows => rows.map((row, i) => i === index ? { ...row, selected: event.target.checked } : row)) }),
           h('span', { key: 'description' }, `${item.from} → ${item.to} · ${item.category === 'research' ? '科研课题' : '测试／演示归档'} · ${item.confidence === 'high' ? '高置信' : '需确认'} · 证据 ${item.counts.evidence}、论断 ${item.counts.researchClaims}、资产 ${item.counts.assets}、知识 ${item.counts.nodes + item.counts.claims}、运行 ${item.counts.runs}。${item.reason}`),
@@ -74,22 +117,33 @@ export function EvidenceVaultTopCards({
           h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: () => setOrganizerPlan(null) }, '取消'),
         ]),
       ]) : null,
-      backupOpen ? h('div', { key: 'backup', style: { display: 'grid', gap: 8 } }, [
-        h('strong', { key: 't', style: { fontSize: 12, color: C.muted } }, '粘贴此前导出的 JSON 备份（增量合并：已存在的条目跳过，不会覆盖现有笔记）'),
-        h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 5, mono: true, ariaLabel: 'JSON 备份内容' }),
+      backupOpen ? h('div', { key: 'backup', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+        h('strong', { key: 't', style: { fontSize: 12, color: C.ink } }, '从备份文件恢复（增量合并，不覆盖现有笔记）'),
+        h('input', {
+          key: 'file', type: 'file', accept: '.json,application/json', 'aria-label': '选择证据 JSON 备份文件',
+          onChange: async event => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            try { setBackup(await file.text()) } catch (error) { setNotice(`⚠️ 文件读取失败：${error.message}`) }
+          },
+        }),
+        h('details', { key: 'paste' }, [
+          h('summary', { key: 's', style: { cursor: 'pointer', fontSize: 12, color: C.muted } }, '或直接粘贴 JSON 备份文本'),
+          h(Textarea, { key: 'i', value: backup, onChange: setBackup, rows: 4, mono: true, ariaLabel: 'JSON 备份内容', style: { marginTop: 6 } }),
+        ]),
         h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [
-          h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !backup.trim(), onClick: importJson }, '恢复'),
+          h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !backup.trim(), onClick: importJson }, '确认恢复'),
           h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => { setBackupOpen(false); setBackup('') } }, '取消'),
         ]),
       ]) : null,
     ]),
-    h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
+    hasQualityIssues ? h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
       h('strong', { key: 'title', style: { fontSize: 13 } }, '数据质量提示 · 只读，不自动修改'),
       h('small', { key: 'page-scope', style: { color: C.muted } }, '质量提示仅针对当前页；完整范围可导出检查。'),
       h('span', { key: 'counts', style: { fontSize: 12, color: C.muted } }, `缺稳定标识符 ${quality.missingIdentifier} · 未核验 ${quality.unverified} · 标为失效／官方记录未找到 ${quality.staleOrMissing} · 疑似同源组 ${quality.duplicateGroups.length} · 关联断链 ${quality.orphanLinks.length}`),
       quality.duplicateGroups.length ? h('span', { key: 'duplicates', style: { fontSize: 12, color: C.muted } }, `待人工复核的同源候选：${quality.duplicateGroups.slice(0, 3).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 3 ? '…' : ''}。跨课题重复可能是有意引用，不会自动合并。`) : null,
       !quality.assetSideChecked ? h('span', { key: 'asset-limit', style: { fontSize: 11, color: C.muted } }, '当前未载入完整资产列表；断链数仅核对证据端。') : null,
-    ]),
+    ]) : null,
     h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
       h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),

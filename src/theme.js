@@ -260,6 +260,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px rgba(13,148,136,.45)) }
 .rk-pop { animation: rk-pop .18s ease both }
 .rk-fade { animation: rk-fade .16s ease both }
+.rk-toast-stack {
+  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  z-index: 20030; display: grid; gap: 8px; width: min(520px, calc(100vw - 24px));
+  pointer-events: none; font-family: var(--rk-font);
+}
+.rk-toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--rk-line); border-radius: 10px;
+  box-shadow: var(--rk-shadow-lg); font-size: 13px;
+}
+.rk-selection-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px 14px; border: 1px solid var(--rk-teal-line-strong); border-radius: 10px;
+  background: var(--rk-teal-tint); box-shadow: var(--rk-shadow-card);
+}
+.rk-danger-zone {
+  display: grid; gap: 8px; padding: 12px; border: 1px solid var(--rk-red);
+  border-radius: 9px; background: var(--rk-red-tint);
+}
 .rk-scroll::-webkit-scrollbar { width: 8px; height: 8px }
 .rk-scroll::-webkit-scrollbar-thumb { background: #cdd8df; border-radius: 999px }
 .rk-scroll::-webkit-scrollbar-track { background: transparent }

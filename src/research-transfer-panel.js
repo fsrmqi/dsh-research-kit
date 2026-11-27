@@ -149,12 +149,16 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     finally { setBusy(false) }
   }
   const apply = async () => {
-    if (!incoming || !backupReady) return
+    if (!incoming) return
     setBusy(true)
     try {
       const current = await captureResearchTransfer(assetProvider)
       if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，未导入；请重新选择备份文件并预览。')
       if (current.runs.length + preview.runs.add > MAX_RESEARCH_RUNS) throw new Error(`合并后研究运行超过 ${MAX_RESEARCH_RUNS} 条上限，已停止；请先备份并整理旧运行。`)
+      if (!backupReady) {
+        transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
+        setBackupReady(true)
+      }
       const result = await applyResearchTransfer(incoming, current, assetProvider, setProgress)
       setNotice(`恢复完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条，拒收无效 ${result.invalidEvidence} 条，未恢复关联 ${result.skippedRelated} 条。${result.existingSources ? `文件侧已有同源证据 ${result.existingSources} 条，未覆盖原记录；` : ''}其余数据按稳定 ID 增量合并，请刷新核对。`)
       setIncoming(null); setPreview(null); setBackupReady(false)
@@ -178,8 +182,8 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
       h('strong', { key: 'label' }, '恢复预览（总数／预计新增／本端已有）'),
       ...TRANSFER_SECTIONS.map(([key, label]) => h('div', { key }, `${label}：${preview[key].total}／${preview[key].add}／${preview[key].existing}${preview[key].invalid ? `（无效 ${preview[key].invalid}）` : ''}`)),
       h('div', { key: 'confirm', style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 } }, [
-        h(Button, { key: 'backup', size: 'sm', disabled: busy, onClick: backupCurrent }, '先下载恢复前备份'),
-        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy || !backupReady, onClick: apply }, '确认增量恢复'),
+        h(Button, { key: 'backup', size: 'sm', variant: 'ghost', disabled: busy, onClick: backupCurrent }, '先下载恢复前备份'),
+        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy, onClick: apply }, backupReady ? '确认增量恢复' : '自动备份并增量恢复'),
       ]),
     ]) : null,
     progress ? h('span', { key: 'progress', role: 'status', style: { color: C.teal } }, progress) : null,

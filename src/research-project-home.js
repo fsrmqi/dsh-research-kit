@@ -184,9 +184,9 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
       ]),
       h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, '待办收件箱'),
-        h('span', { key: 'counts' }, `待核验 Claim ${pending} · 项目未核验证据 ${data.counts.unverified || 0}`),
+        h('span', { key: 'counts' }, `待核验论断 ${pending} · 课题待核验证据 ${data.counts.unverified || 0}`),
         h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-          h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '处理 Claim'),
+          h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '审阅论断'),
           h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
         ]),
         data.missing.size ? h(Notice, { key: 'missing', tone: 'warn' }, `${data.missing.size} 条已关联证据在当前项目中缺失。`) : null,

@@ -87,7 +87,7 @@ export function ResearchDepositButton() {
         next = {
           tone: 'ok',
           text: `已沉淀：+${result.summary.addedNodes} 节点 · 证据 ${result.summary.savedEvidence} · 资产 ${result.summary.savedAssets}`,
-          detail: `消息 #${result.seq ?? '?'}${result.interrupted ? '（曾被中断，内容可能不完整）' : ''}；全部以待核验状态入库，可在「研究证据图谱」分区查看。`,
+          detail: `消息 #${result.seq ?? '?'}${result.interrupted ? '（曾被中断，内容可能不完整）' : ''}；全部以待核验状态入库，可在「证据图谱」分区查看。`,
         }
       }
     } catch (error) {

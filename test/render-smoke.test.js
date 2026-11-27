@@ -42,18 +42,18 @@ function buttonMarkup(html, label) {
   return start >= 0 && end > start ? html.slice(start, end + 1) : null
 }
 
-test('工作台：宿主未提供 inputActions 时给出降级提示，写入与发送按钮均禁用', () => {
+test('工作台：宿主未提供 inputActions 时给出降级提示，插入与发送按钮均禁用', () => {
   const html = render(ResearchWorkbench, { sessionId: 'r2', embedded: true })
   assert.match(html, /当前 DSH 会话未提供输入框操作/, '降级提示缺失')
-  assert.match(buttonMarkup(html, '写入输入框') || '', /disabled/, '写入按钮应为禁用态')
-  assert.match(buttonMarkup(html, '发送到当前会话') || '', /disabled/, '发送按钮应为禁用态')
+  assert.match(buttonMarkup(html, '插入对话') || '', /disabled/, '插入按钮应为禁用态')
+  assert.match(buttonMarkup(html, '发送到对话') || '', /disabled/, '发送按钮应为禁用态')
 })
 
 test('工作台对照组：宿主提供 inputActions 后两个按钮恢复可用', () => {
   const html = render(ResearchWorkbench, { sessionId: 'r2', inputActions: hostActionsStub, embedded: true })
   assert.doesNotMatch(html, /当前 DSH 会话未提供输入框操作/, '提供宿主动作后不应再出现降级提示')
-  assert.doesNotMatch(buttonMarkup(html, '写入输入框') || '', /disabled/, '写入按钮应恢复可用')
-  assert.doesNotMatch(buttonMarkup(html, '发送到当前会话') || '', /disabled/, '发送按钮应恢复可用')
+  assert.doesNotMatch(buttonMarkup(html, '插入对话') || '', /disabled/, '插入按钮应恢复可用')
+  assert.doesNotMatch(buttonMarkup(html, '发送到对话') || '', /disabled/, '发送按钮应恢复可用')
 })
 
 test('工作台：「在新会话开始」只在宿主支持草稿预填时渲染（更早宿主不留死按钮）', () => {
@@ -63,10 +63,10 @@ test('工作台：「在新会话开始」只在宿主支持草稿预填时渲�
   assert.match(buttonMarkup(withLaunch, '在新会话开始') || '', /<button/, '宿主支持时应渲染可点击入口')
 })
 
-test('证据库：宿主不支持写入时「写入 Prompt」按钮为禁用态', () => {
+test('证据库：未勾选条目时隐藏批量操作浮条，避免灰按钮占位', () => {
   const html = render(EvidenceVaultPane, {})
-  assert.match(buttonMarkup(html, '写入 Prompt') || '', /disabled/, '宿主无 setDraft 时写入按钮应禁用')
-  assert.match(buttonMarkup(html, 'Agent 判断选中') || '', /disabled/, '未选证据时 Agent 判断选中应禁用')
+  assert.doesNotMatch(html, /rk-selection-bar/, '未选中证据时不应渲染批量操作浮条')
+  assert.doesNotMatch(html, /插入对话（0）/, '未选中证据时不应渲染 0 条插入按钮')
 })
 
 test('灵感库与数据库面板：宿主未提供 inputActions 时仍能完整渲染，不抛错', () => {

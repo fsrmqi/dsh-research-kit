@@ -88,7 +88,13 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   const [sourceText, setSourceText] = React.useState('')
   const [candidates, setCandidates] = React.useState([])
   const [pickedCandidates, setPickedCandidates] = React.useState([])
-  const [reviewer, setReviewer] = React.useState('')
+  const [reviewer, setReviewerRaw] = React.useState(() => {
+    try { return window.localStorage.getItem('dsh-research-kit.reviewer.v1') || '' } catch { return '' }
+  })
+  const setReviewer = React.useCallback(value => {
+    setReviewerRaw(value)
+    try { window.localStorage.setItem('dsh-research-kit.reviewer.v1', value) } catch { /* 忽略 */ }
+  }, [])
   const [editingId, setEditingId] = React.useState('')
   const [relationId, setRelationId] = React.useState('')
   const [draft, setDraft] = React.useState({ state: 'ambiguous', reason: '', evidenceIds: [] })
@@ -134,16 +140,24 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     finally { setBusy(false) }
   }
 
-  const extract = async () => {
-    if (!sourceText.trim() || busy) return
+  const extract = async (overrideText) => {
+    const targetText = typeof overrideText === 'string' ? overrideText : sourceText
+    if (!targetText.trim() || busy) return
     setBusy(true)
     try {
-      const result = await claimReviewRequest(project, { action: 'extract', project, text: sourceText })
+      const result = await claimReviewRequest(project, { action: 'extract', project, text: targetText })
       setCandidates(result.drafts)
       setPickedCandidates([])
-      setNotice(result.drafts.length ? `找到 ${result.drafts.length} 条带引用的 Claim 候选；请勾选要登记的条目。` : '未找到带 DOI、PMID 或 arXiv 引用的可定位 Claim。')
+      setNotice(result.drafts.length ? `找到 ${result.drafts.length} 条带引用的论断候选；请勾选要登记的条目。` : '未找到带 DOI、PMID 或 arXiv 引用的可定位论断。')
     } catch (error) { setNotice(`候选提取失败：${error.message}`) }
     finally { setBusy(false) }
+  }
+  const extractFromLatestAnswer = () => {
+    const found = readLatestResearchAnswer(sessionId)
+    if (!found) return setNotice('当前会话没有可读取的助手回答；可手动粘贴研究段落。')
+    const text = found.text.slice(0, 12000)
+    setSourceText(text); setCandidates([]); setPickedCandidates([])
+    void extract(text)
   }
 
   const saveCandidates = async () => {
@@ -240,29 +254,24 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   }))
   const pendingForAgent = claims.filter(claim => !['verified', 'rejected'].includes(claim.state) && !claim.agent_review).slice(0, 6)
 
-  return h('section', { 'aria-label': 'Claim 审阅', style: { display: 'grid', gap: 12, marginTop: 16 } }, [
+  return h('section', { 'aria-label': '论断审阅', style: { display: 'grid', gap: 12, marginTop: 16 } }, [
     h(Card, { key: 'intro', style: { display: 'grid', gap: 10 } }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'text' }, [
           h('h2', { key: 'title', style: { margin: 0, fontSize: 17 } }, '登记与人工审核'),
           h('p', { key: 'hint', style: { margin: '5px 0 0', color: C.muted, fontSize: 12, lineHeight: 1.6 } },
-            `当前课题：${context.project || '未命名项目'}。确认结论须由研究者填写理由，并关联本课题已保存的证据。`),
+            `当前课题：${context.project || '默认课题'}。确认论断须由研究者填写理由，并关联本课题已保存的证据。`),
         ]),
         h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', disabled: loading || busy, onClick: refresh }, '刷新台账'),
       ]),
-      h(Field, { key: 'statement', label: '新建 Claim 草稿', hint: '只写一句可检验的短声明；创建后状态为“摘取待核验”。' },
+      h(Field, { key: 'statement', label: '新建论断草稿', hint: '只写一句可检验的短声明；创建后状态为「摘取待核验」。' },
         h(Textarea, { value: statement, onChange: setStatement, rows: 2, maxLength: 800, ariaLabel: '新建 Claim 内容', placeholder: '例如：在指定样本与条件下，干预 A 改善结果 B。' })),
       h(Button, { key: 'create', size: 'sm', variant: 'primary', disabled: busy || !statement.trim(), onClick: create, style: { justifySelf: 'start' } }, '登记草稿'),
     ]),
     h(Card, { key: 'extract', style: { display: 'grid', gap: 10 } }, [
       h('h3', { key: 'title', style: { margin: 0, fontSize: 14 } }, '从研究段落提取候选'),
       h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12, lineHeight: 1.5 } }, '粘贴带 DOI、PMID 或 arXiv 引用的段落；先预览并勾选，再登记为待核验 Claim。原文不会整篇保存。'),
-      h(Button, { key: 'latest-answer', size: 'sm', disabled: busy, onClick: () => {
-        const found = readLatestResearchAnswer(sessionId)
-        if (!found) return setNotice('当前会话没有可读取的助手回答；可手动粘贴研究段落。')
-        setSourceText(found.text.slice(0, 12000)); setCandidates([]); setPickedCandidates([])
-        setNotice(`${found.interrupted ? '回答曾被中断；' : ''}${found.text.length > 12000 ? '仅载入前 12000 字；' : ''}已载入最近回答，请先核对内容，再提取并勾选候选。`)
-      }, style: { justifySelf: 'start' } }, '从最近回答开始'),
+      h(Button, { key: 'latest-answer', size: 'sm', variant: 'soft', disabled: busy, onClick: extractFromLatestAnswer, style: { justifySelf: 'start' } }, '从最近回答开始'),
       h(Textarea, { key: 'input', value: sourceText, onChange: value => { setSourceText(value); setCandidates([]); setPickedCandidates([]) }, rows: 4,
         maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '例如：在某研究条件下，干预 A 改善结局 B [1](https://doi.org/10.1000/example)。' }),
       h(Button, { key: 'extract-button', size: 'sm', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
@@ -292,7 +301,12 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     limits.claims || limits.evidence ? h(Notice, { key: 'limit', tone: 'warn' }, '证据选择器显示最近 200 条；更早来源可从证据库建立论断后，在此审核。') : null,
     syncWarning ? h(Notice, { key: 'sync-warning', tone: 'warn' }, syncWarning) : null,
     loading ? h(Spinner, { key: 'loading', text: '正在读取 Claim 台账……' }) : null,
-    !loading && !claims.length ? h(EmptyState, { key: 'empty', text: '当前课题还没有 Claim。', hint: '从已有研究段落提取候选，或去证据库选择来源并建立论断，再返回这里审核。' }) : null,
+    !loading && !claims.length ? h(EmptyState, {
+      key: 'empty',
+      text: '当前课题还没有论断。',
+      hint: '可直接从最近一条助手回答中提取候选，或在上方登记一条研究论断。',
+      action: h(Button, { size: 'sm', variant: 'primary', disabled: busy, onClick: extractFromLatestAnswer }, '从最近回答提取'),
+    }) : null,
     claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
       h(Button, { key: 'prev', size: 'sm', disabled: !claimPage || busy, onClick: () => setClaimPage(page => page - 1) }, '上一页论断'),
       h('span', { key: 'count' }, `第 ${claimPage + 1} 页 · 共 ${claims.length} 条`),

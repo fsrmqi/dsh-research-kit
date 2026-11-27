@@ -461,7 +461,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
       key: 'head',
       kicker: 'Research Kit',
       title: '研究证据图谱',
-      lead: '连接本会话的资源、工作流和查询来源，并接入已保存证据与自动沉淀的研究知识；不显示检索词、原始文件、全文或笔记。箭头表示代码记录到的关系方向，不代表已核验的科学结论。默认只绘制存在关系的节点，未关联节点只在需要时展开。可缩放、拖拽与框选范围。',
+      lead: '展示当前课题的来源、论断与知识关联，点击节点可追溯原文。',
       actions: [
         h(Button, { key: 'motion', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停链路流动' : '播放链路流动'),
         h(Button, { key: 'export', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照'),
@@ -597,8 +597,11 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
           ? '当前筛选范围内没有可绘制的关系'
           : '尚无可绘制的证据关系',
         hint: (scope !== 'all' || projectFilter)
-          ? '调整上方的节点范围或项目筛选；「本会话」只含刷新即消失的记录，「持久沉淀」含证据、灵感资产与自动沉淀知识。'
-          : '先选择资源、启动工作流、执行数据库查询或保存研究灵感资产，图谱会自动形成；也可打开对话下方的「回答依据」确认保存。',
+          ? '调整上方的节点范围或课题筛选即可查看其他范围。'
+          : '先查文献或保存证据与灵感，图谱会自动建立关联。',
+        action: !(scope !== 'all' || projectFilter) && typeof onNavigate === 'function'
+          ? h(Button, { variant: 'primary', size: 'sm', onClick: () => onNavigate('catalog', { type: 'database' }) }, '去查文献')
+          : null,
       }),
     h(EvidenceGraphDetailPanels, {
       key: 'detail-panels',

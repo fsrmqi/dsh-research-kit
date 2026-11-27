@@ -181,7 +181,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await dreamPanel.getByRole('button',{name:'开始一次梦境',exact:true}).click();
   await dreamPanel.getByText(/已扫描 .*提炼出 .*条高信号提案/).waitFor();
   assert.equal(promptKitRequests,0,'触发科研梦境不得提前加载 PromptKit');
-  await page.getByRole('button',{name:'证据关系',exact:true}).click();
+  await page.getByRole('tab',{name:'证据图谱',exact:true}).click();
   await page.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
   assert.equal(promptKitRequests,0,'独立图谱不得等待 PromptKit');
   await page.getByRole('tab',{name:'本次研究',exact:true}).click();
@@ -191,9 +191,9 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.ok((await page.getByLabel('待提取的研究段落').inputValue()).includes('Ghd7'));
   await page.screenshot({path:path.join(artifacts,'claim-onboarding.png'),fullPage:false});
   assert.equal(promptKitRequests,0,'独立 Claim 入口不得等待 PromptKit');
-  await page.getByRole('button',{name:'研究资料',exact:true}).click();
+  await page.getByRole('tab',{name:'资料库',exact:true}).click();
   await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
-  await page.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
+  await page.getByRole('tab',{name:'论断审阅',exact:true}).click();
   await page.getByLabel('新建 Claim 内容').fill('干预 A 改善结局 B');
   await page.getByRole('button',{name:'登记草稿'}).click();
   await page.getByText('干预 A 改善结局 B').waitFor();
@@ -230,7 +230,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(claimRecords[1].state,'verified');
   if(process.env.RK_CLAIM_QA_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_SCREENSHOT});
   await page.setViewportSize({width:390,height:900});
-  const claimLayout=await page.getByLabel('Claim 审阅').evaluate(element=>({width:element.getBoundingClientRect().width,scrollWidth:element.scrollWidth}));
+  const claimLayout=await page.getByLabel('论断审阅').evaluate(element=>({width:element.getBoundingClientRect().width,scrollWidth:element.scrollWidth}));
   assert.ok(claimLayout.scrollWidth<=claimLayout.width+2,'Claim 面板不应出现横向溢出');
   await page.getByText('干预 A 改善结局 B').scrollIntoViewIfNeeded();
   if(process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.RK_CLAIM_QA_MOBILE_SCREENSHOT});
@@ -450,7 +450,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(persistedTrace.length,1);
   assert.equal(persistedTrace[0].evidenceIds.length,1);
   assert.match(persistedTrace[0].sources[0].excerpt,/Schwaab 2021 · 结果；图 1；图 2c/);
-  await tracePage.getByRole('button',{name:'证据关系',exact:true}).click();
+  await tracePage.getByRole('tab',{name:'证据图谱',exact:true}).click();
   await tracePage.getByRole('heading',{name:'研究证据图谱',exact:true}).waitFor();
   await tracePage.locator('svg a[aria-label^="聚焦 中欧城市的卫星地表温差"]').click();
   await tracePage.getByText(/原文位置（待核验）：Schwaab 2021 · 结果；图 1；图 2c/).waitFor();
@@ -467,6 +467,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(archifyRequests,1,'Archify 模板应只在回放窗口首次使用时请求一次');
   await page.getByRole('button',{name:'收起回放',exact:true}).click();
   console.log('回放自动完成、静态模式和独立窗口：通过');
+  await page.getByRole('button',{name:'展开提示词预览 ▾',exact:true}).click();
   await page.getByLabel('提示词预览',{exact:true}).fill('手动编辑内容必须保留');
   await page.getByRole('button',{name:'组装回放',exact:true}).click();
   await page.getByText('提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。',{exact:true}).waitFor();
@@ -479,7 +480,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   console.log('切换科研模式保留手动编辑并展示主工作台推荐区块：通过');
   await page.getByRole('tab',{name:'查来源',exact:true}).click();
   await page.getByLabel('资源列表').getByText('PubMed',{exact:true}).click();
-  await page.getByLabel('英文检索式').fill('rice');
+  await page.getByLabel('检索词').fill('rice');
   await page.route('**/dsh-research-kit/query?**', route=>route.fulfill({json:{mode:'direct',query:'rice',sources:[{id:'test',title:'测试候选记录',url:'https://example.org/test'}]}}));
   await page.getByRole('button',{name:'查询',exact:true}).click();
   await page.getByText('测试候选记录',{exact:true}).waitFor();
@@ -487,7 +488,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.match(await page.evaluate(()=>window.draft),/rice/);
   await page.getByLabel('资源列表').getByText('Crossref',{exact:true}).click();
   assert.equal(await page.getByText('测试候选记录',{exact:true}).count(),0);
-  assert.equal(await page.getByLabel('英文检索式').inputValue(),'');
+  assert.equal(await page.getByLabel('检索词').inputValue(),'');
   console.log('英文查询传给 Agent、切换数据库清除旧结果：通过');
   await page.getByRole('tab',{name:'选流程',exact:true}).click();
   for (const [type,quick] of [['技能','生物信息学'],['数据库','文献与引文']]) {
@@ -674,7 +675,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.match(await page.getByLabel('模板内容').inputValue(),/核验来源/);
   await page.getByLabel('模板内容').fill('先核验来源，再列出证据缺口。');
   await page.getByRole('button',{name:'保存模板'}).click();
-  await page.getByRole('button',{name:'插入草稿'}).click();
+  await page.getByRole('button',{name:'插入对话'}).click();
   assert.match(await page.evaluate(()=>window.draft),/证据缺口/);
   await page.getByRole('button',{name:'版本记录'}).click();
   await page.getByRole('button',{name:/^查看 .*个人科研模板/}).click();
@@ -707,7 +708,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.getByRole('button',{name:'从目录复制'}).click();
   console.log('个人流程新建、编辑、复用、正文复制搜索、延迟复制保稿与历史版本：通过');
   await page.getByRole('tab',{name:'本次研究',exact:true}).click();
-  await page.getByRole('button',{name:'研究资料',exact:true}).click();
+  await page.getByRole('tab',{name:'资料库',exact:true}).click();
   await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
   await page.getByRole('button',{name:'新建资产',exact:true}).click();
   await page.getByLabel('标题（留空自动取正文首行）').fill('水稻耐盐性研究');
@@ -750,6 +751,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await secondAssessment;
   await page.getByRole('button',{name:'用 Agent 判断完整范围（2）'}).waitFor();
   assert.deepEqual(assessedBatches,[['qa-agent-new','qa-agent-human'],['qa-agent-new','qa-agent-human']]);
+  await page.locator('.rk-card').filter({ has: page.getByText('人工处理证据', { exact: true }) }).getByRole('button', { name: /细评/ }).click();
   assert.equal(await page.getByLabel('设置「人工处理证据」的人工评估依据').inputValue(),'人工已核对');
   if(process.env.RK_QA_AGENT_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_AGENT_SCREENSHOT,fullPage:true});
   await page.getByRole('button',{name:'按主题分组 ✓'}).click();
@@ -795,7 +797,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const isolated=await browser.newContext();
   const appPage=await isolated.newPage();
   await appPage.goto('http://127.0.0.1:'+server.address().port);
-  await appPage.getByRole('button',{name:'研究资料',exact:true}).click();
+  await appPage.getByRole('tab',{name:'资料库',exact:true}).click();
   await appPage.getByRole('button',{name:'备份与恢复',exact:true}).click();
   await appPage.waitForFunction(()=>!!window.__DSH_RESEARCH_PROMPTKIT__);
   await appPage.getByLabel('选择 Research Kit 备份文件').setInputFiles({name:'research-transfer.json',mimeType:'application/json',buffer:Buffer.from(migrationText)});
@@ -808,7 +810,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await appPage.getByRole('button',{name:'确认增量恢复'}).click();
   await appPage.getByText(/恢复完成：/).waitFor();
   await appPage.getByRole('button',{name:'关闭',exact:true}).click();
-  await appPage.getByRole('button',{name:'研究资料',exact:true}).click();
+  await appPage.getByRole('tab',{name:'资料库',exact:true}).click();
   const restoredAsset = appPage.locator('.rk-card').filter({ has: appPage.getByText('水稻耐盐性研究',{exact:true}) }).first();
   await restoredAsset.getByRole('button',{name:'关联证据（1）',exact:true}).click();
   await restoredAsset.getByRole('button',{name:'解除',exact:true}).waitFor();
@@ -820,7 +822,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   largePage.on('pageerror',error=>errors.push(String(error)));
   await largePage.goto('http://127.0.0.1:'+server.address().port);
   await largePage.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
-  await largePage.getByRole('button',{name:'研究资料',exact:true}).click();
+  await largePage.getByRole('tab',{name:'资料库',exact:true}).click();
   await largePage.getByRole('tablist',{name:'沉淀层子模块'}).getByRole('tab',{name:'证据库',exact:true}).click();
   await largePage.getByText('第 1 页 · 本页 0 条 · 完整范围 0 条',{exact:true}).waitFor();
   await largePage.evaluate(async()=>{
@@ -832,16 +834,16 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const pageStarted=Date.now();
   await largePage.getByRole('button',{name:'重试同步',exact:true}).click();
   await largePage.getByText('第 1 页 · 本页 50 条 · 完整范围 10000 条',{exact:true}).waitFor();
-  assert.equal(await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).count(),50);
+  assert.equal(await largePage.getByRole('checkbox',{name:/用于批量处理或插入对话/}).count(),50);
   console.log('真实 IndexedDB 1 万条首个分页可见耗时（含摘要读取）：'+(Date.now()-pageStarted)+'ms');
-  await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).first().check();
+  await largePage.getByRole('checkbox',{name:/用于批量处理或插入对话/}).first().check();
   await largePage.getByRole('button',{name:'下一页',exact:true}).click();
   await largePage.getByText('第 2 页 · 本页 50 条 · 完整范围 10000 条',{exact:true}).waitFor();
-  await largePage.getByRole('checkbox',{name:'选择「性能证据 09949」用于 Agent 判断或写入 Prompt',exact:true}).waitFor();
-  await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).first().check();
-  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).waitFor();
+  await largePage.getByRole('checkbox',{name:'选择「性能证据 09949」用于批量处理或插入对话',exact:true}).waitFor();
+  await largePage.getByRole('checkbox',{name:/用于批量处理或插入对话/}).first().check();
+  await largePage.getByRole('button',{name:'插入对话（2）',exact:true}).waitFor();
   await largePage.screenshot({path:path.join(artifacts,'cross-page-selection.png'),fullPage:false});
-  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).click();
+  await largePage.getByRole('button',{name:'插入对话（2）',exact:true}).click();
   assert.ok((await largePage.evaluate(()=>window.draft)).includes('性能证据 09999'));
   assert.ok((await largePage.evaluate(()=>window.draft)).includes('性能证据 09949'));
   await largePage.getByRole('button',{name:'上一页',exact:true}).click();
@@ -849,9 +851,9 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await largePage.screenshot({path:path.join(artifacts,'evidence-pagination.png'),fullPage:false});
   await largePage.getByLabel('搜索证据条目').fill('性能证据 00001');
   await largePage.getByText('第 1 页 · 本页 1 条 · 完整范围 10000 条',{exact:true}).waitFor();
-  assert.equal(await largePage.getByRole('checkbox',{name:/用于 Agent 判断或写入 Prompt/}).count(),1);
-  await largePage.getByRole('button',{name:'写入 Prompt（2）',exact:true}).waitFor();
-  await largePage.getByRole('button',{name:'导入文献引用',exact:true}).click();
+  assert.equal(await largePage.getByRole('checkbox',{name:/用于批量处理或插入对话/}).count(),1);
+  await largePage.getByRole('button',{name:'插入对话（2）',exact:true}).waitFor();
+  await largePage.getByRole('button',{name:'导入引用',exact:true}).click();
   await largePage.getByLabel('BibTeX 或 RIS 引用内容').fill('@article{qa,title={浏览器引用往返},author={Li and Wang},year={2024},doi={10.9999/browser}}');
   await largePage.getByRole('button',{name:'预览引用',exact:true}).click();
   await largePage.getByRole('button',{name:'确认保存所选 0 条（待核验）',exact:true}).waitFor();
@@ -926,7 +928,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await runPage.getByText('当前运行：run-mcp-existing',{exact:true}).waitFor();
   await runPage.getByLabel('恢复指定运行').selectOption('run-review-original');
   await runPage.getByText('上次综述产出',{exact:true}).waitFor();
-  await runPage.getByText(/待核验 Claim 1/).waitFor();
+  await runPage.getByText(/待核验论断 1/).waitFor();
   const approve=runPage.getByRole('button',{name:'确认阶段 screen',exact:true});
   await approve.click();
   await approve.waitFor({state:'hidden'});
@@ -953,7 +955,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(report.claims[0].reason, '待核对原文范围');
   assert.equal(report.claims[0].links[0].sourceAvailable, true);
   assert.equal(report.claims[0].links[0].stance, 'supports');
-  await runPage.getByRole('tab',{name:'Claim 审阅',exact:true}).click();
+  await runPage.getByRole('tab',{name:'论断审阅',exact:true}).click();
   await runPage.getByText('需要核对的综述结论',{exact:true}).waitFor();
   await runPage.getByText(/文件同步失败.*HTTP 409/).waitFor();
   const targetClaim = runPage.getByText('需要核对的综述结论',{exact:true}).locator('../..').locator('..');

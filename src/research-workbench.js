@@ -14,6 +14,7 @@ import { getActiveProject } from './lib/evidence-vault-sync.js'
 import { startResearchRun } from './research-context-store.js'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
+import { pushToast } from './lib/toast.js'
 import {
   Page, PageHead, Toolbar, Panel, PanelHead, Card, Button, StarButton,
   Badge, Chip, Field, Input, Textarea, Select, Notice, Segmented, GroupLabel, EmptyState, ListRow, Spinner,
@@ -246,6 +247,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const hasDraftAction = canWriteDraft(inputActions)
   const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
   const selectedKey = selected?.id || ''
+  const selectedKeyRef = React.useRef(selectedKey)
+  selectedKeyRef.current = selectedKey
   const requiredFields = workflow && detailReady ? (workflow.placeholders || []).filter(field => field.required) : []
   const missingNow = requiredFields.filter(field => !String(values[field.key] || '').trim()).map(field => field.label)
   const taskPlan = researchPlanFor(workflow)
@@ -306,7 +309,25 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
     setNotice('已恢复由当前参数和勾选技能自动生成的提示词。')
   }
   const clearForm = () => {
-    setValues({}); setEditedPrompt(null); setNotice('已清空表单，恢复到模板初始状态。')
+    const clearedKey = selectedKey
+    const previousValues = values
+    const previousEditedPrompt = editedPrompt
+    setValues({}); setEditedPrompt(null)
+    const msg = '已清空表单，恢复到模板初始状态。'
+    setNotice(msg)
+    pushToast({
+      message: msg,
+      actionLabel: '撤销',
+      onAction: () => {
+        if (selectedKeyRef.current !== clearedKey) {
+          pushToast({ message: '已切换工作流，未恢复原表单。', tone: 'warn' })
+          return
+        }
+        setValues(previousValues)
+        setEditedPrompt(previousEditedPrompt)
+        setNotice('已恢复清空前的表单内容。')
+      },
+    })
   }
   const writeTaskPlan = () => {
     if (!hasDraftAction || !workflow || !taskPlan) return
@@ -616,14 +637,14 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
             }),
             !hasDraftAction ? h(Notice, { key: 'host', tone: 'warn', icon: 'shield' }, '当前 DSH 会话未提供输入框操作；可使用“复制 Prompt”粘贴到任意会话。') : null,
             h('div', { key: 'actions', style: { display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' } }, [
-              h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '写入输入框'),
-              h(Button, { key: 'send', variant: 'primary', icon: 'send', disabled: !hasSubmitAction, onClick: send }, '发送到当前会话'),
+              h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '插入对话'),
+              h(Button, { key: 'send', variant: 'primary', icon: 'send', disabled: !hasSubmitAction, onClick: send }, '发送到对话'),
               typeof launchSession === 'function'
                 ? h(Button, { key: 'new-session', variant: 'ghost', icon: 'layers', onClick: startNewSession }, '在新会话开始')
                 : null,
-              h(Button, { key: 'copy', variant: 'ghost', icon: 'copy', onClick: copyPrompt }, '复制 Prompt'),
+              h(Button, { key: 'copy', variant: 'ghost', icon: 'copy', onClick: copyPrompt }, '复制提示词'),
               (workflow.placeholders || []).length || editedPrompt !== null
-                ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: clearForm }, '清空表单')
+                ? h(Button, { key: 'clear', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: clearForm, style: { marginLeft: 'auto' } }, '清空表单')
                 : null,
             ]),
           ]) : null,
