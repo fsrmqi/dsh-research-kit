@@ -9,6 +9,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js'
 import { toolCount } from '../mcp/tool-registry.js'
+import { auditNumberedReferences } from '../mcp/execution/reference-audit.js'
 
 // MCP 工具会往 DSH_RESEARCH_KIT_HOME 写证据库与调用日志，测试必须落到沙箱目录，
 // 否则会污染用户真实数据（还会触发日志轮转，把真实历史转走）。
@@ -162,8 +163,12 @@ test('MCP 边界：research_run_status 汇总阶段、检查点与证据盘点',
 })
 
 test('MCP 边界：research_review_output 聚合多个审阅维度', async () => {
+  const manuscript = [
+    '在本研究中，我们初步的结果可能提示该干预有效，但样本量和统计方法尚未报告。众所周知，这一结论具有重要意义。'.repeat(3),
+    '结果与早期记录一致 [1, 3–4]，另见 [12]。', '## 参考文献', '[1] 第一项', '[3] 第三项',
+  ].join('\n')
   const parsed = await callTool('research_review_output', {
-    text: '在本研究中，我们初步的结果可能提示该干预有效，但样本量和统计方法尚未报告。众所周知，这一结论具有重要意义。'.repeat(3),
+    text: manuscript,
     max_claims: 1,
     run_id: 'run-smoke-review',
   })
@@ -171,6 +176,22 @@ test('MCP 边界：research_review_output 聚合多个审阅维度', async () =>
   assert.ok(parsed.data.anomalies)
   assert.ok(parsed.data.writing)
   assert.ok(parsed.data.hedging)
+  assert.deepEqual(parsed.data.references, {
+    status: 'checked',
+    findings: [
+      { rule: 'missing_reference', line: 2, citation: '[1, 3–4]', from: 3, to: 4 },
+      { rule: 'missing_reference', line: 2, citation: '[12]', from: 12, to: 12 },
+    ],
+  })
+  assert.deepEqual(auditNumberedReferences('正文只有 [23]。'), { status: 'not_applicable', findings: [] })
+  const duplicates = auditNumberedReferences([
+    '正文 [1–2]。 代码 `[7]`。 链接 [8](#note)。', '## References',
+    '1. First (https://doi.org/10.1234/Example).', '2. Second', '   10.1234/example',
+    '## Appendix', '3. Appendix text 10.1234/example',
+  ].join('\n'))
+  assert.deepEqual(duplicates.findings, [{
+    rule: 'duplicate_doi', doi: '10.1234/example', line: 4, reference: 2, first_line: 3, first_reference: 1,
+  }])
 })
 
 test('MCP 边界：research_evidence_save 后能被 research_evidence_list 读回', async () => {

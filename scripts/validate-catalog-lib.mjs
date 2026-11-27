@@ -8,6 +8,52 @@ import { readShardEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
+function validateWorkflowAgentFields(item, placeholders, fail) {
+  const schema = item.input_schema
+  const properties = schema?.properties
+  const fields = new Map(placeholders.map(field => [field.key, 'string']))
+  const required = new Set(placeholders.filter(field => field.required).map(field => field.key))
+  if (item.requiresFiles) {
+    fields.set('files', 'array')
+    required.add('files')
+  }
+  if (schema?.type !== 'object' || !properties || typeof properties !== 'object' || Array.isArray(properties)) {
+    fail('input_schema 必须声明对象及其 properties')
+  } else {
+    for (const [key, type] of fields) {
+      if (!Object.hasOwn(properties, key) || properties[key]?.type !== type
+        || (type === 'array' && properties[key].items?.type !== 'string')) {
+        fail(`input_schema.properties.${key} 缺失或类型不正确`)
+      }
+    }
+    for (const key of Object.keys(properties)) {
+      if (!fields.has(key)) fail(`input_schema.properties 声明了额外的字段 ${key}`)
+    }
+  }
+  const declaredRequired = schema?.required === undefined ? [] : schema.required
+  if (!Array.isArray(declaredRequired) || declaredRequired.length !== required.size
+    || new Set(declaredRequired).size !== required.size || declaredRequired.some(key => !required.has(key))) {
+    fail('input_schema.required 必须与必填占位符及材料要求一致')
+  }
+  if (!['direct', 'guided'].includes(item.tool_mode)) fail('tool_mode 必须是 direct 或 guided')
+  if (typeof item.agent_guidance !== 'string' || !item.agent_guidance.trim()) fail('agent_guidance 必须是非空字符串')
+  if (!Array.isArray(item.checkpoints)) {
+    fail('checkpoints 必须是数组')
+    return
+  }
+  const stages = new Set()
+  const actions = new Set()
+  item.checkpoints.forEach((checkpoint, index) => {
+    const stage = typeof checkpoint?.after_stage === 'string' ? checkpoint.after_stage.trim() : ''
+    const action = typeof checkpoint?.action === 'string' ? checkpoint.action.trim() : ''
+    if (!stage || stages.has(stage)) fail(`checkpoints[${index}].after_stage 为空或重复`)
+    if (!action || actions.has(action)) fail(`checkpoints[${index}].action 为空或重复`)
+    if (typeof checkpoint?.required !== 'boolean') fail(`checkpoints[${index}].required 必须是布尔值`)
+    stages.add(stage)
+    actions.add(action)
+  })
+}
+
 export function validateCatalogItems(all, { directQueryIds } = {}) {
   const errors = []
   const fail = (id, message) => errors.push(`[${id}] ${message}`)
@@ -50,6 +96,7 @@ export function validateCatalogItems(all, { directQueryIds } = {}) {
         if (!used.includes(key)) fail(id, `占位符 ${key} 未出现在 Prompt 中`)
       }
       if (!GUARD.test(item.prompt || '') && !GUARD.test((item.limitations || []).join(' '))) fail(id, 'Prompt 缺少防编造或待核验边界表述')
+      validateWorkflowAgentFields(item, placeholders, message => fail(id, message))
     }
     if (item.type === 'skill') {
       if (!item.guidance) fail(id, 'skill 缺少 guidance')

@@ -26,7 +26,7 @@
       "latex-hardening",
       "word-count-allocation"
     ],
-    "prompt": "对论文（{paper_file}）执行投稿前检查。目标期刊：{target_journal}。\n\n逐项检查：(1) 期刊范围匹配；(2) 掠夺性期刊检查（Beall's List / DOAJ / Cabells）；(3) 字数/页数限制；(4) 引用格式合规；(5) 图表分辨率 ≥300 DPI、格式（TIFF/EPS/PDF）；(6) 双盲匿名化（如需）；(7) 作者信息页分离；(8) Running head / 行号（如需）；(9) Cover letter；(10) Title page（标题、作者、机构、通讯作者）；(11) Abstract（150-250 词）；(12) Keywords（5-7 个）；(13) CRediT 作者贡献声明；(14) 利益冲突声明；(15) 数据可得性声明 + 资助声明 + 伦理声明 + AI 使用披露。\n\n每项标注 PASS / FAIL / NOT_APPLICABLE。缺任何必需项不得提交。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
+    "prompt": "对论文（{paper_file}）执行投稿前检查。目标期刊：{target_journal}。\n\n逐项检查：(1) 期刊范围匹配；(2) 掠夺性期刊检查（Beall's List / DOAJ / Cabells）；(3) 字数/页数限制；(4) 引用格式合规；(5) 图表分辨率 ≥300 DPI、格式（TIFF/EPS/PDF）；(6) 双盲匿名化（如需）；(7) 作者信息页分离；(8) Running head / 行号（如需）；(9) Cover letter；(10) Title page（标题、作者、机构、通讯作者）；(11) Abstract（150-250 词）；(12) Keywords（5-7 个）；(13) CRediT 作者贡献声明；(14) 利益冲突声明；(15) 数据可得性声明 + 资助声明 + 伦理声明 + AI 使用披露。\n\n稿件使用方括号编号引用，且正文与编号文献表均可读时，可用 research_review_output 的 references 字段对账。按报告行号列出缺少对应文献项的引用和重复 DOI，交作者核对。\n\n每项标注 PASS / FAIL / NOT_APPLICABLE。缺任何必需项不得提交。\n\n所有结论须由研究者核验，不得编造引用、数据、结论或文件路径；无法确认时标注为待核验。",
     "tool_mode": "guided",
     "input_schema": {
       "type": "object",

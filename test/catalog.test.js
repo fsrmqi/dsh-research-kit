@@ -268,6 +268,20 @@ test('技能正文可被搜索命中', () => {
 
 test('校验器：真实目录零错误', () => {
   assert.deepEqual(validateCatalogItems(catalog), [])
+  const original = catalog.find(item => item.id === 'research-result-explain')
+  const broken = structuredClone(original)
+  delete broken.input_schema.properties.files
+  broken.input_schema.required = []
+  broken.tool_mode = 'automatic'
+  broken.agent_guidance = ' '
+  broken.checkpoints = [
+    { after_stage: 'done', action: 'review', required: 'yes' },
+    { after_stage: 'done', action: 'review', required: true },
+  ]
+  const errors = validateCatalogItems([broken, ...catalog.filter(item => item !== original)])
+  for (const field of ['properties.files', 'input_schema.required', 'tool_mode', 'agent_guidance', '[0].required', '[1].after_stage', '[1].action']) {
+    assert.ok(errors.some(error => error.includes(`[${original.id}]`) && error.includes(field)), field)
+  }
 })
 
 test('校验器：重复 ID 与非法格式被拒绝', () => {

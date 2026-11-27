@@ -19,11 +19,14 @@ cd dsh-research-kit
 
 npm run build   # 根据 src/、catalog/ 与锁定工件生成 ui/ 下三个浏览器产物
 npm run check   # 目录契约校验 + 源码语法检查
+npm run check:research-suggestions -- development #查看调参集的提示与误报
 npm run check:performance # 目录搜索与大证据图谱的合成性能门禁
 npm test        # 先重建浏览器产物，再运行目录逻辑、分片聚合、存储层、查询、渲染级降级、组装回放、构建产物、分区契约、DSH 槽位注册与宿主契约矩阵测试（627 项 / 78 个测试文件）
 npx playwright install chromium # 首次安装浏览器；Linux CI 使用 --with-deps
 npm run test:browser            # 加载生成产物，执行真实浏览器交互回归
 ```
+
+科研推荐评测由 `npm run check` 运行。固定回归集覆盖中英文科研稿件、非科研请求、显式拒绝、材料数量和续接，并分别报告漏提示、误提示和流程选错。调整匹配规则时可先跑 `development` 集，`regression` 集用于独立回归验收。
 
 兼容性与质量门（细节见 [COMPATIBILITY.md](COMPATIBILITY.md)）：
 

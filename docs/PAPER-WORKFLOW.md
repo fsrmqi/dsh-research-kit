@@ -123,6 +123,8 @@
 | 投稿前逐项核对 | `submission-checklist` · `submission-readiness-check` |
 | 过程记录与溯源 | `process-summary-generate` · `experiment-provenance` |
 
+稿件有明确的「参考文献」或 `References` 标题，且文献表带编号时，可以用 `research_review_output` 的 `references` 字段核对正文方括号编号和重复 DOI。结果会指出稿件行号和涉及的编号；没有可识别的编号文献表时显示 `not_applicable`。
+
 两条边界照实说：`format-journal` **无法核验的投稿要求会明确列出**，需你向期刊确认；`write-cover-letter` 的推荐审稿人**须由作者确认无利益冲突后决定**。
 
 ## 3. 检索：三条查询路径

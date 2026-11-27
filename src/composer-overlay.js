@@ -207,6 +207,7 @@ function matchResearchDraft(draft, materialCount) {
   const text = draft.trim()
   if (!text || text.length > 2500 || /^[/@]/.test(text) && !materialCount
       || /^(什么是|啥是|如何理解|请解释|解释一下|为什么|what is|what are|explain)/i.test(text)
+      || /^(?:请\s*)?(?:(?:不要|不用|不需要|别)\s*(?:帮我|给我)?\s*(?:做|写|整理|开展|完成|制定|审阅|评审|审查|比较|对比)|(?:do not|don't)\s+(?:conduct|write|prepare|review|compare)\b)/i.test(text)
       || text.includes(RESEARCH_STEPS_HEADING)) return null
   if (materialCount >= 2 && /(?:比较|对比).{0,20}(?:论文|文献|证据|研究)|compare.{0,40}(?:papers|studies|evidence)/i.test(text)) {
     return { id: 'compare-papers', values: {}, reason: '当前问题涉及对比多份材料的发现和证据强度。' }
@@ -218,6 +219,13 @@ function matchResearchDraft(draft, materialCount) {
     return { id: 'literature-review', values: { question: text }, reason: '当前问题适合先明确检索范围，再综合已有证据。' }
   }
   return null
+}
+
+export function matchResearchSuggestion(draft, materialCount, readPrevious = () => '') {
+  const direct = matchResearchDraft(draft, materialCount)
+  if (direct || !/^(请)?(继续|接着|按刚才的|continue\b)/i.test(draft.trim())) return direct
+  const inherited = matchResearchDraft(readPrevious(), materialCount)
+  return inherited && { ...inherited, reason: '当前提问在延续本会话最近一次明确的研究任务。' }
 }
 
 function recentResearchRequest(sessions, sessionId) {
@@ -303,11 +311,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
     setAssistNotice('')
     if (!eligible || !draft.trim() || ignored?.has(draft.trim())) return undefined
     const handle = setTimeout(() => {
-      const direct = matchResearchDraft(draft, materialCount)
-      const followUp = !direct && /^(请)?(继续|接着|按刚才的|continue\b)/i.test(draft.trim())
-      const previous = followUp ? recentResearchRequest(sessions, sessionId) : ''
-      const inherited = previous && matchResearchDraft(previous, materialCount)
-      const match = direct || (inherited && { ...inherited, reason: '当前提问在延续本会话最近一次明确的研究任务。' })
+      const match = matchResearchSuggestion(draft, materialCount, () => recentResearchRequest(sessions, sessionId))
       if (match) setSuggestion({ ...match, sessionId, revision, draft, materialCount })
     }, 650)
     return () => clearTimeout(handle)

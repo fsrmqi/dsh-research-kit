@@ -5,6 +5,7 @@ import { extractClaimDrafts } from '../execution/claim-drafts.js'
 import { contract } from '../execution/contract.js'
 import { generateDisclosureStatement, listDisclosurePolicies } from '../execution/disclosure-generator.js'
 import { checkHedgingPhrases } from '../execution/hedging-phrases.js'
+import { auditNumberedReferences } from '../execution/reference-audit.js'
 import { checkWritingQuality } from '../execution/writing-quality.js'
 import { wrap } from '../execution/wrapper.js'
 
@@ -24,12 +25,14 @@ export const reviewCoreTools = [
         checkWritingQuality(text),
         checkHedgingPhrases(text),
       ])
+      const references = auditNumberedReferences(text)
       return contract({
         claims: claims.data,
         claim_drafts: extractClaimDrafts(text.slice(0, 20_000), [], { limit: max_claims }),
         anomalies: anomalies.data,
         writing: writing.data,
         hedging: hedging.data,
+        references,
       }, {
         source: 'research-output-review',
         confidence: 'mixed',
@@ -40,6 +43,7 @@ export const reviewCoreTools = [
           anomalies: anomalies.data?.summary?.contradictions ?? anomalies.data?.findings?.length ?? 0,
           quality_flags: writing.data?.summary?.total ?? writing.data?.issues?.length ?? 0,
           hedging_phrases: hedging.data?.total ?? hedging.data?.phrases?.length ?? 0,
+          reference_issues: references.findings.length,
         },
         next_actions: [
           '优先修复未找到或不支持的引用声明，再复核全文。',

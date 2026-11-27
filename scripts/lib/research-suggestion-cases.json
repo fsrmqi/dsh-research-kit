@@ -1,0 +1,26 @@
+{
+  "development": [
+    {"draft":"请写一份土壤碳循环的文献综述。","expected":"literature-review"},
+    {"draft":"Review this manuscript's statistical methods.","materials":1,"expected":"review-paper"},
+    {"draft":"对比两篇论文的实验条件和结论。","materials":2,"expected":"compare-papers"},
+    {"draft":"如何理解这两份论文的共同局限？","materials":2,"expected":null},
+    {"draft":"不要写文献综述，只把这句话翻译成英文。","expected":null},
+    {"draft":"不用解释基本概念，请写一份土壤碳的文献综述。","expected":"literature-review"},
+    {"draft":"接着补一个检索范围。","previous":"请做一份土壤碳的文献综述。","expected":"literature-review"}
+  ],
+  "regression": [
+    {"draft":"请开展一个居住环境与睡眠质量的文献综述。","expected":"literature-review"},
+    {"draft":"Prepare a literature review on urban heat exposure.","expected":"literature-review"},
+    {"draft":"帮我审阅附件里的稿件，看看方法和结论是否一致。","materials":1,"expected":"review-paper"},
+    {"draft":"Compare the main findings in these two papers.","materials":2,"expected":"compare-papers"},
+    {"draft":"请继续，把上面的方法限制说清楚。","previous":"请审阅这篇稿件的研究设计。","materials":1,"expected":"review-paper"},
+    {"draft":"晚上吃什么？","expected":null},
+    {"draft":"请解释怎样做一篇文献综述。","expected":null},
+    {"draft":"别做文献综述，给这个文件改个名字就行。","expected":null},
+    {"draft":"Don't write a literature review. Just translate the title.","expected":null},
+    {"draft":"请比较这两篇论文的结论。","materials":1,"expected":null},
+    {"draft":"请审阅这篇稿件。","expected":null},
+    {"draft":"继续。","previous":"帮我把会议时间改成明天。","expected":null},
+    {"draft":"请做文献综述。\n科研执行步骤\n先明确检索范围。","expected":null}
+  ]
+}
