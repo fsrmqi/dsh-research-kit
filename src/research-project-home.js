@@ -149,7 +149,7 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
       ]),
       h('div', { key: 'right', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
         h(IconButton, {
-          key: `refresh-${refreshSpin}`, name: 'refresh', size: 14, label: '刷新项目状态',
+          key: 'refresh', iconKey: refreshSpin, name: 'refresh', size: 14, label: '刷新项目状态',
           className: refreshSpin ? 'rk-btn rk-spin-once' : 'rk-btn',
           onClick: () => { setRefreshSpin(v => v + 1); refresh() },
         }),

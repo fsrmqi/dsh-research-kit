@@ -6,19 +6,29 @@ import { graphKindColor, nodeStrokeColor, nodeStrokeDash, graphLabel } from './e
 const GRAPH_FRAME_HEIGHT = 520
 
 export function EvidenceGraphCanvas({
-  layout, routes, view, pan, setPan, scale, clampPanFor, zoomBy,
+  layout, routes, view, pan, setPan, scale, clampPanFor, zoomBy, onDragEnd,
   flowing, highlighted, onSelectNode, onDoubleClickNode,
 }) {
   const frameRef = React.useRef(null)
+  const minimapViewportRef = React.useRef(null)
   const dragRef = React.useRef(null)
   const cameraAnimRef = React.useRef(0)
   const viewWidth = layout.width / scale
   const viewHeight = layout.height / scale
-  const renderedBoxRef = React.useRef({ x: pan.x, y: pan.y, w: viewWidth, h: viewHeight })
+  const initialBox = React.useRef({ x: pan.x, y: pan.y, w: viewWidth, h: viewHeight }).current
+  const renderedBoxRef = React.useRef(initialBox)
+  const paintBox = box => {
+    renderedBoxRef.current = box
+    frameRef.current?.setAttribute('viewBox', `${box.x} ${box.y} ${box.w} ${box.h}`)
+    const indicator = minimapViewportRef.current
+    indicator?.setAttribute('x', box.x)
+    indicator?.setAttribute('y', box.y)
+    indicator?.setAttribute('width', box.w)
+    indicator?.setAttribute('height', box.h)
+  }
 
   // 缩放、复位或迷你地图跳转时平滑推拉镜头，拖拽或再次操作时立刻中断并从当前帧接续。
-  React.useEffect(() => {
-    const svg = frameRef.current
+  React.useLayoutEffect(() => {
     const target = { x: pan.x, y: pan.y, w: viewWidth, h: viewHeight }
     if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(cameraAnimRef.current)
@@ -27,9 +37,9 @@ export function EvidenceGraphCanvas({
     const from = renderedBoxRef.current
     const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
     const delta = Math.abs(target.x - from.x) + Math.abs(target.y - from.y) + Math.abs(target.w - from.w) + Math.abs(target.h - from.h)
-    if (!svg || dragRef.current || reduce || typeof requestAnimationFrame !== 'function' || delta < 0.5) {
-      renderedBoxRef.current = target
-      svg?.setAttribute('viewBox', `${target.x} ${target.y} ${target.w} ${target.h}`)
+    if (dragRef.current) return undefined
+    if (reduce || typeof requestAnimationFrame !== 'function' || delta < 0.5) {
+      paintBox(target)
       return undefined
     }
     const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -44,8 +54,7 @@ export function EvidenceGraphCanvas({
         w: from.w + (target.w - from.w) * eased,
         h: from.h + (target.h - from.h) * eased,
       }
-      renderedBoxRef.current = cur
-      svg.setAttribute('viewBox', `${cur.x} ${cur.y} ${cur.w} ${cur.h}`)
+      paintBox(cur)
       if (progress < 1) cameraAnimRef.current = requestAnimationFrame(step)
       else cameraAnimRef.current = 0
     }
@@ -59,28 +68,33 @@ export function EvidenceGraphCanvas({
   }, [pan.x, pan.y, viewWidth, viewHeight])
 
   const onPointerDown = event => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || dragRef.current) return
     if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(cameraAnimRef.current)
       cameraAnimRef.current = 0
     }
-    const basePan = { x: renderedBoxRef.current.x, y: renderedBoxRef.current.y }
-    dragRef.current = { x: event.clientX, y: event.clientY, pan: basePan, pending: { ...basePan }, frame: 0 }
+    const box = renderedBoxRef.current
+    const matrix = frameRef.current?.getScreenCTM()
+    const screenScale = matrix && Math.hypot(matrix.a, matrix.b)
+    if (!screenScale) return
+    dragRef.current = {
+      pointerId: event.pointerId, x: event.clientX, y: event.clientY, box,
+      pending: box, scale: layout.width / box.w, unit: 1 / screenScale, frame: 0,
+    }
     if (frameRef.current) frameRef.current.style.cursor = 'grabbing'
     if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
   }
   const onPointerMove = event => {
     const drag = dragRef.current
-    if (!drag) return
-    const rect = frameRef.current && frameRef.current.getBoundingClientRect()
-    if (!rect || !rect.width) return
-    const unit = viewWidth / rect.width
-    drag.pending = clampPanFor({ x: drag.pan.x - (event.clientX - drag.x) * unit, y: drag.pan.y - (event.clientY - drag.y) * unit }, scale)
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const position = clampPanFor({
+      x: drag.box.x - (event.clientX - drag.x) * drag.unit,
+      y: drag.box.y - (event.clientY - drag.y) * drag.unit,
+    }, drag.scale)
+    drag.pending = { ...drag.box, ...position }
     const paint = () => {
       drag.frame = 0
-      const next = drag.pending
-      renderedBoxRef.current = { x: next.x, y: next.y, w: viewWidth, h: viewHeight }
-      frameRef.current?.setAttribute('viewBox', `${next.x} ${next.y} ${viewWidth} ${viewHeight}`)
+      paintBox(drag.pending)
     }
     if (!drag.frame) {
       if (typeof requestAnimationFrame === 'function') drag.frame = requestAnimationFrame(paint)
@@ -89,12 +103,11 @@ export function EvidenceGraphCanvas({
   }
   const onPointerUp = event => {
     const drag = dragRef.current
-    if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
-    if (drag?.pending) {
-      renderedBoxRef.current = { x: drag.pending.x, y: drag.pending.y, w: viewWidth, h: viewHeight }
-      setPan(drag.pending)
-    }
+    if (!drag || drag.pointerId !== event.pointerId) return
+    if (drag.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
     dragRef.current = null
+    paintBox(drag.pending)
+    onDragEnd({ x: drag.pending.x, y: drag.pending.y }, drag.scale)
     if (frameRef.current) frameRef.current.style.cursor = 'grab'
     if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
@@ -140,7 +153,7 @@ export function EvidenceGraphCanvas({
   const canvas = h('svg', {
     key: 'canvas',
     ref: frameRef,
-    viewBox: `${pan.x} ${pan.y} ${viewWidth} ${viewHeight}`,
+    viewBox: `${initialBox.x} ${initialBox.y} ${initialBox.w} ${initialBox.h}`,
     width: '100%',
     height: frameHeight,
     role: 'img',
@@ -234,7 +247,7 @@ export function EvidenceGraphCanvas({
           fill: graphKindColor(node.kind),
           opacity: highlighted && !highlighted.has(node.id) ? 0.25 : 0.75
         }))),
-    h('rect', { key: 'viewport', x: pan.x, y: pan.y, width: viewWidth, height: viewHeight, fill: 'none', stroke: C.accent, strokeWidth: Math.max(3, layout.width / 140) })
+    h('rect', { key: 'viewport', ref: minimapViewportRef, x: initialBox.x, y: initialBox.y, width: initialBox.w, height: initialBox.h, fill: 'none', stroke: C.accent, strokeWidth: Math.max(3, layout.width / 140) })
   ]), useDensityMode ? h('div', {
     key: 'density-label',
     style: { position: 'absolute', bottom: 4, left: 8, fontSize: 9, color: C.muted, pointerEvents: 'none' },

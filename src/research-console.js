@@ -347,7 +347,7 @@ export function ResearchConsole(props) {
           ariaLabel: '科研工作台分区',
         }),
         inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '时空囊'),
+          h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '备份与恢复'),
         ]),
       ]),
     ]),

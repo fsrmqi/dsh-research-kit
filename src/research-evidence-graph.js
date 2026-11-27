@@ -551,6 +551,10 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
             h(EvidenceGraphCanvas, {
               layout, routes, view, pan, setPan, scale, clampPanFor, zoomBy,
+              onDragEnd: (position, nextScale) => {
+                setPan(position)
+                if (nextScale !== scale) applyView({ scale: nextScale })
+              },
               flowing, highlighted, onSelectNode, onDoubleClickNode,
             }))
         : h(Card, { key: 'no-relations', style: { margin: '18px var(--rk-gutter) 14px', padding: 18, display: 'grid', gap: 12 } }, [

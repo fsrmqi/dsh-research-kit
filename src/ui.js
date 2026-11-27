@@ -58,7 +58,7 @@ export function Button({ variant = 'soft', size = 'md', icon, disabled = false, 
   }, [icon ? h(Icon, { key: 'i', name: icon, size: 13 }) : null, children])
 }
 
-export function IconButton({ name, size = 15, onClick, label, active = false, disabled = false, style, ...rest }) {
+export function IconButton({ name, iconKey, size = 15, onClick, label, active = false, disabled = false, style, ...rest }) {
   return h('button', {
     type: 'button',
     onClick,
@@ -74,7 +74,7 @@ export function IconButton({ name, size = 15, onClick, label, active = false, di
       background: active ? C.tealTint : C.surfaceAlt, color: active ? C.teal : C.muted,
       cursor: disabled ? 'not-allowed' : 'pointer', flexShrink: 0, ...style,
     },
-  }, h(Icon, { name, size }))
+  }, h(Icon, { key: iconKey, name, size }))
 }
 
 export function StarButton({ active, onClick, label }) {
@@ -458,7 +458,8 @@ export function ToastHost() {
     const iconName = item.tone === 'error' || item.tone === 'warn' ? 'shield' : 'check'
     return h('div', {
       key: item.id,
-      role: 'status',
+      role: item.leaving ? undefined : 'status',
+      'aria-hidden': item.leaving || undefined,
       className: item.leaving ? 'rk-toast rk-toast-leave' : 'rk-pop rk-toast',
       style: {
         borderColor: palette.line,
@@ -469,14 +470,14 @@ export function ToastHost() {
       h('span', { key: 'icon', className: iconName === 'check' ? 'rk-check-pop' : undefined, style: { color: palette.color, display: 'inline-flex', flexShrink: 0 } }, h(Icon, { name: iconName, size: 14 })),
       h('span', { key: 'msg', style: { flex: 1, minWidth: 0, lineHeight: 1.45 } }, item.message),
       item.onAction && item.actionLabel ? h(Button, {
-        key: 'action', size: 'sm', variant: 'soft',
+        key: 'action', size: 'sm', variant: 'soft', disabled: item.leaving,
         onClick: () => {
-          dismissToast(item.id)
+          if (!dismissToast(item.id)) return
           try { item.onAction() } catch { /* 撤销异常不阻塞关闭 */ }
         },
       }, item.actionLabel) : null,
       h(IconButton, {
-        key: 'close', name: 'close', size: 13, label: '关闭提示',
+        key: 'close', name: 'close', size: 13, label: '关闭提示', disabled: item.leaving,
         onClick: () => dismissToast(item.id),
         style: { width: 22, height: 22, border: 0, background: 'transparent' },
       }),

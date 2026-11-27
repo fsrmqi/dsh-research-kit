@@ -180,6 +180,10 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
   assert.equal(await page.getByLabel('研究课题名称').count(),0);
   assert.equal(await page.getByRole('button',{name:/Agent 活动/}).count(),0);
+  const refreshProject=page.getByRole('button',{name:'刷新项目状态'});
+  await refreshProject.focus();
+  await refreshProject.press('Enter');
+  assert.equal(await refreshProject.evaluate(button=>document.activeElement===button),true,'刷新动画不应重建按钮或移走键盘焦点');
   await page.screenshot({path:path.join(artifacts,'conversation-research-home.png')});
   assert.equal(promptKitRequests,0,'首页不得提前加载 PromptKit');
   const dreamPanel=page.getByRole('region',{name:'科研梦境',exact:true});
@@ -224,7 +228,17 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.getByRole('button',{name:'存疑',exact:true}).click();
   await page.getByLabel('关联证据：人工核对的文献').uncheck();
   await page.getByRole('button',{name:'保存审阅'}).click();
-  await page.getByLabel('操作反馈').getByRole('status').filter({hasText:'论断已更新为「存疑」。'}).getByRole('button',{name:'撤销',exact:true}).click();
+  const undo=page.getByLabel('操作反馈').getByRole('status').filter({hasText:'论断已更新为「存疑」。'}).getByRole('button',{name:'撤销',exact:true});
+  await undo.focus();
+  const undoExit=await undo.evaluate(button=>{
+    const toast=button.closest('.rk-toast');
+    let clicks=0;
+    button.addEventListener('click',()=>clicks++);
+    window.ReactDOM.flushSync(()=>{button.click();button.click();});
+    button.click();
+    return {clicks,leaving:toast.classList.contains('rk-toast-leave'),disabled:button.disabled,hidden:toast.getAttribute('aria-hidden')};
+  });
+  assert.deepEqual(undoExit,{clicks:2,leaving:true,disabled:true,hidden:'true'});
   await page.getByText('已撤销上次审阅。',{exact:true}).waitFor();
   assert.deepEqual(claimRecords[0].links,[{evidenceId:'qa-evidence-1',stance:'supports'}]);
   await page.getByRole('button',{name:'添加论断'}).click();
@@ -471,6 +485,51 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.match(persistedTrace[0].sources[0].excerpt,/Schwaab 2021 · 结果；图 1；图 2c/);
   await tracePage.getByRole('tab',{name:'证据星图',exact:true}).click();
   await tracePage.getByRole('heading',{name:'证据星图',exact:true}).waitFor();
+  await tracePage.emulateMedia({reducedMotion:'reduce'});
+  await tracePage.getByRole('button',{name:'复位',exact:true}).click();
+  await tracePage.emulateMedia({reducedMotion:'no-preference'});
+  const dragZoom=await tracePage.getByRole('button',{name:'放大',exact:true}).evaluate(zoom=>{
+    const svg=document.querySelector('svg[aria-label="研究证据图谱"]');
+    const width=()=>svg.viewBox.baseVal.width;
+    const before=width();
+    const raf=window.requestAnimationFrame;
+    const cancel=window.cancelAnimationFrame;
+    const capture=svg.setPointerCapture;
+    const frames=new Map();
+    let frameId=0;
+    window.requestAnimationFrame=callback=>{frames.set(++frameId,callback);return frameId;};
+    window.cancelAnimationFrame=id=>frames.delete(id);
+    svg.setPointerCapture=()=>{};
+    const advance=time=>{
+      const pending=[...frames.values()];
+      frames.clear();
+      for(const callback of pending)callback(time);
+    };
+    const pointer=(type,x)=>svg.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:1,clientX:x,clientY:50,button:0}));
+    try{
+      window.ReactDOM.flushSync(()=>zoom.click());
+      const queued=width();
+      advance(performance.now()+55);
+      const intermediate=width();
+      pointer('pointerdown',50);
+      pointer('pointermove',40);
+      advance(performance.now()+80);
+      const during=width();
+      window.ReactDOM.flushSync(()=>pointer('pointerup',40));
+      const final=width();
+      const mini=document.querySelector('svg[aria-label="图谱迷你地图"] rect:last-child');
+      return {before,queued,intermediate,during,final,minimap:Number(mini.getAttribute('width'))};
+    }finally{
+      svg.setPointerCapture=capture;
+      window.requestAnimationFrame=raf;
+      window.cancelAnimationFrame=cancel;
+    }
+  });
+  assert.equal(dragZoom.queued,dragZoom.before,'缩放动画开始前不能先跳到目标尺寸');
+  assert.ok(dragZoom.intermediate<dragZoom.before&&dragZoom.intermediate>dragZoom.before/1.2,JSON.stringify(dragZoom));
+  assert.equal(dragZoom.during,dragZoom.intermediate,'拖拽首帧必须保留中间缩放');
+  assert.ok(Math.abs(dragZoom.final-dragZoom.intermediate)<0.01);
+  assert.ok(Math.abs(dragZoom.minimap-dragZoom.final)<0.01);
   await tracePage.locator('svg a[aria-label^="聚焦 中欧城市的卫星地表温差"]').click();
   await tracePage.getByText(/原文位置（待核验）：Schwaab 2021 · 结果；图 1；图 2c/).waitFor();
   const originalDoi='https://doi.org/10.1038/s41467-021-26768-w';
