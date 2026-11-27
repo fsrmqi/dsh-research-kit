@@ -124,7 +124,35 @@ const server = http.createServer((req,res)=>{
  res.setHeader('Content-Type', files[req.url]?'text/javascript':'text/html');
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
 });
-(async()=>{
+
+async function verifyColdCatalogSearch(browser, baseUrl) {
+  const page = await browser.newPage()
+  let releaseIndex
+  const indexGate = new Promise(resolve => { releaseIndex = resolve })
+  try {
+    await page.route('**/dsh-research-kit/catalog-data', async route => {
+      await indexGate
+      await route.continue()
+    })
+    await page.goto(baseUrl)
+    await page.locator('#composer').getByRole('button', { name: '科研辅助', exact: true }).click()
+    const picker = page.getByRole('dialog', { name: '选择科研工作流程' })
+    const query = '禁止静默丢弃数据'
+    await picker.getByRole('textbox', { name: '搜索', exact: true }).fill(query)
+    await picker.getByText('正在读取科研目录…', { exact: true }).waitFor()
+    // 索引仍在等待。先给 useDeferredValue 一次空闲渲染机会，再放行索引。
+    await page.evaluate(() => new Promise(resolve => requestIdleCallback(resolve)))
+    releaseIndex()
+    await picker.getByRole('button', { name: /^数据清洗方案/ }).waitFor({ timeout: 5_000 })
+    assert.equal(await picker.getByRole('textbox', { name: '搜索', exact: true }).inputValue(), query)
+  } finally {
+    releaseIndex()
+    await page.close()
+  }
+  console.log('首屏目录延迟：索引就绪后自动补跑正文搜索')
+}
+
+;(async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  let browser, page;
  try {
@@ -913,6 +941,7 @@ const server = http.createServer((req,res)=>{
   console.log('390px 窄屏无页面横向溢出：通过');
   assert.deepEqual(errors,[]);
   console.log('浏览器运行错误：0');
+  await verifyColdCatalogSearch(browser, 'http://127.0.0.1:'+server.address().port);
  } catch(error) {
   if(page) await page.screenshot({path:path.join(artifacts,'failure.png'),fullPage:true}).catch(()=>{});
   throw error;

@@ -490,7 +490,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
     }, [
       h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
         h('strong', { key: 'title', style: { fontSize: 13, color: C.ink } }, '推荐工作流'),
-        h('span', { key: 'hint', style: { fontSize: 12, color: C.muted } }, sciencePreset && sessionResourceIds.length
+        h('span', { key: 'hint', style: { fontSize: 12, color: C.muted } }, sciencePreset && workbenchRecommendations.some(row => row.reason.includes('已选资源'))
           ? `按「${sciencePreset.label}」预设与本会话已选资源排序，不影响下方全目录搜索与筛选。`
           : sciencePreset
             ? `按「${sciencePreset.label}」预设优先推荐，不影响下方全目录搜索与筛选。`

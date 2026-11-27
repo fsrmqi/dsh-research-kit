@@ -458,10 +458,11 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
   }, [mode, launchWorkflow])
   const selectedOnly = mode === 'resources' && resourceType === 'selected' ? resourceIds : null
   const listType = mode === 'workflows' ? 'workflow' : selectedOnly ? 'all' : resourceType
+  const indexMode = catalogIndexMode()
   const [remoteSearch, setRemoteSearch] = React.useState({ query: '', type: '', matches: null })
   React.useEffect(() => {
     const trimmed = deferredQuery.trim()
-    if (!mode || !trimmed || !catalogIndexMode()) {
+    if (!mode || !trimmed || !indexMode) {
       setRemoteSearch({ query: '', type: '', matches: null })
       return undefined
     }
@@ -473,7 +474,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
       })
       .catch(() => { /* 远端正文检索失败时保留本地索引结果 */ })
     return () => controller.abort()
-  }, [mode, deferredQuery, listType])
+  }, [mode, deferredQuery, listType, indexMode])
   const remoteMatches = remoteSearch.query === deferredQuery.trim() && remoteSearch.type === listType ? remoteSearch.matches : null
   const rows = React.useMemo(() => mode ? searchCatalog({ query: deferredQuery, type: listType, remoteMatches })
     .filter(item => mode !== 'resources' || item.type !== 'workflow')

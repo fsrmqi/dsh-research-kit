@@ -126,6 +126,7 @@ function ResearchPersonalTemplates({ inputActions }) {
     setNotice(ok ? '已插入当前会话草稿。' : '草稿已变化，请重新尝试。')
   }
   const openCopy = () => {
+    if (copyOpen) invalidatePendingCopy()
     setCopyOpen(value => !value)
     if (!copyOpen) provider.list().then(methods => setBuiltinMethods(methods.filter(item => item.source !== 'private')))
       .catch(error => setNotice(error.message))
