@@ -34,9 +34,9 @@ test('四个科研视图复用同一组件层，不再各自内联样式常量',
 // 同一份 ui/client.js 要同时跑在两种宿主形态下：Web（http://…:3080）与 Desktop App
 // （dsh-app://app/，Electron 把应用请求转发给本地 Web Host，源码见 apps/desktop/src/web-document.ts）。
 // 宿主形态差异只能由宿主承担，客户端不得对「页面源是 http(s)」做任何假设。
-const CLIENT_SOURCES = (() => {
-  const script = readFileSync(new URL('../scripts/build-client.mjs', import.meta.url), 'utf8')
-  return [...new Set(script.match(/'(?:src|dsh|mcp|vendor)\/[^']+'/g) || [])].map(entry => entry.slice(1, -1))
+const CLIENT_SOURCES = await (async () => {
+  const { collectClientSources } = await import('../scripts/build-client.mjs')
+  return collectClientSources()
 })()
 const HOST_SHAPE_ASSUMPTIONS = [
   ['绝对 http(s) 请求地址（在 App 里会绕过 dsh-app:// 转发）', /\b[\w$]*[Ff]etch\(\s*[`'"](?:https?:)?\/\//],

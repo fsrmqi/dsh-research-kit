@@ -30,6 +30,7 @@ import {
 } from './lib/knowledge-extract.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
 import { researchCitationHref } from './lib/answer-evidence.js'
+import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 
 const GRAPH_VIEW_MODES = [
   { value: 'all', label: '全部' },

@@ -1,10 +1,12 @@
+import React from 'react'
+import { Notice, Spinner } from '../src/ui.js'
 import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
 import { canWriteDraft, writeDraftText } from '../src/lib/input-actions.js'
 
 // Provider 只在 PromptKit 首次加载后创建；独立 storagePrefix 避免污染或依赖独立
 // dsh-promptkit 的资产。三个消费入口共用这两个实例。
-let researchMethodProvider = null
-let researchAssetProvider = null
+export let researchMethodProvider = null
+export let researchAssetProvider = null
 
 export function ensureResearchProviders(PromptKit = getPromptKit()) {
   if (!researchMethodProvider) researchMethodProvider = new PromptKit.StaticMethodProvider({ storagePrefix: 'dsh-research-kit.promptkit.' })
@@ -53,7 +55,7 @@ function LoadedResearchPromptStudioHost(props) {
   )
 }
 
-function ResearchPromptStudioHost(props) {
+export function ResearchPromptStudioHost(props) {
   const [state, setState] = React.useState(() => promptKitReady() ? 'ready' : 'loading')
   const [error, setError] = React.useState('')
   React.useEffect(() => {

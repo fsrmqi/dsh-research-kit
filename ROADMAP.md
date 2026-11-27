@@ -53,13 +53,9 @@
 
 **同批交付的另两项可视化能力（不在本节的遗留清单内）**：工作台「组装回放」（`src/route-replay.js` + archify viewer 弹窗）与「研究结果解释图生成」工作流 + 出图工具链（`scripts/render-diagrams.mjs` / `validate-diagrams.mjs`）已随本次交付落地，细节见 [CHANGELOG](CHANGELOG.md)。本节的分区④ Viewer 只覆盖证据图谱，**不是**本仓库可视化能力的全部——按路线图判断可视化进度时不要只看本节。
 
-### 12. 工作流新增字段的契约校验
+### 12. 工作流新增字段的契约校验（已完成）
 
-**现状**：`scripts/add-agent-fields.mjs` 一次性为全部 349 条工作流补入了 `input_schema` / `tool_mode` / `agent_guidance` / `checkpoints` 四个字段，把目录条目接到 MCP 工具链上。但这四个字段**既不在 `scripts/validate-catalog-lib.mjs` 的校验范围内，也没有任何测试断言**——改坏、漏填或写错阶段名都不会让 `npm run check` 失败（同一批脚本 `sync-tool-docs.mjs`、`check-doc-stats.mjs` 都是事后才补上落点的，本项是同一类遗漏）。
-
-**要做**：按字段性质分成两类校验——`input_schema` 与 `placeholders` 是同一份字段的两种表示，应当断言逐字段一致（键集合、必填集合、`requiresFiles` 时追加 `files`）；`checkpoints[].required` 与 `after_stage` 属于流程语义，至少断言 `required` 为布尔、`after_stage` / `action` 非空且在条目内唯一。`tool_mode` 取值限定在两个枚举内。同时补进「三落点」纪律的登记清单。
-
-**门槛**：新增规则必须做反向验证——临时篡改一条工作流的字段，确认校验器以非零退出报出「文件 + 条目 id」；只加规则不做反向验证等于没加。
+**已完成**：`scripts/validate-catalog-lib.mjs` 的 `validateWorkflowAgentFields()` 已将 `input_schema`（与 `placeholders` 及 `requiresFiles` 逐字段与必填集合对齐）、`tool_mode`（限定 `direct` / `guided`）、`agent_guidance`（非空字符串）与 `checkpoints`（`after_stage` / `action` 非空且条目内唯一、`required` 为布尔）全部纳入 `npm run check` 契约校验，并由 `test/catalog.test.js` 反向篡改测试守护。
 
 ## 中期（需要上游支持或较大改动）
 
@@ -116,7 +112,7 @@
 
 ### 8. 目录内容扩充（工作流）（上游对账已办结 · 2026-09-12）
 
-**现状**：工作流目录已按流程族分片维护于 `catalog/workflows/`（`index.js` 聚合），共 349 条、28 个类目。原 8 个预留空分片（生态、神经科学、物理、天文、社会科学、数学、机器学习、工程）已全部由 K-Dense 上游条目中文化迁入填满。
+**现状**：工作流目录已按流程族分片维护于 `catalog/workflows/`（`index.js` 聚合），当前共 351 条、28 个类目（2026-09-12 上游对账快照时为 349 条）。原 8 个预留空分片（生态、神经科学、物理、天文、社会科学、数学、机器学习、工程）已全部由 K-Dense 上游条目中文化迁入填满。
 
 **对账结论（2026-09-12，快照：k-dense-byok 本地同步版）**：上游 326 条工作流中非金融 285 条按 id 逐一比对，**id 级缺口为 0**——仅 2 条属同义改名迁入（上游 `write-paper` → 本目录 `write-full-manuscript`「撰写完整论文初稿」；上游 `systematic-review` → 本目录 `systematic-review-protocol`「系统综述方案设计」），其余全部同 id 在库。此前记写的「约 10 条散落缺口（基金申请 -2 / 基因组学 -3 / 细胞生物学 -4 / 药物发现 -1）」经复核为**记账错误**：那是「我方分片条数 vs 上游类目条数」的差值，实际对应迁移时的既定跨类归置——管线类工作流（bulk/single-cell RNA-seq、变异检测、ChIP-seq、ATAC-seq、甲基化、空间转录组共 7 条）按「执行管线归生物信息学」的分工落在 `bioinformatics.json`；细胞类型注释、轨迹拟时序、免疫画像按「基因组学扩充轮」的既定设计落在 `genomics.json`；研究计划、数据管理计划按初期设计落在研究设计。这些归置服务检索直觉，不回改——只为类目计数对齐而搬家会让检索变差。
 
@@ -154,7 +150,7 @@
 - 入口 B（反查，只读）：证据条目显示「被引用于」哪些灵感资产（标题由分区③传入，悬空资产如实标注）。
 - 出口：图谱消费 link 表画「资产 → 支撑证据」边（`supports`，随「持久沉淀」范围收敛）；视图 hash 只编码焦点 id，不编码内容。
 - 验收：候选推导与 link 去重走纯函数测试（`test/asset-evidence-links.test.js`，含 v1→v2 升级、证据删除联动清链、500 条保险丝、降级路径行为一致）→ 接线契约断言 → MANUAL-QA 现场条目（L1–L3）。
-- Non-goals：不做自动建边、不做双向同步、不碰 `vendor/`、首版不进备份导出/导入（导出完成文案已如实注明「关联关系不在备份内」）。
+- Non-goals：不做自动建边、不做双向同步、不碰 `vendor/`。后续迭代已将关联关系纳入证据库 JSON 备份与完整迁移包（完整迁移包导入时跳过缺失资产或证据端点的记录）；待用隔离的真实 Desktop profile 完成「Web 导入 → 刷新后关联仍在 → 重复导入不增边」实机验收。
 - 已知约束：资产可从增强器知识区等 vendored 面板删除，删除钩子只能挂在自有 vault UI（已挂）——残余悬空由图谱末尾边过滤与反查兜底（进验收条目，不当边缘情况）。
 
 **后续候选（按痛点登记，未定案）**：P1 草稿三出口互不知情（最小解：写入成功提示带来源标签 + 当前草稿前 N 字预览，不新增出口）；P2 目录「浏览型」缺下一步动线（注意：推荐下一步工作流 `recommendedWorkflowsForResources` 已存在于输入框弹层，工作台侧未接入——先复用再新造）；P9 领域预设「假全局」（最小解：分区①常驻条 + 目录默认收窄到相关类目，不碰工坊）；P6 核验激励（挂点在 P5：核验状态决定边的视觉权重）；P8 开启说明的防御性措辞精简（小活）。

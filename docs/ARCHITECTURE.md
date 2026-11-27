@@ -206,7 +206,7 @@ dsh-research-kit/
 │   │   └── LICENSE                  # 上游许可证原文
 │   └── vendor-manifest.json         # 工件来源 commit 与校验和清单（当前 3 个工件）
 ├── scripts/
-│   ├── build-client.mjs             # 生成主包与两份延迟工件（含符号顺序与顶层重名断言）
+│   ├── build-client.mjs             # 基于 esbuild 生成主包与两份延迟工件（含目录空壳与工具投影插件）
 │   ├── check-vendor.mjs             # 校验 vendored 工件未被篡改
 │   ├── check-syntax.mjs             # 语法门：遍历源码树全部 .js/.mjs（catalog/ dsh/ mcp/ scripts/ src/ test/ ui/ + index.js）单进程 vm 解析，文件数低于下限即失败；取代手工维护的 node --check 清单与只盖 mcp/tools 的 precheck
 │   ├── check-doc-stats.mjs          # 校验对外文档的规模数字与 catalog/ / 工具注册表实测一致（--verbose 列看守范围）
@@ -238,7 +238,7 @@ dsh-research-kit/
 └── cordis.patch.yml                 # DSH bundle 注册补丁
 ```
 
-> 本树是**受控清单**：新增模块、脚本或 vendored 工件必须同步登记本节。它与「新增源码模块登记构建白名单」是同一条纪律的两个落点——本树（人读）/ `scripts/build-client.mjs` 的 `files`（产物）。语法不需要登记：`scripts/check-syntax.mjs` 遍历全树解析（见 `scripts/` 一节）。目录分片只按目录粒度登记，不逐条列出资源。
+> 本树是**受控清单**：新增模块、脚本或 vendored 工件必须同步登记本节。浏览器端构建已改为由 `scripts/build-client.mjs` 从 `dsh/standalone-glue.js` 沿标准 ESM `import` 打包，不再维护手工 `files` 白名单；语法由 `scripts/check-syntax.mjs` 遍历全树解析（见 `scripts/` 一节）。目录分片只按目录粒度登记，不逐条列出资源。
 
 ### 2.1 分层规则
 
@@ -771,8 +771,8 @@ type ResearchDatabase = BaseItem & {
 
 `ui/client.js` 是适配 DSH `window.__ModuleLoader__` 的生成文件。构建脚本会：
 
-1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记）；
-2. 移除主包源码的 ESM import/export；
+1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记），烘焙构建期规模统计 `RESEARCH_KIT_BUILD_STATS`；
+2. 以 `dsh/standalone-glue.js` 为入口调用 `esbuild.build` 沿模块依赖图打包（虚拟插件将 `react`/`react-dom` 导向宿主 `require`，将 `catalog/*/index.js` 替换为空壳，将 `mcp/tool-registry-data.js` 替换为 `mcp/tool-registry-projection.js` 的浏览器投影）；
 3. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的 `ui/client.js`；
 4. 生成 `ui/catalog-data.json`，目录不再内联进主 JS；Node half 通过同源路由提供强 ETag 与 `Cache-Control: no-cache`，版本变化立即重验证、未变化返回 304；
 5. 将 SHA 锁定的 PromptKit 快照改写为独立 `ui/promptkit.js`，由同源脚本路由按需加载，所有消费者共享单例 Promise；
@@ -786,16 +786,7 @@ type ResearchDatabase = BaseItem & {
 npm run build && npm run check && npm test && node --check ui/client.js && node --check ui/promptkit.js
 ```
 
-CI 会校验「重新构建后产物无 diff」，忘记重建会直接挂 CI。`scripts/build-client.mjs` 的 `files` 是显式白名单——**新增模块漏登记不会有任何构建报错**，产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。
-
-该白名单里包含项目模块与 `vendor/archify/i18n.mjs`；后者会经过 `strip()` 并参与主包拼接，因此也必须登记并接受单文件语法检查。`vendor/promptkit-embed.js` 不在白名单中，而是由构建器单独包装成 `ui/promptkit.js`；`vendor/archify/template.html` 则由 Node half 直接提供，二者都不参与主包顶层符号检查。
-
-「`files` 登记」与「`package.json` 的 `check` 登记」是互为补集的两条纪律：前者管「有没有拼进产物」，后者管「单文件语法是否成立」。当前 `files` 中每个项目模块都已列入 `check`。
-
-构建期另有两道硬断言，把「产物级、运行时才炸」的缺陷提前到构建：
-
-- `assertSymbolOrder`：关键符号的定义位置必须早于 `standalone-glue` 使用它们的位置——顺序错位在运行时表现为 `ReferenceError`；
-- `assertUniqueTopLevelSymbols`：项目模块被拼进同一个函数作用域，**顶层符号名必须全局唯一**。重名 `const` / `let` / `class` 是 `SyntaxError`（至少构建期可见），而**重名 `function` 声明合法、后者静默覆盖前者**，产物照样通过 `node --check`，只在运行到调用点才炸。实测：`src/research-selection-store.js` 与 `src/evidence-store.js` 各有一个 `stateFor`、返回的 state 形状不同（后者没有 ids 字段），覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏。因此函数重名时按职责加前缀，不要依赖「两份内容一样，覆盖也无所谓」。独立 PromptKit 工件不参与此检查；`vendor/archify/i18n.mjs` 经 `strip()` 直接拼进主包，因此参与。
+CI 会校验「重新构建后产物无 diff」，忘记重建会直接挂 CI。因为主包由 `esbuild.build` 按模块图打包（各模块拥有独立作用域并自动 tree-shaking），新增模块只需使用标准 ESM `import` / `export` 接入依赖图即可，不再需要手工维护 `files` 拼接顺序或顶层符号全局唯一约束；`test/build-client.test.js` 通过 `collectClientSources()` 读取 esbuild `metafile` 校验全部真实入包源码的宿主无关性。`vendor/archify/i18n.mjs` 通过模块导入进入主包；`vendor/promptkit-embed.js` 单独包装为 `ui/promptkit.js`；`vendor/archify/template.html` 由 Node half 直接提供。
 
 **图门禁（在 `npm run check` 内，但在仓库内空转）。** `npm run check` 还包含 `node scripts/validate-diagrams.mjs --repo`：它按 10 条规则码校验 diagram IR，并给出 `supportedFixes`（与 `scripts/render-diagrams.mjs` 的产出对应）。**仓库内不预置任何 `*.diagram.json`**，因此该步实测输出 `checked: []`——它守护的是你产出或审阅 IR 的那一刻，不代表仓库里有被守护的图。凡提到这条门禁处都应带上这句限定，否则读者会去找一个并不存在的被守护文件。
 

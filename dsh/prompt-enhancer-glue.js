@@ -16,6 +16,7 @@ import { IconButton } from '../src/ui.js'
 import { ResearchDepositButton, QUICK_ENHANCER_POSITION_KEY } from '../src/composer-deposit-button.js'
 import { useEntryMode, ENTRY_MODE_FLOATING } from '../src/entry-mode.js'
 import { getPromptKit, loadPromptKit, promptKitReady } from '../src/promptkit-loader.js'
+import { ensureResearchProviders, researchMethodProvider, researchAssetProvider } from './prompt-studio-glue.js'
 
 const ENHANCE_PATH = '/dsh-research-kit/semantic-enhance'
 const ENHANCE_STREAM_PATH = '/dsh-research-kit/semantic-enhance/stream'

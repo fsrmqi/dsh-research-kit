@@ -52,7 +52,7 @@ test('工具投影：产物里 36 个工具的中文名与摘要都在，服务�
   const sentinel = TOOL_REGISTRY.map(tool => String(tool.example || '')).sort((a, b) => b.length - a.length)[0]
   assert.ok(sentinel.length > 30, '注册表 example 字段应足够长，才能当哨兵')
   assert.ok(!bundle.includes(sentinel.slice(0, 40)), 'example 是服务端字段，不得进入客户端产物')
-  // 标签函数仍在产物内。
-  assert.match(bundle, /function toolLabel\(/)
-  assert.match(bundle, /function artifactKindLabel\(/)
+  // 浏览器只消费 TOOL_REGISTRY；未被引用的 mcp/tool-labels.js 辅助函数由 esbuild 正常 tree-shake。
+  assert.match(bundle, /TOOL_REGISTRY=\[/)
+  assert.match(bundle, /function ResearchToolView\(/)
 })

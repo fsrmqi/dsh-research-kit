@@ -66,11 +66,10 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 
 ## 4. 命名空间纪律
 
-主包内的自有模块处于**同一个 JavaScript 工厂作用域**，因此每次新增模块都要检查顶层冲突；PromptKit 则在独立同源脚本的 IIFE 中导出命名空间：
+主包内的自有模块已由 `esbuild.build` 按 ESM 作用域隔离打包；跨组件、跨插件共享的浏览器全局面仍需遵守命名空间约定（PromptKit 在独立同源脚本的 IIFE 中导出命名空间）：
 
 | 维度 | 规则 |
 | --- | --- |
-| 顶层 `const` / `class` / `function` | 不得重名（构建器的 `ORDERED_SYMBOLS` 会断言定义顺序） |
 | 事件名 | 一律 `dsh-research-kit.*` 前缀 |
 | `localStorage` key | 一律 `dsh-research-kit.` 前缀（方法资产用 `dsh-research-kit.promptkit.`，避免与独立安装的 PromptKit 互相读写） |
 | CSS 变量 | 工件用 `--pk-*`，本仓库用 `--rk-*`，允许并存但不得互相覆盖 |
@@ -78,27 +77,13 @@ conversation.input.right     dsh-research-kit-draft-enhancer    草稿增强器
 
 ## 5. 构建器集成规则
 
-浏览器构建器是**受控拼接器**，不是通用 bundler。
+浏览器构建器（`scripts/build-client.mjs`）以 `dsh/standalone-glue.js` 为入口调用 `esbuild.build` 沿标准 ESM 依赖图打包，并通过虚拟插件保留宿主 `react`/`react-dom`、目录空壳与工具注册表投影边界。
 
-### 拼接顺序
+### 依赖关系与延迟加载
 
-`src/promptkit-loader.js` 必须排在两处 glue 之前；它用单例 Promise 加载 `ui/promptkit.js`，后续 glue 通过加载器取得 `PromptKit` 命名空间与共享 provider。
+`src/promptkit-loader.js` 用单例 Promise 按需加载 `ui/promptkit.js`，两处 glue（`dsh/prompt-studio-glue.js`、`dsh/prompt-enhancer-glue.js`）与 `dsh/standalone-glue.js` 通过标准 `import` 引用加载器与共享 provider，不再依赖手工拼接顺序或 `files` 白名单。
 
-```text
-catalog / state / theme
-→ UI 组件层
-→ PromptKit loader
-→ PromptStudio glue
-→ standalone glue
-```
-
-### 新增源码模块只要登记构建白名单
-
-1. `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）。
-
-**漏登记 `files` 不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条顺序断言，把「顺序错位」提前成构建期错误。
-
-> 语法不需要登记：`npm run check` 里的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 228 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析。此前「第 2 步：`package.json` 的逐文件 `node --check` 清单」已删除——那条清单只有 59 个文件、漏了 149 个，当时那条清单却看起来还在守语法。
+> 语法不需要登记：`npm run check` 里的 `scripts/check-syntax.mjs` 遍历整棵源码树（含 `dsh/` 路由模块与 `mcp/`）单进程解析。
 
 ### 任何改动后必须运行
 

@@ -16,6 +16,7 @@ import {
 import { knowledgeStore } from './knowledge-store.js'
 import { ResearchClaimReview } from './research-claim-review.js'
 import { downloadBlob, downloadText, downloadJsonFile } from './lib/download.js'
+import { researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 
 // 研究灵感资产：PromptKit Vault 概念的科研化视图。数据仍存于
 // StaticAssetProvider（localStorage，前缀 dsh-research-kit.promptkit.），
@@ -480,6 +481,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
+export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange }) {
   return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange })
 }

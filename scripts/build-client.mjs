@@ -1,254 +1,127 @@
 #!/usr/bin/env node
-import { clientToolRegistrySource } from '../mcp/tool-registry-projection.js'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { Parser } from 'acorn'
-import { transformSync } from 'esbuild'
+import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { build, transformSync } from 'esbuild'
+import { clientToolRegistrySource } from '../mcp/tool-registry-projection.js'
 import { loadCatalogEntries } from './lib/catalog-entries.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const catalogData = await loadCatalogEntries()
-// Plugins 页徽章与诊断载荷的数字在构建期烘焙：客户端在挂载时还没有目录数据，
-// 运行期取值会先渲染 0 再跳变，且独立页（无目录请求）永远拿不到数字。
-const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
-const buildStats = {
-  version: String(pkg.version || ''),
-  workflows: catalogData.workflows.length,
-  skills: catalogData.skills.length,
-  resources: catalogData.resources.length,
-  direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
-}
-// 显式按拓扑顺序声明客户端模块清单（不再用零散 splice 补丁），便于审阅依赖关系与顺序约束。
-const files = [
-  // 1. 目录、存储与会话上下文
-  'src/catalog.js',
-  'src/catalog-storage.js',
-  'src/research-selection-store.js',
-  'src/research-context-store.js',
-  'src/evidence-store.js',
-  // 2. 主题、基础 UI 与入口形态偏好
-  'src/theme.js',
-  'src/lib/icons.js',
-  'src/ui.js',
-  'src/promptkit-loader.js',
-  'src/entry-mode.js', // 必须在 dsh/prompt-enhancer-glue.js 与 src/plugin-status.js 之前
-  'src/catalog-category-filter.js',
-  // 3. 领域纯函数库
-  'src/lib/enhance-output.js',
-  'src/lib/vault-core.js',
-  'src/lib/knowledge-extract.js',
-  'src/lib/answer-evidence.js',
-  'src/lib/research-taxonomy.js',
-  'src/lib/research-workspaces.js',
-  'src/lib/research-quality.js',
-  'src/lib/deposition-taxonomy.js',
-  'src/lib/project-organizer.js',
-  'src/lib/research-claims.js',
-  'src/lib/research-ledger.js',
-  'src/lib/asset-evidence-links.js',
-  'src/lib/evidence-graph-core.js',
-  'src/lib/test-projects.js',
-  'src/lib/bibliography.js',
-  'src/lib/evidence-vault-core.js',
-  'src/lib/agent-evidence-batch.js',
-  'src/lib/console-sections.js',
-  'src/lib/overlay-anchor.js',
-  'src/lib/input-actions.js',
-  'src/lib/host-navigation.js',
-  'src/lib/download.js',
-  'src/lib/idb.js',
-  'src/host-capabilities-client.js',
-  'vendor/archify/i18n.mjs',
-  'src/lib/archify-adapter.js',
-  // 4. 持久化 Store 与同步层
-  'src/evidence-vault-store.js',
-  'src/lib/claim-review-client.js',
-  'src/knowledge-store.js',
-  'src/lib/research-transfer.js',
-  'src/project-organizer.js',
-  'src/lib/file-evidence-source.js',
-  'src/lib/evidence-vault-sync.js',
-  // 5. 视图组件
-  'src/evidence-save-form.js',
-  'src/evidence-vault-sections.js',
-  'src/research-evidence-vault.js',
-  'src/database-query-panel.js',
-  'src/composer-launcher.js',
-  'src/lib/session-events.js',
-  'src/composer-overlay.js',
-  'src/research-claim-review.js',
-  'src/research-vault.js',
-  'src/evidence-graph-panels.js',
-  'src/research-evidence-graph.js',
-  'src/knowledge-deposition.js',
-  'src/message-deposit-action.js',
-  'src/composer-deposit-button.js',
-  'src/route-replay.js',
-  'src/research-workbench.js',
-  '__generated:tool-registry-data',
-  'mcp/tool-labels.js',
-  'src/research-toolview.js',
-  // 6. DSH 槽位与胶水层
-  'dsh/slot-registry.js',
-  'dsh/prompt-studio-glue.js',
-  'dsh/prompt-enhancer-glue.js',
-  'src/plugin-status.js',
-  'src/research-transfer-panel.js',
-  'src/research-project-home.js',
-  'src/lib/literature-review-export.js',
-  'src/research-console.js',
-  'dsh/standalone-glue.js',
-]
-// 多行 import 先折叠成单行：剥离规则按行过滤 `import`，
-// 若 import 跨行则只删掉首行，剩余行会残留成非法语句（产物语法错误）。
-function collapseImports(source) {
-  return source.replace(/^([ \t]*)import\s*\{([\s\S]*?)\}\s*from\s*([^\n]+)$/gm,
-    (_, indent, names, tail) => `${indent}import {${names.replace(/\s+/g, ' ').trim()}} from ${tail}`)
-}
-function strip(source) {
-  return collapseImports(source).split('\n').filter(line => !/^\s*import\s/.test(line)).map(line => line
-    .replace(/^(\s*)export\s+const\s/, '$1const ')
-    .replace(/^(\s*)export\s+let\s/, '$1let ')
-    // async 必须单独一条且排在普通 function 之前：`export async function` 不匹配
-    // `^export function`，漏掉会让产物里残留 export 关键字，直接语法错误。
-    .replace(/^(\s*)export\s+async\s+function\s/, '$1async function ')
-    .replace(/^(\s*)export\s+function\s/, '$1function ')
-    .replace(/^(\s*)export\s+class\s/, '$1class ')
-    .replace(/^export\s+\{[^}]*\}\s*$/, '')
-  ).join('\n')
-}
-const promptKitEmbed = readFileSync(resolve(root, 'vendor/promptkit-embed.js'), 'utf8')
-// vendored 工件保持与源仓库逐字节一致（vendor-manifest.json 锁定 SHA-256）。
-// 工件内置的 DshSessionEnhancer 是未接线的死代码，但硬编码了 PromptKit 独立插件路由；
-// 构建时统一改写为本插件路由，保证产物内不出现跨插件 fetch 路径。
-const promptKitEmbedRewritten = promptKitEmbed.replaceAll('/dsh-promptkit/semantic-enhance', '/dsh-research-kit/semantic-enhance')
-// 客户端工具注册表只投影浏览器用得到的字段（生成物必须先于 mcp/tool-labels.js：
-// 它顶层就用 TOOL_REGISTRY 建索引，const 不提升）。
-const GENERATED_SOURCES = {
-  '__generated:tool-registry-data': () => clientToolRegistrySource(),
-}
-const projects = files.map(file => ({
-  file,
-  source: GENERATED_SOURCES[file] ? GENERATED_SOURCES[file]() : strip(readFileSync(resolve(root, file), 'utf8')),
-}))
-const rawModulesBody = projects.map(entry => entry.source).join('\n\n')
-// 大目录由 Node half 的同源路由按需提供。空壳保持源码模块契约不变，首次视图挂载后
-// catalog.js 会原子替换 live binding，并通知所有已挂载消费者。
-const catalogShell = `const workflows = []\nconst skills = []\nconst resources = []\nconst databaseMetadataConfig = { groups: [], accessOverrides: {} }\nconst RESEARCH_KIT_BUILD_STATS = ${JSON.stringify(buildStats)}`
-const body = `${catalogShell}\n\n${rawModulesBody}`
-// 模块间没有 import：符号全部依赖 files 的拼接顺序可见。顺序一旦错位，
-// node --check 查不出，只有运行时才 ReferenceError。这里在构建期把顺序约束固化：
-// 下列符号的定义位置必须早于 standalone-glue 使用它们的位置。
-const ORDERED_SYMBOLS = [
-  'h', 'C', 'GlobalStyle',         // src/theme.js
-  'Icon',                          // src/lib/icons.js
-  'Button', 'Panel', 'Modal',      // src/ui.js
-  'catalog', 'composeWorkflow',    // src/catalog.js
-  'currentResearchContext', 'startResearchRun', // src/research-context-store.js
-  'RESEARCH_CONSOLE_SECTIONS', 'normalizeConsoleSection', 'findConsoleSection', // src/lib/console-sections.js
-  'POPOVER_GAP', 'overlayMaxHeight', 'findScrollport', // src/lib/overlay-anchor.js
-  'normalizeEvidenceEntry',                       // src/lib/evidence-vault-core.js
-  'createEvidenceVaultStore',                     // src/evidence-vault-store.js
-  'EvidenceSaveForm', 'EvidenceVaultPane',        // src/research-evidence-vault.js
-  'knowledgeStore', 'publishKnowledge',           // src/knowledge-store.js（图谱面板）
-  'researchMethodProvider', 'researchAssetProvider', 'ResearchPromptStudioHost', // dsh/prompt-studio-glue.js
-  'ResearchVaultHost',             // src/research-vault.js
-  'readEntryMode', 'useEntryMode', 'EntryModeSetting', // src/entry-mode.js（入口形态偏好 + Plugins 页设置项）
-  'ResearchDraftEnhancerHost',     // dsh/prompt-enhancer-glue.js
-  'ResearchWorkbench', 'ResearchComposerLauncher', 'ResearchComposerOverlay',
-  'readSessionEvents',
-  'extractAnswerEvidence',
-  'ResearchPluginStatusSection',   // src/plugin-status.js（standalone-glue 注册状态区）
-  'ResearchKitBadge', 'ResearchKitDiagnosticsAction', 'ResearchKitOpenWorkbenchAction', // src/plugin-status.js（Plugins 页徽章、诊断与跨页跳转动作）
-  'ResearchToolView',              // src/research-toolview.js（新版 DSH 工具调用详情槽）
-  'registerDepositionSessions',   // src/knowledge-deposition.js（standalone-glue 接线）
-  'ResearchDepositButton',         // src/composer-deposit-button.js（悬浮入口形态下的沉淀伴生钮）
-  'ResearchConsole',               // src/research-console.js
-]
-function assertSymbolOrder(body) {
-  const glueStart = body.indexOf('function researchKitApply')
-  if (glueStart < 0) throw new Error('构建产物缺少 researchKitApply；检查 files 列表是否包含 dsh/standalone-glue.js')
-  for (const symbol of ORDERED_SYMBOLS) {
-    const match = new RegExp(`(?:^|\\n)\\s*(?:const|let|function|class)\\s+${symbol}\\b`).exec(body)
-    if (!match) throw new Error(`构建产物缺少符号定义：${symbol}（检查 scripts/build-client.mjs 的 files 列表）`)
-    if (match.index > glueStart) throw new Error(`符号 ${symbol} 的定义晚于 standalone-glue：拼接顺序错误，请调整 files 列表`)
-  }
-}
-assertSymbolOrder(body)
+const ENTRY_POINT = resolve(root, 'dsh/standalone-glue.js')
 
-// 顶层符号必须全局唯一 —— 与上面的「顺序」约束是一对：顺序错位会 ReferenceError，
-// 重名则是更安静的失败。重名 const/let/class 直接 SyntaxError（至少构建期可见），
-// 而重名 function 声明合法、**后者静默覆盖前者**，产物照样通过 node --check，
-// 只在运行到调用点才炸。实测血案：src/research-selection-store.js 与 src/evidence-store.js
-// 各定义了一个 stateFor，返回的 state 形状不同（后者没有 ids 字段），覆盖后 state.ids
-// 不可迭代，统一视图与输入框浮层渲染即抛错、整屏空白。故在构建期硬失败。
-//
-function collectPatternNames(pattern, out) {
-  if (!pattern) return
-  if (pattern.type === 'Identifier') { out.push(pattern); return }
-  if (pattern.type === 'AssignmentPattern') { collectPatternNames(pattern.left, out); return }
-  if (pattern.type === 'RestElement') { collectPatternNames(pattern.argument, out); return }
-  if (pattern.type === 'ArrayPattern') {
-    for (const element of pattern.elements) collectPatternNames(element, out)
-    return
-  }
-  if (pattern.type === 'ObjectPattern') {
-    for (const property of pattern.properties) {
-      collectPatternNames(property.type === 'RestElement' ? property.argument : property.value, out)
-    }
-  }
-}
+function createResearchKitPlugin() {
+  return {
+    name: 'dsh-research-kit-browser-virtuals',
+    setup(pluginBuild) {
+      // 宿主运行时由 window.__ModuleLoader__.load 的 factory 注入 React 与 react-dom，
+      // 不把第三方 React 源码打进插件包。
+      pluginBuild.onResolve({ filter: /^react$/ }, () => ({ path: 'react', namespace: 'rk-host' }))
+      pluginBuild.onResolve({ filter: /^react-dom$/ }, () => ({ path: 'react-dom', namespace: 'rk-host' }))
+      pluginBuild.onLoad({ filter: /^react$/, namespace: 'rk-host' }, () => ({
+        contents: 'export default React;\nexport const { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useDeferredValue, createElement, Fragment, Component, memo } = React;\n',
+        loader: 'js',
+      }))
+      pluginBuild.onLoad({ filter: /^react-dom$/, namespace: 'rk-host' }, () => ({
+        contents: 'export const createPortal = __rk_react_dom__.createPortal;\nexport default __rk_react_dom__;\n',
+        loader: 'js',
+      }))
 
-function assertUniqueTopLevelSymbols(entries) {
-  const declared = new Map()
-  const record = (file, node) => {
-    const owners = declared.get(node.name) || []
-    owners.push(`${file}:${node.loc.start.line}`)
-    declared.set(node.name, owners)
-  }
-  for (const { file, source } of entries) {
-    // 改用 acorn AST 扫描顶层绑定：完整覆盖解构声明（const { a, b } = ...），并避免模板字面量误报。
-    const ast = Parser.parse(source, { ecmaVersion: 'latest', locations: true, allowReturnOutsideFunction: true })
-    for (const stmt of ast.body) {
-      if ((stmt.type === 'FunctionDeclaration' || stmt.type === 'ClassDeclaration') && stmt.id) {
-        record(file, stmt.id)
-      } else if (stmt.type === 'VariableDeclaration') {
-        for (const decl of stmt.declarations) {
-          const names = []
-          collectPatternNames(decl.id, names)
-          for (const node of names) record(file, node)
+      // 大目录由 Node half 的同源路由按需提供；浏览器主包拦截静态目录导入，改为复用外层空壳。
+      pluginBuild.onResolve({ filter: /catalog\/(workflows|skills|resources)\/index\.js$/ }, args => ({
+        path: args.path,
+        namespace: 'rk-catalog-shell',
+      }))
+      pluginBuild.onLoad({ filter: /.*/, namespace: 'rk-catalog-shell' }, args => {
+        if (args.path.includes('workflows')) return { contents: 'export default [];\n', loader: 'js' }
+        if (args.path.includes('skills')) return { contents: 'export default [];\n', loader: 'js' }
+        return {
+          contents: 'export const resources = [];\nexport const databaseMetadataConfig = { groups: [], accessOverrides: {} };\nexport default resources;\n',
+          loader: 'js',
         }
-      }
-    }
+      })
+
+      // 客户端工具注册表只投影浏览器渲染所需的字段（mcp/tool-registry-projection.js）。
+      pluginBuild.onResolve({ filter: /(?:^|\/)tool-registry-data\.js$/ }, () => ({
+        path: 'mcp/tool-registry-data.js',
+        namespace: 'rk-tool-registry',
+      }))
+      pluginBuild.onLoad({ filter: /.*/, namespace: 'rk-tool-registry' }, () => ({
+        contents: `${clientToolRegistrySource()}\nexport { ARTIFACT_KIND_LABELS, TOOL_REGISTRY }\n`,
+        loader: 'js',
+      }))
+    },
   }
-  const clashes = [...declared].filter(([, owners]) => owners.length > 1)
-  if (!clashes.length) return
-  throw new Error('构建产物存在顶层重名符号（拼进同一作用域后会静默覆盖，请改名）：'
-    + clashes.map(([name, owners]) => `${name} @ ${owners.join(' / ')}`).join('；'))
 }
-assertUniqueTopLevelSymbols(projects)
 
-// 使用 esbuild 压缩空白与语法（保留顶层与组件标识符名称，兼顾 React DevTools 与运行期可读堆栈；
-// charset: 'utf8' 保留中文文案原样，外层模块工厂与 catalog 空壳保持宿主 seam 契约）。
-const minifiedModulesBody = transformSync(rawModulesBody, {
-  loader: 'js',
-  minifyWhitespace: true,
-  minifySyntax: true,
-  minifyIdentifiers: false,
-  charset: 'utf8',
-  target: 'es2022',
-}).code.trim()
+export async function bundleClient({ write = false } = {}) {
+  const catalogData = await loadCatalogEntries()
+  // Plugins 页徽章与诊断载荷的数字在构建期烘焙：客户端在挂载时还没有目录数据，
+  // 运行期取值会先渲染 0 再跳变，且独立页（无目录请求）永远拿不到数字。
+  const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
+  const buildStats = {
+    version: String(pkg.version || ''),
+    workflows: catalogData.workflows.length,
+    skills: catalogData.skills.length,
+    resources: catalogData.resources.length,
+    direct: catalogData.resources.filter(entry => entry.availability === 'available-in-plugin').length,
+  }
 
-const output = `/* eslint-disable */\n/* Generated by scripts/build-client.mjs. Do not edit directly. */\nwindow.__ModuleLoader__.load({\n  id: 'dsh-research-kit',\n  factory: require => {\n    const React = require('react')\n    const { createPortal } = require('react-dom')\n${catalogShell}\n${minifiedModulesBody}\n    return { inject: ['slots', 'sessions'], apply: researchKitApply }\n  }\n})\n`
-writeFileSync(resolve(root, 'ui/client.js'), output)
-writeFileSync(resolve(root, 'ui/catalog-data.json'), JSON.stringify({ ok: true, data: catalogData }))
-const promptKitRaw = `(() => {\n  const React = window.__DSH_RESEARCH_REACT__\n  if (!React) throw new Error('PromptKit 缺少 React 运行时。')\n${promptKitEmbedRewritten}\n  window.__DSH_RESEARCH_PROMPTKIT__ = PromptKit\n})()`
-const promptKitMinified = transformSync(promptKitRaw, {
-  loader: 'js',
-  minify: true,
-  charset: 'utf8',
-  target: 'es2022',
-}).code.trim()
-writeFileSync(resolve(root, 'ui/promptkit.js'), `/* eslint-disable */\n/* Generated by scripts/build-client.mjs. Do not edit directly. */\n${promptKitMinified}\n`)
-console.log('Generated ui/client.js, ui/catalog-data.json and ui/promptkit.js')
+  // 使用 esbuild 真正打包模块依赖图：保留组件与顶层标识符名称（兼顾 React DevTools 与运行期可读堆栈；
+  // charset: 'utf8' 保留中文文案原样，外层模块工厂与 catalog 空壳保持宿主 seam 契约）。
+  const result = await build({
+    entryPoints: [ENTRY_POINT],
+    absWorkingDir: root,
+    bundle: true,
+    write: false,
+    metafile: true,
+    format: 'iife',
+    globalName: '__rk_entry__',
+    platform: 'browser',
+    target: 'es2022',
+    charset: 'utf8',
+    minifyWhitespace: true,
+    minifySyntax: true,
+    minifyIdentifiers: false,
+    plugins: [createResearchKitPlugin()],
+  })
+
+  const bundledCode = result.outputFiles[0].text.trim()
+  const catalogShell = `const workflows = []\nconst skills = []\nconst resources = []\nconst databaseMetadataConfig = { groups: [], accessOverrides: {} }\nconst RESEARCH_KIT_BUILD_STATS = ${JSON.stringify(buildStats)}`
+  const clientOutput = `/* eslint-disable */\n/* Generated by scripts/build-client.mjs. Do not edit directly. */\nwindow.__ModuleLoader__.load({\n  id: 'dsh-research-kit',\n  factory: require => {\n    const React = require('react')\n    const __rk_react_dom__ = require('react-dom')\n${catalogShell}\n${bundledCode}\n    return { inject: ['slots', 'sessions'], apply: __rk_entry__.researchKitApply }\n  }\n})\n`
+
+  const sourceFiles = Object.keys(result.metafile.inputs)
+    .filter(input => !input.includes(':'))
+    .map(input => relative(root, resolve(root, input)).replaceAll('\\', '/'))
+    .sort()
+
+  if (write) {
+    const promptKitEmbed = readFileSync(resolve(root, 'vendor/promptkit-embed.js'), 'utf8')
+    // vendored 工件保持与源仓库逐字节一致（vendor-manifest.json 锁定 SHA-256）。
+    // 工件内置的 DshSessionEnhancer 是未接线的死代码，但硬编码了 PromptKit 独立插件路由；
+    // 构建时统一改写为本插件路由，保证产物内不出现跨插件 fetch 路径。
+    const promptKitEmbedRewritten = promptKitEmbed.replaceAll('/dsh-promptkit/semantic-enhance', '/dsh-research-kit/semantic-enhance')
+    const promptKitRaw = `(() => {\n  const React = window.__DSH_RESEARCH_REACT__\n  if (!React) throw new Error('PromptKit 缺少 React 运行时。')\n${promptKitEmbedRewritten}\n  window.__DSH_RESEARCH_PROMPTKIT__ = PromptKit\n})()`
+    const promptKitMinified = transformSync(promptKitRaw, {
+      loader: 'js',
+      minify: true,
+      charset: 'utf8',
+      target: 'es2022',
+    }).code.trim()
+
+    writeFileSync(resolve(root, 'ui/client.js'), clientOutput)
+    writeFileSync(resolve(root, 'ui/catalog-data.json'), JSON.stringify({ ok: true, data: catalogData }))
+    writeFileSync(resolve(root, 'ui/promptkit.js'), `/* eslint-disable */\n/* Generated by scripts/build-client.mjs. Do not edit directly. */\n${promptKitMinified}\n`)
+    console.log('Generated ui/client.js, ui/catalog-data.json and ui/promptkit.js')
+  }
+
+  return { clientOutput, sourceFiles, buildStats }
+}
+
+export async function collectClientSources() {
+  const { sourceFiles } = await bundleClient({ write: false })
+  return sourceFiles
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await bundleClient({ write: true })
+}

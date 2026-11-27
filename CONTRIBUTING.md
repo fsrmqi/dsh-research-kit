@@ -88,7 +88,7 @@ npm run build && npm run check && npm test && node --check ui/client.js
 | 现象 | 原因与处理 |
 | --- | --- |
 | `dsh plugin …` 报 `ERR_PNPM_UNEXPECTED_STORE` | PATH 上的 `pnpm` 与目标 profile 的 store 布局主版本不一致。对照 `node_modules/.modules.yaml` 的 `storeDir` 与 `pnpm store path`，改用一致的主版本 |
-| 打开界面才 `ReferenceError`，构建却无报错 | 新模块漏登记 `scripts/build-client.mjs` 的 `files` 白名单。产物只是少了一段代码，`node --check` 查不出来 |
+| 新增浏览器模块未打进产物 | 未从 `dsh/standalone-glue.js` 可达的 ESM `import` 链引用，或改动后未运行 `npm run build` |
 | CI 报构建产物与源码不同步 | 忘了 `npm run build`，或手改了 `ui/client.js` |
 | `npm run check` 报工件 SHA 不匹配 | `vendor/` 下的文件被改动了。工件是 SHA 锁定快照，**不得手改**；更新需同步 `vendor/vendor-manifest.json` |
 | 升级 DSH 后某个入口不见了 | 宿主改了槽位名或事件名。先跑 `npm run baselines:fetch && npm run check:dsh-app -- --require-source` 定位是哪条 seam，再改 glue 层（见 [COMPATIBILITY.md](docs/COMPATIBILITY.md)） |
@@ -96,9 +96,9 @@ npm run build && npm run check && npm test && node --check ui/client.js
 
 ## 两条硬规则
 
-### 1. 新增源码模块必须登记构建白名单
+### 1. 新增源码模块必须显式 `import` 并登记受控清单
 
-`scripts/build-client.mjs` 的 `files` 白名单。宿主半区（`dsh/`）的新文件**不需要**另外登记语法清单：`npm run check` 的语法门（`scripts/check-syntax.mjs`）遍历全树解析。细节与理由见 [DEVELOPMENT.md §1](docs/DEVELOPMENT.md)。
+浏览器侧模块由 `scripts/build-client.mjs` 从 `dsh/standalone-glue.js` 沿标准 ESM `import` 打包，不再维护手工 `files` 白名单；新增模块需同步登记到 [ARCHITECTURE.md](docs/ARCHITECTURE.md) 的受控清单。宿主半区（`dsh/`）的新文件不需要另外登记语法清单：`npm run check` 的语法门（`scripts/check-syntax.mjs`）遍历全树解析。细节见 [DEVELOPMENT.md §1](docs/DEVELOPMENT.md)。
 
 ### 2. 解析外部数据的函数必须是 **total** 的
 

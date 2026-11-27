@@ -4,9 +4,11 @@ import { Page, Segmented, Spinner, Notice, Button, Input, Textarea, Card } from 
 import { catalogReady, composeWorkflow, loadBrowserCatalog, searchCatalog, subscribeCatalog } from './catalog.js'
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
-import { ensureResearchProviders } from '../dsh/prompt-studio-glue.js'
+import { ensureResearchProviders, ResearchPromptStudioHost, researchMethodProvider, researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchProjectHome } from './research-project-home.js'
+import { ResearchWorkbench } from './research-workbench.js'
+import { ResearchVaultHost } from './research-vault.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { ResearchTransferPanel } from './research-transfer-panel.js'
 

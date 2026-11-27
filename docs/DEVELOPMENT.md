@@ -65,15 +65,11 @@ Web 与 Desktop App 跑的是同一份 `ui/client.js`：Web 由 `dev:web` 起在
 npm run build && npm run check && npm test && node --check ui/client.js && node --check ui/promptkit.js
 ```
 
-> **新增源码模块只要登记一处：** `scripts/build-client.mjs` 的 `files` 白名单（拼接顺序即符号可见顺序，模块间没有 `import`）。漏登记 `files` **不会有任何构建报错**，`node --check ui/client.js` 也查不出——产物只是少了一段代码，直到打开对应界面才 `ReferenceError`。同时在 `ORDERED_SYMBOLS` 补一条定义顺序断言，把「顺序错位」提前成构建期错误而非运行时崩溃。
+> **新增浏览器源码模块无需登记构建白名单：** `scripts/build-client.mjs` 已改为以 `dsh/standalone-glue.js` 为单入口调用 `esbuild.build` 沿正常 ESM `import` / `export` 打包，模块各自隔离作用域，不再依赖手工拼接顺序或顶层符号全局唯一。新增模块后正常 `import` 接入依赖图、登记到 [ARCHITECTURE.md](ARCHITECTURE.md) 受控清单并执行 `npm run build` 即可。
 >
-> **唯一例外是构建期生成物：** 客户端工具注册表不登记文件，而是登记一个生成标记 `'__generated:tool-registry-data'`——构建时由 `mcp/tool-registry-projection.js` 把全部工具投影成只含渲染字段（`CLIENT_TOOL_FIELDS`）的源码片段，`example` / `helpRoute` / `tier` / `artifactKind` / `category` 等只有服务端与文档用的字段不进产物。生成物必须排在 `mcp/tool-labels.js` 之前（它顶层就用 `TOOL_REGISTRY` 建索引，`const` 不提升）。新增浏览器要用的工具字段先加进 `CLIENT_TOOL_FIELDS`，否则会被投影裁掉——`test/tool-registry-projection.test.js` 会在消费方越界读字段时失败。
+> **构建期虚拟模块边界：** 构建插件只拦截三类特殊依赖——`react` / `react-dom` 交由宿主 `window.__ModuleLoader__.load` 的 `require` 提供；`catalog/{workflows,skills,resources}/index.js` 拦截为空壳（避免把完整目录打入主包）；`mcp/tool-registry-data.js` 替换为 `mcp/tool-registry-projection.js` 的投影产物（只含 `CLIENT_TOOL_FIELDS`，`example` / `helpRoute` / `tier` / `artifactKind` / `category` 等服务端字段不进主包）。新增浏览器要用的工具字段先加进 `CLIENT_TOOL_FIELDS`，否则会被投影裁掉——`test/tool-registry-projection.test.js` 会在消费方越界读字段时失败。
 >
-> **语法不用登记：** `npm run check` 的 `scripts/check-syntax.mjs` 遍历整棵源码树（当前 228 个 `.js/.mjs`，含 `dsh/` 路由模块与 `mcp/`）单进程解析，取代了此前那条 59 项、每加一个文件都要手动补的 `node --check` 清单——它漏掉 149 个文件，当时那条清单却看起来还在守语法（`dsh/claim-review.js` 这类模块加个语法错误，老门禁照样绿）。清单里那 11 个 `mcp/tools/*.js` 的重复检查（`precheck`）也一并删掉了。
-
-> **顶层符号名必须全局唯一，且每次改完源码都要重新 `npm run build`。** 所有模块被拼进同一个函数作用域，因此两个文件各写一个 `const sessions` 会让整个产物 `SyntaxError: Identifier 'sessions' has already been declared`——而这个错误只在**重新构建**时才出现：不 build 就跑 `npm run check`，检查的仍是旧产物，会一直显示为通过。**重名 `function` 比重名 `const` 更阴险**：声明合法、后者静默覆盖前者，产物照样通过 `node --check`，只在运行到调用点才炸（实测：`research-selection-store.js` 与 `evidence-store.js` 各有一个 `stateFor`，形状不同，覆盖后 `state.ids` 不可迭代，统一视图与输入框浮层一起白屏）。现已由构建期的 `assertUniqueTopLevelSymbols` 硬失败并报出 `文件:行`，不必靠记忆；函数重名按职责加前缀（`formatAssetTime` / `formatWorkbenchTime` / `formatEvidenceTime`），不要依赖「两份内容一样，覆盖也无所谓」。
-
-> `strip()` 只认识 `export const` / `export function` / `export async function`（后者是单独一条规则，必须排在普通 `export function` 之前）与整行 `export {}`；用了别的导出形式会残留 `export` 关键字，同样是产物级别语法错误。
+> **语法不用登记：** `npm run check` 的 `scripts/check-syntax.mjs` 遍历整棵源码树（含 `dsh/` 路由模块与 `mcp/`）单进程解析，改动源码后务必重新 `npm run build` 保持产物同步。
 
 ## 2. 当前基线
 
@@ -201,13 +197,12 @@ type InputActions = {
 
 ### 4.3 浏览器构建器
 
-构建器目前为零外部依赖的简化拼接器，不是通用 bundler。维护时注意：
+构建器（`scripts/build-client.mjs`）以 `dsh/standalone-glue.js` 为入口调用 `esbuild.build` 打包为 IIFE，再包一层 DSH `window.__ModuleLoader__.load` 工厂。维护时注意：
 
-- 加入新的浏览器模块后，要把它放到 `files` 列表且保证依赖顺序；
-- 任何 ESM import 均会被去除，因此模块间符号依赖需要按拼接顺序可见；
-- JSON 需要构建时内联；
-- 不要把 Node API、动态 import、CommonJS `require`（除 DSH 提供模块）留在最终浏览器代码；
-- 引入复杂依赖前，应考虑迁移到受控 bundler，而不是继续扩大文本替换规则。
+- 浏览器模块之间使用标准 ESM `import` / `export`，无需维护手工文件顺序或全局唯一顶层符号；
+- `react` / `react-dom`、`catalog/*/index.js`（目录空壳）与 `mcp/tool-registry-data.js`（工具投影）由构建插件拦截处理；
+- 不要把 Node API 或未声明的第三方运行时依赖引入浏览器模块图；
+- 构建产物 `ui/client.js`、`ui/catalog-data.json`、`ui/promptkit.js` 必须通过 `npm run build` 生成，不得手改。
 
 ## 5. 测试策略
 
@@ -263,7 +258,7 @@ const actions = {
 
 ### 新增源码模块 / 外部数据解析
 
-- [ ] 登记三处：`scripts/build-client.mjs` 的 `files`、`package.json` 的 `check`（宿主半区文件也要进）、[ARCHITECTURE.md 的受控清单](ARCHITECTURE.md)；
+- [ ] 浏览器模块已通过标准 `import` 接入 `dsh/standalone-glue.js` 依赖图，并登记到 [ARCHITECTURE.md 的受控清单](ARCHITECTURE.md)（语法由 `scripts/check-syntax.mjs` 自动遍历）；
 - [ ] 解析外部数据的函数是 total 的（见 [CONTRIBUTING.md 的「两条硬规则」](../CONTRIBUTING.md)），并在 `test/hostile-input.test.mjs` 补一条敌意 fixture；
 - [ ] 覆盖率不低于当前 Node 主版本的地板（`npm run coverage`）。`coverage:update` **只抬不降**：下降时它会失败并要求补测试；若下降确实是设计取舍，直接改 `coverage-baseline.json` 并在 PR 写明理由。换 Node 主版本后要在那台版本上重新记录地板。地板块缺失、字段非法（含 `0 < 值 < 1`——Node 会把阈值向下取整成 0，那条指标的门禁会当场消失）时判为配置错误（exit 2）；`coverage:update` 也不会替你静默重建非法条目。
 
