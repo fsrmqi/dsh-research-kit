@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { catalog, composeWorkflow, searchCatalog, itemById, itemDetailReady, loadCatalogItemDetail, applyCatalogData, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources } from '../src/catalog.js'
+import { catalog, composeWorkflow, searchCatalog, itemById, itemDetailReady, loadCatalogItemDetail, applyCatalogData, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources, recommendedWorkflowsForWorkbench } from '../src/catalog.js'
 import { validateCatalogItems, readDirectQueryIds, loadCatalogFromDisk, compareShardsWithEntries } from '../scripts/validate-catalog-lib.mjs'
 import { loadCatalogEntries, projectCatalogIndex, readShards } from '../scripts/lib/catalog-entries.mjs'
 
@@ -134,6 +134,14 @@ test('数据库选择能给出同领域的可启动工作流建议', () => {
   const recommendations = recommendedWorkflowsForResources(['clinvar', 'gnomad'])
   assert.ok(recommendations.some(item => item.id === 'variant-annotation'))
   assert.ok(recommendations.every(item => item.type === 'workflow'))
+  assert.deepEqual(recommendedWorkflowsForWorkbench({}), [])
+  const presetOnly = recommendedWorkflowsForWorkbench({ presetKey: 'cropBreeding' })
+  assert.ok(presetOnly.some(row => row.item.id === 'crop-gwas-breeding' && row.reason === '匹配领域预设'))
+  const combined = recommendedWorkflowsForWorkbench({ resourceIds: ['pubmed', 'gnomad'], presetKey: 'bioinformatics' })
+  assert.equal(combined[0].item.id, 'variant-annotation')
+  assert.equal(combined[0].reason, '匹配领域预设与已选资源')
+  assert.ok(combined.some(row => row.item.id === 'literature-search' && row.reason === '匹配已选资源'))
+  assert.ok(combined.every(row => row.item.type === 'workflow'))
 })
 
 test('关联资源 ID 均真实存在', () => {

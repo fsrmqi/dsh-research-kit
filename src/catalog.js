@@ -64,6 +64,64 @@ export function recommendedWorkflowsForResources(resourceIds = []) {
   return [...workflowIds].map(id => catalogIndex.get(id)).filter(item => item?.type === 'workflow')
 }
 
+const PRESET_WORKFLOW_RECOMMENDATIONS = {
+  general: {
+    categories: ['研究设计', '论文与手稿', '文献研究'],
+    workflowIds: ['literature-review', 'analysis-plan', 'review-paper', 'compare-papers'],
+  },
+  literature: {
+    categories: ['文献研究', '论文与手稿'],
+    workflowIds: ['literature-search', 'literature-review', 'compare-papers', 'review-paper', 'reference-check'],
+  },
+  bioinformatics: {
+    categories: ['生物信息学', '基因组学'],
+    workflowIds: ['rnaseq-deseq2', 'single-cell-rnaseq', 'variant-calling', 'bioinformatics-qc-pipeline', 'pathway-enrichment-execution'],
+  },
+  cropBreeding: {
+    categories: ['作物遗传育种'],
+    workflowIds: ['crop-gwas-breeding', 'crop-multi-environment-trial', 'crop-qtl-validation', 'crop-phenotype-qc', 'genomic-selection-plan'],
+  },
+  clinical: {
+    categories: ['临床研究'],
+    workflowIds: ['patient-cohort-study', 'case-control-analysis', 'risk-prediction-model', 'diagnostic-accuracy', 'longitudinal-study'],
+  },
+  dataVisualization: {
+    categories: ['数据分析', '可视化'],
+    workflowIds: ['explore-data', 'clean-data', 'analysis-plan', 'statistical-analysis', 'figure-audit'],
+  },
+}
+
+/**
+ * 主工作台独立推荐区计算：复用已选资源推荐，并按当前领域预设排优先级；
+ * 不改变全目录搜索和分类筛选语义。
+ */
+export function recommendedWorkflowsForWorkbench({ resourceIds = [], presetKey = null, limit = 6 } = {}) {
+  const fromResources = recommendedWorkflowsForResources(resourceIds)
+  const preset = presetKey ? PRESET_WORKFLOW_RECOMMENDATIONS[presetKey] || null : null
+  if (!fromResources.length && !preset) return []
+
+  const presetIdSet = new Set(preset?.workflowIds || [])
+  const presetCategorySet = new Set(preset?.categories || [])
+  const matchesPreset = item => presetIdSet.has(item.id) || presetCategorySet.has(item.category)
+
+  const seen = new Set()
+  const ranked = []
+  const push = (item, reason) => {
+    if (!item || item.type !== 'workflow' || seen.has(item.id)) return
+    seen.add(item.id)
+    ranked.push({ item, reason })
+  }
+
+  if (preset) {
+    for (const item of fromResources) if (matchesPreset(item)) push(item, '匹配领域预设与已选资源')
+  }
+  for (const item of fromResources) push(item, '匹配已选资源')
+  if (preset) {
+    for (const id of preset.workflowIds) push(catalogIndex.get(id), '匹配领域预设')
+  }
+  return ranked.slice(0, limit)
+}
+
 function enrichItem(item) {
   const normalized = Array.isArray(item.tags) && item.tags.length ? item : { ...item, tags: [item.category || '科研'] }
   return normalized.type === 'database' ? { ...normalized, databaseMeta: databaseMetadata(normalized) } : normalized

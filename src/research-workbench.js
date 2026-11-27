@@ -1,7 +1,7 @@
 import React from 'react'
 import {
   catalog, catalogIndexMode, itemById, itemDetailReady, loadCatalogItemDetail,
-  catalogMatch, searchCatalog, searchCatalogRemote, selectedCatalogItem, subscribeCatalog, composeWorkflow, databaseMetadata,
+  catalogMatch, searchCatalog, searchCatalogRemote, selectedCatalogItem, subscribeCatalog, composeWorkflow, databaseMetadata, recommendedWorkflowsForWorkbench,
 } from './catalog.js'
 import { RouteReplay } from './route-replay.js'
 import { createCatalogStorage } from './catalog-storage.js'
@@ -224,6 +224,12 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const sessionDatabaseIds = React.useMemo(() => sessionResources.filter(item => item.type === 'database').map(item => item.id), [sessionResources])
   const activeSkillIds = React.useMemo(() => uniqueIds([...attachedSkills, ...sessionSkillIds]), [attachedSkills, sessionSkillIds])
   const sciencePreset = scienceMode ? SCIENCE_MODE_PRESETS[scienceMode] : null
+  const workbenchRecommendations = React.useMemo(
+    () => initialType !== 'database' && (type === 'all' || type === 'workflow') && !deferredQuery.trim()
+      ? recommendedWorkflowsForWorkbench({ resourceIds: sessionResourceIds, presetKey: scienceMode, limit: 6 })
+      : [],
+    [initialType, type, deferredQuery, sessionResourceIds, scienceMode, catalogVersion],
+  )
   // 科研模式下组装 Prompt 前统一前置纪律段（通用预设只有基础纪律）。
   const scienceAssemble = prompt => {
     if (!sciencePreset) return prompt
@@ -407,6 +413,10 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
     setQuery('')
     setSelectedId(item.id)
   }
+  const openRecommendedWorkflow = item => {
+    if (type === 'workflow' && workflowCategory !== 'all' && item.category !== workflowCategory) setWorkflowCategory('all')
+    setSelectedId(item.id)
+  }
   const catalogCounts = React.useMemo(() => catalog.reduce((counts, item) => {
     counts[item.type] = (counts[item.type] || 0) + 1
     return counts
@@ -469,6 +479,45 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
         onChange: type === 'workflow' ? setWorkflowCategory : type === 'skill' ? setSkillCategory : setDatabaseCategory,
       }) : null,
     ]),
+    workbenchRecommendations.length ? h('section', {
+      key: 'recommended-workflows',
+      'aria-label': '推荐工作流',
+      style: {
+        marginBottom: 14, padding: '12px 14px', borderRadius: 12,
+        border: `1px solid ${C.tealLine}`, background: C.tealTint,
+        display: 'grid', gap: 8,
+      },
+    }, [
+      h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+        h('strong', { key: 'title', style: { fontSize: 13, color: C.ink } }, '推荐工作流'),
+        h('span', { key: 'hint', style: { fontSize: 12, color: C.muted } }, sciencePreset && sessionResourceIds.length
+          ? `按「${sciencePreset.label}」预设与本会话已选资源排序，不影响下方全目录搜索与筛选。`
+          : sciencePreset
+            ? `按「${sciencePreset.label}」预设优先推荐，不影响下方全目录搜索与筛选。`
+            : '按本会话已选资源推荐，不影响下方全目录搜索与筛选。'),
+      ]),
+      h('div', { key: 'items', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, workbenchRecommendations.map(({ item, reason }) => {
+        const active = selected?.id === item.id
+        return h('button', {
+          key: item.id,
+          type: 'button',
+          className: 'rk-btn',
+          'aria-pressed': active,
+          title: `${reason} · ${item.description}`,
+          onClick: () => openRecommendedWorkflow(item),
+          style: {
+            display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 999,
+            border: `1px solid ${active ? C.teal : C.tealLineStrong}`,
+            background: active ? C.teal : C.surface,
+            color: active ? C.onInk : C.ink,
+            fontSize: 12, fontWeight: 650, cursor: 'pointer',
+          },
+        }, [
+          h('span', { key: 'name' }, item.name),
+          h('span', { key: 'cat', style: { fontSize: 11, opacity: active ? .9 : .72 } }, item.category),
+        ])
+      })),
+    ]) : null,
     h('div', { key: 'layout', ref: layoutRef, className: 'rk-layout', style: { display: 'grid', gridTemplateColumns: 'minmax(280px, .8fr) minmax(0, 1.2fr)', gap: 16, alignItems: 'start' } }, [
       // 左列 sticky（ROADMAP §2）：右列详情可达约 1044px，列表原来会滚出视口。
       // 偏移 = 一级导航 + 二级吸顶带两段实测变量（都不写死：两者高度都随折行变化），

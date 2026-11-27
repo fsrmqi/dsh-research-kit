@@ -433,7 +433,9 @@ const server = http.createServer((req,res)=>{
   await page.getByRole('button',{name:'收起回放',exact:true}).click();
   await page.getByLabel('选择科研模式领域预设').selectOption('bioinformatics');
   assert.equal(await page.getByLabel('提示词预览',{exact:true}).inputValue(),'手动编辑内容必须保留');
-  console.log('切换科研模式保留手动编辑：通过');
+  const workbenchRecs=page.getByRole('region',{name:'推荐工作流'});
+  await workbenchRecs.getByRole('button',{name:/bulk RNA-seq 差异表达/}).waitFor();
+  console.log('切换科研模式保留手动编辑并展示主工作台推荐区块：通过');
   await page.getByRole('tab',{name:'查来源',exact:true}).click();
   await page.getByLabel('资源列表').getByText('PubMed',{exact:true}).click();
   await page.getByLabel('英文检索式').fill('rice');
