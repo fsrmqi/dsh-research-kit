@@ -18,16 +18,18 @@ function withOpenAlexAuth(url, env = process.env) {
 
 function reconstructAbstract(invertedIndex) {
   if (!invertedIndex || typeof invertedIndex !== 'object') return ''
-  const pairs = []
+  const wordsByPosition = new Map()
   for (const [word, positions] of Object.entries(invertedIndex)) {
     if (!Array.isArray(positions)) continue
     for (const pos of positions) {
-      if (Number.isInteger(pos) && pos >= 0 && pos < MAX_ABSTRACT_POSITION) pairs.push([pos, word])
+      if (Number.isInteger(pos) && pos >= 0 && pos < MAX_ABSTRACT_POSITION) wordsByPosition.set(pos, word)
     }
   }
-  if (!pairs.length) return ''
-  pairs.sort((a, b) => a[0] - b[0])
-  return pairs.map(([, word]) => word).join(' ')
+  return [...wordsByPosition]
+    .sort(([left], [right]) => left - right)
+    .map(([, word]) => word)
+    .filter(Boolean)
+    .join(' ')
 }
 
 function normalizeWork(work, { includeReferences = false } = {}) {

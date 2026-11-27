@@ -67,6 +67,7 @@ test('reconstructAbstract 安全处理空对象，且配置 OPENALEX_API_KEY 时
   assert.equal(reconstructAbstract(null), '')
   assert.equal(reconstructAbstract({}), '')
   assert.equal(reconstructAbstract({ world: [1], hello: [0] }), 'hello world')
+  assert.equal(reconstructAbstract({ first: [0, 0], second: [0], last: [1] }), 'second last')
 
   const originalFetch = globalThis.fetch
   const prevKey = process.env.OPENALEX_API_KEY

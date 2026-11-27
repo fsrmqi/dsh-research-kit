@@ -16,7 +16,7 @@ const MAX_CHECKPOINT_FILES = 20
 let logSnapshot = { size: -1, mtimeMs: -1, records: [] }
 const checkpointSnapshots = new Map()
 
-const readBody = req => readJsonBody(req, { maxChars: 32 * 1024, destroyOnTooLarge: true, requireObject: true })
+const readBody = req => readJsonBody(req, { maxChars: 32 * 1024, requireObject: true })
 
 // 刻意不复用写入方（mcp/execution/call-logger.js）的 readCallLogs：那条要覆盖轮转文件
 // 并按 tool 过滤，这条只读当前文件尾部（有界内存）、按 size/mtime 缓存快照、since 用

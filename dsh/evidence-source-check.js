@@ -5,7 +5,7 @@ import { jsonReply, readJsonBody, resolveAllowedCorsOrigin } from './lib/http-js
 // 本路由的 CORS 来源挂在 res.__sourceCheckOrigin（只允许回环、同源或白名单 Origin）。
 const reply = (res, status, body) => jsonReply(res, status, body, { corsOrigin: res.__sourceCheckOrigin })
 
-const readBody = req => readJsonBody(req, { maxChars: 16_384, destroyOnTooLarge: true, requireObject: true })
+const readBody = req => readJsonBody(req, { maxChars: 16_384, requireObject: true })
 
 const titleKey = value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 

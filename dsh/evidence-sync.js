@@ -17,7 +17,7 @@ import { jsonReply as reply, readJsonBody } from './lib/http-json.js'
 
 export const EVIDENCE_SYNC_PATH = '/dsh-research-kit/evidence-sync'
 
-const readBody = req => readJsonBody(req, { maxChars: 1_048_576, destroyOnTooLarge: true, requireObject: true })
+const readBody = req => readJsonBody(req, { maxChars: 1_048_576, requireObject: true })
 
 function requestProject(value) {
   return safeProjectName(value || 'default')

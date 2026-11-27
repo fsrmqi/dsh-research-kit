@@ -1,5 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
+import { createServer } from 'node:http'
+import { agentActivityRoute } from '../dsh/agent-activity.js'
+import { evidenceSyncRoute } from '../dsh/evidence-sync.js'
 import { checkEvidenceSource, compareSourceTitle, evidenceSourceCheckRoute } from '../dsh/evidence-source-check.js'
 
 test('官方 DOI 元数据核对不等于原文核验', async () => {
@@ -15,7 +19,7 @@ test('官方 DOI 元数据核对不等于原文核验', async () => {
   assert.equal(evidenceSourceCheckRoute({ web }).path, '/dsh-research-kit/evidence-source-check')
 })
 
-test('元数据核对路由收敛 CORS、并发核对条目并正确映射 400/413 状态码', async () => {
+test('元数据核对路由收敛 CORS、并发核对条目并正确映射 400/413 状态码', async t => {
   let active = 0
   let maxActive = 0
   const web = {
@@ -44,9 +48,26 @@ test('元数据核对路由收敛 CORS、并发核对条目并正确映射 400/4
   await route.handler({ method: 'POST', headers: {}, async *[Symbol.asyncIterator]() { yield 'null' } }, nullBody)
   assert.equal(nullBody.status, 400)
 
-  const tooLarge = makeRes()
-  await route.handler({ method: 'POST', headers: {}, destroy() {}, async *[Symbol.asyncIterator]() { yield 'x'.repeat(20_000) } }, tooLarge)
-  assert.equal(tooLarge.status, 413)
+  const oversizedRequests = [
+    [route, 16_384],
+    [agentActivityRoute(), 32_768],
+    [evidenceSyncRoute(), 1_048_576],
+  ]
+  const handlers = new Map(oversizedRequests.map(([route]) => [route.path, route.handler]))
+  const server = createServer((req, res) => handlers.get(req.url)(req, res))
+  t.after(() => new Promise(resolve => server.close(resolve)))
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  for (const [route, maxChars] of oversizedRequests) {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}${route.path}`, {
+      method: 'POST',
+      body: ' '.repeat(maxChars + 1),
+      signal: AbortSignal.timeout(5_000),
+    })
+    assert.equal(response.status, 413, route.path)
+    assert.equal(response.headers.get('connection'), 'close')
+    assert.deepEqual(await response.json(), { ok: false, error: 'body_too_large' })
+  }
 
   const ok = makeRes()
   await route.handler({

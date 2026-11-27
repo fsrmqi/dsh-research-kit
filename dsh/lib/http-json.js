@@ -32,6 +32,7 @@ export function jsonReply(res, status, body, { headers, corsOrigin } = {}) {
     'cache-control': 'no-store',
     ...(corsOrigin ? { 'access-control-allow-origin': corsOrigin, vary: 'Origin' } : {}),
     ...headers,
+    ...(status === 413 ? { connection: 'close' } : {}),
   })
   res.end(JSON.stringify(body))
 }
@@ -42,16 +43,16 @@ export async function readJsonBody(req, {
   tooLargeMessage = 'body_too_large',
   invalidJsonMessage = 'invalid_json',
   emptyBodyAsObject = false,
-  destroyOnTooLarge = false,
   requireObject = false,
 } = {}) {
   // 上限必须显式：无上限读入等于把进程内存交给调用方，不能成为默认。
   if (maxBytes === undefined && maxChars === undefined) throw new Error('readJsonBody 需要显式上限（maxBytes 或 maxChars）')
   let raw = ''
-  for await (const chunk of req) {
+  // 提前结束读取时保留连接，由响应端先送出 413 再关闭。
+  const chunks = req.iterator?.({ destroyOnReturn: false }) ?? req
+  for await (const chunk of chunks) {
     raw += chunk
     if (maxBytes !== undefined ? Buffer.byteLength(raw) > maxBytes : raw.length > maxChars) {
-      if (destroyOnTooLarge) req.destroy()
       const error = new Error(tooLargeMessage)
       error.code = 'body_too_large'
       throw error
