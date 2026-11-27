@@ -317,7 +317,7 @@ export function ResearchConsole(props) {
         inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
           h(Button, { key: 'materials', size: 'sm', variant: 'ghost', onClick: () => select('vault', { tab: 'assets' }) }, '研究资料'),
           h(Button, { key: 'evidence', size: 'sm', variant: 'ghost', onClick: () => select('evidence') }, '证据关系'),
-          current.id === 'vault' ? h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '迁移到 App') : null,
+          current.id === 'vault' ? h(Button, { key: 'transfer', size: 'sm', variant: 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen }, '备份与恢复') : null,
         ]),
       ]),
     ]),

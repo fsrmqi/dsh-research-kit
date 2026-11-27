@@ -14,8 +14,11 @@ function samplePayload() {
   }
 }
 
-test('App 迁移包校验完整性，并拒绝篡改和缺项', async () => {
+test('完整备份沿用旧迁移包格式，校验完整性并拒绝篡改和缺项', async () => {
   const serialized = await serializeResearchTransfer(samplePayload())
+  const envelope = JSON.parse(serialized)
+  assert.equal(envelope.kind, 'dsh-research-kit-app-transfer')
+  assert.equal(envelope.version, 1)
   const parsed = await parseResearchTransfer(serialized)
   assert.equal(parsed.assets[0].id, 'asset:one')
   assert.equal(parsed.runs[0].project, '大麦')
@@ -25,7 +28,7 @@ test('App 迁移包校验完整性，并拒绝篡改和缺项', async () => {
   await assert.rejects(parseResearchTransfer(await serializeResearchTransfer(incomplete)), /知识库/)
 })
 
-test('App 迁移预览按稳定 ID 区分新增与已有', () => {
+test('备份恢复预览按稳定 ID 区分新增与已有', () => {
   const incoming = samplePayload()
   const current = samplePayload()
   current.assets = [{ id: 'asset:two', body: '本端资产' }]

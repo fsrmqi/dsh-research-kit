@@ -112,7 +112,7 @@ After you launch a workflow, the workbench replays the **actual assembly facts**
 - **Evidence graph** — traces relations among this session's resources, workflows, query sources, assets and **saved evidence**; evidence nodes carry only source database / stable identifier / verification status, **never notes or query terms**; arrows show relation direction, with anchors chosen from the two endpoints' actual positions rather than a fixed "always left-to-right". Deterministic layered layout with Ctrl / ⌘ wheel zoom, drag panning and reset, a minimap for quick navigation, and four range modes (focus / upstream / downstream / two-point path); you can copy a link that carries view state only, and export desensitized SVG / HTML snapshots (the metadata scope is stated before each export).
 - **Research answer suggestions** — enable Research Assist for the current session to see a compact workflow before sending and a save suggestion on eligible new answers. The preview extracts findings and sources locally. Confirm your selections to save them for verification. The graph supports project filters and JSON backups.
 - **Automatic tags and topic grouping** — newly deposited assets and cited evidence receive content-type, research-topic and source-type tags from a local controlled vocabulary; several topics per item are allowed. Both libraries group by the first matching topic by default, with a flat, searchable list available. Existing items derive their topic in the list without a bulk rewrite of stored data or human tags; unmatched items go to "Unclassified". Tags help organise only — they are not a verification signal and remain editable.
-- **Asset–evidence links** — an asset card expands into an "evidence links" panel: candidates derived from same project, shared tags and auto-deposition knowledge chains; **links are created only after explicit checkbox confirmation** (never automatically). Evidence entries show a read-only "cited by" list; the graph draws "asset → supporting evidence" edges (scoped to "persisted", dropped when an endpoint disappears). Links are included in evidence-vault JSON backups and full migration bundles; full migration bundle import automatically skips records whose asset or evidence endpoint is missing.
+- **Asset–evidence links** — an asset card expands into an "evidence links" panel: candidates derived from same project, shared tags and auto-deposition knowledge chains; **links are created only after explicit checkbox confirmation** (never automatically). Evidence entries show a read-only "cited by" list; the graph draws "asset → supporting evidence" edges (scoped to "persisted", dropped when an endpoint disappears). Links are included in evidence-vault JSON backups and full backup files; full backup file import automatically skips records whose asset or evidence endpoint is missing.
 - **Research-result explainer diagrams** — a built-in "research result explainer diagram" workflow turns findings into diagram IR, which `scripts/render-diagrams.mjs --html` renders **deterministically** into single-file interactive HTML (shareable and opens offline); `--from-files` scaffolds IR from files produced in a session. `scripts/validate-diagrams.mjs` gives machine-readable rule diagnostics and is part of `npm run check` (no IR files ship in the repo, so it takes effect when an IR is produced or reviewed).
 - **Multiple prompt exits** — beyond write-to-composer and send, "Copy prompt" works even when host actions are missing.
 - **Launch-time validation** — field-level errors (red border + message) inside the preview dialog; missing required parameters never write the draft.
@@ -146,7 +146,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball (offline / audit)**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.1.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.2.tgz
 ```
 
 > The generated `ui/client.js`, `ui/catalog-data.json`, and `ui/promptkit.js` artifacts are committed, so a clone installs without building.
@@ -249,7 +249,7 @@ Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1
 
 Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
-With the DSH Desktop App as the primary host, local data from the older Web endpoint is not shared automatically. Use "Research Workbench → This Research → Research Materials → Migrate to App" to preview, validate and import incrementally; steps, retained scope and known limits are in the [App migration guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md).
+In DSH Desktop, open Research Workbench → This Research → Research Materials → Backup and Restore to export a complete backup. Use the same entry point to preview and restore it on a new machine or profile. Existing migration bundles remain supported. See the [local backup and restore guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md).
 
 ### Database queries
 
@@ -259,9 +259,9 @@ The remaining 118 sources are marked `requires-mcp` or `reference-only`, state t
 
 ## Compatibility & status
 
-Current version `0.3.1` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
+Current version `0.3.2` (not yet published to npm). Development status and next steps: [ROADMAP.md](ROADMAP.md).
 
-Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 627 regression tests in 78 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. The App transfer entry, export, and preview were verified in a real Desktop profile; final import and cross-Web migration still require real-App acceptance.
+Verified so far: catalog contract validation (589 entries, 589 unique IDs, shards identical to the aggregated entries) and 627 regression tests in 78 files, including 7 render-level assertions for missing host actions, a host-contract matrix across 14 DSH baseline tags and artifact guards for the client half shared by Web and the Desktop App. Existing Web behavior previously passed real DSH web-profile smoke tests. Backup export and preview were verified in a real Desktop profile. Incremental restore still needs verification in an isolated Desktop profile.
 
 > Real-profile acceptance cannot be replaced by unit tests — `test/dsh-slots.test.js` does execute the real build artifact, but the slots service is simulated. Re-run the [manual QA checklist](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md) after upgrading DSH.
 
@@ -290,7 +290,7 @@ After touching `catalog/`, `src/` or `dsh/`, run `npm run build && npm run check
 | [Scope & boundaries](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT.md) | Problem statement, product boundaries, quality and safety principles |
 | [Optimizations & feature notes](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) | Review recovery, evidence pagination, literature interoperability, Claim review and per-stance evidence relations (Chinese only) |
 | [Compatibility matrix](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md) | Supported DSH baselines, host seams and how CI guards them (Chinese only) |
-| [App migration guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | Moving local Web data to the Desktop App: steps and boundaries (Chinese only) |
+| [Local backup and restore guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | Backing up and restoring local Desktop data: steps and boundaries (Chinese only) |
 | [Changelog](CHANGELOG.md) | Versioned changes and the tool-rename cross-reference |
 
 > The in-depth documents are currently **Chinese-only**. English readers can follow the architecture and QA checklists structurally; the code and catalog are the authoritative reference.

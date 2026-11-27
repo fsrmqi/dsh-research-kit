@@ -18,7 +18,7 @@ const TRANSFER_SECTIONS = [
 ]
 
 function transferDownload(text, name) {
-  // 迁移包可能很大，保留更保守的回收延时。
+  // 完整备份可能很大，保留更保守的回收延时。
   return downloadJsonFile(text, name, { revokeDelayMs: 10_000 })
 }
 
@@ -33,12 +33,12 @@ async function captureResearchTransfer(assetProvider) {
     evidence.listResearchLedger(), evidence.listWorkspaces({ includeArchived: true }),
     knowledge.listNodes(), knowledge.listClaims(), assetProvider.list(),
   ])
-  if (evidence.isDegraded() || knowledge.isDegraded()) throw new Error('本地数据库不可用；为防止只迁移到临时内存，已停止。')
+  if (evidence.isDegraded() || knowledge.isDegraded()) throw new Error('本地数据库不可用，已停止备份或恢复。')
   if (synced.skipped) throw new Error('文件同步不可用；为防止遗漏 Agent 保存的证据，已停止。')
   const evidenceBackup = JSON.parse(serializeEvidenceBackup({ entries, claims, links, ledger,
     workspaces: workspaces.filter(row => row.origin === 'user' || row.updatedAt > 0) }))
   const knowledgeBackup = JSON.parse(serializeKnowledgeBackup({ nodes, claims: knowledgeClaims }))
-  // 导出时间只属于外层迁移文件；基线比较必须只比较业务数据。
+  // 导出时间只属于外层备份文件；基线比较必须只比较业务数据。
   evidenceBackup.exportedAt = 0
   knowledgeBackup.exportedAt = 0
   return {
@@ -116,8 +116,8 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     setBusy(true)
     try {
       const data = await captureResearchTransfer(assetProvider)
-      transferDownload(await serializeResearchTransfer(data), `research-kit-app-transfer-${Date.now()}.json`)
-      setNotice('已生成完整迁移包。请妥善保管；它包含笔记、灵感资产及来源摘录。')
+      transferDownload(await serializeResearchTransfer(data), `research-kit-backup-${Date.now()}.json`)
+      setNotice('已生成完整备份。请妥善保管；它包含笔记、灵感资产及来源摘录。')
     } catch (error) { setNotice(`导出失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
@@ -125,7 +125,7 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     setIncoming(null); setPreview(null); setBaseline(null); setBackupReady(false)
     const file = event.target.files?.[0]
     if (!file) return
-    if (file.size > 30_000_000) return setNotice('迁移文件超过 30 MB；请分批导出或联系维护者。')
+    if (file.size > 30_000_000) return setNotice('备份文件超过 30 MB，无法在此恢复。')
     setBusy(true)
     try {
       const data = await parseResearchTransfer(await file.text())
@@ -133,7 +133,7 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
       setIncoming(data)
       setPreview(previewResearchTransfer(data, current))
       setBaseline(JSON.stringify(current))
-      setNotice('校验通过。请检查预览，先下载本端备份，再确认增量导入。已有 ID 不覆盖。')
+      setNotice('校验通过。请检查预览，先下载恢复前备份，再确认增量恢复。已有 ID 不覆盖。')
     } catch (error) { setNotice(`预览失败：${error?.message || error}`) }
     finally { setBusy(false); event.target.value = '' }
   }
@@ -141,10 +141,10 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     setBusy(true)
     try {
       const current = await captureResearchTransfer(assetProvider)
-      if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，请重新选择迁移文件并预览。')
+      if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，请重新选择备份文件并预览。')
       transferDownload(await serializeResearchTransfer(current), `research-kit-before-import-${Date.now()}.json`)
       setBackupReady(true)
-      setNotice('已生成本端导入前备份。确认文件已保存后，再点击“确认增量导入”。')
+      setNotice('已生成本端恢复前备份。确认文件已保存后，再点击“确认增量恢复”。')
     } catch (error) { setBackupReady(false); setNotice(`备份失败：${error?.message || error}`) }
     finally { setBusy(false) }
   }
@@ -153,33 +153,33 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     setBusy(true)
     try {
       const current = await captureResearchTransfer(assetProvider)
-      if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，未导入；请重新选择迁移文件并预览。')
+      if (JSON.stringify(current) !== baseline) throw new Error('本端数据已变化，未导入；请重新选择备份文件并预览。')
       if (current.runs.length + preview.runs.add > MAX_RESEARCH_RUNS) throw new Error(`合并后研究运行超过 ${MAX_RESEARCH_RUNS} 条上限，已停止；请先备份并整理旧运行。`)
       const result = await applyResearchTransfer(incoming, current, assetProvider, setProgress)
-      setNotice(`导入完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条，拒收无效 ${result.invalidEvidence} 条，未恢复关联 ${result.skippedRelated} 条。${result.existingSources ? `文件侧已有同源证据 ${result.existingSources} 条，未覆盖原记录；` : ''}其余数据按稳定 ID 增量合并，请刷新核对。`)
+      setNotice(`恢复完成：新增证据 ${result.addedEvidence} 条，跳过已有 ${result.skippedEvidence} 条，拒收无效 ${result.invalidEvidence} 条，未恢复关联 ${result.skippedRelated} 条。${result.existingSources ? `文件侧已有同源证据 ${result.existingSources} 条，未覆盖原记录；` : ''}其余数据按稳定 ID 增量合并，请刷新核对。`)
       setIncoming(null); setPreview(null); setBackupReady(false)
-    } catch (error) { setNotice(`导入未完成：${error?.message || error}。原数据未清空；可用导入前备份核对，重新预览后续导。`) }
+    } catch (error) { setNotice(`恢复未完成：${error?.message || error}。原数据未清空；可用恢复前备份核对，重新预览后续导。`) }
     finally { setBusy(false); setProgress('') }
   }
 
   return h(Card, { style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 10, maxWidth: 780 } }, [
     h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
-      h('strong', { key: 'title' }, '迁移到 DSH App'),
+      h('strong', { key: 'title' }, '备份与恢复'),
       h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: onClose }, '关闭'),
     ]),
-    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '在旧 Web 端导出迁移包；在 App 中选择该文件，预览后增量导入。两端页面源不同，不会自动共享浏览器数据。'),
+    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '导出当前客户端的完整研究资料。换电脑、重装或重建客户端配置后，可选择备份文件预览并增量恢复。'),
     h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-      h(Button, { key: 'export', size: 'sm', disabled: busy, onClick: exportCurrent }, '导出本端完整迁移包'),
+      h(Button, { key: 'export', size: 'sm', disabled: busy, onClick: exportCurrent }, '导出完整备份'),
       h('label', { key: 'file', style: { display: 'inline-grid', gap: 4, fontSize: 12, color: C.ink } }, [
-        '选择迁移文件', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 迁移文件' }),
+        '选择备份文件', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 备份文件' }),
       ]),
     ]),
     preview ? h('div', { key: 'preview', role: 'status', style: { display: 'grid', gap: 4, fontSize: 12 } }, [
-      h('strong', { key: 'label' }, '导入预览（总数／预计新增／本端已有）'),
+      h('strong', { key: 'label' }, '恢复预览（总数／预计新增／本端已有）'),
       ...TRANSFER_SECTIONS.map(([key, label]) => h('div', { key }, `${label}：${preview[key].total}／${preview[key].add}／${preview[key].existing}${preview[key].invalid ? `（无效 ${preview[key].invalid}）` : ''}`)),
       h('div', { key: 'confirm', style: { display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 } }, [
-        h(Button, { key: 'backup', size: 'sm', disabled: busy, onClick: backupCurrent }, '先下载本端备份'),
-        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy || !backupReady, onClick: apply }, '确认增量导入'),
+        h(Button, { key: 'backup', size: 'sm', disabled: busy, onClick: backupCurrent }, '先下载恢复前备份'),
+        h(Button, { key: 'apply', size: 'sm', variant: 'primary', disabled: busy || !backupReady, onClick: apply }, '确认增量恢复'),
       ]),
     ]) : null,
     progress ? h('span', { key: 'progress', role: 'status', style: { color: C.teal } }, progress) : null,

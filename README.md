@@ -118,7 +118,7 @@ Research Kit 把这四点做成可复用的资产。
 - **回答沉淀** — 开启当前会话的「自动科研辅助」后，符合条件的新回答会提示可保存的结论和来源。选择并确认后，知识进入图谱、灵感资产及证据库，全部按待核验记录，支持回看回答摘录、按课题筛选及备份。
 - **自动多标签与主题分组** — 新沉淀的灵感资产和引用证据会按本地受控词表写入内容类型、可并存的研究主题及来源类型标签；两个库默认按首个匹配主题分组，可切回平铺列表并搜索主题标签。旧条目在列表中即时推导主题，不批量改写原有数据或人工标签；未命中的条目归入「待归类」。分类只帮助整理，不代表事实核验，标签仍可人工编辑。
 - **研究结果解释图** — 目录内置「研究结果解释图生成」工作流：把研究结果整理成 diagram IR，再由 `scripts/render-diagrams.mjs --html` **确定性**产出单文件交互 HTML（可直接分享、离线打开），`--from-files` 可从会话产出文件生成 IR 脚手架；`scripts/validate-diagrams.mjs` 提供机器可读的规则诊断并已进入 `npm run check`（仓库内不预置 IR 文件，该校验在产出 / 审阅 IR 时生效）。
-- **资产-证据互链** — 灵感资产卡可展开「关联证据」：按同项目、共同标签与自动沉淀的知识链推导候选，**勾选确认后才建立**（绝不自动建边）；证据条目反查「被引用于」哪些资产；图谱画出「资产 → 支撑证据」边（随「持久沉淀」范围收敛，端点删除自然剔除）。关联关系已随证据库 JSON 备份与完整迁移包导出，完整迁移包导入时自动跳过缺失资产或证据端点的记录。
+- **资产-证据互链** — 灵感资产卡可展开「关联证据」：按同项目、共同标签与自动沉淀的知识链推导候选，**勾选确认后才建立**（绝不自动建边）；证据条目反查「被引用于」哪些资产；图谱画出「资产 → 支撑证据」边（随「持久沉淀」范围收敛，端点删除自然剔除）。关联关系已随证据库 JSON 备份与完整备份导出，完整备份导入时自动跳过缺失资产或证据端点的记录。
 - **多种 Prompt 出口** — 写入输入框、发送到会话之外，还有「复制 Prompt」兜底：宿主动作缺失时也能把提示词带去任意会话。
 - **启动前必填校验** — 预览弹窗内字段级错误提示（红框 + 说明）；缺失必填项不会写入草稿。
 - **资源选择可管理** — 弹层底部实时显示已选资源 chip，可单个移除或清空。
@@ -150,7 +150,7 @@ dsh plugin --profile web add github:fsrmqi/dsh-research-kit#<commit-sha>
 **tarball（离线 / 审计）**
 
 ```bash
-npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.1.tgz
+npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.2.tgz
 ```
 
 > 构建产物 `ui/client.js`、`ui/catalog-data.json` 与 `ui/promptkit.js` 已提交到仓库——克隆后即可安装，无需本地构建。
@@ -240,7 +240,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.1.tgz
 
 ## 隐私与安全
 
-以 DSH Desktop App 为主使用时，旧 Web 端的本地数据不会自动共享；请使用「科研工作台 → 本次研究 → 研究资料」里的「迁移到 App」完成预览、校验和增量导入。步骤、保留范围与已知限制见 [App 迁移说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
+在 DSH Desktop 中，打开「科研工作台 → 本次研究 → 研究资料 → 备份与恢复」导出本地完整备份。换电脑、重装或重建配置后，可从同一入口预览并增量恢复。以往的迁移包也可在这里打开。详见 [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
 
 | 访问 | 用途 | 说明 |
 | --- | --- | --- |
@@ -267,9 +267,9 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.1.tgz
 
 ## 兼容性与状态
 
-当前版本 `0.3.1`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
+当前版本 `0.3.2`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、627 项回归测试（78 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。App 迁移入口、导出和预览已在真实 Desktop profile 验收，最终导入与跨 Web 迁移仍需真实 App 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、627 项回归测试（78 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
@@ -298,7 +298,7 @@ npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright 
 | [范围与边界](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT.md) | 要解决的问题、产品边界、质量与安全原则 |
 | [优化与功能说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) | 综述恢复、证据分页、文献互操作、Claim 审核与按立场证据关系 |
 | [兼容性矩阵](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/COMPATIBILITY.md) | 支持的 DSH 基线、宿主契约 seam 与 CI 看守方式 |
-| [App 迁移说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | 从 Web 本地数据迁移到 Desktop App 的步骤与边界 |
+| [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md) | 本地完整备份、恢复流程与兼容边界 |
 | [变更记录](CHANGELOG.md) | 按版本的可追溯变更与工具改名对照 |
 
 ## 参与贡献
