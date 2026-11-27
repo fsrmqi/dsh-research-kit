@@ -11,12 +11,61 @@ export function EvidenceGraphCanvas({
 }) {
   const frameRef = React.useRef(null)
   const dragRef = React.useRef(null)
+  const cameraAnimRef = React.useRef(0)
   const viewWidth = layout.width / scale
   const viewHeight = layout.height / scale
+  const renderedBoxRef = React.useRef({ x: pan.x, y: pan.y, w: viewWidth, h: viewHeight })
+
+  // 缩放、复位或迷你地图跳转时平滑推拉镜头，拖拽或再次操作时立刻中断并从当前帧接续。
+  React.useEffect(() => {
+    const svg = frameRef.current
+    const target = { x: pan.x, y: pan.y, w: viewWidth, h: viewHeight }
+    if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(cameraAnimRef.current)
+      cameraAnimRef.current = 0
+    }
+    const from = renderedBoxRef.current
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    const delta = Math.abs(target.x - from.x) + Math.abs(target.y - from.y) + Math.abs(target.w - from.w) + Math.abs(target.h - from.h)
+    if (!svg || dragRef.current || reduce || typeof requestAnimationFrame !== 'function' || delta < 0.5) {
+      renderedBoxRef.current = target
+      svg?.setAttribute('viewBox', `${target.x} ${target.y} ${target.w} ${target.h}`)
+      return undefined
+    }
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const duration = 220
+    const step = now => {
+      const elapsed = Math.max(0, (typeof performance !== 'undefined' ? now : Date.now()) - startTime)
+      const progress = Math.min(1, elapsed / duration)
+      const eased = 1 - Math.pow(1 - progress, 3.2)
+      const cur = {
+        x: from.x + (target.x - from.x) * eased,
+        y: from.y + (target.y - from.y) * eased,
+        w: from.w + (target.w - from.w) * eased,
+        h: from.h + (target.h - from.h) * eased,
+      }
+      renderedBoxRef.current = cur
+      svg.setAttribute('viewBox', `${cur.x} ${cur.y} ${cur.w} ${cur.h}`)
+      if (progress < 1) cameraAnimRef.current = requestAnimationFrame(step)
+      else cameraAnimRef.current = 0
+    }
+    cameraAnimRef.current = requestAnimationFrame(step)
+    return () => {
+      if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(cameraAnimRef.current)
+        cameraAnimRef.current = 0
+      }
+    }
+  }, [pan.x, pan.y, viewWidth, viewHeight])
 
   const onPointerDown = event => {
     if (event.button !== 0) return
-    dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan }, pending: { ...pan }, frame: 0 }
+    if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(cameraAnimRef.current)
+      cameraAnimRef.current = 0
+    }
+    const basePan = { x: renderedBoxRef.current.x, y: renderedBoxRef.current.y }
+    dragRef.current = { x: event.clientX, y: event.clientY, pan: basePan, pending: { ...basePan }, frame: 0 }
     if (frameRef.current) frameRef.current.style.cursor = 'grabbing'
     if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -30,6 +79,7 @@ export function EvidenceGraphCanvas({
     const paint = () => {
       drag.frame = 0
       const next = drag.pending
+      renderedBoxRef.current = { x: next.x, y: next.y, w: viewWidth, h: viewHeight }
       frameRef.current?.setAttribute('viewBox', `${next.x} ${next.y} ${viewWidth} ${viewHeight}`)
     }
     if (!drag.frame) {
@@ -40,7 +90,10 @@ export function EvidenceGraphCanvas({
   const onPointerUp = event => {
     const drag = dragRef.current
     if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
-    if (drag?.pending) setPan(drag.pending)
+    if (drag?.pending) {
+      renderedBoxRef.current = { x: drag.pending.x, y: drag.pending.y, w: viewWidth, h: viewHeight }
+      setPan(drag.pending)
+    }
     dragRef.current = null
     if (frameRef.current) frameRef.current.style.cursor = 'grab'
     if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {

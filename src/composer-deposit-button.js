@@ -87,7 +87,7 @@ export function ResearchDepositButton() {
         next = {
           tone: 'ok',
           text: `已沉淀：+${result.summary.addedNodes} 节点 · 证据 ${result.summary.savedEvidence} · 资产 ${result.summary.savedAssets}`,
-          detail: `消息 #${result.seq ?? '?'}${result.interrupted ? '（曾被中断，内容可能不完整）' : ''}；全部以待核验状态入库，可在「证据图谱」分区查看。`,
+          detail: `消息 #${result.seq ?? '?'}${result.interrupted ? '（曾被中断，内容可能不完整）' : ''}；全部以待核验状态入库，可在「证据星图」分区查看。`,
         }
       }
     } catch (error) {
@@ -104,6 +104,7 @@ export function ResearchDepositButton() {
     status ? h('div', {
       key: 'status',
       role: 'status',
+      className: 'rk-reveal',
       title: status.detail || status.text,
       style: {
         position: 'fixed', left: Math.max(8, position.x - 40), bottom: 'auto',
@@ -118,6 +119,8 @@ export function ResearchDepositButton() {
     h('button', {
       key: 'deposit',
       type: 'button',
+      className: 'rk-fab-btn',
+      'data-busy': status?.tone === 'busy' ? 'true' : undefined,
       'aria-label': '沉淀当前会话最近一条助手回答',
       title: '把当前会话最近一条助手回答提取入库（本地完成，待核验起步；不开自动沉淀也可用）',
       onClick: deposit,
@@ -128,10 +131,7 @@ export function ResearchDepositButton() {
         background: C.tealTint, color: C.teal, cursor: status?.tone === 'busy' ? 'wait' : 'pointer',
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: '0 6px 16px var(--pk-shadow-faint, rgba(15,40,60,.14))',
-        transition: 'transform .16s ease, box-shadow .16s ease',
       },
-      onMouseEnter: event => { event.currentTarget.style.transform = 'scale(1.06)' },
-      onMouseLeave: event => { event.currentTarget.style.transform = 'none' },
     }, h(Icon, { name: 'sparkles', size: 18 })),
   ]))
 }

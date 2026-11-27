@@ -21,11 +21,12 @@ const GLOBAL_CSS = `
   --rk-shadow-fab: 0 4px 14px rgba(17,38,60,.18);
   --rk-shadow-lg: 0 20px 50px rgba(17,38,60,.20);
   --rk-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --rk-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --rk-ease-spring: cubic-bezier(0.32, 1.28, 0.52, 1);
   --rk-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --rk-dur-fast: 120ms;
-  --rk-dur-base: 200ms;
-  --rk-dur-slow: 260ms;
+  --rk-dur-instant: 90ms;
+  --rk-dur-fast: 140ms;
+  --rk-dur-base: 210ms;
+  --rk-dur-slow: 280ms;
   --rk-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --rk-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -136,7 +137,9 @@ body[data-ds-dark-theme] {
   min-height: 26px; padding: 3px 7px; border: 0; border-radius: 6px;
   background: transparent; color: var(--rk-muted); font: 600 12px/1.35 var(--rk-font);
   cursor: pointer; white-space: nowrap;
+  transition: background var(--rk-dur-fast) var(--rk-ease-out), color var(--rk-dur-fast) var(--rk-ease-out), transform var(--rk-dur-instant) var(--rk-ease-out);
 }
+.rk-picker-tabs button:active, .rk-picker-text-action:active { transform: scale(.97) }
 .rk-picker-tabs button[aria-selected="true"], .rk-picker-done { background: var(--rk-teal-tint-deep); color: var(--rk-teal) }
 .rk-picker-tabs button:hover, .rk-picker-text-action:hover { background: var(--rk-teal-tint); color: var(--rk-teal) }
 .rk-picker-organize { min-height: 32px; border: 1px solid var(--rk-line); color: var(--rk-ink); background: var(--rk-surface-alt) }
@@ -146,7 +149,7 @@ body[data-ds-dark-theme] {
 }
 .rk-picker-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer }
 .rk-picker-switch-track { width: 28px; height: 16px; padding: 2px; box-sizing: border-box; border-radius: 999px; background: var(--rk-track); box-shadow: inset 0 0 0 1px var(--rk-line-strong); transition: background var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out) }
-.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted); transition: transform var(--rk-dur-base) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted); transition: transform var(--rk-dur-base) var(--rk-ease-spring), background var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-picker-switch:active .rk-picker-switch-track::before { transform: scaleX(1.16) }
 .rk-picker-switch input:checked + .rk-picker-switch-track { background: var(--rk-teal-strong); box-shadow: none }
 .rk-picker-switch input:checked + .rk-picker-switch-track::before { transform: translateX(12px); background: var(--rk-on-ink) }
@@ -159,8 +162,10 @@ body[data-ds-dark-theme] {
   width: 100%; min-width: 0; min-height: 45px; display: flex; align-items: center; gap: 8px; box-sizing: border-box;
   padding: 5px 9px; border: 1px solid var(--rk-line); border-radius: 8px; background: var(--rk-surface-alt);
   color: var(--rk-ink); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out), transform var(--rk-dur-instant) var(--rk-ease-out);
 }
 .rk-picker-row:hover, .rk-picker-row[data-selected] { border-color: var(--rk-teal-line-strong); background: var(--rk-teal-tint) }
+.rk-picker-row:active { transform: scale(.99) }
 .rk-picker-row:focus-visible { outline-offset: -2px }
 .rk-picker-row input { flex: none; margin: 0; accent-color: var(--rk-teal) }
 .rk-picker-row-text { flex: 1; min-width: 0 }
@@ -177,6 +182,7 @@ body[data-ds-dark-theme] {
   border: 1px solid var(--rk-teal-line); border-radius: 12px;
   background: var(--rk-surface); color: var(--rk-ink); box-shadow: var(--rk-shadow-panel);
   font: 13px/1.5 var(--rk-font);
+  animation: rk-pop var(--rk-dur-base) var(--rk-ease-out) both;
 }
 .rk-compose-reason { color: var(--rk-muted); font-size: 12px; line-height: 1.5 }
 .rk-personal-templates { display: grid; gap: 12px; padding: 24px var(--rk-gutter) 48px; color: var(--rk-ink) }
@@ -196,20 +202,26 @@ body[data-ds-dark-theme] {
   display: grid; gap: 8px; padding: 15px 16px; border-radius: 12px;
   border: 1px solid var(--rk-line); background: var(--rk-surface); color: var(--rk-ink);
   text-align: left; cursor: pointer; font-family: var(--rk-font);
-  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+  transition: transform var(--rk-dur-fast) var(--rk-ease-out), border-color var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-base) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out);
 }
 .rk-home-launch-card:hover { transform: translateY(-2px); border-color: var(--rk-teal-line-strong); box-shadow: var(--rk-shadow-card) }
+.rk-home-launch-card:active { transform: translateY(0) scale(.985); transition-duration: var(--rk-dur-instant) }
 .rk-home-launch-card--primary { border-color: var(--rk-teal-line-strong); background: linear-gradient(180deg, var(--rk-teal-tint) 0%, var(--rk-surface) 72%) }
 .rk-home-launch-head { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.rk-home-launch-head > svg { transition: transform var(--rk-dur-fast) var(--rk-ease-out), color var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-home-launch-card:hover .rk-home-launch-head > svg { transform: translateX(3px); color: var(--rk-teal) }
 .rk-home-launch-icon {
   width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
   background: var(--rk-teal-tint); color: var(--rk-teal);
+  transition: transform var(--rk-dur-fast) var(--rk-ease-out);
 }
+.rk-home-launch-card:hover .rk-home-launch-icon { transform: scale(1.04) }
 .rk-home-launch-card--primary .rk-home-launch-icon { background: var(--rk-teal); color: var(--rk-on-ink) }
 .rk-home-quiet-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   padding: 10px 14px; border-radius: 10px; background: var(--rk-surface);
   border: 1px solid var(--rk-divide); font-size: 12px; color: var(--rk-muted);
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 760px) {
   .rk-home-launch-grid { grid-template-columns: minmax(0, 1fr) }
@@ -260,15 +272,23 @@ body[data-ds-dark-theme] {
   padding: 18px 0 14px !important;
   margin-bottom: 0 !important;
 }
-/* 统一交互反馈语言：一套减速曲线、三档克制节奏、仅动合成层属性。 */
+/* 统一交互反馈语言：一套减速曲线、四档克制节奏、仅动合成层属性。 */
+.rk-page { font-variant-numeric: tabular-nums }
 .rk-btn {
   transition: transform var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
     border-color var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out),
     color var(--rk-dur-fast) var(--rk-ease-out), opacity var(--rk-dur-fast) var(--rk-ease-out);
 }
-.rk-btn:hover:not(:disabled) { transform: translateY(-1px) }
-.rk-btn:active:not(:disabled) { transform: scale(.97) }
+.rk-btn:hover:not(:disabled) { transform: translateY(-0.5px) }
+.rk-btn:active:not(:disabled) { transform: scale(.97); transition-duration: var(--rk-dur-instant) }
 .rk-btn:disabled { opacity: .48; cursor: not-allowed }
+.rk-fab-btn {
+  transition: transform var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
+    background var(--rk-dur-fast) var(--rk-ease-out), border-color var(--rk-dur-fast) var(--rk-ease-out);
+}
+.rk-fab-btn:hover { transform: scale(1.06); box-shadow: var(--rk-shadow-fab) }
+.rk-fab-btn:active { transform: scale(.95); transition-duration: var(--rk-dur-instant) }
+.rk-fab-btn[data-busy="true"] svg { animation: rk-spin 900ms linear infinite }
 .rk-control {
   transition: border-color var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
     background var(--rk-dur-fast) var(--rk-ease-out);
@@ -285,6 +305,7 @@ body[data-ds-dark-theme] {
 .rk-seg > button { position: relative; z-index: 1 }
 .rk-seg > button:hover:not([aria-selected="true"]) { color: var(--rk-ink) !important }
 .rk-star-active svg { animation: rk-star-pop 240ms var(--rk-ease-spring) both }
+.rk-spin-once svg { animation: rk-spin 420ms var(--rk-ease-out) both }
 /* 宿主的通用 select 样式可能会把控件拉满整行；分类下拉必须按分类栏的紧凑节奏布局。 */
 .rk-workflow-category-select {
   width: clamp(88px, 10vw, 116px) !important;
@@ -306,38 +327,47 @@ body[data-ds-dark-theme] {
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
 .rk-row { transition: background var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-row:hover { background: var(--rk-surface-alt) }
-.rk-home-launch-card:active { transform: translateY(0) scale(.985) }
 .rk-tabular { font-variant-numeric: tabular-nums }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--rk-teal-line-active); outline-offset: 2px }
+details[open] > :not(summary) { animation: rk-reveal var(--rk-dur-base) var(--rk-ease-out) both }
 @keyframes rk-spin { to { transform: rotate(360deg) } }
-@keyframes rk-pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
+@keyframes rk-pop { from { opacity: 0; transform: translateY(8px) scale(.975) } to { opacity: 1; transform: none } }
+@keyframes rk-toast-leave { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(6px) scale(.97) } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
-@keyframes rk-reveal { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+@keyframes rk-reveal { from { opacity: 0; transform: translateY(-4px) scale(.995) } to { opacity: 1; transform: none } }
+@keyframes rk-content-swap { from { opacity: .35; transform: translateY(3px) } to { opacity: 1; transform: none } }
 @keyframes rk-section-enter { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
-@keyframes rk-star-pop { 0% { transform: scale(.86) } 55% { transform: scale(1.18) } 100% { transform: scale(1) } }
+@keyframes rk-star-pop { 0% { transform: scale(.86) } 55% { transform: scale(1.16) } 100% { transform: scale(1) } }
+@keyframes rk-check-pop { 0% { opacity: 0; transform: scale(.72) } 65% { opacity: 1; transform: scale(1.08) } 100% { opacity: 1; transform: scale(1) } }
 @keyframes rk-shake { 0%, 100% { transform: translateX(0) } 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }
 @keyframes rk-graph-flow { to { stroke-dashoffset: -36 } }
 .rk-graph-edge { stroke-linecap: round; opacity: .72; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-graph-edge-flow { stroke: var(--rk-teal) !important; stroke-dasharray: 7 11; animation: rk-graph-flow 1.25s linear infinite }
-.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)); cursor: pointer; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)); cursor: pointer; transition: opacity var(--rk-dur-fast) var(--rk-ease-out), filter var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-graph-node:hover { filter: drop-shadow(0 4px 10px rgba(15, 23, 42, .16)) }
 .rk-graph-node rect { transition: stroke var(--rk-dur-fast) var(--rk-ease-out), stroke-width var(--rk-dur-fast) var(--rk-ease-out) }
-.rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px rgba(13,148,136,.45)) }
+.rk-graph-node:hover rect { stroke-width: 2.2px }
+.rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rk-teal) 42%, transparent)) }
 .rk-pop { animation: rk-pop var(--rk-dur-slow) var(--rk-ease-out) both }
 .rk-backdrop { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-modal-backdrop { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px) }
 .rk-fade { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
 .rk-reveal { animation: rk-reveal var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-content-swap { animation: rk-content-swap 160ms var(--rk-ease-out) both }
 .rk-section-enter { animation: rk-section-enter var(--rk-dur-base) var(--rk-ease-out) both }
-.rk-shake { animation: rk-shake 240ms var(--rk-ease-out) both }
+.rk-check-pop { animation: rk-check-pop 220ms var(--rk-ease-spring) both }
+.rk-shake { animation: rk-shake 220ms var(--rk-ease-out) both }
 .rk-toast-stack {
   position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%);
   z-index: 20030; display: grid; gap: 8px; width: min(520px, calc(100vw - 24px));
-  pointer-events: none; font-family: var(--rk-font);
+  pointer-events: none; font-family: var(--rk-font); font-variant-numeric: tabular-nums;
 }
 .rk-toast {
   pointer-events: auto; display: flex; align-items: center; gap: 10px;
   padding: 10px 12px; border: 1px solid var(--rk-line); border-radius: 10px;
   box-shadow: var(--rk-shadow-lg); font-size: 13px;
 }
+.rk-toast-leave { animation: rk-toast-leave var(--rk-dur-fast) var(--rk-ease-in) both; pointer-events: none }
 .rk-selection-bar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   padding: 10px 14px; border: 1px solid var(--rk-teal-line-strong); border-radius: 10px;
@@ -351,9 +381,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .rk-scroll::-webkit-scrollbar-thumb { background: #cdd8df; border-radius: 999px }
 .rk-scroll::-webkit-scrollbar-track { background: transparent }
 @media (prefers-reduced-motion: reduce) {
-  .rk-btn, .rk-control, .rk-card, .rk-row, .rk-home-launch-card, .rk-seg-indicator,
-  .rk-picker-switch-track, .rk-picker-switch-track::before, .rk-graph-node, .rk-graph-node rect, .rk-graph-edge,
-  .rk-pop, .rk-backdrop, .rk-fade, .rk-reveal, .rk-section-enter, .rk-shake, .rk-star-active svg, .rk-graph-edge-flow {
+  .rk-btn, .rk-fab-btn, .rk-fab-btn svg, .rk-control, .rk-card, .rk-row, .rk-home-launch-card,
+  .rk-home-launch-head > svg, .rk-home-launch-icon, .rk-seg-indicator, .rk-picker-row,
+  .rk-picker-tabs button, .rk-picker-text-action, .rk-picker-switch-track, .rk-picker-switch-track::before,
+  .rk-graph-node, .rk-graph-node rect, .rk-graph-edge, .rk-compose-suggestion > section,
+  details[open] > :not(summary),
+  .rk-pop, .rk-backdrop, .rk-fade, .rk-reveal, .rk-content-swap, .rk-section-enter,
+  .rk-toast-leave, .rk-check-pop, .rk-spin-once svg, .rk-shake, .rk-star-active svg, .rk-graph-edge-flow {
     transition: none !important; animation: none !important;
   }
 }

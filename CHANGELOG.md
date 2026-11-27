@@ -4,7 +4,17 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-> 当前版本 `0.3.12`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+> 当前版本 `0.3.13`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+
+## [0.3.13]
+
+### 改进
+
+- **全项目苹果级状态变化动效精修（统一语言、有来有去、跟手可打断）**：
+  - **统一曲线与四档节奏**：收敛全站动效语言至单一真源（`--rk-ease-out`、`--rk-ease-spring` 克制微弹、`--rk-ease-in` 干脆退场，配 `90ms / 140ms / 210ms / 280ms` 四档时长），清除首页任务卡与悬浮沉淀钮中残留的零散 `.16s ease` 与内联 hover 脚本。
+  - **出现与消失完整闭环**：`ToastHost` 补齐 155ms 平滑退场动画（`rk-toast-leave`）与勾选微弹（`rk-check-pop`），不破坏 `dismissToast` 同步契约；`Modal` 遮罩新增轻柔景深模糊（`backdrop-filter: blur(4px)`）；输入框科研建议浮条、消息沉淀浮层与悬浮沉淀状态条均补齐方向性进场动效（并修正消息提示条暗色模式硬编码白底）。
+  - **证据星图可打断镜头缓动**：点击「放大 / 缩小 / 复位 / 迷你地图跳转」时通过 `requestAnimationFrame` 按 220ms 减速曲线平滑推拉 `viewBox`；拖拽或连续缩放瞬间中断上一段动画并从当前帧无缝接续；节点悬停增柔和抬升与描边过渡，聚焦光晕改用当前语义色 `--rk-teal`。
+  - **高频切换、展开与微触感**：科研工具切换左侧资源时右侧详情主体平滑轻切（160ms `rk-content-swap`）；首页任务卡悬停时箭头轻滑 `3px`，刷新图标点击后旋转 360° 确认；输入框选择行（`.rk-picker-row`）与 Tab 按钮补齐按压回弹；原生 `<details>` 与全站表单/对比/证据关系/提示词预览抽屉统一 `rk-reveal` 展开；全页面与提示栏启用 `tabular-nums` 消除计数跳动；同步将主控制台顶栏按钮文案修正为「时空囊」。所有新增动效与镜头插值均完整尊重 `prefers-reduced-motion: reduce`。
 
 ## [0.3.12]
 

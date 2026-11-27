@@ -76,8 +76,8 @@ export function WorkbenchWorkflowForm({
         ? h(Notice, { key: 'replay-edited', tone: 'warn' }, '提示词已手动编辑，自动组装轨迹可能与当前正文不一致。恢复自动生成后可查看组装回放。')
         : h(RouteReplay, { key: 'replay', trace: composed.trace, prompt: finalPrompt })
       : null,
-    promptOpen ? h(Field, { key: 'prompt', label: '' },
-      h(Textarea, { value: finalPrompt, onChange: onEditPrompt, rows: 10, mono: true, ariaLabel: '提示词预览' })) : null,
+    promptOpen ? h('div', { key: 'prompt', className: 'rk-reveal' }, h(Field, { label: '' },
+      h(Textarea, { value: finalPrompt, onChange: onEditPrompt, rows: 10, mono: true, ariaLabel: '提示词预览' }))) : null,
     editedPrompt !== null ? h(Notice, { key: 'edited', tone: 'warn', icon: 'edit' }, [
       '当前为手动编辑版本；字段和技能变更不会自动改写正文。',
       h(Button, { key: 'restore', variant: 'quiet', size: 'sm', icon: 'undo', onClick: onRestoreGeneratedPrompt, style: { marginLeft: 4 } }, '恢复自动生成'),

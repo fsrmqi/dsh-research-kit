@@ -19,6 +19,7 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
   const [externalRunId, setExternalRunId] = React.useState('')
   const [runAction, setRunAction] = React.useState(false)
   const [runFeedback, setRunFeedback] = React.useState('')
+  const [refreshSpin, setRefreshSpin] = React.useState(0)
   const run = activeResearchRun()
   const scopedRun = run?.project === context.project ? run : null
   const activeRunId = scopedRun?.id || (run ? '' : context.activeRunId)
@@ -147,10 +148,14 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
         h(Button, { key: 'project', size: 'sm', variant: 'soft', onClick: openProjectEditor, 'aria-expanded': projectEditor !== null }, context.project ? `课题 · ${context.project}` : '研究课题'),
       ]),
       h('div', { key: 'right', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
-        h(IconButton, { key: 'refresh', name: 'refresh', size: 14, label: '刷新项目状态', onClick: refresh }),
+        h(IconButton, {
+          key: `refresh-${refreshSpin}`, name: 'refresh', size: 14, label: '刷新项目状态',
+          className: refreshSpin ? 'rk-btn rk-spin-once' : 'rk-btn',
+          onClick: () => { setRefreshSpin(v => v + 1); refresh() },
+        }),
       ]),
     ]),
-    projectEditor !== null ? h(Card, { key: 'project-panel', style: { display: 'grid', gap: 8 } }, [
+    projectEditor !== null ? h(Card, { key: 'project-panel', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
       h('form', { key: 'project', className: 'rk-compose-actions', onSubmit: event => {
         event.preventDefault()
         setResearchProject(projectEditor)

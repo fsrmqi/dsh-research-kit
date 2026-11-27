@@ -12,14 +12,14 @@ import { getToasts, subscribeToasts, dismissToast } from './lib/toast.js'
 const FONT = { fontFamily: C.font }
 
 export function Spinner({ text, size = 12 }) {
-  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 7, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, [
+  return h('span', { className: 'rk-fade', style: { display: 'inline-flex', alignItems: 'center', gap: 7, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, [
     h('span', {
       key: 'dot',
       'aria-hidden': 'true',
       style: {
         display: 'inline-block', width: size, height: size, borderRadius: '50%',
         border: `2px solid ${C.tealLine}`, borderTopColor: C.teal,
-        animation: 'rk-spin .7s linear infinite',
+        animation: 'rk-spin .75s cubic-bezier(0.4, 0, 0.2, 1) infinite',
       },
     }),
     text,
@@ -343,7 +343,7 @@ export function Modal({ title, subtitle, onClose, footer, children, width = 660,
   // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
   return bodyPortal(h('div', {
     role: 'presentation',
-    className: 'rk-backdrop',
+    className: 'rk-backdrop rk-modal-backdrop',
     onMouseDown: onClose,
     style: {
       position: 'fixed', inset: 0, zIndex: 20020, display: 'grid', placeItems: 'center',
@@ -411,28 +411,62 @@ export function Toolbar({ children, style, sticky = false, innerRef }) {
 }
 
 export function ToastHost() {
-  const [items, setItems] = React.useState(getToasts)
-  React.useEffect(() => subscribeToasts(setItems), [])
-  if (typeof document === 'undefined' || !items.length) return null
+  const [rendered, setRendered] = React.useState(() => getToasts().map(item => ({ ...item, leaving: false })))
+  const exitTimers = React.useRef(new Map())
+  React.useEffect(() => {
+    const sync = next => {
+      const nextIds = new Set(next.map(item => item.id))
+      const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+      setRendered(current => {
+        const staying = []
+        for (const row of current) {
+          if (nextIds.has(row.id)) continue
+          if (reduce) continue
+          if (!row.leaving) {
+            const id = row.id
+            const timer = setTimeout(() => {
+              exitTimers.current.delete(id)
+              setRendered(list => list.filter(entry => entry.id !== id))
+            }, 155)
+            exitTimers.current.set(id, timer)
+          }
+          staying.push({ ...row, leaving: true })
+        }
+        for (const item of next) {
+          const existingTimer = exitTimers.current.get(item.id)
+          if (existingTimer) { clearTimeout(existingTimer); exitTimers.current.delete(item.id) }
+          staying.push({ ...item, leaving: false })
+        }
+        return staying
+      })
+    }
+    const unsub = subscribeToasts(sync)
+    return () => {
+      unsub()
+      for (const timer of exitTimers.current.values()) clearTimeout(timer)
+      exitTimers.current.clear()
+    }
+  }, [])
+  if (typeof document === 'undefined' || !rendered.length) return null
   return bodyPortal(h('div', {
     className: 'rk-toast-stack',
     role: 'region',
     'aria-label': '操作反馈',
     'aria-live': 'polite',
-  }, items.map(item => {
+  }, rendered.map(item => {
     const palette = NOTICE_TONES[item.tone] || NOTICE_TONES.info
     const iconName = item.tone === 'error' || item.tone === 'warn' ? 'shield' : 'check'
     return h('div', {
       key: item.id,
       role: 'status',
-      className: 'rk-pop rk-toast',
+      className: item.leaving ? 'rk-toast rk-toast-leave' : 'rk-pop rk-toast',
       style: {
         borderColor: palette.line,
         background: C.surface,
         color: C.ink,
       },
     }, [
-      h('span', { key: 'icon', style: { color: palette.color, display: 'inline-flex', flexShrink: 0 } }, h(Icon, { name: iconName, size: 14 })),
+      h('span', { key: 'icon', className: iconName === 'check' ? 'rk-check-pop' : undefined, style: { color: palette.color, display: 'inline-flex', flexShrink: 0 } }, h(Icon, { name: iconName, size: 14 })),
       h('span', { key: 'msg', style: { flex: 1, minWidth: 0, lineHeight: 1.45 } }, item.message),
       item.onAction && item.actionLabel ? h(Button, {
         key: 'action', size: 'sm', variant: 'soft',

@@ -608,7 +608,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
             label: `${favorites.includes(selected.id) ? '取消收藏' : '收藏'}${selected.name}`,
           })],
         }),
-        h('div', { key: 'body', style: { padding: 18, display: 'grid', gap: 16 } }, [
+        h('div', { key: `body:${selected.id}`, className: 'rk-content-swap', style: { padding: 18, display: 'grid', gap: 16 } }, [
           !detailReady ? (
             detailState.id === selected.id && detailState.status === 'error'
               ? h(Notice, { key: 'detail-error', tone: 'error', icon: 'shield' }, [

@@ -334,6 +334,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     ]) : null,
     tab === 'assets' && formOpen ? h(Card, {
       key: 'form',
+      className: 'rk-reveal',
       style: { marginTop: 16, display: 'grid', gap: 12, border: `1px solid ${C.tealLine}`, background: C.surface },
     }, [
       h('strong', { key: 't', style: { fontSize: 14 } }, form.id ? `编辑「${form.title || '未命名资产'}」` : '新建研究灵感资产'),
@@ -343,7 +344,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
         h(Button, { key: 'btn', size: 'sm', variant: 'ghost', onClick: () => setFormMoreOpen(value => !value), 'aria-expanded': formMoreOpen },
           formMoreOpen ? '收起更多属性 ▴' : '更多属性（标签、课题、核验状态等） ▾'),
       ]),
-      formMoreOpen ? h('div', { key: 'more-fields', style: { display: 'grid', gap: 12 } }, [
+      formMoreOpen ? h('div', { key: 'more-fields', className: 'rk-reveal', style: { display: 'grid', gap: 12 } }, [
         h('div', { key: 'grid', className: 'rk-form-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 } }, [
           field('标签（逗号分隔）', 'tags', { placeholder: '主题:植物科学, 批次效应；主题标签可人工改写' }),
           field('课题（可选）', 'project', { placeholder: '例：肿瘤队列分析' }),
@@ -443,7 +444,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
           ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；同时解除该资产的全部证据关联', onClick: () => remove(item) }, '确认删除？')
           : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复；将同时解除该资产的全部证据关联', onClick: () => requestRemove(item) }, '删除'),
       ]) : null,
-      compareId === item.id && compareItem ? h('div', { key: 'diff', className: 'rk-diff', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
+      compareId === item.id && compareItem ? h('div', { key: 'diff', className: 'rk-diff rk-reveal', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
         h('div', { key: 'old' }, [
           h('strong', { key: 'l', style: { fontSize: 12, color: C.muted } }, `来源：${compareItem.title}`),
           h('div', { key: 'b', className: 'rk-scroll', style: { marginTop: 6, padding: 10, border: `1px solid ${C.line}`, borderRadius: 9, background: C.surfaceAlt, whiteSpace: 'pre-wrap', fontSize: 12, maxHeight: 160, overflowY: 'auto' } }, compareItem.body),
@@ -455,7 +456,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       ]) : null,
       // 入口 A（主）：关联证据。候选按项目/标签/知识链种子推导，用户勾选确认后建立——
       // 推导≠建边，绝不自动建立（全仓库「检索 → 预览 → 确认」纪律的落点）。
-      linkAssetId === item.id ? h('div', { key: 'asset-links', style: { display: 'grid', gap: 10, padding: 12, border: `1px solid ${C.tealLine}`, borderRadius: 10, background: C.surfaceAlt } }, (() => {
+      linkAssetId === item.id ? h('div', { key: 'asset-links', className: 'rk-reveal', style: { display: 'grid', gap: 10, padding: 12, border: `1px solid ${C.tealLine}`, borderRadius: 10, background: C.surfaceAlt } }, (() => {
         const current = linksForAsset(item.id)
         const candidates = candidatesForAsset(item)
         const picked = checkedCandidates[item.id] || new Set()

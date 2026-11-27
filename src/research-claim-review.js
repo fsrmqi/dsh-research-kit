@@ -40,6 +40,7 @@ export function ClaimEvidenceRelations({ claim, evidenceById }) {
   const links = new Map((claim.links || []).map(link => [link.evidenceId, link]))
   return h('section', {
     'aria-label': '当前论断的证据关系',
+    className: 'rk-reveal',
     style: { display: 'grid', gap: 8, borderTop: `1px solid ${C.line}`, paddingTop: 10 },
   }, [
     h('strong', { key: 'title' }, '当前论断的证据关系'),

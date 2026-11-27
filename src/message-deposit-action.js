@@ -203,7 +203,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   ]
   const sectionStyle = { display: 'grid', gap: 6, paddingBlock: 8, borderTop: `1px solid ${C.line}` }
   const panel = preview ? React.createElement('div', {
-    key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览',
+    key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', className: 'rk-pop',
     style: { ...position, zIndex: 2147483000, boxSizing: 'border-box', padding: '10px 12px', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))',
       overflow: 'auto', border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, background: C.surface, boxShadow: C.shadowLg, font: `12px/1.45 ${C.font}` },
   }, [
@@ -281,7 +281,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
         notice ? React.createElement('p', { key: 'deposit-notice', role: 'status' }, notice) : null,
       ]),
     ]) : null,
-  ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', background: '#fff', border: '1px solid #d0d7de', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,.15)', fontSize: 12 } }, notice) : null
+  ]) : notice ? React.createElement('span', { key: 'notice', role: 'status', className: 'rk-reveal', style: { ...position, zIndex: 2147483000, display: 'block', boxSizing: 'border-box', padding: '6px 9px', width: 'min(320px, calc(100vw - 24px))', color: C.ink, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 8, boxShadow: C.shadowLg, fontSize: 12 } }, notice) : null
   return React.createElement(React.Fragment, null, [
     React.createElement('button', {
       key: 'open', ref: anchorRef, type: 'button', onClick: open,
