@@ -186,6 +186,10 @@ body[data-ds-dark-theme] {
 .rk-research-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px }
 .rk-research-home-grid > * { align-content: start }
 .rk-home-page { box-sizing: border-box; padding: 14px var(--rk-gutter) 144px; display: grid; gap: 14px }
+.rk-sidebar-main-shell { box-sizing: border-box; width: 100%; height: 100%; min-height: 0; overflow-y: auto; background: var(--rk-canvas) }
+[data-platform="darwin"] .rk-sidebar-main-shell { padding-top: var(--dsh-frame-top-clearance, 0px) }
+.rk-sidebar-main-shell .rk-home-page { padding-bottom: 48px }
+.rk-sidebar-main-shell .rk-toast-stack { bottom: 28px }
 .rk-home-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap }
 .rk-home-launch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px }
 .rk-home-launch-card {

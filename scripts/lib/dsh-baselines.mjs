@@ -296,7 +296,7 @@ export const PLUGIN_SLOT_SOURCES = [
 
 /** 必需宿主契约及有独立降级路径的可选槽位。 */
 export function declaredSlots() {
-  const slots = new Set(['conversation.session.panel.section'])
+  const slots = new Set(['conversation.session.panel.section', 'main', 'sidebar.panellist'])
   for (const seam of HOST_SEAMS) {
     if (seam.slot) slots.add(seam.slot)
     for (const slot of seam.slots || []) slots.add(slot)

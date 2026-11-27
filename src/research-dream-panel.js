@@ -30,8 +30,10 @@ import {
   subscribeDreamStore,
   updateDreamProposalStatus,
 } from './dream-store.js'
-import { evidenceVaultStore, linkAssetToEvidence } from './lib/evidence-vault-sync.js'
+import { evidenceVaultStore, linkAssetToEvidence, subscribeEvidenceVault } from './lib/evidence-vault-sync.js'
 import { requestResearchClaims } from './lib/claim-review-client.js'
+import { planAgentEvidenceBatch } from './lib/agent-evidence-batch.js'
+import { executeAgentEvidenceAssessment } from './lib/evidence-agent-runner.js'
 import {
   DREAM_MEMORY_PATH, coverIndex, looseMemoryCards, memoryCardFromProposal, retireCoveredRecords, themeFromCards,
 } from './lib/dream-memory.js'
@@ -71,12 +73,69 @@ export function ResearchDreamPanel({
   const [mode, setMode] = React.useState(getPreferredDreamMode)
   const [autoEnabled, setAutoEnabled] = React.useState(getDreamAutoEnabled)
   const [prefsOpen, setPrefsOpen] = React.useState(false)
+  const [batchOpen, setBatchOpen] = React.useState(false)
+  const [batchEntries, setBatchEntries] = React.useState([])
+  const [includeHuman, setIncludeHuman] = React.useState(false)
+  const [batchBusy, setBatchBusy] = React.useState(false)
+  const [batchProgress, setBatchProgress] = React.useState('')
+  const [batchStats, setBatchStats] = React.useState(null)
+  const [batchRetryIds, setBatchRetryIds] = React.useState([])
+  const batchAbort = React.useRef(null)
   const [memory, setMemory] = React.useState(() => ({ schemaVersion: 1, project, cards: [], themes: [] }))
   const [running, setRunning] = React.useState(false)
   const dreamLock = React.useRef(false)
   const [feedback, setFeedback] = React.useState('')
   const [revision, setRevision] = React.useState(0)
   React.useEffect(() => subscribeDreamStore(() => setRevision(v => v + 1)), [])
+  const loadBatchScope = React.useCallback(async () => {
+    try {
+      const rows = await evidenceVaultStore().list({ project: project || undefined })
+      setBatchEntries(rows || [])
+    } catch { /* 本地证据库不可读时保持空列表 */ }
+  }, [project])
+  React.useEffect(() => {
+    if (!batchOpen) return undefined
+    loadBatchScope()
+    return subscribeEvidenceVault(loadBatchScope)
+  }, [batchOpen, loadBatchScope])
+  const batchPlan = React.useMemo(
+    () => planAgentEvidenceBatch(batchEntries, { includeHuman }),
+    [batchEntries, includeHuman],
+  )
+  const runBatchAssessment = async requestedEntries => {
+    if (batchBusy) return
+    const store = evidenceVaultStore()
+    let target = requestedEntries
+    if (!target) {
+      try { target = await store.list({ project: project || undefined }) } catch (error) { setFeedback(`读取证据失败：${error.message}`); return }
+    }
+    const controller = new AbortController()
+    batchAbort.current = controller
+    setBatchBusy(true)
+    setFeedback('')
+    try {
+      const result = await executeAgentEvidenceAssessment({
+        entries: target,
+        sessionId,
+        includeHuman,
+        store,
+        signal: controller.signal,
+        onProgress: setBatchProgress,
+        onStats: setBatchStats,
+      })
+      setBatchRetryIds(result.remainingIds || [])
+      setFeedback(result.message)
+      pushToast({ message: result.message })
+    } catch (error) {
+      setBatchRetryIds(error.remainingIds || [])
+      setFeedback(error.message)
+      pushToast({ message: error.message, tone: 'warn' })
+    } finally {
+      batchAbort.current = null
+      setBatchBusy(false)
+      setBatchProgress('')
+    }
+  }
 
   const reports = React.useMemo(() => listDreamReports(project), [project, revision])
   const latest = reports[0] || latestDreamReport(project)
@@ -416,16 +475,65 @@ export function ResearchDreamPanel({
           onClick: () => runDream({ force: true }),
         }, running ? '正在整理…' : '开始一次梦境'),
         h(Button, {
+          key: 'batch',
+          variant: batchOpen ? 'soft' : 'ghost',
+          size: 'sm',
+          'aria-expanded': batchOpen,
+          onClick: () => { setBatchOpen(open => !open); setPrefsOpen(false) },
+        }, batchBusy ? '初判中…' : '批量初判 ▾'),
+        h(Button, {
           key: 'prefs',
           variant: prefsOpen ? 'soft' : 'ghost',
           size: 'sm',
           'aria-expanded': prefsOpen,
-          onClick: () => setPrefsOpen(open => !open),
+          onClick: () => { setPrefsOpen(open => !open); setBatchOpen(false) },
         }, '偏好 ▾'),
       ]),
     ]),
+    batchOpen ? h('div', {
+      key: 'batch-panel',
+      className: 'rk-reveal',
+      style: { display: 'grid', gap: 8, padding: '10px 12px', borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` },
+    }, [
+      h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
+        h('strong', { key: 't', style: { fontSize: 13, color: C.ink } }, '证据批量初判'),
+        h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, `${project ? `课题「${project}」` : '全部课题'} · 待评 ${batchPlan.eligible.length} / 共 ${batchEntries.length} 条`),
+      ]),
+      h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
+        h(Button, {
+          key: 'run', size: 'sm', variant: 'primary',
+          disabled: batchBusy || !batchEntries.length || !sessionId,
+          onClick: () => runBatchAssessment(),
+        }, batchBusy ? (batchProgress || '判断中…') : `用 Agent 判断完整范围（${batchEntries.length}）`),
+        batchBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => batchAbort.current?.abort() }, '取消') : null,
+        batchRetryIds.length && !batchBusy ? h(Button, {
+          key: 'retry', size: 'sm', variant: 'soft',
+          onClick: async () => {
+            try { await runBatchAssessment(await evidenceVaultStore().getMany(batchRetryIds)) } catch (error) { setFeedback(error.message) }
+          },
+        }, `继续未完成（${batchRetryIds.length}）`) : null,
+        h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink, cursor: 'pointer' } }, [
+          h('input', {
+            key: 'check', type: 'checkbox', checked: includeHuman, disabled: batchBusy,
+            onChange: event => setIncludeHuman(event.target.checked),
+          }),
+          '包含人工处理过的',
+        ]),
+      ]),
+      batchBusy && batchStats ? h('div', { key: 'progress', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 10px', background: C.canvas, borderRadius: 8, fontSize: 12, color: C.muted } }, [
+        h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
+          h('strong', { key: 'phase', style: { color: C.ink } }, batchStats.phase),
+          h('span', { key: 'count' }, `已完成 ${batchStats.completed} / ${batchStats.total} · 跳过 ${batchStats.skipped} · 失败 ${batchStats.failed}`),
+        ]),
+        h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
+          h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (batchStats.completed + batchStats.skipped + batchStats.failed) / Math.max(1, batchStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
+        batchStats.last ? h('span', { key: 'last' }, `最近：${batchStats.last}`) : null,
+      ]) : null,
+      h('small', { key: 'note', style: { color: C.muted, lineHeight: 1.5 } }, '逐条写入元数据初判（与人工评估分开保存，不改变核验状态）；选中单条也可在证据库内局部初判。'),
+    ]) : null,
     prefsOpen ? h('label', {
       key: 'auto-opt',
+      className: 'rk-reveal',
       style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.muted, cursor: 'pointer', width: 'fit-content', padding: '8px 10px', borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` },
     }, [
       h('input', {

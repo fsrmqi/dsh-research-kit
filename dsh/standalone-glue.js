@@ -11,7 +11,26 @@ import { registerDepositionSessions } from '../src/knowledge-deposition.js'
 import { ResearchPluginStatusSection, ResearchKitBadge, ResearchKitDiagnosticsAction, ResearchKitOpenWorkbenchAction, ResearchKitPresetConfig, RESEARCH_KIT_CONSOLE_VIEW } from '../src/plugin-status.js'
 import { ResearchToolView, researchToolNames } from '../src/research-toolview.js'
 import { ResearchMessageDepositAction } from '../src/message-deposit-action.js'
-import { insertResearchMaterial, launchResearchSession, researchMaterialInput, returnToConversation, supportsSessionLaunch } from '../src/lib/host-navigation.js'
+import { currentMainSessionId, insertResearchMaterial, launchResearchSession, researchMaterialInput, returnToConversation, supportsSessionLaunch } from '../src/lib/host-navigation.js'
+
+function ResearchSidebarIcon({ size = 16 } = {}) {
+  return React.createElement('svg', {
+    width: size,
+    height: size,
+    viewBox: '0 0 16 16',
+    fill: 'none',
+    xmlns: 'http://www.w3.org/2000/svg',
+    'aria-hidden': 'true',
+    stroke: 'currentColor',
+    strokeWidth: '1.4',
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  }, [
+    React.createElement('path', { key: 'neck', d: 'M6 2.25h4' }),
+    React.createElement('path', { key: 'body', d: 'M6.75 2.25v3.4L3.4 11.45A1.5 1.5 0 0 0 4.7 13.7h6.6a1.5 1.5 0 0 0 1.3-2.25L9.25 5.65v-3.4' }),
+    React.createElement('path', { key: 'liquid', d: 'M4.9 10.2h6.2' }),
+  ])
+}
 
 export function researchKitApply(ctx) {
   const hostNavigation = {
@@ -31,6 +50,19 @@ export function researchKitApply(ctx) {
       ? path => insertResearchMaterial(hostNavigation, props.sessionId, path) : null
     return React.createElement(ResearchConsole, { ...props, launchSession, insertMaterialReference })
   }
+  function ResearchSidebarConsoleHost() {
+    const [activeSessionId, setActiveSessionId] = React.useState(() => currentMainSessionId(ctx.sessions))
+    React.useEffect(() => {
+      const sync = () => setActiveSessionId(currentMainSessionId(ctx.sessions))
+      sync()
+      const unsubscribe = ctx.sessions?.list?.subscribe?.(sync)
+      return () => { if (typeof unsubscribe === 'function') unsubscribe() }
+    }, [])
+    const insertMaterialReference = researchMaterialInput(hostNavigation, activeSessionId)
+      ? path => insertResearchMaterial(hostNavigation, activeSessionId, path) : null
+    return React.createElement('div', { className: 'rk-sidebar-main-shell' },
+      React.createElement(ResearchConsole, { sessionId: activeSessionId, launchSession, insertMaterialReference }))
+  }
   function ResearchComposerOverlayHost(props) {
     return React.createElement(ResearchComposerOverlay, { ...props, sessions: ctx.sessions })
   }
@@ -41,6 +73,16 @@ export function researchKitApply(ctx) {
     ResearchDraftEnhancerHost   // dsh-research-kit-draft-enhancer（prompt-enhancer-glue.js）
   ]
   const disposers = [registerResearchSlots(ctx, components)]
+  disposers.push(ctx.slots.inject('main', () => ctx.slots.register({
+    name: 'main',
+    key: RESEARCH_KIT_CONSOLE_VIEW,
+  }, ResearchSidebarConsoleHost)))
+  disposers.push(ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
+    name: 'sidebar.panellist',
+    id: RESEARCH_KIT_CONSOLE_VIEW,
+    order: 25,
+    label: () => '科研工作台',
+  }, ResearchSidebarIcon)))
   disposers.push(ctx.slots.inject('conversation.session.panel.section', () => ctx.slots.register({
     name: 'conversation.session.panel.section',
     id: 'dsh-research-kit-project', label: '科研项目', order: 90,

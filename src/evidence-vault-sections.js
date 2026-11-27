@@ -17,7 +17,6 @@ export function EvidenceVaultTopCards({
   organizerProgress, organizerLog, organizerPlan, setOrganizerPlan, applyOrganizer,
   backup, setBackup, importJson,
   quality,
-  agentBusy, agentProgress, sessionId, runAgentAssessment, agentAbort, includeHuman, setIncludeHuman, agentStats,
   citationOpen, citationBusy, setNotice, citationText, setCitationText,
   citationPreviewRows, setCitationPreviewRows, citationPicked, setCitationPicked,
   previewCitations, citationWarnings, importCitations,
@@ -137,38 +136,25 @@ export function EvidenceVaultTopCards({
         ]),
       ]) : null,
     ]),
-    hasQualityIssues ? h(Card, { key: 'quality-audit', style: { display: 'grid', gap: 6 } }, [
-      h('strong', { key: 'title', style: { fontSize: 13 } }, '数据质量提示 · 只读，不自动修改'),
-      h('small', { key: 'page-scope', style: { color: C.muted } }, '质量提示仅针对当前页；完整范围可导出检查。'),
-      h('span', { key: 'counts', style: { fontSize: 12, color: C.muted } }, `缺稳定标识符 ${quality.missingIdentifier} · 未核验 ${quality.unverified} · 标为失效／官方记录未找到 ${quality.staleOrMissing} · 疑似同源组 ${quality.duplicateGroups.length} · 关联断链 ${quality.orphanLinks.length}`),
-      quality.duplicateGroups.length ? h('span', { key: 'duplicates', style: { fontSize: 12, color: C.muted } }, `待人工复核的同源候选：${quality.duplicateGroups.slice(0, 3).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 3 ? '…' : ''}。跨课题重复可能是有意引用，不会自动合并。`) : null,
-      !quality.assetSideChecked ? h('span', { key: 'asset-limit', style: { fontSize: 11, color: C.muted } }, '当前未载入完整资产列表；断链数仅核对证据端。') : null,
-    ]) : null,
-    h(Card, { key: 'agent-batch', style: { display: 'grid', gap: 8, border: `1px solid ${C.tealLine}` } }, [
-      h('div', { key: 'title', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h('strong', { key: 'label', style: { fontSize: 13 } }, 'Agent 批量判断'),
-        h('span', { key: 'scope', style: { fontSize: 12, color: C.muted } }, project ? `范围：项目「${project}」全部证据` : '范围：全部项目证据'),
-      ]),
-      h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
-        h(Button, { key: 'run', size: 'sm', variant: 'primary', disabled: agentBusy || loading || !entries.length || !sessionId, onClick: () => runAgentAssessment() },
-          agentBusy ? agentProgress || '判断中…' : `用 Agent 判断完整范围（${counts.all}）`),
-        agentBusy ? h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
-        h('label', { key: 'include', style: { display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: C.ink } }, [
-          h('input', { key: 'check', type: 'checkbox', checked: includeHuman, disabled: agentBusy, onChange: event => setIncludeHuman(event.target.checked) }),
-          '包含人工处理过的',
-        ]),
-      ]),
-      agentBusy && agentStats ? h('div', { key: 'progress', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 10px', background: C.canvas, borderRadius: 8, fontSize: 12, color: C.muted } }, [
-        h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
-          h('strong', { key: 'phase', style: { color: C.ink } }, agentStats.phase),
-          h('span', { key: 'count' }, `已完成 ${agentStats.completed} / ${agentStats.total} · 跳过 ${agentStats.skipped} · 失败 ${agentStats.failed}`),
-        ]),
-        h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
-          h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
-        agentStats.last ? h('span', { key: 'last' }, `最近：${agentStats.last}`) : null,
-      ]) : null,
-      h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '可按全部数据或仅按已勾选数据判断；每次点击重新调用当前会话模型。项目用于科研工作区隔离，主题标签用于内容分类，二者职责不同。仅发送标题、链接、标识符、保存原因和笔记；结果与人工评估分开保存，不会自动标记为已核验。'),
-    ]),
+    hasQualityIssues ? (() => {
+      const parts = [
+        quality.missingIdentifier ? `缺标识符 ${quality.missingIdentifier}` : '',
+        quality.unverified ? `未核验 ${quality.unverified}` : '',
+        quality.staleOrMissing ? `失效／未找到 ${quality.staleOrMissing}` : '',
+        quality.duplicateGroups.length ? `疑似同源 ${quality.duplicateGroups.length}` : '',
+        quality.orphanLinks.length ? `关联断链 ${quality.orphanLinks.length}` : '',
+      ].filter(Boolean)
+      return h('div', {
+        key: 'quality-audit',
+        style: {
+          display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between',
+          padding: '7px 12px', borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}`, fontSize: 12, color: C.muted,
+        },
+      }, [
+        h('span', { key: 'counts' }, `本页体检：${parts.join(' · ')}`),
+        quality.duplicateGroups.length ? h('span', { key: 'duplicates' }, `同源候选：${quality.duplicateGroups.slice(0, 2).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 2 ? '…' : ''}`) : null,
+      ])
+    })() : null,
     citationOpen ? h(Card, { key: 'citation-import', style: { display: 'grid', gap: 8 } }, [
       h('strong', { key: 'title' }, '导入 BibTeX／RIS · 预览并选择后保存'),
       h('input', { key: 'file', type: 'file', accept: '.bib,.ris,.txt', 'aria-label': '选择引用文件', disabled: citationBusy,

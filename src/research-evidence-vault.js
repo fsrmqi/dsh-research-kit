@@ -21,9 +21,8 @@ import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { parseBibliography, serializeBibliography } from './lib/bibliography.js'
 import { synchronizeResearchClaims, synchronizeClaimScopes } from './lib/claim-review-client.js'
 import { downloadText, downloadJsonFile } from './lib/download.js'
-import {
-  evidenceAssessmentFingerprint, normalizeAgentEvidenceResult, planAgentEvidenceBatch,
-} from './lib/agent-evidence-batch.js'
+import { planAgentEvidenceBatch } from './lib/agent-evidence-batch.js'
+import { executeAgentEvidenceAssessment } from './lib/evidence-agent-runner.js'
 import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-taxonomy.js'
 import { latestResearchScreening, researchLedgerSummary } from './lib/research-ledger.js'
 import { pushToast } from './lib/toast.js'
@@ -332,7 +331,6 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
             ? [...(current.sourceCheckHistory || []), current.sourceCheck].slice(-5) : current.sourceCheckHistory || []
           const saved = await saveEvidenceEntry({ ...current, sourceCheck: result.check, sourceCheckHistory }, { onDuplicate: 'update' })
           if (!saved.fileSynced) throw new Error(`「${original.title}」的核对记录未同步到文件侧。`)
-          remainingIds.delete(result.id)
           completed++
         }
       }
@@ -605,64 +603,25 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     if (!requestedEntries) {
       try { requestedEntries = await readScope() } catch (error) { return setNotice(`⚠️ ${error.message}`) }
     }
-    const remainingIds = new Set(requestedEntries.map(row => row.id))
-    const plan = planAgentEvidenceBatch(requestedEntries, { includeHuman })
-    if (!plan.eligible.length) return setNotice('当前范围没有待 Agent 判断的证据；可勾选「包含人工处理过的」重新判断。')
-    if (!sessionId) return setNotice('⚠️ 当前会话不可用，无法调用 Agent 模型。')
     const controller = new AbortController()
     agentAbort.current = controller
     setAgentBusy(true)
-    setAgentStats({ total: plan.eligible.length, completed: 0, skipped: 0, failed: 0, batch: 0, batches: plan.batches.length, phase: '准备请求', last: '' })
-    let completed = 0
-    let skippedChanged = 0
-    let failed = 0
     try {
-      for (const batch of plan.batches) {
-        if (controller.signal.aborted) break
-        const batchNumber = plan.batches.indexOf(batch) + 1
-        setAgentProgress(`第 ${batchNumber}/${plan.batches.length} 批：请求 ${batch.length} 条`)
-        setAgentStats(current => ({ ...current, batch: batchNumber, phase: `正在请求第 ${batchNumber} 批（${batch.length} 条）`, last: '' }))
-        const response = await fetch(`/dsh-research-kit/evidence-agent-assess?session_id=${encodeURIComponent(sessionId)}`, {
-          method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ entries: batch }), signal: controller.signal,
-        })
-        const raw = await response.text()
-        let body
-        try { body = JSON.parse(raw || '{}') } catch {
-          throw new Error(`Agent 服务返回了空或无效响应（HTTP ${response.status}）。请重试；若持续出现，请检查当前会话模型路由。`)
-        }
-        if (!response.ok) throw new Error(body.next_action || body.error || `Agent 请求失败：HTTP ${response.status}`)
-        if (!body?.ok || !Array.isArray(body.assessments)) throw new Error('Agent 服务未返回完整的结构化判断。请重试。')
-        const results = normalizeAgentEvidenceResult(body, batch.map(row => row.id), { model: body.model })
-        setAgentStats(current => ({ ...current, phase: `第 ${batchNumber} 批返回，正在逐条写回` }))
-        for (const result of results) {
-          if (controller.signal.aborted) break
-          const original = batch.find(row => row.id === result.id)
-          const current = (await store.getMany([result.id]))[0]
-          if (!current || evidenceAssessmentFingerprint(current) !== evidenceAssessmentFingerprint(original)) {
-            remainingIds.delete(result.id)
-            skippedChanged++
-            setAgentStats(current => ({ ...current, skipped: current.skipped + 1, last: `${original.title}：跳过（条目已变化或删除）` }))
-            continue
-          }
-          const history = current.agentAssessment
-            ? [...(current.agentAssessmentHistory || []), current.agentAssessment].slice(-5)
-            : current.agentAssessmentHistory || []
-          const saved = await store.save({ ...current, agentAssessment: result, agentAssessmentHistory: history, updatedAt: Date.now() }, { onDuplicate: 'update' })
-          if (!await persistEvidenceEntryToFile(saved.entry)) throw new Error(`「${original.title}」的 Agent 结果仅保存在当前浏览器，文件同步失败；请重试以避免丢失。`)
-          remainingIds.delete(result.id)
-          completed++
-          setAgentStats(current => ({ ...current, completed: current.completed + 1, last: `${original.title}：已完成` }))
-          publishEvidenceVault()
-        }
-      }
-      setNotice(`${controller.signal.aborted ? '已取消；' : 'Agent 判断完成：'}更新 ${completed} 条${skippedChanged ? `，跳过运行期间变化的 ${skippedChanged} 条` : ''}${plan.skippedHuman ? `，跳过人工处理过的 ${plan.skippedHuman} 条` : ''}。结果仅基于元数据与笔记，不等于来源核验。`)
+      const result = await executeAgentEvidenceAssessment({
+        entries: requestedEntries,
+        sessionId,
+        includeHuman,
+        store,
+        signal: controller.signal,
+        onProgress: setAgentProgress,
+        onStats: setAgentStats,
+      })
+      setRetryIds(result.remainingIds || [])
+      setNotice(result.message)
     } catch (error) {
-      failed = plan.eligible.length - completed - skippedChanged
-      setAgentStats(current => ({ ...current, failed, phase: controller.signal.aborted ? '已取消' : '请求失败', last: error?.message || String(error) }))
-      setNotice(`⚠️ ${controller.signal.aborted ? '已取消' : error?.message || error}；已完成 ${completed} 条，未处理 ${failed} 条。`)
+      setRetryIds(error.remainingIds || [])
+      setNotice(`⚠️ ${error.message}`)
     } finally {
-      setRetryIds([...remainingIds])
       agentAbort.current = null
       setAgentBusy(false)
       setAgentProgress('')
@@ -721,7 +680,6 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       organizerProgress, organizerLog, organizerPlan, setOrganizerPlan, applyOrganizer,
       backup, setBackup, importJson,
       quality,
-      agentBusy, agentProgress, sessionId, runAgentAssessment, agentAbort, includeHuman, setIncludeHuman, agentStats,
       citationOpen, citationBusy, setNotice, citationText, setCitationText,
       citationPreviewRows, setCitationPreviewRows, citationPicked, setCitationPicked,
       previewCitations, citationWarnings, importCitations,
@@ -738,12 +696,21 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     selectedEntries.length ? h('div', { key: 'selection-bar', className: 'rk-selection-bar rk-fade', role: 'region', 'aria-label': '已选证据批量操作' }, [
       h('strong', { key: 'count', style: { fontSize: 12, color: C.teal } }, `已选 ${selectedEntries.length} 条`),
       h(Button, { key: 'assess-selected', size: 'sm', variant: 'soft', disabled: agentBusy || loading || !selectedEntries.length || !sessionId, onClick: () => runAgentAssessment(selectedEntries) },
-        `AI 初判（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
+        agentBusy ? (agentProgress || '初判中…') : `AI 初判（${planAgentEvidenceBatch(selectedEntries, { includeHuman }).eligible.length}/${selectedEntries.length}）`),
+      agentBusy ? h(Button, { key: 'cancel-agent', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
       h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对来源（${selectedEntries.length}）`),
       h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选（${selectedEntries.length}）`),
       h(Button, { key: 'claim', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setClaimFormOpen(value => !value) }, `建立论断（${selectedEntries.length}）`),
       h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `插入对话（${selectedEntries.length}）`),
       h(Button, { key: 'clear-sel', size: 'sm', variant: 'quiet', onClick: () => setSelectedIds([]), style: { marginLeft: 'auto' } }, '取消选择'),
+    ]) : null,
+    agentBusy && agentStats ? h('div', { key: 'agent-progress', className: 'rk-reveal', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 12px', background: C.surfaceAlt, border: `1px solid ${C.line}`, borderRadius: 9, fontSize: 12, color: C.muted } }, [
+      h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
+        h('strong', { key: 'phase', style: { color: C.ink } }, agentStats.phase),
+        h('span', { key: 'count' }, `已完成 ${agentStats.completed} / ${agentStats.total} · 跳过 ${agentStats.skipped} · 失败 ${agentStats.failed}`),
+      ]),
+      h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
+        h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
     ]) : null,
     h(EvidenceVaultActionPanels, {
       key: 'action-panels',
