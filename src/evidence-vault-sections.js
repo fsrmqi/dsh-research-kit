@@ -50,14 +50,14 @@ export function EvidenceVaultTopCards({
         h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
         h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
       ]) : null,
-      ioOpen ? h('div', { key: 'io-panel', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+      ioOpen ? h('div', { key: 'io-panel', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
         h(Button, { key: 'export', size: 'sm', variant: 'soft', icon: 'download', onClick: exportJson, disabled: !canExportBackup }, '导出备份'),
         h(Button, { key: 'import', size: 'sm', variant: 'ghost', icon: 'upload', onClick: () => setBackupOpen(value => !value) }, '恢复备份'),
         h(Button, { key: 'bibtex', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('bibtex') }, '导出 BibTeX'),
         h(Button, { key: 'ris', size: 'sm', variant: 'ghost', disabled: !counts.all, onClick: () => exportCitations('ris') }, '导出 RIS'),
         h(Button, { key: 'export-pack', size: 'sm', variant: 'ghost', icon: 'download', onClick: exportExplainPack, disabled: !filtered.length }, '导出解释图素材'),
       ]) : null,
-      manageOpen ? h('div', { key: 'manage-panel', style: { display: 'grid', gap: 10, padding: 12, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+      manageOpen ? h('div', { key: 'manage-panel', className: 'rk-reveal', style: { display: 'grid', gap: 10, padding: 12, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
         h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
           project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
           project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
@@ -164,7 +164,7 @@ export function EvidenceVaultTopCards({
           h('span', { key: 'count' }, `已完成 ${agentStats.completed} / ${agentStats.total} · 跳过 ${agentStats.skipped} · 失败 ${agentStats.failed}`),
         ]),
         h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
-          h('div', { style: { width: `${Math.min(100, ((agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total)) * 100)}%`, height: '100%', background: C.teal, transition: 'width 160ms ease' } })),
+          h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
         agentStats.last ? h('span', { key: 'last' }, `最近：${agentStats.last}`) : null,
       ]) : null,
       h('span', { key: 'warning', style: { fontSize: 12, color: C.muted, lineHeight: 1.5 } }, '可按全部数据或仅按已勾选数据判断；每次点击重新调用当前会话模型。项目用于科研工作区隔离，主题标签用于内容分类，二者职责不同。仅发送标题、链接、标识符、保存原因和笔记；结果与人工评估分开保存，不会自动标记为已核验。'),

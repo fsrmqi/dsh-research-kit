@@ -17,6 +17,7 @@ export function EvidenceGraphCanvas({
   const onPointerDown = event => {
     if (event.button !== 0) return
     dragRef.current = { x: event.clientX, y: event.clientY, pan: { ...pan }, pending: { ...pan }, frame: 0 }
+    if (frameRef.current) frameRef.current.style.cursor = 'grabbing'
     if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
   }
   const onPointerMove = event => {
@@ -41,6 +42,7 @@ export function EvidenceGraphCanvas({
     if (drag?.frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(drag.frame)
     if (drag?.pending) setPan(drag.pending)
     dragRef.current = null
+    if (frameRef.current) frameRef.current.style.cursor = 'grab'
     if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture && event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }

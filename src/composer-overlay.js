@@ -524,7 +524,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           h(Button, { key: 'skip', variant: 'ghost', size: 'sm', onClick: dismissSuggestion }, '略过'),
         ]),
         preview && suggestedText ? h('div', {
-          key: 'inline-preview', role: 'dialog', 'aria-label': '预览科研建议',
+          key: 'inline-preview', role: 'dialog', 'aria-label': '预览科研建议', className: 'rk-reveal',
           style: { display: 'grid', gap: 8, marginTop: 4, paddingTop: 8, borderTop: `1px solid ${C.line}` },
         }, [
           h('p', { key: 'description', style: { margin: 0, color: C.muted, fontSize: 12 } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),

@@ -350,7 +350,7 @@ export function ResearchConsole(props) {
     ]),
     transferOpen && promptKitLoaded ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) }) : null,
     h(ToastHost, { key: 'toast-host' }),
-    h('div', { key: 'section', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
+    h('div', { key: `section:${current.id}`, className: 'rk-section-enter', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
         view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError

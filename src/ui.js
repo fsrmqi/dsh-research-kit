@@ -84,7 +84,7 @@ export function StarButton({ active, onClick, label }) {
     title: label,
     'aria-label': label,
     'aria-pressed': active,
-    className: 'rk-btn',
+    className: `rk-btn${active ? ' rk-star-active' : ''}`,
     style: {
       width: 26, height: 26, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       border: `1px solid ${active ? C.amberLine : C.line}`, borderRadius: '50%',
@@ -125,31 +125,61 @@ export function PanelHead({ title, hint, actions, style }) {
 }
 
 export function Segmented({ value, options, onChange, ariaLabel }) {
+  const containerRef = React.useRef(null)
+  const mountedRef = React.useRef(false)
+  const [indicator, setIndicator] = React.useState(null)
+  const optionSig = options.map(o => `${o.value}:${o.label}`).join('|')
+  React.useLayoutEffect(() => {
+    const host = containerRef.current
+    if (!host || typeof window === 'undefined') return undefined
+    const measure = () => {
+      const activeBtn = host.querySelector('button[aria-selected="true"]')
+      if (!activeBtn) { setIndicator(null); return }
+      const instant = !mountedRef.current
+      mountedRef.current = true
+      setIndicator({ x: activeBtn.offsetLeft, y: activeBtn.offsetTop, w: activeBtn.offsetWidth, h: activeBtn.offsetHeight, instant })
+    }
+    measure()
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null
+    observer?.observe(host)
+    return () => observer?.disconnect()
+  }, [value, optionSig])
   return h('div', {
+    ref: containerRef,
     role: 'tablist',
     'aria-label': ariaLabel,
+    className: 'rk-seg',
     style: {
       display: 'inline-flex', gap: 3, padding: 4, flexWrap: 'wrap',
       border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: C.shadowCard,
     },
-  }, options.map(option => {
-    const active = option.value === value
-    return h('button', {
-      key: option.value,
-      type: 'button',
-      role: 'tab',
-      'aria-selected': active,
-      onClick: () => onChange(option.value),
-      className: 'rk-btn',
-      style: {
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '8px 13px', border: 0, borderRadius: 8,
-        background: active ? C.tealTintDeep : 'transparent',
-        color: active ? C.teal : C.muted,
-        cursor: 'pointer', fontSize: 13, fontWeight: active ? 750 : 600, ...FONT,
-      },
-    }, option.label)
-  }))
+  }, [
+    indicator ? h('span', {
+      key: '__indicator',
+      'aria-hidden': 'true',
+      className: 'rk-seg-indicator',
+      'data-instant': indicator.instant ? 'true' : undefined,
+      style: { width: indicator.w, height: indicator.h, transform: `translate3d(${indicator.x}px, ${indicator.y}px, 0)` },
+    }) : null,
+    ...options.map(option => {
+      const active = option.value === value
+      return h('button', {
+        key: option.value,
+        type: 'button',
+        role: 'tab',
+        'aria-selected': active,
+        onClick: () => onChange(option.value),
+        className: 'rk-btn',
+        style: {
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '8px 13px', border: 0, borderRadius: 8,
+          background: active && !indicator ? C.tealTintDeep : 'transparent',
+          color: active ? C.teal : C.muted,
+          cursor: 'pointer', fontSize: 13, fontWeight: active ? 750 : 600, ...FONT,
+        },
+      }, option.label)
+    }),
+  ])
 }
 
 export function Field({ label, hint, error, required, children, style }) {
@@ -170,7 +200,7 @@ const CONTROL_BASE = {
   background: C.surface, color: C.ink, ...FONT,
 }
 
-export function Input({ value, onChange, placeholder, ariaLabel, invalid, type = 'text', style, ...rest }) {
+export function Input({ value, onChange, placeholder, ariaLabel, invalid, type = 'text', className, style, ...rest }) {
   return h('input', {
     type,
     value,
@@ -178,18 +208,20 @@ export function Input({ value, onChange, placeholder, ariaLabel, invalid, type =
     placeholder,
     'aria-label': ariaLabel,
     'aria-invalid': invalid || undefined,
+    className: className ? `rk-control ${className}` : 'rk-control',
     style: { ...CONTROL_BASE, ...(invalid ? { borderColor: C.red } : {}), ...style },
     ...rest,
   })
 }
 
-export function Textarea({ value, onChange, placeholder, rows = 3, ariaLabel, mono = false, style, ...rest }) {
+export function Textarea({ value, onChange, placeholder, rows = 3, ariaLabel, mono = false, className, style, ...rest }) {
   return h('textarea', {
     value,
     onChange: event => onChange(event.target.value),
     placeholder,
     rows,
     'aria-label': ariaLabel,
+    className: className ? `rk-control ${className}` : 'rk-control',
     style: { ...CONTROL_BASE, lineHeight: 1.55, resize: 'vertical', ...(mono ? { fontFamily: C.fontMono, fontSize: 12 } : {}), ...style },
     ...rest,
   })
@@ -200,7 +232,7 @@ export function Select({ value, onChange, options, ariaLabel, style, className, 
     value,
     onChange: event => onChange(event.target.value),
     'aria-label': ariaLabel,
-    className,
+    className: className ? `rk-control ${className}` : 'rk-control',
     style: { ...CONTROL_BASE, cursor: 'pointer', ...style },
     ...rest,
   }, options.map(option => h('option', { key: option.value, value: option.value }, option.label)))
@@ -296,7 +328,7 @@ export function Notice({ tone = 'info', icon, children, style }) {
   const palette = NOTICE_TONES[tone] || NOTICE_TONES.info
   return h('p', {
     role: 'status',
-    className: 'rk-fade',
+    className: tone === 'error' ? 'rk-shake' : 'rk-reveal',
     style: {
       display: 'flex', gap: 8, alignItems: 'flex-start', margin: 0,
       padding: '10px 13px', borderRadius: 8, fontSize: 13, lineHeight: 1.5,
@@ -311,6 +343,7 @@ export function Modal({ title, subtitle, onClose, footer, children, width = 660,
   // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
   return bodyPortal(h('div', {
     role: 'presentation',
+    className: 'rk-backdrop',
     onMouseDown: onClose,
     style: {
       position: 'fixed', inset: 0, zIndex: 20020, display: 'grid', placeItems: 'center',

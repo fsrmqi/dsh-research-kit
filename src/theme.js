@@ -20,6 +20,12 @@ const GLOBAL_CSS = `
   --rk-shadow-panel: 0 1px 2px rgba(17,38,60,.04),0 10px 24px rgba(17,38,60,.025);
   --rk-shadow-fab: 0 4px 14px rgba(17,38,60,.18);
   --rk-shadow-lg: 0 20px 50px rgba(17,38,60,.20);
+  --rk-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --rk-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --rk-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --rk-dur-fast: 120ms;
+  --rk-dur-base: 200ms;
+  --rk-dur-slow: 260ms;
   --rk-font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --rk-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
 }
@@ -139,10 +145,12 @@ body[data-ds-dark-theme] {
   padding: 0 3px; color: var(--rk-ink); white-space: nowrap; cursor: pointer; font-size: 12px;
 }
 .rk-picker-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer }
-.rk-picker-switch-track { width: 28px; height: 16px; padding: 2px; box-sizing: border-box; border-radius: 999px; background: var(--rk-track); box-shadow: inset 0 0 0 1px var(--rk-line-strong) }
-.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted) }
+.rk-picker-switch-track { width: 28px; height: 16px; padding: 2px; box-sizing: border-box; border-radius: 999px; background: var(--rk-track); box-shadow: inset 0 0 0 1px var(--rk-line-strong); transition: background var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-picker-switch-track::before { content: ''; width: 12px; height: 12px; display: block; border-radius: 50%; background: var(--rk-muted); transition: transform var(--rk-dur-base) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-picker-switch:active .rk-picker-switch-track::before { transform: scaleX(1.16) }
 .rk-picker-switch input:checked + .rk-picker-switch-track { background: var(--rk-teal-strong); box-shadow: none }
 .rk-picker-switch input:checked + .rk-picker-switch-track::before { transform: translateX(12px); background: var(--rk-on-ink) }
+.rk-picker-switch:active input:checked + .rk-picker-switch-track::before { transform: translateX(10px) scaleX(1.16) }
 .rk-picker-switch input:focus-visible + .rk-picker-switch-track { outline: 2px solid var(--rk-teal); outline-offset: 2px }
 .rk-picker-search { position: relative; flex: 1; min-width: 0 }
 .rk-picker-filter { flex: 0 1 132px; min-width: 0; max-width: 42%; text-overflow: ellipsis }
@@ -248,11 +256,31 @@ body[data-ds-dark-theme] {
   padding: 18px 0 14px !important;
   margin-bottom: 0 !important;
 }
-/* 与增强器一致的交互反馈：按钮位移、卡片悬浮抬升、统一焦点环。 */
-.rk-btn { transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease, opacity .15s ease }
+/* 统一交互反馈语言：一套减速曲线、三档克制节奏、仅动合成层属性。 */
+.rk-btn {
+  transition: transform var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
+    border-color var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out),
+    color var(--rk-dur-fast) var(--rk-ease-out), opacity var(--rk-dur-fast) var(--rk-ease-out);
+}
 .rk-btn:hover:not(:disabled) { transform: translateY(-1px) }
-.rk-btn:active:not(:disabled) { transform: translateY(0) scale(.98) }
-.rk-btn:disabled { opacity: .5; cursor: not-allowed }
+.rk-btn:active:not(:disabled) { transform: scale(.97) }
+.rk-btn:disabled { opacity: .48; cursor: not-allowed }
+.rk-control {
+  transition: border-color var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
+    background var(--rk-dur-fast) var(--rk-ease-out);
+}
+.rk-control:focus { border-color: var(--rk-teal-line-active) !important; box-shadow: 0 0 0 3px var(--rk-teal-tint-deep) }
+/* 分段控件滑动胶囊：以实测位移平滑滑向目标选项，首次挂载无飞行。 */
+.rk-seg { position: relative; font-variant-numeric: tabular-nums }
+.rk-seg-indicator {
+  position: absolute; top: 0; left: 0; pointer-events: none; border-radius: 8px;
+  background: var(--rk-teal-tint-deep);
+  transition: transform var(--rk-dur-base) var(--rk-ease-out), width var(--rk-dur-base) var(--rk-ease-out), height var(--rk-dur-base) var(--rk-ease-out);
+}
+.rk-seg-indicator[data-instant] { transition: none }
+.rk-seg > button { position: relative; z-index: 1 }
+.rk-seg > button:hover:not([aria-selected="true"]) { color: var(--rk-ink) !important }
+.rk-star-active svg { animation: rk-star-pop 240ms var(--rk-ease-spring) both }
 /* 宿主的通用 select 样式可能会把控件拉满整行；分类下拉必须按分类栏的紧凑节奏布局。 */
 .rk-workflow-category-select {
   width: clamp(88px, 10vw, 116px) !important;
@@ -270,23 +298,34 @@ body[data-ds-dark-theme] {
   max-width: min(100%, 196px) !important;
   flex: 0 1 auto !important;
 }
-.rk-card { transition: transform .18s ease, box-shadow .18s ease }
+.rk-card { transition: transform var(--rk-dur-base) var(--rk-ease-out), box-shadow var(--rk-dur-base) var(--rk-ease-out), border-color var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
-.rk-row { transition: background .15s ease }
+.rk-row { transition: background var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-row:hover { background: var(--rk-surface-alt) }
+.rk-home-launch-card:active { transform: translateY(0) scale(.985) }
+.rk-tabular { font-variant-numeric: tabular-nums }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--rk-teal-line-active); outline-offset: 2px }
 @keyframes rk-spin { to { transform: rotate(360deg) } }
-@keyframes rk-pop { from { opacity: 0; transform: translateY(6px) scale(.985) } to { opacity: 1; transform: none } }
+@keyframes rk-pop { from { opacity: 0; transform: translateY(8px) scale(.98) } to { opacity: 1; transform: none } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rk-reveal { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+@keyframes rk-section-enter { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+@keyframes rk-star-pop { 0% { transform: scale(.86) } 55% { transform: scale(1.18) } 100% { transform: scale(1) } }
+@keyframes rk-shake { 0%, 100% { transform: translateX(0) } 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }
 @keyframes rk-graph-flow { to { stroke-dashoffset: -36 } }
-.rk-graph-edge { stroke-linecap: round; opacity: .72 }
+.rk-graph-edge { stroke-linecap: round; opacity: .72; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-graph-edge-flow { stroke: var(--rk-teal) !important; stroke-dasharray: 7 11; animation: rk-graph-flow 1.25s linear infinite }
-.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)) }
-.rk-graph-node { cursor: pointer }
+.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)); cursor: pointer; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-graph-node rect { transition: stroke var(--rk-dur-fast) var(--rk-ease-out), stroke-width var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px rgba(13,148,136,.45)) }
-.rk-pop { animation: rk-pop .18s ease both }
-.rk-fade { animation: rk-fade .16s ease both }
+.rk-pop { animation: rk-pop var(--rk-dur-slow) var(--rk-ease-out) both }
+.rk-backdrop { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-fade { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-reveal { animation: rk-reveal var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-section-enter { animation: rk-section-enter var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-shake { animation: rk-shake 240ms var(--rk-ease-out) both }
 .rk-toast-stack {
-  position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+  position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%);
   z-index: 20030; display: grid; gap: 8px; width: min(520px, calc(100vw - 24px));
   pointer-events: none; font-family: var(--rk-font);
 }
@@ -308,7 +347,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .rk-scroll::-webkit-scrollbar-thumb { background: #cdd8df; border-radius: 999px }
 .rk-scroll::-webkit-scrollbar-track { background: transparent }
 @media (prefers-reduced-motion: reduce) {
-  .rk-btn, .rk-card, .rk-pop, .rk-fade, .rk-graph-edge-flow { transition: none; animation: none }
+  .rk-btn, .rk-control, .rk-card, .rk-row, .rk-home-launch-card, .rk-seg-indicator,
+  .rk-picker-switch-track, .rk-picker-switch-track::before, .rk-graph-node, .rk-graph-node rect, .rk-graph-edge,
+  .rk-pop, .rk-backdrop, .rk-fade, .rk-reveal, .rk-section-enter, .rk-shake, .rk-star-active svg, .rk-graph-edge-flow {
+    transition: none !important; animation: none !important;
+  }
 }
 /* 窄屏单列：两栏布局与表单网格统一塌陷，避免并排挤压。 */
 @media (max-width: 880px) {

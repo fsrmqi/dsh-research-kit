@@ -4,7 +4,18 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-> 当前版本 `0.3.7`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+> 当前版本 `0.3.8`，**尚未发布到 npm**。安装方式见 [README](README.md)。
+
+## [0.3.8]
+
+### 改进
+
+- **全站统一动效系统（按状态变化重塑）**：
+  - **统一曲线与三档节奏**：在 `src/theme.js` 建立单一真源动效令牌（`--rk-ease-out` / `--rk-ease-spring` / `--rk-dur-fast 120ms` / `--rk-dur-base 200ms` / `--rk-dur-slow 260ms`），淘汰各处零散 `ease`。
+  - **分段控件滑动胶囊**：为 `Segmented` 新增实测定位的滑动背景指示器（`.rk-seg-indicator`），首次挂载无飞行、支持 `ResizeObserver` 折行自适应，全站 7 处分段切换统一拥有丝滑滑动反馈。
+  - **微交互与触感**：修复开关圆点（`.rk-picker-switch-track`）瞬移并加入按压微拉伸；收藏星标激活时增加克制微弹（`rk-star-pop`）；`Input/Textarea/Select` 增加柔和焦点环过渡；`ListRow` 与按钮按下阻尼统一为 `120ms`；数字计数启用 `tabular-nums` 防抖动。
+  - **空间与反馈层次**：一级分区切换加入 `4px` 轻柔淡入（`.rk-section-enter`）；折叠面板与原位预览统一从触发处自然展开（`.rk-reveal`）；`Modal` 遮罩补齐淡入；错误提示（`Notice tone="error"`）加入轻震反馈（`.rk-shake`）；全局 Toast 上移至 `bottom: 112px` 避让 DSH 底部输入框。
+  - **跟手与零重排**：证据图谱画布拖拽实时切换 `grabbing` 手感并为节点/连线聚焦暗退增加平滑透明度过渡；证据库批处理进度条由 `width` 过渡改为合成层 `transform: scaleX()`；所有新增动效完整纳入 `prefers-reduced-motion: reduce` 降级。
 
 ## [0.3.7]
 
