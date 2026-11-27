@@ -177,6 +177,31 @@ body[data-ds-dark-theme] {
 .rk-template-form { display: grid; gap: 10px }
 .rk-research-home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 12px }
 .rk-research-home-grid > * { align-content: start }
+.rk-home-page { box-sizing: border-box; padding: 14px var(--rk-gutter) 144px; display: grid; gap: 14px }
+.rk-home-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap }
+.rk-home-launch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px }
+.rk-home-launch-card {
+  display: grid; gap: 8px; padding: 15px 16px; border-radius: 12px;
+  border: 1px solid var(--rk-line); background: var(--rk-surface); color: var(--rk-ink);
+  text-align: left; cursor: pointer; font-family: var(--rk-font);
+  transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.rk-home-launch-card:hover { transform: translateY(-2px); border-color: var(--rk-teal-line-strong); box-shadow: var(--rk-shadow-card) }
+.rk-home-launch-card--primary { border-color: var(--rk-teal-line-strong); background: linear-gradient(180deg, var(--rk-teal-tint) 0%, var(--rk-surface) 72%) }
+.rk-home-launch-head { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.rk-home-launch-icon {
+  width: 30px; height: 30px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--rk-teal-tint); color: var(--rk-teal);
+}
+.rk-home-launch-card--primary .rk-home-launch-icon { background: var(--rk-teal); color: var(--rk-on-ink) }
+.rk-home-quiet-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 10px; background: var(--rk-surface);
+  border: 1px solid var(--rk-divide); font-size: 12px; color: var(--rk-muted);
+}
+@media (max-width: 760px) {
+  .rk-home-launch-grid { grid-template-columns: minmax(0, 1fr) }
+}
 .rk-studio-host > main {
   width: 100% !important;
   max-width: none !important;

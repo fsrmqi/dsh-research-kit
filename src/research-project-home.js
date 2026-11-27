@@ -1,6 +1,6 @@
 import React from 'react'
 import { h, C } from './theme.js'
-import { Button, Card, PageHead, Notice, Spinner, Input } from './ui.js'
+import { Button, Card, IconButton, Notice, Spinner, Input, Icon } from './ui.js'
 import { currentResearchContext, activeResearchRun, listResearchRuns, resumeResearchRun, setResearchContext, setResearchProject, subscribeResearchContext } from './research-context-store.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
 import { itemById } from './catalog.js'
@@ -131,19 +131,33 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
       setDraftFeedback(ok ? '已插入继续研究草稿。' : '草稿暂不可写入，请切回会话后重试。')
     } catch (error) { setDraftFeedback(error.message) }
   }
-  return h('div', { className: 'rk-page', style: { padding: '20px var(--rk-gutter) 48px' } }, [
-    h(PageHead, { key: 'head', title: '本次研究', lead: '查看当前任务、近期产出和待核验项。', actions: [
-      h(Button, { key: 'project', size: 'sm', variant: 'ghost', onClick: openProjectEditor, 'aria-expanded': projectEditor !== null }, context.project ? `课题 · ${context.project}` : '研究课题'),
-      h(Button, { key: 'refresh', size: 'sm', variant: 'ghost', onClick: refresh }, '刷新项目状态'),
-    ] }),
-    projectEditor !== null ? h(Card, { key: 'project-panel', style: { display: 'grid', gap: 8, marginBottom: 12 } }, [
+  const hasActivity = Boolean(
+    activeRunId || scopedRun || question || pending > 0 || (data?.counts?.all || 0) > 0
+    || outputs.length || activityOutputs.length || pendingStages.length || (data?.missing?.size || 0) > 0,
+  )
+  const launchItems = [
+    { key: 'review', label: '做文献综述', desc: '按问题检索、筛选来源并生成综述草案', icon: 'layers', primary: true, onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) },
+    { key: 'paper', label: '审阅论文', desc: '逐节核查方法、统计与论断证据链', icon: 'file', primary: false, onClick: () => onNavigate('catalog', { workflowId: 'review-paper' }) },
+    { key: 'claims', label: '验证研究结论', desc: '从回答提取论断并关联已保存证据', icon: 'shield', primary: false, onClick: () => onNavigate('vault', { tab: 'claims' }) },
+  ]
+  return h('div', { className: 'rk-page rk-home-page' }, [
+    h('header', { key: 'head', className: 'rk-home-header' }, [
+      h('div', { key: 'left', style: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' } }, [
+        h('h1', { key: 'title', style: { margin: 0, fontSize: 19, fontWeight: 700, letterSpacing: '-.01em', color: C.ink } }, '本次研究'),
+        h(Button, { key: 'project', size: 'sm', variant: 'soft', onClick: openProjectEditor, 'aria-expanded': projectEditor !== null }, context.project ? `课题 · ${context.project}` : '研究课题'),
+      ]),
+      h('div', { key: 'right', style: { display: 'flex', alignItems: 'center', gap: 6 } }, [
+        h(IconButton, { key: 'refresh', name: 'refresh', size: 14, label: '刷新项目状态', onClick: refresh }),
+      ]),
+    ]),
+    projectEditor !== null ? h(Card, { key: 'project-panel', style: { display: 'grid', gap: 8 } }, [
       h('form', { key: 'project', className: 'rk-compose-actions', onSubmit: event => {
         event.preventDefault()
         setResearchProject(projectEditor)
         setProjectEditor(null)
       } }, [
         h(Input, { key: 'name', value: projectEditor, onChange: setProjectEditor, ariaLabel: '研究课题名称', placeholder: '留空使用默认课题', maxLength: 100, style: { width: 'min(260px, 100%)' } }),
-        h(Button, { key: 'save', type: 'submit', size: 'sm' }, '切换课题'),
+        h(Button, { key: 'save', type: 'submit', size: 'sm', variant: 'primary' }, '切换课题'),
       ]),
       h('small', { key: 'hint', style: { color: C.muted } }, '按课题查看已保存的资料、证据与论断。'),
       h('details', { key: 'run' }, [
@@ -154,53 +168,72 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
         ]),
       ]),
     ]) : null,
-    runFeedback ? h(Notice, { key: 'run-feedback', tone: 'warn', style: { marginBottom: 12 } }, runFeedback) : null,
+    runFeedback ? h(Notice, { key: 'run-feedback', tone: 'warn' }, runFeedback) : null,
     error ? h(Notice, { key: 'error', tone: 'warn' }, `${error}。可刷新重试；离线数据不代表最新审核状态。`) : null,
-    h(Card, { key: 'tasks', style: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 } }, [
-      h(Button, { key: 'review', variant: 'primary', onClick: () => onNavigate('catalog', { workflowId: 'literature-review' }) }, '做文献综述'),
-      h(Button, { key: 'paper', onClick: () => onNavigate('catalog', { workflowId: 'review-paper' }) }, '审阅论文'),
-      h(Button, { key: 'claims', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '验证研究结论'),
-      h(Button, { key: 'continue', disabled: !recentRun, onClick: () => restore(recentRun.id) }, '继续上次工作流'),
-      activeRunId && supportsSafeInsert(inputActions) ? h(Button, { key: 'continue-draft', onClick: prepareContinuation }, '写入继续研究草稿') : null,
-      draftFeedback ? h('span', { key: 'draft-feedback', role: 'status' }, draftFeedback) : null,
-    ]),
-    insertMaterialReference ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
-    projectRuns.length > 1 ? h('label', { key: 'run-picker', style: { display: 'block', marginBottom: 12 } }, [
-      '恢复指定运行 ',
-      h('select', { key: 'select', value: activeRunId, onChange: event => restore(event.target.value), 'aria-label': '恢复指定运行' }, [
-        h('option', { key: 'none', value: '', disabled: true }, '选择运行'),
-        ...projectRuns.map(item => h('option', { key: item.id, value: item.id },
-          `${item.workflowName || item.workflowId || '研究运行'} · ${new Date(item.createdAt || 0).toLocaleString()} · ${item.id}`)),
+    h('div', { key: 'tasks', className: 'rk-home-launch-grid' }, launchItems.map(item => h('button', {
+      key: item.key,
+      type: 'button',
+      'aria-label': item.label,
+      className: `rk-home-launch-card${item.primary ? ' rk-home-launch-card--primary' : ''}`,
+      onClick: item.onClick,
+    }, [
+      h('div', { key: 'top', className: 'rk-home-launch-head' }, [
+        h('span', { key: 'icon', className: 'rk-home-launch-icon' }, h(Icon, { name: item.icon, size: 15 })),
+        h(Icon, { key: 'arrow', name: 'arrowRight', size: 13, style: { color: C.muted } }),
       ]),
+      h('strong', { key: 'label', style: { fontSize: 14, color: C.ink } }, item.label),
+      h('span', { key: 'desc', style: { fontSize: 12, color: C.muted, lineHeight: 1.45 } }, item.desc),
+    ]))),
+    (recentRun || (activeRunId && supportsSafeInsert(inputActions)) || draftFeedback) ? h('div', { key: 'resume-bar', className: 'rk-home-quiet-bar' }, [
+      h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+        recentRun ? h(Button, { key: 'continue', size: 'sm', variant: 'soft', icon: 'history', onClick: () => restore(recentRun.id) }, '继续上次工作流') : null,
+        activeRunId && supportsSafeInsert(inputActions) ? h(Button, { key: 'continue-draft', size: 'sm', variant: 'ghost', onClick: prepareContinuation }, '写入继续研究草稿') : null,
+        draftFeedback ? h('span', { key: 'draft-feedback', role: 'status', style: { color: C.teal } }, draftFeedback) : null,
+      ]),
+      projectRuns.length > 1 ? h('label', { key: 'run-picker', style: { display: 'inline-flex', alignItems: 'center', gap: 6 } }, [
+        '恢复指定运行',
+        h('select', { key: 'select', value: activeRunId, onChange: event => restore(event.target.value), 'aria-label': '恢复指定运行' }, [
+          h('option', { key: 'none', value: '', disabled: true }, '选择运行'),
+          ...projectRuns.map(item => h('option', { key: item.id, value: item.id },
+            `${item.workflowName || item.workflowId || '研究运行'} · ${new Date(item.createdAt || 0).toLocaleString()} · ${item.id}`)),
+        ]),
+      ]) : null,
     ]) : null,
-    !data ? h(Spinner, { key: 'loading', text: '正在读取项目进度……' }) : h('div', { key: 'content', className: 'rk-research-home-grid' }, [
+    insertMaterialReference ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
+    !data ? h(Spinner, { key: 'loading', text: '正在读取课题进度……' }) : !hasActivity ? h('div', { key: 'quiet-status', className: 'rk-home-quiet-bar' }, [
+      h('span', { key: 'summary' }, '当前课题暂无进行中的任务 · 证据 0 · 论断 0'),
+      h('div', { key: 'links', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
+        h(Button, { key: 'db', size: 'sm', variant: 'quiet', onClick: () => onNavigate('catalog', { type: 'database' }) }, '查来源'),
+        h(Button, { key: 'ev', size: 'sm', variant: 'quiet', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
+      ]),
+    ]) : h('div', { key: 'content', className: 'rk-research-home-grid' }, [
       h(Card, { key: 'progress', style: { display: 'grid', gap: 8 } }, [
-        h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究问题尚未登记'),
-        h('span', { key: 'run' }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : activeRunId ? `当前运行：${activeRunId}` : '还没有启动研究工作流'),
+        h('strong', { key: 'question' }, question ? `研究问题：${question}` : '研究进度'),
+        h('span', { key: 'run', style: { fontSize: 13 } }, scopedRun ? `当前工作流：${scopedRun.workflowName || scopedRun.workflowId} · ${HOME_RUN_LABELS[scopedRun.status] || scopedRun.status}` : activeRunId ? `当前运行：${activeRunId}` : '尚未启动工作流'),
         overview?.current_stage && overview.current_stage !== 'unknown'
-          ? h('span', { key: 'stage' }, `当前阶段：${overview.current_stage}`) : null,
+          ? h('span', { key: 'stage', style: { fontSize: 12, color: C.muted } }, `当前阶段：${overview.current_stage}`) : null,
         scopedRun && itemById(scopedRun.workflowId)?.requiresFiles ? h(Notice, { key: 'materials', tone: 'warn' }, '此工作流需要材料：请核对当前会话的 @文件 引用。') : null,
         scopedRun ? h('small', { key: 'boundary', style: { color: C.muted } }, '执行情况见运行记录和人工审批。') : null,
       ]),
       h(Card, { key: 'inbox', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, '待办收件箱'),
-        h('span', { key: 'counts' }, `待核验论断 ${pending} · 课题待核验证据 ${data.counts.unverified || 0}`),
+        h('span', { key: 'counts', style: { fontSize: 13 } }, `待核验论断 ${pending} · 课题待核验证据 ${data.counts.unverified || 0}`),
         h('div', { key: 'buttons', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
-          h(Button, { key: 'review', size: 'sm', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '审阅论断'),
-          h(Button, { key: 'evidence', size: 'sm', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
+          h(Button, { key: 'review', size: 'sm', variant: 'soft', onClick: () => onNavigate('vault', { tab: 'claims' }) }, '审阅论断'),
+          h(Button, { key: 'evidence', size: 'sm', variant: 'ghost', onClick: () => onNavigate('vault', { tab: 'evidence' }) }, '打开证据与筛选队列'),
         ]),
         data.missing.size ? h(Notice, { key: 'missing', tone: 'warn' }, `${data.missing.size} 条已关联证据在当前项目中缺失。`) : null,
-        scopedClaims.some(claim => !claim.links?.length) ? h('span', { key: 'unlinked' },
+        scopedClaims.some(claim => !claim.links?.length) ? h('span', { key: 'unlinked', style: { fontSize: 12, color: C.muted } },
           `${scopedClaims.filter(claim => !claim.links?.length).length} 条论断尚未关联证据`) : null,
         ...pendingStages.map(stage => h('div', { key: stage, className: 'rk-compose-actions' }, [
-          h('span', { key: 'label' }, `待确认阶段 · ${stage}`),
-          h(Button, { key: 'approve', size: 'sm', disabled: runAction, onClick: () => approveStage(stage), 'aria-label': `确认阶段 ${stage}` }, '确认'),
+          h('span', { key: 'label', style: { fontSize: 12 } }, `待确认阶段 · ${stage}`),
+          h(Button, { key: 'approve', size: 'sm', variant: 'primary', disabled: runAction, onClick: () => approveStage(stage), 'aria-label': `确认阶段 ${stage}` }, '确认'),
         ])),
       ]),
       h(Card, { key: 'outputs', style: { display: 'grid', gap: 8 } }, [
         h('strong', { key: 'title' }, `最近产出 · 已保存证据 ${data.counts.all}`),
-        ...activityOutputs.slice(0, 3).map(item => h('span', { key: `tool-${item.id}` }, item.summary || item.kind)),
-        ...(outputs.length ? outputs.map(output => h('span', { key: output.id }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : activityOutputs.length ? [] : [h('span', { key: 'empty', style: { color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
+        ...activityOutputs.slice(0, 3).map(item => h('span', { key: `tool-${item.id}`, style: { fontSize: 13 } }, item.summary || item.kind)),
+        ...(outputs.length ? outputs.map(output => h('span', { key: output.id, style: { fontSize: 13 } }, `${output.title} · ${output.state === 'verified-execution' ? '执行已核验' : '草稿／执行待核对'}`)) : activityOutputs.length ? [] : [h('span', { key: 'empty', style: { fontSize: 12, color: C.muted } }, '暂无已登记产出。可在证据库记录图表、报告与复现信息。')]),
       ]),
     ]),
     h(ResearchDreamPanel, {

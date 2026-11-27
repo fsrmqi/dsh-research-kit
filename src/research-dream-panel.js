@@ -528,10 +528,7 @@ export function ResearchDreamPanel({
               }, '忽略（不再提示）'),
             ]),
           ])))
-        : h('p', { key: 'empty', style: { margin: 0, fontSize: 13, color: C.muted } },
-          handledProposals.length
-            ? '收件箱里的提案都已处理。再跑一次梦境时，未处理项仍会留在这里。'
-            : '当前课题积累较少或暂无新的高信号提案；继续收集证据与论断后可再次触发梦境。'),
+        : (handledProposals.length ? h('p', { key: 'empty', style: { margin: 0, fontSize: 12, color: C.muted } }, '收件箱里的提案都已处理。再跑一次梦境时，未处理项仍会留在这里。') : null),
       handledProposals.length || reports.length > 1 ? h('details', { key: 'history' }, [
         h('summary', { key: 'sum', style: { cursor: 'pointer', fontSize: 12, color: C.muted } },
           `查看已处理提案（${handledProposals.length}）与历史梦境（${reports.length}）`),
