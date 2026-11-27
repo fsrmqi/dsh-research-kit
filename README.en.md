@@ -249,7 +249,7 @@ Plus 109 skills (`catalog/skills/`: core 43 / crop-breeding 2 / bioinformatics 1
 
 Security boundaries and vulnerability reporting: see [SECURITY.md](SECURITY.md).
 
-In DSH Desktop, open Research Workbench → This Research → Research Materials → Backup and Restore to export a complete backup. Use the same entry point to preview and restore it on a new machine or profile. Existing migration bundles remain supported. See the [local backup and restore guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md).
+In DSH Desktop, open Research Workbench → This Research → Time Capsule (时空囊) to export a complete backup. Use the same entry point to preview and restore it on a new machine or profile. Existing migration bundles remain supported. See the [local backup and restore guide](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md).
 
 ### Database queries
 

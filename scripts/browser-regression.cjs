@@ -877,7 +877,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
     db.close();
     return link;
   });
-  await page.getByRole('button',{name:'备份与恢复',exact:true}).click();
+  await page.getByRole('button',{name:'时空囊',exact:true}).click();
   const transfer=page.locator('strong').filter({hasText:/^时空囊 · 备份与恢复$/});
   await transfer.waitFor();
   const exportWait=page.waitForEvent('download');
@@ -903,7 +903,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const promptKitGate=new Promise(resolve=>{releasePromptKit=resolve;});
   await appPage.route('**/dsh-research-kit/promptkit-client',async route=>{await promptKitGate;await route.continue();});
   await appPage.goto('http://127.0.0.1:'+server.address().port);
-  await appPage.getByRole('button',{name:'备份与恢复',exact:true}).click();
+  await appPage.getByRole('button',{name:'时空囊',exact:true}).click();
   await appPage.getByText('正在准备备份与恢复……').waitFor();
   await appPage.getByRole('heading',{name:'本次研究',exact:true}).waitFor();
   releasePromptKit();
@@ -926,7 +926,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await appPage.getByRole('button',{name:'自动快照并恢复'}).click();
   await appPage.getByText(/恢复完成：/).waitFor();
   await appPage.reload();
-  await appPage.getByRole('button',{name:'备份与恢复',exact:true}).click();
+  await appPage.getByRole('button',{name:'时空囊',exact:true}).click();
   const snapshotWait=appPage.waitForEvent('download');
   await appPage.getByRole('button',{name:'下载最近恢复前快照'}).click();
   const snapshot=JSON.parse(fs.readFileSync(await (await snapshotWait).path(),'utf8'));
