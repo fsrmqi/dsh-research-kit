@@ -86,7 +86,7 @@ const PRESET_WORKFLOW_RECOMMENDATIONS = {
     workflowIds: ['patient-cohort-study', 'case-control-analysis', 'risk-prediction-model', 'diagnostic-accuracy', 'longitudinal-study'],
   },
   dataVisualization: {
-    categories: ['数据分析', '可视化'],
+    categories: ['数据分析', '可视化与图表'],
     workflowIds: ['explore-data', 'clean-data', 'analysis-plan', 'statistical-analysis', 'figure-audit'],
   },
 }
