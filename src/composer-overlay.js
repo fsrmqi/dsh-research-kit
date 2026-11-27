@@ -1,6 +1,9 @@
 import React from 'react'
 import { readSessionEvents } from './lib/session-events.js'
-import { catalog, itemById, searchCatalog, composeWorkflow, recommendedWorkflowsForResources, loadBrowserCatalog, subscribeCatalog } from './catalog.js'
+import {
+  catalog, catalogIndexMode, itemById, itemDetailReady, loadCatalogItemDetail,
+  searchCatalog, searchCatalogRemote, composeWorkflow, recommendedWorkflowsForResources, loadBrowserCatalog, subscribeCatalog,
+} from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createEvidenceStore } from './evidence-store.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
@@ -8,7 +11,7 @@ import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import { POPOVER_GAP, POPOVER_MAX_HEIGHT, overlayMaxHeight, findScrollport } from './lib/overlay-anchor.js'
 import {
-  Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Select,
+  Button, IconButton, Chip, Badge, Field, Input, Textarea, Notice, Modal, Select, Spinner,
 } from './ui.js'
 import { RESEARCH_COMPOSER_EVENT, RESEARCH_ORGANIZE_EVENT, RESEARCH_RESOURCE_SELECTION_EVENT } from './composer-launcher.js'
 import { canWriteDraft, supportsSafeInsert, writeDraftText } from './lib/input-actions.js'
@@ -34,8 +37,23 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [missing, setMissing] = React.useState([])
   const [notice, setNotice] = React.useState('')
+  const [detailVersion, setDetailVersion] = React.useState(0)
+  const [detailError, setDetailError] = React.useState('')
+  const [retryNonce, setRetryNonce] = React.useState(0)
+  const requestRef = React.useRef(0)
+  React.useEffect(() => subscribeCatalog(() => setDetailVersion(value => value + 1)), [])
+  const activeWorkflow = React.useMemo(() => itemById(workflow.id) || workflow, [workflow, detailVersion])
+  const detailReady = itemDetailReady(activeWorkflow)
+  React.useEffect(() => {
+    if (detailReady) { setDetailError(''); return undefined }
+    const requestId = ++requestRef.current
+    setDetailError('')
+    loadCatalogItemDetail(workflow.id)
+      .catch(error => { if (requestRef.current === requestId) setDetailError(error?.message || String(error)) })
+    return undefined
+  }, [workflow.id, detailReady, retryNonce])
   const resourceItems = resourceIds.map(itemById).filter(Boolean)
-  const suggestedSkills = (workflow.suggestedSkillIds || []).map(itemById).filter(Boolean)
+  const suggestedSkills = (activeWorkflow.suggestedSkillIds || []).map(itemById).filter(Boolean)
   const skillIds = unique([...resourceItems.filter(item => item.type === 'skill').map(item => item.id), ...suggestedSkills.filter(item => item.type === 'skill').map(item => item.id)])
   const databaseIds = resourceItems.filter(item => item.type === 'database').map(item => item.id)
   // 与工作台 recordUse 同一口径：使用/复制即同时记「使用历史」与「本会话工作流轨迹」，
@@ -47,16 +65,17 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     catalogStorage?.recordHistory?.({ id: workflow.id, name: workflow.name })
     evidence.recordWorkflow({ id: workflow.id, name: workflow.name, resourceIds: [...resourceIds, ...skillIds] })
   }
-  const assembled = composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: skillIds, extraDatabaseIds: databaseIds }).prompt
+  const assembled = detailReady ? composeWorkflow(activeWorkflow, values, { enforceRequired: false, extraSkillIds: skillIds, extraDatabaseIds: databaseIds }).prompt : ''
   const finalPrompt = editedPrompt ?? assembled
   const hasDraftAction = canWriteDraft(inputActions)
   const missingSet = new Set(missing)
   const update = (key, value) => setValues(current => ({ ...current, [key]: value }))
   const useWorkflow = () => {
+    if (!detailReady) return setNotice('工作流详情仍在加载中，请稍候。')
     if (!hasDraftAction) return setNotice('当前 DSH 会话尚未提供输入框操作，无法使用该工作流程。')
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法使用。')
     try {
-      composeWorkflow(workflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
+      composeWorkflow(activeWorkflow, values, { extraSkillIds: skillIds, extraDatabaseIds: databaseIds })
       if (supportsSafeInsert(inputActions)) {
         const span = inputActions.captureInsertion()
         const text = originalDraft ? `\n\n${finalPrompt}\n\n` : finalPrompt
@@ -74,7 +93,7 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     } catch (error) { setMissing([]); setNotice(error.message) }
   }
   const copyPrompt = async () => {
-    if (!String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
+    if (!detailReady || !String(finalPrompt).trim()) return setNotice('提示词为空，无需复制。')
     try {
       await navigator.clipboard.writeText(finalPrompt)
       recordUse()
@@ -83,7 +102,8 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
   }
   // 点按即校验：必填缺失时在弹窗内给出字段级错误，不依赖静默 notice。
   const validateThenUse = () => {
-    const missingFields = (workflow.placeholders || [])
+    if (!detailReady) return setNotice('工作流详情仍在加载中，请稍候。')
+    const missingFields = (activeWorkflow.placeholders || [])
       .filter(field => field.required && !String(values[field.key] || '').trim())
       .map(field => field.label)
     if (missingFields.length) {
@@ -95,28 +115,35 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     useWorkflow()
   }
   const attachedResources = [...skillIds, ...databaseIds].map(itemById).filter(Boolean)
-  const color = WORKBENCH_CATEGORY_COLORS[workflow.category] || workbenchFallbackCategoryColor
+  const color = WORKBENCH_CATEGORY_COLORS[activeWorkflow.category] || workbenchFallbackCategoryColor
   return h(Modal, {
-    title: workflow.name,
-    subtitle: workflow.description,
+    title: activeWorkflow.name,
+    subtitle: activeWorkflow.description,
     onClose,
     footer: [
-      h(Button, { key: 'copy', variant: 'quiet', icon: 'copy', onClick: copyPrompt, style: { marginRight: 'auto' } }, '复制 Prompt'),
+      h(Button, { key: 'copy', variant: 'quiet', icon: 'copy', disabled: !detailReady, onClick: copyPrompt, style: { marginRight: 'auto' } }, '复制 Prompt'),
       h(Button, { key: 'cancel', variant: 'ghost', onClick: onClose }, '取消'),
-      h(Button, { key: 'use', variant: 'primary', icon: 'check', disabled: !hasDraftAction, onClick: validateThenUse }, '使用工作流程'),
+      h(Button, { key: 'use', variant: 'primary', icon: 'check', disabled: !hasDraftAction || !detailReady, onClick: validateThenUse }, '使用工作流程'),
     ],
-  }, [
+  }, !detailReady ? [
+    detailError
+      ? h(Notice, { key: 'detail-error', tone: 'error', icon: 'shield' }, [
+        `无法加载工作流详情：${detailError}`,
+        h(Button, { key: 'retry', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: () => setRetryNonce(value => value + 1), style: { marginLeft: 8 } }, '重试加载'),
+      ])
+      : h(Spinner, { key: 'detail-loading', text: '正在加载工作流详情……' }),
+  ] : [
     h('div', { key: 'meta', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
-      h(Chip, { key: 'cat', color }, workflow.category),
-      h(Badge, { key: 'params', color: C.slate }, `${(workflow.placeholders || []).length} 个参数`),
-      workflow.requiresFiles ? h(Badge, { key: 'file', color: C.amber }, '需要材料') : null,
+      h(Chip, { key: 'cat', color }, activeWorkflow.category),
+      h(Badge, { key: 'params', color: C.slate }, `${(activeWorkflow.placeholders || []).length} 个参数`),
+      activeWorkflow.requiresFiles ? h(Badge, { key: 'file', color: C.amber }, '需要材料') : null,
     ]),
-    workflow.requiresFiles ? h(Notice, {
+    activeWorkflow.requiresFiles ? h(Notice, {
       key: 'files', tone: 'warn', icon: 'file',
-    }, workflow.limitations?.length
-      ? `需要研究材料：使用后请在 DSH 输入框用原生回形针或 @文件 引用相关文件，再发送消息。本流程边界：${workflow.limitations.join(' ')}`
+    }, activeWorkflow.limitations?.length
+      ? `需要研究材料：使用后请在 DSH 输入框用原生回形针或 @文件 引用相关文件，再发送消息。本流程边界：${activeWorkflow.limitations.join(' ')}`
       : '需要研究材料：使用后请在 DSH 输入框用原生回形针或 @文件 引用相关文件，再发送消息。') : null,
-    ...(workflow.placeholders || []).map(field => h(Field, {
+    ...(activeWorkflow.placeholders || []).map(field => h(Field, {
       key: field.key,
       label: field.label,
       required: field.required,
@@ -431,11 +458,28 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
   }, [mode, launchWorkflow])
   const selectedOnly = mode === 'resources' && resourceType === 'selected' ? resourceIds : null
   const listType = mode === 'workflows' ? 'workflow' : selectedOnly ? 'all' : resourceType
-  const rows = React.useMemo(() => mode ? searchCatalog({ query: deferredQuery, type: listType })
+  const [remoteSearch, setRemoteSearch] = React.useState({ query: '', type: '', matches: null })
+  React.useEffect(() => {
+    const trimmed = deferredQuery.trim()
+    if (!mode || !trimmed || !catalogIndexMode()) {
+      setRemoteSearch({ query: '', type: '', matches: null })
+      return undefined
+    }
+    const controller = new AbortController()
+    searchCatalogRemote({ query: trimmed, type: listType }, { signal: controller.signal })
+      .then(results => {
+        if (controller.signal.aborted) return
+        setRemoteSearch({ query: trimmed, type: listType, matches: new Map(results.map(row => [row.id, row])) })
+      })
+      .catch(() => { /* 远端正文检索失败时保留本地索引结果 */ })
+    return () => controller.abort()
+  }, [mode, deferredQuery, listType])
+  const remoteMatches = remoteSearch.query === deferredQuery.trim() && remoteSearch.type === listType ? remoteSearch.matches : null
+  const rows = React.useMemo(() => mode ? searchCatalog({ query: deferredQuery, type: listType, remoteMatches })
     .filter(item => mode !== 'resources' || item.type !== 'workflow')
     .filter(item => mode !== 'workflows' || workflowCategory === 'all' || item.category === workflowCategory)
     .filter(item => !selectedOnly || selectedOnly.includes(item.id)) : [],
-  [deferredQuery, listType, mode, workflowCategory, catalogVersion, selectedOnly])
+  [deferredQuery, listType, mode, workflowCategory, catalogVersion, selectedOnly, remoteMatches])
   const close = () => setMode(null)
   const selectWorkflow = workflow => { setLaunchWorkflow({ workflow, draft, revision, sessionId }); setMode(null) }
   const recommendedWorkflows = React.useMemo(

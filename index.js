@@ -11,7 +11,7 @@ import { claimReviewRoute } from './dsh/claim-review.js'
 import { claimAgentReviewRoute } from './dsh/claim-agent-review.js'
 import { evidenceSourceCheckRoute } from './dsh/evidence-source-check.js'
 import { agentActivityRoute } from './dsh/agent-activity.js'
-import { catalogDataRoute } from './dsh/catalog-data.js'
+import { catalogDataRoute, catalogItemRoute, catalogSearchRoute } from './dsh/catalog-data.js'
 import { archifyTemplateRoute } from './dsh/archify-template.js'
 import { promptKitClientRoute } from './dsh/promptkit-client.js'
 
@@ -85,6 +85,8 @@ function createSessionRoutes(sessions) {
 export function apply(ctx, config = Config({})) {
   const logger = ctx.logger?.('dsh-research-kit')
   ctx.effect(() => ctx.webServer.register(catalogDataRoute()), 'dsh-research-kit catalog data')
+  ctx.effect(() => ctx.webServer.register(catalogItemRoute()), 'dsh-research-kit catalog item')
+  ctx.effect(() => ctx.webServer.register(catalogSearchRoute()), 'dsh-research-kit catalog search')
   ctx.effect(() => ctx.webServer.register(archifyTemplateRoute()), 'dsh-research-kit archify template')
   ctx.effect(() => ctx.webServer.register(promptKitClientRoute()), 'dsh-research-kit promptkit client')
   ctx.effect(() => ctx.webServer.register(databaseQueryRoute({ web: ctx.web, databases: resources, logger, config })), 'dsh-research-kit database query')

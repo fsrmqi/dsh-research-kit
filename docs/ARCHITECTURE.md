@@ -461,7 +461,7 @@ DSH 加载 ui/client.js
 
 两条宿主服务都软探测（`ctx.get` 缺失即降级），且**不写进** `dsh.client.inject`：缺 `uiWorkspace` 只会让「回到会话」按钮不渲染（缺 `uiConversation.binding` 时按钮照常渲染、只跳过视图激活），都不会让插件装载失败。顺序不可交换——`openSession` 之后 `binding(id)` 才是当前代；先 binding 会因会话未激活而抛错。`activate()` 只把目标加入会话的活跃目标集，**不选中标签**（宿主会话 store 的 `s.view` 决定渲染哪个视图，跨页无公开写入口）；因此入口只承诺「切回当前会话」，详见 [COMPATIBILITY.md](COMPATIBILITY.md) §4。
 
-目录数据构建为独立的 `ui/catalog-data.json`，工作台首次挂载后经同源 `/dsh-research-kit/catalog-data` 路由加载；并发消费者共享同一个 Promise。这样主 JS 不再解析 800KB 级目录对象。更新目录后必须重新执行 `npm run build`。
+目录数据构建为轻量索引 `ui/catalog-data.json`（约 211 KB，剥离大段工作流 Prompt 与技能长文），工作台首次挂载后经同源 `/dsh-research-kit/catalog-data` 路由加载（并发消费者共享同一个 Promise）；选中或启动工作流/技能时经 `/dsh-research-kit/catalog-item?id=...` 按需拉取完整详情（强 ETag 缓存、防快速切换竞态、支持失败重试）；正文关键词检索经 `/dsh-research-kit/catalog-search?q=...` 在 Node 侧完整目录中补齐。更新目录后必须重新执行 `npm run build`。
 
 ### 3.2 启动工作流
 
@@ -774,11 +774,11 @@ type ResearchDatabase = BaseItem & {
 1. 从 `catalog/{workflows,skills,resources}/index.js` 三个聚合入口加载目录数据（分片由入口统一登记），烘焙构建期规模统计 `RESEARCH_KIT_BUILD_STATS`；
 2. 以 `dsh/standalone-glue.js` 为入口调用 `esbuild.build` 沿模块依赖图打包（虚拟插件将 `react`/`react-dom` 导向宿主 `require`，将 `catalog/*/index.js` 替换为空壳，将 `mcp/tool-registry-data.js` 替换为 `mcp/tool-registry-projection.js` 的浏览器投影）；
 3. 生成以 `dsh-research-kit` 为 ModuleLoader ID 的 `ui/client.js`；
-4. 生成 `ui/catalog-data.json`，目录不再内联进主 JS；Node half 通过同源路由提供强 ETag 与 `Cache-Control: no-cache`，版本变化立即重验证、未变化返回 304；
+4. 生成轻量索引 `ui/catalog-data.json`（由 `projectCatalogIndex()` 投影，约 211 KB），目录不再内联进主 JS；Node half 通过 `/dsh-research-kit/catalog-data` 与 `/dsh-research-kit/catalog-item` 提供强 ETag + `Cache-Control: no-cache`（304 复用），并通过 `/dsh-research-kit/catalog-search` 提供完整目录正文检索；
 5. 将 SHA 锁定的 PromptKit 快照改写为独立 `ui/promptkit.js`，由同源脚本路由按需加载，所有消费者共享单例 Promise；
 6. archify viewer 模板不进入主包，只在用户悬停、聚焦或点击「弹出回放窗口」后从 `/dsh-research-kit/archify-template` 预取并复用。
 
-目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、`ui/catalog-data.json` 与聚合入口逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
+目录数据自模块化拆分后受「分片 ↔ 入口 ↔ 产物」三向断言守护：`scripts/lib/catalog-entries.mjs` 提供 fs 直读分片与 ESM 加载入口两条独立路径，`validate-catalog.mjs` 与测试断言分片登记完整（目录中的每个 `*.json` 都被对应 `index.js` 引用）、分片条目总数等于聚合数组长度且逐条一致、`ui/catalog-data.json` 与 `projectCatalogIndex()` 投影结果逐条相等。新增分片忘记登记会在 `npm run check` 直接失败。
 
 因此**任何 `catalog/`、`src/`、`dsh/` 或构建脚本的改动**都必须重新构建并提交生成产物：
 

@@ -1,7 +1,7 @@
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
 import { Page, Segmented, Spinner, Notice, Button, Input, Textarea, Card } from './ui.js'
-import { catalogReady, composeWorkflow, loadBrowserCatalog, searchCatalog, subscribeCatalog } from './catalog.js'
+import { catalogIndexMode, catalogReady, composeWorkflow, itemDetailReady, loadBrowserCatalog, loadCatalogItemDetail, searchCatalog, searchCatalogRemote, subscribeCatalog } from './catalog.js'
 import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
 import { ensureResearchProviders, ResearchPromptStudioHost, researchMethodProvider, researchAssetProvider } from '../dsh/prompt-studio-glue.js'
@@ -62,8 +62,28 @@ function ResearchPersonalTemplates({ inputActions }) {
   const [selectedHistory, setSelectedHistory] = React.useState('')
   const [copyOpen, setCopyOpen] = React.useState(false)
   const [sourceQuery, setSourceQuery] = React.useState('')
+  const deferredSourceQuery = React.useDeferredValue(sourceQuery)
+  const [remoteSearch, setRemoteSearch] = React.useState({ query: '', matches: null })
   const [builtinMethods, setBuiltinMethods] = React.useState([])
   const [notice, setNotice] = React.useState('')
+  const copyRequestRef = React.useRef(0)
+  const invalidatePendingCopy = () => { copyRequestRef.current += 1 }
+  React.useEffect(() => () => { copyRequestRef.current += 1 }, [])
+  React.useEffect(() => {
+    const trimmed = deferredSourceQuery.trim()
+    if (!copyOpen || !trimmed || !catalogIndexMode()) {
+      setRemoteSearch({ query: '', matches: null })
+      return undefined
+    }
+    const controller = new AbortController()
+    searchCatalogRemote({ query: trimmed, type: 'workflow' }, { signal: controller.signal })
+      .then(results => {
+        if (controller.signal.aborted) return
+        setRemoteSearch({ query: trimmed, matches: new Map(results.map(row => [row.id, row])) })
+      })
+      .catch(() => { /* 远端正文检索失败时保留本地索引结果 */ })
+    return () => controller.abort()
+  }, [copyOpen, deferredSourceQuery])
   const reload = async () => {
     const backup = JSON.parse(await provider.exportPrivateMethods())
     setItems(backup.methods)
@@ -109,10 +129,12 @@ function ResearchPersonalTemplates({ inputActions }) {
     if (!copyOpen) provider.list().then(methods => setBuiltinMethods(methods.filter(item => item.source !== 'private')))
       .catch(error => setNotice(error.message))
   }
-  const query = sourceQuery.trim().toLowerCase()
+  const query = deferredSourceQuery.trim().toLowerCase()
+  const remoteMatches = remoteSearch.query === deferredSourceQuery.trim() ? remoteSearch.matches : null
   const sourceMethods = query ? builtinMethods.filter(item => `${item.title} ${item.purpose}`.toLowerCase().includes(query)).slice(0, 4) : []
-  const sourceWorkflows = query ? searchCatalog({ type: 'workflow', query }).slice(0, 4) : []
+  const sourceWorkflows = query ? searchCatalog({ type: 'workflow', query, remoteMatches }).slice(0, 4) : []
   const newDraft = (category, item) => {
+    invalidatePendingCopy()
     setNotice('')
     setCopyOpen(false)
     setDraft({
@@ -120,6 +142,19 @@ function ResearchPersonalTemplates({ inputActions }) {
       title: item ? `${item.title}（副本）` : '',
       prompt: item?.prompt || '',
     })
+  }
+  const copyWorkflow = async item => {
+    const requestId = ++copyRequestRef.current
+    try {
+      const full = itemDetailReady(item) ? item : await loadCatalogItemDetail(item.id)
+      if (copyRequestRef.current !== requestId) return
+      newDraft('我的工作流', {
+        title: full.name, purpose: `复制自目录流程 · ${full.name}`,
+        prompt: composeWorkflow(full, {}, { enforceRequired: false, extraSkillIds: full.suggestedSkillIds, extraDatabaseIds: full.suggestedDatabaseIds }).prompt,
+      })
+    } catch (error) {
+      if (copyRequestRef.current === requestId) setNotice(error?.message || String(error))
+    }
   }
   return h('section', { className: 'rk-personal-templates' }, [
     h('div', { key: 'head', className: 'rk-personal-head' }, [
@@ -137,10 +172,7 @@ function ResearchPersonalTemplates({ inputActions }) {
       h(Input, { key: 'q', value: sourceQuery, onChange: setSourceQuery, ariaLabel: '搜索可复制的模板', placeholder: '搜索内置流程或方法' }),
       ...sourceWorkflows.map(item => h(Button, {
         key: `workflow-${item.id}`, size: 'sm', variant: 'ghost',
-        onClick: () => newDraft('我的工作流', {
-          title: item.name, purpose: `复制自目录流程 · ${item.name}`,
-          prompt: composeWorkflow(item, {}, { enforceRequired: false, extraSkillIds: item.suggestedSkillIds, extraDatabaseIds: item.suggestedDatabaseIds }).prompt,
-        }),
+        onClick: () => { void copyWorkflow(item) },
       }, `复制流程 · ${item.name}`)),
       ...sourceMethods.map(item => h(Button, {
         key: `method-${item.id}`, size: 'sm', variant: 'ghost',
@@ -153,7 +185,7 @@ function ResearchPersonalTemplates({ inputActions }) {
       h(Textarea, { key: 'body', value: draft.prompt, ariaLabel: '模板内容', placeholder: '填写要交给 Agent 的提示词或研究步骤', rows: 8, required: true, onChange: prompt => setDraft({ ...draft, prompt }) }),
       h('div', { key: 'actions', className: 'rk-compose-actions' }, [
         h(Button, { key: 'save', type: 'submit', variant: 'primary', disabled: busy || !draft.title.trim() || !draft.prompt.trim() }, '保存模板'),
-        h(Button, { key: 'cancel', variant: 'ghost', onClick: () => setDraft(null) }, '取消'),
+        h(Button, { key: 'cancel', variant: 'ghost', onClick: () => { invalidatePendingCopy(); setDraft(null) } }, '取消'),
       ]),
     ])) : null,
     notice ? h(Notice, { key: 'notice' }, notice) : null,
@@ -165,7 +197,7 @@ function ResearchPersonalTemplates({ inputActions }) {
           item.purpose?.startsWith('复制自目录') ? h('div', { key: 'source', className: 'rk-compose-reason' }, item.purpose) : null,
         ]),
         h('div', { key: 'actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'edit', size: 'sm', onClick: () => { setNotice(''); setDraft({ ...item }) } }, '查看或编辑'),
+          h(Button, { key: 'edit', size: 'sm', onClick: () => { invalidatePendingCopy(); setNotice(''); setDraft({ ...item }) } }, '查看或编辑'),
           h(Button, { key: 'copy', size: 'sm', variant: 'ghost', onClick: () => newDraft(item.category, item) }, '复制为新模板'),
           h(Button, { key: 'history', size: 'sm', variant: 'ghost', 'aria-expanded': selectedHistory === item.id, onClick: () => setSelectedHistory(current => current === item.id ? '' : item.id) }, '版本记录'),
           h(Button, { key: 'use', size: 'sm', variant: 'primary', onClick: () => use(item) }, '插入草稿'),
@@ -175,7 +207,7 @@ function ResearchPersonalTemplates({ inputActions }) {
         h('small', { key: 'note', style: { color: C.muted } }, '最多保留 10 条本地历史。载入后可在编辑区查看，保存后成为新版本。'),
         ...readResearchTemplateHistory(item.id).map((version, index) => h(Button, {
           key: `${version.at}-${index}`, variant: 'ghost', size: 'sm',
-          onClick: () => { setNotice('已载入历史版本，可在编辑区查看。'); setDraft({ ...item, title: version.title, prompt: version.prompt }) },
+          onClick: () => { invalidatePendingCopy(); setNotice('已载入历史版本，可在编辑区查看。'); setDraft({ ...item, title: version.title, prompt: version.prompt }) },
         }, `查看 ${new Date(version.at).toLocaleString()} · ${version.title}`)),
       ]) : null,
     ])),

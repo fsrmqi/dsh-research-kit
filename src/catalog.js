@@ -6,16 +6,20 @@ import { resources, databaseMetadataConfig } from '../catalog/resources/index.js
 // 数据库的研究用途、访问方式与引用规范。原始目录仍保留上游类别；这里提供面向
 // 研究者的六个入口组，避免把遗传、临床、化学等都笼统归入“数据分析”。
 export const CATALOG_DATA_PATH = '/dsh-research-kit/catalog-data'
+export const CATALOG_ITEM_PATH = '/dsh-research-kit/catalog-item'
+export const CATALOG_SEARCH_PATH = '/dsh-research-kit/catalog-search'
 
 let workflowEntries = workflows
 let skillEntries = skills
 let resourceEntries = resources
 let databaseConfig = databaseMetadataConfig
+let catalogMode = 'full'
 let DATABASE_GROUPS = databaseConfig.groups
 let RESTRICTED_DATABASE_ACCESS = new Map(Object.entries(databaseConfig.accessOverrides))
 let catalogIndex = new Map()
 let catalogSearchIndex = new Map()
 let catalogLoadPromise = null
+const detailLoadPromises = new Map()
 const catalogListeners = new Set()
 
 const WORKFLOW_RECOMMENDATIONS = {
@@ -86,9 +90,24 @@ export function catalogReady() {
   return catalog.length > 0
 }
 
+export function catalogIndexMode() {
+  return catalogMode === 'index'
+}
+
+export function itemDetailReady(item) {
+  if (!item) return false
+  if (item.type === 'workflow') return typeof item.prompt === 'string' && item.prompt.length > 0
+  if (item.type === 'skill') return typeof item.guidance === 'string' && item.guidance.length > 0
+  return true
+}
+
 export function subscribeCatalog(listener) {
   catalogListeners.add(listener)
   return () => catalogListeners.delete(listener)
+}
+
+function notifyCatalogListeners() {
+  for (const listener of catalogListeners) { try { listener(catalog) } catch { /* 单个监听失败不影响目录就绪 */ } }
 }
 
 export function applyCatalogData(data = {}) {
@@ -99,12 +118,29 @@ export function applyCatalogData(data = {}) {
   skillEntries = data.skills
   resourceEntries = data.resources
   databaseConfig = data.databaseMetadataConfig || { groups: [], accessOverrides: {} }
+  catalogMode = data.mode === 'index' ? 'index' : 'full'
+  detailLoadPromises.clear()
   rebuildCatalog()
-  for (const listener of catalogListeners) { try { listener(catalog) } catch { /* 单个监听失败不影响目录就绪 */ } }
+  notifyCatalogListeners()
   return catalog
 }
 
-// 源码/Node 入口直接使用静态目录；浏览器轻量产物以空数组启动，首次挂载时才拉取 JSON。
+export function mergeCatalogItemDetail(detail) {
+  if (!detail?.id || !detail?.type) return null
+  const replace = list => {
+    const index = list.findIndex(entry => entry.id === detail.id)
+    return index >= 0 ? list.map((entry, at) => (at === index ? detail : entry)) : [...list, detail]
+  }
+  if (detail.type === 'workflow') workflowEntries = replace(workflowEntries)
+  else if (detail.type === 'skill') skillEntries = replace(skillEntries)
+  else if (detail.type === 'database') resourceEntries = replace(resourceEntries)
+  else return null
+  rebuildCatalog()
+  notifyCatalogListeners()
+  return catalogIndex.get(detail.id) || null
+}
+
+// 源码/Node 入口直接使用静态目录；浏览器轻量产物以空数组启动，首次挂载时才拉取轻量索引 JSON。
 // 同一个 Promise 被所有视图复用，避免控制台、输入框浮层和增强器并发重复请求。
 export function loadBrowserCatalog(fetcher = globalThis.fetch) {
   if (catalogReady()) return Promise.resolve(catalog)
@@ -118,6 +154,43 @@ export function loadBrowserCatalog(fetcher = globalThis.fetch) {
     .then(payload => applyCatalogData(payload?.data || payload))
     .catch(error => { catalogLoadPromise = null; throw error })
   return catalogLoadPromise
+}
+
+// 按需拉取单条完整目录详情（工作流 Prompt/placeholders、技能 guidance/checklist）；
+// 同 id 并发请求共享一个 Promise，失败后清空占位以支持重试。
+export function loadCatalogItemDetail(id, fetcher = globalThis.fetch) {
+  const key = String(id || '').trim()
+  if (!key) return Promise.resolve(null)
+  const existing = catalogIndex.get(key)
+  if (existing && itemDetailReady(existing)) return Promise.resolve(existing)
+  if (detailLoadPromises.has(key)) return detailLoadPromises.get(key)
+  if (typeof fetcher !== 'function') return Promise.reject(new Error('当前环境无法加载资源详情。'))
+  const promise = fetcher(`${CATALOG_ITEM_PATH}?id=${encodeURIComponent(key)}`, { headers: { accept: 'application/json' } })
+    .then(response => {
+      if (!response.ok) throw new Error(`资源详情加载失败（HTTP ${response.status}）`)
+      return response.json()
+    })
+    .then(payload => {
+      const item = payload?.item || payload?.data
+      if (!item?.id) throw new Error('资源详情格式无效。')
+      return mergeCatalogItemDetail(item)
+    })
+    .finally(() => { detailLoadPromises.delete(key) })
+  detailLoadPromises.set(key, promise)
+  return promise
+}
+
+// Node 侧完整目录全文检索：在浏览器仅持有轻量索引时补齐 Prompt / 技能正文 / 示例检索命中。
+export function searchCatalogRemote({ query = '', type = 'all' } = {}, { fetcher = globalThis.fetch, signal } = {}) {
+  const normalized = String(query || '').trim()
+  if (!normalized || typeof fetcher !== 'function') return Promise.resolve([])
+  const url = `${CATALOG_SEARCH_PATH}?q=${encodeURIComponent(normalized)}&type=${encodeURIComponent(type || 'all')}`
+  return fetcher(url, { headers: { accept: 'application/json' }, signal })
+    .then(response => {
+      if (!response.ok) throw new Error(`全文检索失败（HTTP ${response.status}）`)
+      return response.json()
+    })
+    .then(payload => (Array.isArray(payload?.results) ? payload.results : []))
 }
 
 const CATALOG_SYNONYMS = [
@@ -141,11 +214,16 @@ export function catalogMatch(item, query = '') {
   return best
 }
 
-export function searchCatalog({ query = '', type = 'all' } = {}) {
+export function searchCatalog({ query = '', type = 'all', remoteMatches = null } = {}) {
   const normalized = String(query).trim().toLowerCase()
   const rows = catalog.filter(item => type === 'all' || item.type === type)
   if (!normalized) return rows
-  return rows.map((item, order) => ({ item, order, match: catalogMatch(item, normalized) }))
+  return rows.map((item, order) => {
+    const local = catalogMatch(item, normalized)
+    const remote = remoteMatches?.get?.(item.id)
+    const match = remote && remote.score > local.score ? remote : local
+    return { item, order, match }
+  })
     .filter(row => row.match.score > 0)
     .sort((a, b) => b.match.score - a.match.score || a.order - b.order)
     .map(row => row.item)

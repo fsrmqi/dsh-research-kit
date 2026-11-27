@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { catalog, composeWorkflow, searchCatalog, itemById, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources } from '../src/catalog.js'
+import { catalog, composeWorkflow, searchCatalog, itemById, itemDetailReady, loadCatalogItemDetail, applyCatalogData, selectedCatalogItem, databaseMetadata, recommendedWorkflowsForResources } from '../src/catalog.js'
 import { validateCatalogItems, readDirectQueryIds, loadCatalogFromDisk, compareShardsWithEntries } from '../scripts/validate-catalog-lib.mjs'
-import { loadCatalogEntries, readShards } from '../scripts/lib/catalog-entries.mjs'
+import { loadCatalogEntries, projectCatalogIndex, readShards } from '../scripts/lib/catalog-entries.mjs'
 
 test('目录包含三类科研资源', () => {
   assert.ok(catalog.some(item => item.type === 'workflow'))
@@ -161,14 +161,37 @@ test('目录分片与聚合入口一致（防止只改产物不改源）', async
 })
 
 test('目录独立工件与聚合入口一致，主包只保留按需加载空壳', async () => {
-  const { workflows, skills, resources, databaseMetadataConfig } = await loadCatalogEntries()
+  const full = await loadCatalogEntries()
+  const projected = projectCatalogIndex(full)
   const bundle = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
   const artifact = JSON.parse(readFileSync(new URL('../ui/catalog-data.json', import.meta.url), 'utf8'))
-  assert.deepEqual(artifact.data, { workflows, skills, resources, databaseMetadataConfig })
+  assert.deepEqual(artifact.data, projected)
+  assert.equal(artifact.data.mode, 'index')
+  assert.equal(artifact.data.workflows[0].prompt, undefined, '轻量索引不应携带工作流完整 Prompt')
   assert.match(bundle, /^\s*const workflows = \[\]$/m)
   assert.ok(!bundle.includes('__ARCHIFY_VIEWER_TEMPLATE__'), '主包不应重新内联 Archify 模板')
   assert.ok(!bundle.includes('const PromptKit = (React =>'), '主包不应重新内联 PromptKit')
   assert.match(readFileSync(new URL('../ui/promptkit.js', import.meta.url), 'utf8'), /__DSH_RESEARCH_PROMPTKIT__/)
+  // 验证索引态按需加载、失败后重试、并发去重及远端正文搜索合并
+  const snapshot = full
+  try {
+    applyCatalogData(projected)
+    assert.equal(itemDetailReady(itemById('review-paper')), false)
+    let calls = 0
+    const failingFetch = async () => { calls++; return { ok: false, status: 503 } }
+    await assert.rejects(() => loadCatalogItemDetail('review-paper', failingFetch), /503/)
+    const fullReview = full.workflows.find(item => item.id === 'review-paper')
+    const okFetch = async () => { calls++; return { ok: true, json: async () => ({ ok: true, item: fullReview }) } }
+    const [first, second] = await Promise.all([loadCatalogItemDetail('review-paper', okFetch), loadCatalogItemDetail('review-paper', okFetch)])
+    assert.equal(calls, 2, '失败后应允许重试，且并发请求应去重')
+    assert.equal(first.prompt, fullReview.prompt)
+    assert.equal(second.prompt, fullReview.prompt)
+    assert.equal(itemDetailReady(itemById('review-paper')), true)
+    const remoteMatches = new Map([['data-integrity', { id: 'data-integrity', score: 10, reason: '正文匹配', term: '禁止静默丢弃' }]])
+    assert.ok(searchCatalog({ query: '禁止静默丢弃', remoteMatches }).some(item => item.id === 'data-integrity'))
+  } finally {
+    applyCatalogData(snapshot)
+  }
 })
 
 test('搜索命中新增工作流的模板正文关键词', () => {

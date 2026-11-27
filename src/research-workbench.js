@@ -1,5 +1,8 @@
 import React from 'react'
-import { catalog, itemById, catalogMatch, searchCatalog, selectedCatalogItem, composeWorkflow, databaseMetadata } from './catalog.js'
+import {
+  catalog, catalogIndexMode, itemById, itemDetailReady, loadCatalogItemDetail,
+  catalogMatch, searchCatalog, searchCatalogRemote, selectedCatalogItem, subscribeCatalog, composeWorkflow, databaseMetadata,
+} from './catalog.js'
 import { RouteReplay } from './route-replay.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createResearchSelectionStore } from './research-selection-store.js'
@@ -13,7 +16,7 @@ import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import {
   Page, PageHead, Toolbar, Panel, PanelHead, Card, Button, StarButton,
-  Badge, Chip, Field, Input, Textarea, Select, Notice, Segmented, GroupLabel, EmptyState, ListRow,
+  Badge, Chip, Field, Input, Textarea, Select, Notice, Segmented, GroupLabel, EmptyState, ListRow, Spinner,
 } from './ui.js'
 
 const TYPE_LABELS = { all: '全部', workflow: '工作流程', skill: '技能', database: '数据库' }
@@ -176,24 +179,47 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
       host.style.removeProperty('--rk-workbench-toolbar-h')
     }
   }, [])
+  const [catalogVersion, setCatalogVersion] = React.useState(0)
+  React.useEffect(() => subscribeCatalog(() => setCatalogVersion(value => value + 1)), [])
+  const [remoteSearch, setRemoteSearch] = React.useState({ query: '', matches: null })
+  React.useEffect(() => {
+    const trimmed = deferredQuery.trim()
+    if (!trimmed || !catalogIndexMode()) {
+      setRemoteSearch({ query: '', matches: null })
+      return undefined
+    }
+    const controller = new AbortController()
+    searchCatalogRemote({ query: trimmed, type: 'all' }, { signal: controller.signal })
+      .then(results => {
+        if (controller.signal.aborted) return
+        setRemoteSearch({ query: trimmed, matches: new Map(results.map(row => [row.id, row])) })
+      })
+      .catch(() => { /* 远端正文检索失败时保留本地索引结果，不中断交互 */ })
+    return () => controller.abort()
+  }, [deferredQuery])
+  const remoteMatches = remoteSearch.query === deferredQuery.trim() ? remoteSearch.matches : null
   const activeCategory = type === 'workflow' ? workflowCategory : type === 'skill' ? skillCategory : type === 'database' ? databaseCategory : 'all'
   const categories = React.useMemo(() => (
     type === 'workflow' || type === 'skill' || type === 'database'
       ? [...new Set(catalog.filter(item => item.type === type).map(item => catalogCategory(item, type)))]
       : []
-  ), [type])
+  ), [type, catalogVersion])
   const items = React.useMemo(
-    () => filterCatalogCategory(searchCatalog({ query: deferredQuery, type }), type, activeCategory),
-    [deferredQuery, type, activeCategory],
+    () => filterCatalogCategory(searchCatalog({ query: deferredQuery, type, remoteMatches }), type, activeCategory),
+    [deferredQuery, type, activeCategory, remoteMatches, catalogVersion],
   )
   // 详情必须属于当前筛选结果；否则“技能”筛选下会继续显示先前的工作流。
   const selected = selectedCatalogItem(items, selectedId)
+  const detailReady = selected ? itemDetailReady(selected) : true
+  const [detailState, setDetailState] = React.useState({ id: '', status: 'idle', error: '' })
+  const [detailRetryNonce, setDetailRetryNonce] = React.useState(0)
+  const detailRequestRef = React.useRef(0)
   const workflow = selected?.type === 'workflow' ? selected : null
   const suggestedSkills = React.useMemo(
     () => workflow ? relatedItems(workflow.suggestedSkillIds || []).filter(item => item.promptFragment) : [],
-    [workflow],
+    [workflow, catalogVersion],
   )
-  const sessionResources = React.useMemo(() => sessionResourceIds.map(itemById).filter(Boolean), [sessionResourceIds])
+  const sessionResources = React.useMemo(() => sessionResourceIds.map(itemById).filter(Boolean), [sessionResourceIds, catalogVersion])
   const sessionSkillIds = React.useMemo(() => uniqueIds(sessionResources.filter(item => item.type === 'skill').map(item => item.id)), [sessionResources])
   const sessionDatabaseIds = React.useMemo(() => sessionResources.filter(item => item.type === 'database').map(item => item.id), [sessionResources])
   const activeSkillIds = React.useMemo(() => uniqueIds([...attachedSkills, ...sessionSkillIds]), [attachedSkills, sessionSkillIds])
@@ -206,18 +232,34 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   }
   // 预览阶段保留必填字段的可读占位；写入和发送前才阻止缺失字段。
   const composed = React.useMemo(
-    () => workflow ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null,
-    [workflow, values, activeSkillIds, sessionDatabaseIds],
+    () => workflow && detailReady ? composeWorkflow(workflow, values, { enforceRequired: false, extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds }) : null,
+    [workflow, detailReady, values, activeSkillIds, sessionDatabaseIds],
   )
   const assembled = React.useMemo(() => composed ? scienceAssemble(composed.prompt) : '', [composed, sciencePreset])
   const finalPrompt = editedPrompt ?? assembled
   const hasDraftAction = canWriteDraft(inputActions)
   const hasSubmitAction = hasDraftAction && typeof inputActions?.submit === 'function'
   const selectedKey = selected?.id || ''
-  const requiredFields = workflow ? (workflow.placeholders || []).filter(field => field.required) : []
+  const requiredFields = workflow && detailReady ? (workflow.placeholders || []).filter(field => field.required) : []
   const missingNow = requiredFields.filter(field => !String(values[field.key] || '').trim()).map(field => field.label)
   const taskPlan = researchPlanFor(workflow)
   const activePlan = workflow ? planRows.find(plan => plan.id === workflow.id) : null
+  React.useEffect(() => {
+    if (!selectedKey || detailReady) {
+      setDetailState({ id: selectedKey, status: 'idle', error: '' })
+      return undefined
+    }
+    const requestId = ++detailRequestRef.current
+    setDetailState({ id: selectedKey, status: 'loading', error: '' })
+    loadCatalogItemDetail(selectedKey)
+      .then(() => {
+        if (detailRequestRef.current === requestId) setDetailState({ id: selectedKey, status: 'idle', error: '' })
+      })
+      .catch(error => {
+        if (detailRequestRef.current === requestId) setDetailState({ id: selectedKey, status: 'error', error: error?.message || String(error) })
+      })
+    return undefined
+  }, [selectedKey, detailReady, detailRetryNonce])
 
   React.useEffect(() => {
     // 切换资源后清空编辑态与勾选，避免把上一个工作流的内容或技能组合带过去。
@@ -370,10 +412,10 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
     return counts
   }, {}), [])
   const typeTabs = [
-    { value: 'all', label: `全部 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery }).length : catalog.length}` },
-    { value: 'workflow', label: `工作流程 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'workflow' }).length : catalogCounts.workflow || 0}` },
-    { value: 'skill', label: `技能 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'skill' }).length : catalogCounts.skill || 0}` },
-    { value: 'database', label: `数据库 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'database' }).length : catalogCounts.database || 0}` },
+    { value: 'all', label: `全部 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, remoteMatches }).length : catalog.length}` },
+    { value: 'workflow', label: `工作流程 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'workflow', remoteMatches }).length : catalogCounts.workflow || 0}` },
+    { value: 'skill', label: `技能 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'skill', remoteMatches }).length : catalogCounts.skill || 0}` },
+    { value: 'database', label: `数据库 ${deferredQuery.trim() ? searchCatalog({ query: deferredQuery, type: 'database', remoteMatches }).length : catalogCounts.database || 0}` },
     { value: 'favorites', label: `★ 收藏 ${favorites.length}` },
     { value: 'history', label: `历史 ${history.length}` },
   ]
@@ -448,6 +490,9 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
               const item = entry.item
               const row = entry.row
               const active = item.id === selected?.id
+              const localHit = catalogMatch(item, deferredQuery)
+              const remoteHit = remoteMatches?.get?.(item.id)
+              const hit = remoteHit && remoteHit.score > localHit.score ? remoteHit : localHit
               return h(ListRow, {
                 key: item.id,
                 active,
@@ -460,11 +505,11 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
                 }),
               }, [
                 h('div', { key: 'name', style: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' } }, [
-                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, highlightCatalogText(item.name, catalogMatch(item, deferredQuery).term)),
+                  h('strong', { key: 'n', style: { fontSize: 13, fontWeight: 700 } }, highlightCatalogText(item.name, hit.term)),
                   h(Badge, { key: 't', color: C.teal }, TYPE_LABELS[item.type]),
                 ]),
-                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : highlightCatalogText(item.description, catalogMatch(item, deferredQuery).term)),
-                deferredQuery.trim() ? h('small', { key: 'match', style: { color: C.teal } }, catalogMatch(item, deferredQuery).reason) : null,
+                h('div', { key: 'desc', style: { marginTop: 4, fontSize: 12, color: C.muted, lineHeight: 1.5 } }, type === 'history' && row.summary ? `${row.summary}（${formatWorkbenchTime(row.at)}）` : highlightCatalogText(item.description, hit.term)),
+                deferredQuery.trim() && hit.reason ? h('small', { key: 'match', style: { color: C.teal } }, hit.reason) : null,
               ])
             })
           ])))
@@ -487,7 +532,15 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
           })],
         }),
         h('div', { key: 'body', style: { padding: 18, display: 'grid', gap: 16 } }, [
-          workflow ? h(React.Fragment, { key: 'workflow' }, [
+          !detailReady ? (
+            detailState.id === selected.id && detailState.status === 'error'
+              ? h(Notice, { key: 'detail-error', tone: 'error', icon: 'shield' }, [
+                `无法加载详情：${detailState.error}`,
+                h(Button, { key: 'retry', variant: 'quiet', size: 'sm', icon: 'refresh', onClick: () => setDetailRetryNonce(value => value + 1), style: { marginLeft: 8 } }, '重试加载'),
+              ])
+              : h(Spinner, { key: 'detail-loading', text: '正在加载资源详情……' })
+          ) : null,
+          workflow && detailReady ? h(React.Fragment, { key: 'workflow' }, [
             h('div', { key: 'meta', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, [
               h(Chip, { key: 'cat', color: C.teal }, selected.category),
               h(Badge, { key: 'params', color: C.slate }, `${(workflow.placeholders || []).length} 个参数`),
@@ -563,7 +616,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
                 : null,
             ]),
           ]) : null,
-          selected.type === 'skill' && selected.promptFragment ? h(React.Fragment, { key: 'skill' }, [
+          detailReady && selected.type === 'skill' && selected.promptFragment ? h(React.Fragment, { key: 'skill' }, [
             h('p', { key: 'guidance', style: { margin: 0, lineHeight: 1.6, fontSize: 13 } }, selected.guidance),
             h(Card, { key: 'fragment', style: { padding: 14, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
               h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '启动工作流时可附加的指导片段'),
@@ -575,7 +628,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
             ]) : null,
             h(Notice, { key: 'availability', tone: 'info', icon: 'shield' }, '该技能以提示词指导方式生效：不会自动执行，只在勾选后把指导片段并入相关工作流的提示词。'),
           ]) : null,
-          selected.type === 'skill' && !selected.promptFragment ? h(React.Fragment, { key: 'skill-host' }, [
+          detailReady && selected.type === 'skill' && !selected.promptFragment ? h(React.Fragment, { key: 'skill-host' }, [
             h('p', { key: 'guidance', style: { margin: 0, lineHeight: 1.6, fontSize: 13 } }, selected.guidance),
             selected.checklist?.length ? h(Card, { key: 'checklist', style: { padding: 14, background: C.surfaceAlt } }, [
               h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '使用前提与安全核验'),

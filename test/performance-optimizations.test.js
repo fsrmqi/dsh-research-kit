@@ -1,17 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { catalogDataRoute } from '../dsh/catalog-data.js'
+import { catalogDataRoute, catalogItemRoute, catalogSearchRoute } from '../dsh/catalog-data.js'
 import { archifyTemplateRoute } from '../dsh/archify-template.js'
 import { promptKitClientRoute } from '../dsh/promptkit-client.js'
 import { loadArchifyTemplate } from '../src/route-replay.js'
 import { evidenceVaultStore, invalidateEvidenceSync, syncEvidenceVaultWithFiles } from '../src/lib/evidence-vault-sync.js'
 
-function captureRoute(route, method = 'GET', requestHeaders = {}) {
+function captureRoute(route, method = 'GET', requestHeaders = {}, url = route.path) {
   return new Promise((resolve, reject) => {
     let status = 0
     let headers = {}
-    route.handler({ method, headers: requestHeaders }, {
+    route.handler({ method, url, headers: requestHeaders }, {
       writeHead(nextStatus, nextHeaders) { status = nextStatus; headers = nextHeaders },
       end(body) { resolve({ status, headers, body: String(body || '') }) },
     })?.catch?.(reject)
@@ -38,6 +38,19 @@ test('延迟资源路由：目录、PromptKit 与 Archify 模板可独立读取'
   const cached = await captureRoute(catalogDataRoute(), 'GET', { 'if-none-match': catalogResponse.headers.etag })
   assert.equal(cached.status, 304)
   assert.equal(cached.body, '')
+  // 按需详情与 Node 侧全文检索路由
+  const itemRoute = catalogItemRoute()
+  const itemResponse = await captureRoute(itemRoute, 'GET', {}, `${itemRoute.path}?id=review-paper`)
+  assert.equal(itemResponse.status, 200)
+  assert.ok(JSON.parse(itemResponse.body).item.prompt.length > 50)
+  const itemCached = await captureRoute(itemRoute, 'GET', { 'if-none-match': itemResponse.headers.etag }, `${itemRoute.path}?id=review-paper`)
+  assert.equal(itemCached.status, 304)
+  assert.equal((await captureRoute(itemRoute, 'GET', {}, `${itemRoute.path}?id=Bad_ID`)).status, 400)
+  assert.equal((await captureRoute(itemRoute, 'GET', {}, `${itemRoute.path}?id=missing-workflow`)).status, 404)
+  const searchRoute = catalogSearchRoute()
+  const searchResponse = await captureRoute(searchRoute, 'GET', {}, `${searchRoute.path}?q=${encodeURIComponent('禁止静默丢弃')}&type=skill`)
+  assert.equal(searchResponse.status, 200)
+  assert.ok(JSON.parse(searchResponse.body).results.some(row => row.id === 'data-integrity'))
 })
 
 test('Archify 模板加载：并发调用共享同一个请求', async () => {

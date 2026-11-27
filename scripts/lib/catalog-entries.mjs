@@ -81,3 +81,27 @@ export async function loadCatalogEntries() {
     databaseMetadataConfig: resources.databaseMetadataConfig,
   }
 }
+
+// 浏览器首屏轻量目录索引：保留列表渲染、筛选、资源关联与技能附加所需字段，
+// 剥离大段工作流 Prompt / placeholders / MCP 元数据与技能长文 guidance / checklist；
+// 详情由 /dsh-research-kit/catalog-item 按需拉取，正文检索由 /dsh-research-kit/catalog-search 兜底。
+export function projectCatalogIndex(data) {
+  return {
+    mode: 'index',
+    workflows: (data.workflows || []).map(({ id, type, name, description, category, tags, requiresFiles, suggestedSkillIds, suggestedDatabaseIds }) => ({
+      id, type, name, description, category,
+      ...(Array.isArray(tags) ? { tags } : {}),
+      ...(requiresFiles ? { requiresFiles } : {}),
+      ...(suggestedSkillIds?.length ? { suggestedSkillIds } : {}),
+      ...(suggestedDatabaseIds?.length ? { suggestedDatabaseIds } : {}),
+    })),
+    skills: (data.skills || []).map(({ id, type, name, description, category, tags, availability, promptFragment }) => ({
+      id, type, name, description, category,
+      ...(Array.isArray(tags) ? { tags } : {}),
+      availability,
+      ...(promptFragment ? { promptFragment } : {}),
+    })),
+    resources: data.resources || [],
+    databaseMetadataConfig: data.databaseMetadataConfig || { groups: [], accessOverrides: {} },
+  }
+}

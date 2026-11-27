@@ -11,7 +11,7 @@ import { CLAIM_REVIEW_PATH } from '../dsh/claim-review.js'
 import { CLAIM_AGENT_REVIEW_PATH } from '../dsh/claim-agent-review.js'
 import { EVIDENCE_SOURCE_CHECK_PATH } from '../dsh/evidence-source-check.js'
 import { AGENT_ACTIVITY_PATH } from '../dsh/agent-activity.js'
-import { CATALOG_DATA_PATH } from '../dsh/catalog-data.js'
+import { CATALOG_DATA_PATH, CATALOG_ITEM_PATH, CATALOG_SEARCH_PATH } from '../dsh/catalog-data.js'
 import { ARCHIFY_TEMPLATE_PATH } from '../dsh/archify-template.js'
 import { PROMPTKIT_CLIENT_PATH } from '../dsh/promptkit-client.js'
 
@@ -51,6 +51,8 @@ test('index.js 统一注册科研路由且不使用 dsh-promptkit 路径', () =>
     EVIDENCE_SOURCE_CHECK_PATH,
     AGENT_ACTIVITY_PATH,
     CATALOG_DATA_PATH,
+    CATALOG_ITEM_PATH,
+    CATALOG_SEARCH_PATH,
     ARCHIFY_TEMPLATE_PATH,
     PROMPTKIT_CLIENT_PATH,
   ].sort())

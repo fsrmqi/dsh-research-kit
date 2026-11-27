@@ -4,7 +4,7 @@ import { gzipSync } from 'node:zlib'
 
 const CLIENT_RAW_MAX = 720_000
 const CLIENT_GZIP_MAX = 230_000
-const CATALOG_RAW_MAX = 900_000
+const CATALOG_RAW_MAX = 280_000
 const PROMPTKIT_RAW_MAX = 580_000
 
 const client = readFileSync(new URL('../ui/client.js', import.meta.url))

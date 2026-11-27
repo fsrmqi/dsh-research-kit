@@ -55,6 +55,12 @@ const server = http.createServer((req,res)=>{
   res.setHeader('Content-Type','application/json; charset=utf-8');
   return res.end(fs.readFileSync(path.join(repo,'ui/catalog-data.json')));
  }
+ if(req.url?.startsWith('/dsh-research-kit/catalog-item')){
+  return import('../dsh/catalog-data.js').then(({ catalogItemRoute }) => catalogItemRoute().handler(req, res));
+ }
+ if(req.url?.startsWith('/dsh-research-kit/catalog-search')){
+  return import('../dsh/catalog-data.js').then(({ catalogSearchRoute }) => catalogSearchRoute().handler(req, res));
+ }
  if(req.url==='/dsh-research-kit/archify-template'){
   archifyRequests++;
   res.setHeader('Content-Type','text/html; charset=utf-8');
