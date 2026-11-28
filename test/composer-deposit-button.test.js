@@ -66,11 +66,9 @@ test('伴生钮接线：只在「悬浮」入口形态下并排渲染，位置�
   const button = readFileSync(new URL('../src/composer-deposit-button.js', import.meta.url), 'utf8')
   assert.equal(QUICK_ENHANCER_POSITION_KEY, 'dsh-research-kit.promptkit.quick-action.position.v1', '位置键必须与 vendored storagePrefix + quick-action.position.v1 一致')
   assert.match(button, /window\.localStorage\.getItem\(QUICK_ENHANCER_POSITION_KEY\)/)
-  // 拖拽结束与窗口变化都要重算；状态条定时器必须清理。
+  // 拖拽结束与窗口变化都要重算。
   assert.match(button, /window\.addEventListener\('pointerup', measure\)/)
   assert.match(button, /window\.addEventListener\('resize', measure\)/)
-  assert.match(button, /clearTimeout\(statusTimer\.current\)/)
-  // 点击即显式沉淀（与图谱页同一入口函数），绝不静默注入。
-  assert.match(button, /depositLatestAssistantMessage\(\)/)
-  assert.match(button, /role: 'status'/)
+  assert.match(button, /h\(ResearchMessageDepositAction, \{/)
+  assert.doesNotMatch(button, /depositLatestAssistantMessage\(/)
 })

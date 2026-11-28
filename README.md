@@ -77,14 +77,15 @@ Research Kit 把这四点做成可复用的资产。
 **✍️ 发送前完整可见、可编辑**
 参数替换实时生成 Prompt 预览；手动编辑后参数变更不会静默改写正文，并提供「恢复自动生成」。必填参数缺失时不发送。
 
-**🧭 一个工作台，两个主入口**
+**🧭 一个工作台，三个主入口**
 
 | 入口 | 常用操作 |
 | --- | --- |
-| 本次研究 | 查看当前任务、待核验和最近产出，需要管理归属时打开「研究课题」。通过「研究资料」管理资产、证据与论断，通过「证据关系」追溯关联 |
-| 科研工具 | 「选流程」组装科研提示词；「用方法」从对话取材并填充方法卡；「查来源」直接查询或委托 Agent；「我的」维护可重复使用的私人方法和流程模板 |
+| 本次研究 | 开始或继续当前课题，在「待处理」核验论断和证据，审阅梦境建议 |
+| 科研工具 | 「选流程」组装科研提示词；「用方法」从对话取材并填充方法卡；「查来源」直接查询或委托 Agent；「用方法」中的「个人模板」维护私人方法和流程模板 |
+| 资料库 | 查找已保存的灵感、证据和论断，在「证据星图」追溯关联 |
 
-顶层是上面两个入口；工作台内部由「项目首页」加上发现、构造、沉淀、证据四个分区组成，共用同一套防编造与人工核验纪律。
+「时空囊」始终可打开，用于本地备份与恢复。回答下方的「保存到资料库」可以先预览，再选择要保存的内容。
 
 ![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/research-loop.svg)
 
@@ -240,7 +241,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 
 ## 隐私与安全
 
-在 DSH Desktop 中，打开「科研工作台 → 本次研究 → 时空囊」导出本地完整备份。换电脑、重装或重建配置后，可从同一入口预览并增量恢复。以往的迁移包也可在这里打开。详见 [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
+在 DSH Desktop 中，打开「科研工作台 → 时空囊」导出本地完整备份。换电脑、重装或重建配置后，可从同一入口预览并增量恢复。以往的迁移包也可在这里打开。详见 [本地备份与恢复](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/APP-MIGRATION.md)。
 
 | 访问 | 用途 | 说明 |
 | --- | --- | --- |
@@ -269,7 +270,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 
 当前版本 `0.3.3`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、642 项回归测试（80 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、652 项回归测试（82 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
@@ -278,7 +279,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（642 项 / 80 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（652 项 / 82 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

@@ -161,21 +161,21 @@ export function RouteReplay({ trace, prompt }) {
     downloadText(html, 'text/html', 'route-replay-snapshot.html')
   }
   const litSet = new Set(Array.from({ length: lit }, (_, i) => i))
-  return h('div', { className: 'rk-replay', style: { border: `1px solid ${C.line}`, borderRadius: 12, padding: 12, background: C.surface, display: 'grid', gap: 10 } }, [
+  return h('div', { className: 'rk-replay rk-reveal', style: { border: `1px solid ${C.line}`, borderRadius: 12, padding: 12, background: C.surface, display: 'grid', gap: 10 } }, [
     h('div', { key: 'head', style: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '组装回放'),
       h('span', { key: 'h', style: { fontSize: 12, color: C.muted } }, '只回放本次真实的组装事实；发送与执行由你完成，结果需人工核验。'),
       h('span', { key: 'sp', style: { flex: 1 } }),
       h('button', {
-        key: 'popup', type: 'button',
+        key: 'popup', type: 'button', className: 'rk-btn rk-btn--ghost',
         onPointerEnter: () => { loadArchifyTemplate().catch(() => {}) },
         onFocus: () => { loadArchifyTemplate().catch(() => {}) },
         onClick: () => openReplayWindow(trace, '组装回放'),
         style: buttonStyle(C),
       }, '弹出回放窗口'),
-      h('button', { key: 'mode', type: 'button', onClick: () => setStill(value => !value), style: buttonStyle(C) }, still ? '切到动画' : '切到静态'),
-      !still ? h('button', { key: 'play', type: 'button', onClick: play, style: buttonStyle(C) }, '重新播放') : null,
-      h('button', { key: 'export', type: 'button', onClick: exportSnapshot, style: buttonStyle(C) }, '导出快照'),
+      h('button', { key: 'mode', type: 'button', className: 'rk-btn rk-btn--ghost', onClick: () => setStill(value => !value), style: buttonStyle(C) }, still ? '切到动画' : '切到静态'),
+      !still ? h('button', { key: 'play', type: 'button', className: 'rk-btn rk-btn--ghost', onClick: play, style: buttonStyle(C) }, '重新播放') : null,
+      h('button', { key: 'export', type: 'button', className: 'rk-btn rk-btn--ghost', onClick: exportSnapshot, style: buttonStyle(C) }, '导出快照'),
     ]),
     h('div', { key: 'svg', style: { overflowX: 'auto' }, dangerouslySetInnerHTML: { __html: markup } }),
     caption ? h('div', { key: 'caption', style: { fontSize: 12, color: C.teal, fontWeight: 600 } }, caption) : null,
@@ -183,8 +183,8 @@ export function RouteReplay({ trace, prompt }) {
       segments.map((seg, i) => h('span', {
         key: i,
         style: seg.stepIndex >= 0 && litSet.has(seg.stepIndex)
-          ? { background: C.tealTint, outline: `1px solid ${C.tealLineStrong}`, borderRadius: 3 }
-          : null,
+          ? { background: C.tealTint, outline: `1px solid ${C.tealLineStrong}`, borderRadius: 3, transition: 'background var(--rk-dur-fast) var(--rk-ease-out)' }
+          : { transition: 'background var(--rk-dur-fast) var(--rk-ease-out)' },
       }, seg.text)),
     ),
     h('div', { key: 'legend', style: { fontSize: 11, color: C.muted } },

@@ -1,6 +1,6 @@
 import React from 'react'
 import { h, C } from './theme.js'
-import { Badge, Button, Card, Modal, Notice, Select, Textarea } from './ui.js'
+import { Badge, Button, Card, ConfirmDangerButton, Modal, Notice, Select, Textarea } from './ui.js'
 import { removeEvidenceEntryFromFile } from './lib/evidence-vault-sync.js'
 import {
   CLAIM_RELATION_LABELS,
@@ -26,7 +26,8 @@ export function EvidenceGraphDetailPanels({
 }) {
   return h(React.Fragment, null, [
     selectedEvidenceEntry ? h(Card, {
-      key: 'evidence-detail',
+      key: `evidence-detail:${selectedEvidenceEntry.id}`,
+      className: 'rk-reveal',
       style: {
         margin: '0 var(--rk-gutter) 14px', padding: 16,
         border: `1px solid ${nodeStrokeColor({ kind: 'evidence', grade: selectedEvidenceEntry.grade })}40`,
@@ -64,27 +65,22 @@ export function EvidenceGraphDetailPanels({
           style: { fontSize: 11, color: C.muted, alignSelf: 'center', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 300, whiteSpace: 'nowrap' },
         }, selectedEvidenceEntry.url) : null,
         h('span', { key: 'delete-spacer', style: { flex: 1 } }),
-        confirmDeleteEvidence
-          ? h(Button, {
-            key: 'delete-confirm', size: 'sm', variant: 'danger', icon: 'trash',
-            onClick: async () => {
-              setConfirmDeleteEvidence(false)
-              try {
-                await removeEvidenceEntryFromFile(selectedEvidenceEntry)
-                await vault.remove(selectedEvidenceEntry.id)
-                setSelectedEvidenceNodeId('')
-                setNotice(`已删除「${selectedEvidenceEntry.title}」。`)
-              } catch (error) { setNotice(`删除失败：${error?.message || error}`) }
-            },
-          }, '确认删除')
-          : h(Button, {
-            key: 'delete', size: 'sm', variant: 'ghost', icon: 'trash',
-            onClick: () => setConfirmDeleteEvidence(true),
-            title: '从证据库和文件存储中彻底删除此条目（不可恢复）',
-          }, '删除'),
+        h(ConfirmDangerButton, {
+          key: 'delete', label: '删除', confirmLabel: '确认删除？', variant: 'ghost',
+          title: '从证据库和文件存储中彻底删除此条目',
+          onConfirm: async () => {
+            setConfirmDeleteEvidence(false)
+            try {
+              await removeEvidenceEntryFromFile(selectedEvidenceEntry)
+              await vault.remove(selectedEvidenceEntry.id)
+              setSelectedEvidenceNodeId('')
+              setNotice(`已删除「${selectedEvidenceEntry.title}」。`)
+            } catch (error) { setNotice(`删除失败：${error?.message || error}`) }
+          },
+        }),
       ]),
     ]) : null,
-    selectedKnowledge ? h(Card, { key: 'knowledge-detail', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [
+    selectedKnowledge ? h(Card, { key: `knowledge-detail:${selectedKnowledge.id}`, className: 'rk-reveal', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 12 } }, [
       h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
         h('strong', { key: 't', style: { fontSize: 14 } }, selectedKnowledge.label),
         h(Badge, { key: 'k', color: graphKindColor(selectedKnowledge.kind) },
@@ -135,7 +131,7 @@ export function EvidenceGraphDetailPanels({
       h('p', { key: 'hint', style: { margin: 0, fontSize: 12, color: C.muted, lineHeight: 1.5 } },
         '以上内容由规则提取自动生成，全部以「待核验」起步；提取不等于正确，请以可访问的原文为准逐条核验后再引用。'),
     ]) : null,
-    knowledgeBackupOpen ? h(Card, { key: 'knowledge-backup', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 10 } }, [
+    knowledgeBackupOpen ? h(Card, { key: 'knowledge-backup', className: 'rk-reveal', style: { margin: '0 var(--rk-gutter) 18px', padding: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '粘贴此前导出的知识库 JSON 备份（增量合并：已存在的节点与关系跳过，不覆盖现有核验状态）'),
       h(Textarea, { key: 'i', value: knowledgeBackupText, onChange: setKnowledgeBackupText, rows: 5, mono: true, ariaLabel: '知识库 JSON 备份内容' }),
       h('div', { key: 'row', style: { display: 'flex', gap: 8 } }, [

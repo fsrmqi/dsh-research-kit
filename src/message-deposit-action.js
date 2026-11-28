@@ -3,13 +3,16 @@ import { createPortal } from 'react-dom'
 import { extractKnowledge, KNOWLEDGE_KIND_LABELS } from './lib/knowledge-extract.js'
 import { extractAnswerEvidence, researchCitationHref } from './lib/answer-evidence.js'
 import { currentResearchContext } from './research-context-store.js'
-import { projectClaimProjection } from './lib/claim-review-client.js'
+import { requestResearchClaims, projectClaimProjection } from './lib/claim-review-client.js'
 import { ClaimEvidenceRelations } from './research-claim-review.js'
 import { C } from './theme.js'
 import { inheritResearchAutoSession, readResearchAutoSession, subscribeResearchAutoSessions, RESEARCH_STEPS_HEADING } from './composer-overlay.js'
 import { readSessionEvents } from './lib/session-events.js'
-import { Button } from './ui.js'
-import { depositAssistantMessage } from './knowledge-deposition.js'
+import { Button, useDismissable } from './ui.js'
+import { loadPromptKit } from './promptkit-loader.js'
+import { ensureResearchProviders } from '../dsh/prompt-studio-glue.js'
+import { publishEvidenceVault } from './lib/evidence-vault-sync.js'
+import { depositAssistantMessage, readLatestResearchAnswer } from './knowledge-deposition.js'
 
 export function reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes) {
   const projected = chatNodes?.values?.().find(node => node?.kind === 'turn-tail' && String(node?.data?.closing?.finalNode?.messageId) === String(messageId))
@@ -90,7 +93,12 @@ export function researchAnswerCandidateSummary(sessions, sessionId, messageId, a
   return findings || sources ? { findings, sources } : null
 }
 
-export function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetProvider, useChat }) {
+const localAssetProvider = {
+  list: async () => ensureResearchProviders(await loadPromptKit()).researchAssetProvider.list(),
+  save: async item => ensureResearchProviders(await loadPromptKit()).researchAssetProvider.save(item),
+}
+
+export function ResearchMessageDepositAction({ messageId, sessionId, sessions, assetProvider, useChat, triggerLabel, triggerContent, triggerStyle, triggerClassName, triggerDataInstant, onSaved }) {
   const chatNodes = typeof useChat === 'function' ? useChat(snapshot => snapshot.nodes) : null
   const anchorRef = React.useRef(null)
   const autoSession = React.useSyncExternalStore(subscribeResearchAutoSessions, () => readResearchAutoSession(sessionId), () => null)
@@ -104,7 +112,13 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   const [claimChoices, setClaimChoices] = React.useState(null)
   const [confirmedClaims, setConfirmedClaims] = React.useState([])
   const [claimNotice, setClaimNotice] = React.useState('')
-  const associationKey = preview && `dsh-research-kit.answer-claims.v1.${JSON.stringify([sessionId, messageId, preview.project])}`
+  const associationKey = preview && `dsh-research-kit.answer-claims.v1.${JSON.stringify([preview.sessionId, messageId || preview.seq, preview.project])}`
+  const [draftOptions, setDraftOptions] = React.useState(null)
+  const [pickedDrafts, setPickedDrafts] = React.useState([])
+  const saveLock = React.useRef(false)
+  const readAnswer = () => messageId
+    ? reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
+    : readLatestResearchAnswer(sessionId)
   React.useEffect(() => {
     if (!preview) return undefined
     const controller = new AbortController()
@@ -123,6 +137,8 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   const [selectedCitations, setSelectedCitations] = React.useState([])
   const [busy, setBusy] = React.useState(false)
   const [notice, setNotice] = React.useState('')
+  const panelRef = React.useRef(null)
+  useDismissable(Boolean(preview), () => setPreview(null), panelRef, { disabled: busy })
   const place = () => {
     if (typeof window === 'undefined') return
     setPosition(depositPopoverPosition(anchorRef.current?.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight }))
@@ -138,23 +154,39 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     const timer = window.setTimeout(() => setNotice(''), 5000)
     return () => window.clearTimeout(timer)
   }, [notice, preview])
+  React.useEffect(() => {
+    if (!preview) return undefined
+    const controller = new AbortController()
+    if (!preview.extraction.citations.length) {
+      setDraftOptions([])
+      return undefined
+    }
+    requestResearchClaims(preview.project || 'default', { action: 'extract', text: preview.text.slice(0, 12000) }, AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]))
+      .then(response => { if (!controller.signal.aborted) setDraftOptions(response.drafts || []) })
+      .catch(() => { if (!controller.signal.aborted) setDraftOptions(false) })
+    return () => controller.abort()
+  }, [preview])
   const open = () => {
+    if (saveLock.current) return
+    if (preview) { setPreview(null); return }
     place()
-    const found = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
+    const found = readAnswer()
     if (!found) { setNotice('当前会话窗口中找不到这条回答。'); return }
     setClaimChoices(null)
     setClaimNotice('')
     setConfirmedClaims([])
     const project = currentResearchContext().project
     const extraction = extractAnswerEvidence(found.text, project)
-    setPreview({ ...found, extraction, project })
+    setDraftOptions(null)
+    setPickedDrafts([])
+    setPreview({ ...found, extraction, project, sessionId: found.sessionId || sessionId })
     setSelectedNodes([])
     setSelectedCitations(extraction.citations.map((_, index) => index))
     setNotice('')
   }
   const toggleClaimAssociation = id => {
-    const latest = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
-    if (!latest || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
+    const latest = readAnswer()
+    if (!latest || (latest.sessionId || sessionId) !== preview.sessionId || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
       setClaimNotice('回答或课题已变化，请重新打开。')
       return
     }
@@ -167,26 +199,43 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   }
   const toggle = (values, setValues, key) => setValues(values.includes(key) ? values.filter(item => item !== key) : [...values, key])
   const confirm = async () => {
-    if (!preview || busy) return
-    if (!selectedNodes.length && !selectedCitations.length) { setNotice('请至少选择一项。'); return }
-    const latest = reviewableAssistantMessage(sessions, sessionId, messageId, chatNodes)
-    if (!latest || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
+    if (!preview || saveLock.current) return
+    if (!selectedNodes.length && !selectedCitations.length && !pickedDrafts.length) { setNotice('请至少选择一项。'); return }
+    const latest = readAnswer()
+    if (!latest || (latest.sessionId || sessionId) !== preview.sessionId || latest.seq !== preview.seq || latest.text !== preview.text || currentResearchContext().project !== preview.project) {
       setNotice('回答或课题已变化，请重新打开预览。')
       setPreview(null)
       return
     }
+    saveLock.current = true
     setBusy(true)
     try {
-      const summary = await depositAssistantMessage({
-        text: preview.text, sessionId: String(sessionId), seq: preview.seq, turn: preview.turn, at: preview.at,
+      const summary = selectedNodes.length || selectedCitations.length ? await depositAssistantMessage({
+        text: preview.text, sessionId: String(preview.sessionId || ''), seq: preview.seq, turn: preview.turn, at: preview.at,
         selection: { nodeKeys: selectedNodes, citationIndexes: selectedCitations }, traceAnswerSources: true,
-        activeProject: preview.project, assetProvider: assetProvider?.(),
-      })
-      if (summary.extracted) setSavedFromAnswer(true)
-      setNotice(summary.extracted ? `已沉淀：知识 ${summary.addedNodes}、证据 ${summary.savedEvidence}、资产 ${summary.savedAssets}；均待人工核验。` : '所选内容没有可提取的研究信息。')
+        activeProject: preview.project, assetProvider: assetProvider?.() || localAssetProvider,
+      }) : { extracted: false, addedNodes: 0, savedEvidence: 0, savedAssets: 0 }
+      let savedClaims = 0
+      if (pickedDrafts.length) {
+        try {
+          const result = await requestResearchClaims(preview.project || 'default', {
+            action: 'save_drafts', text: preview.text.slice(0, 12000), selected_indices: pickedDrafts,
+          })
+          savedClaims = result.saved?.length || 0
+          publishEvidenceVault()
+          onSaved?.()
+        } catch (error) {
+          setSelectedNodes([])
+          setSelectedCitations([])
+          setNotice(`所选来源和灵感已处理，论断登记失败：${error.message}。可重试论断。`)
+          return
+        }
+      }
+      if (summary.extracted || savedClaims) setSavedFromAnswer(true)
+      setNotice(`已保存到资料库：知识 ${summary.addedNodes}、证据 ${summary.savedEvidence}、灵感 ${summary.savedAssets}、论断 ${savedClaims}。新增记录待核验。`)
       setPreview(null)
     } catch (error) { setNotice(`沉淀失败：${error?.message || error}`) }
-    finally { setBusy(false) }
+    finally { saveLock.current = false; setBusy(false) }
   }
   const citations = preview?.extraction.citations || []
   const nodes = preview?.extraction.nodes || []
@@ -203,7 +252,7 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   ]
   const sectionStyle = { display: 'grid', gap: 6, paddingBlock: 8, borderTop: `1px solid ${C.line}` }
   const panel = preview ? React.createElement('div', {
-    key: 'preview', role: 'group', 'aria-label': '研究回答沉淀预览', className: 'rk-pop',
+    key: 'preview', ref: panelRef, role: 'group', 'aria-label': '研究回答沉淀预览', className: 'rk-pop',
     style: { ...position, zIndex: 2147483000, boxSizing: 'border-box', padding: '10px 12px', width: 'min(360px, calc(100vw - 24px))', maxHeight: 'min(300px, calc(100vh - 72px))',
       overflow: 'auto', border: `1px solid ${C.line}`, borderRadius: 10, color: C.ink, background: C.surface, boxShadow: C.shadowLg, font: `12px/1.45 ${C.font}` },
   }, [
@@ -265,8 +314,8 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
     ]) : null,
     claimNotice ? React.createElement('p', { key: 'claim-notice', role: 'status' }, claimNotice) : null,
     !citations.length && !orderedClaims.length && !evidenceRows.length ? React.createElement('p', { key: 'empty', style: { color: C.muted } }, '这条回答暂无可展示的引用或关联论断。') : null,
-    citations.length || nodes.length ? React.createElement('details', { key: 'deposit', style: { borderTop: `1px solid ${C.line}`, paddingTop: 8 } }, [
-      React.createElement('summary', { key: 'summary', style: { cursor: 'pointer', fontWeight: 600 } }, '沉淀所选'),
+    citations.length || nodes.length || draftOptions?.length ? React.createElement('section', { key: 'deposit', style: sectionStyle }, [
+      React.createElement('strong', { key: 'summary' }, `保存到课题 · ${preview.project || '默认课题'}`),
       React.createElement('div', { key: 'choices', style: { display: 'grid', gap: 7, marginTop: 8 } }, [
         ...citations.map((citation, index) => React.createElement('label', { key: `citation-${index}`, style: { overflowWrap: 'anywhere' } }, [
           React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedCitations.includes(index), onChange: () => toggle(selectedCitations, setSelectedCitations, index) }),
@@ -277,7 +326,13 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
           React.createElement('input', { key: 'check', type: 'checkbox', checked: selectedNodes.includes(node.key), onChange: () => toggle(selectedNodes, setSelectedNodes, node.key) }),
           `${KNOWLEDGE_KIND_LABELS[node.kind] || '知识'}：${node.label}`,
         ])),
-        React.createElement(Button, { key: 'confirm', size: 'sm', variant: 'primary', style: { justifySelf: 'start' }, disabled: busy || (!selectedNodes.length && !selectedCitations.length), onClick: confirm }, busy ? '沉淀中…' : '确认沉淀所选'),
+        Array.isArray(draftOptions) ? draftOptions.map((item, index) => React.createElement('label', { key: `draft-${index}` }, [
+          React.createElement('input', { key: 'check', type: 'checkbox', checked: pickedDrafts.includes(index), onChange: () => toggle(pickedDrafts, setPickedDrafts, index) }),
+          `待核验论断：${item.statement}`,
+        ])) : null,
+        draftOptions === false ? React.createElement('small', { key: 'draft-error' }, '暂时无法提取论断，可以保存其他所选内容。') : null,
+        draftOptions === null ? React.createElement('small', { key: 'draft-loading', role: 'status' }, '正在提取可登记的论断……') : null,
+        React.createElement(Button, { key: 'confirm', size: 'sm', variant: 'primary', style: { justifySelf: 'start' }, disabled: busy || (!selectedNodes.length && !selectedCitations.length && !pickedDrafts.length), onClick: confirm }, busy ? '正在保存…' : '保存所选'),
         notice ? React.createElement('p', { key: 'deposit-notice', role: 'status' }, notice) : null,
       ]),
     ]) : null,
@@ -285,8 +340,11 @@ export function ResearchMessageDepositAction({ messageId, sessionId, sessions, a
   return React.createElement(React.Fragment, null, [
     React.createElement('button', {
       key: 'open', ref: anchorRef, type: 'button', onClick: open,
-      'aria-label': candidateLabel || '审阅并沉淀这条研究回答',
-    }, candidateLabel || '回答依据'),
+      'aria-label': triggerLabel || candidateLabel || '保存到资料库',
+      'aria-expanded': Boolean(preview),
+      'data-instant': triggerDataInstant ? 'true' : undefined,
+      ...(triggerStyle ? { className: triggerClassName || 'rk-fab-btn', style: triggerStyle } : { className: 'rk-btn' }),
+    }, triggerContent || triggerLabel || candidateLabel || '保存到资料库'),
     panel && typeof document !== 'undefined' ? createPortal(panel, document.body) : null,
   ])
 }

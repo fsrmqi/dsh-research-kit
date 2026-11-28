@@ -16,14 +16,30 @@ export function Spinner({ text, size = 12 }) {
     h('span', {
       key: 'dot',
       'aria-hidden': 'true',
+      className: 'rk-spinner-ring',
       style: {
         display: 'inline-block', width: size, height: size, borderRadius: '50%',
         border: `2px solid ${C.tealLine}`, borderTopColor: C.teal,
-        animation: 'rk-spin .75s cubic-bezier(0.4, 0, 0.2, 1) infinite',
       },
     }),
     text,
   ])
+}
+
+export function CountValue({ value, suffix = '', prefix = '', style }) {
+  const prevRef = React.useRef(value)
+  const [tick, setTick] = React.useState(0)
+  React.useEffect(() => {
+    if (prevRef.current !== value) {
+      prevRef.current = value
+      setTick(n => n + 1)
+    }
+  }, [value])
+  return h('span', {
+    key: tick ? `tick-${tick}` : 'init',
+    className: tick ? 'rk-num-tick' : 'rk-tabular',
+    style,
+  }, `${prefix}${value}${suffix}`)
 }
 
 const BUTTON_VARIANTS = {
@@ -39,23 +55,36 @@ const BUTTON_SIZES = {
   smSoft: { padding: '5px 11px', fontSize: 12, borderRadius: 7 },
 }
 
-export function Button({ variant = 'soft', size = 'md', icon, disabled = false, onClick, type = 'button', title, style, children, ...rest }) {
+export function Button({ variant = 'soft', size = 'md', icon, disabled = false, onClick, type = 'button', title, className, style, children, ...rest }) {
+  const prevIconRef = React.useRef(icon)
+  const [iconChanged, setIconChanged] = React.useState(false)
+  React.useEffect(() => {
+    if (prevIconRef.current !== icon) {
+      prevIconRef.current = icon
+      setIconChanged(true)
+    }
+  }, [icon])
   const base = BUTTON_VARIANTS[variant] || BUTTON_VARIANTS.soft
   // 次要按钮本就比主按钮矮一档，避免「写入 / 发送 / 复制」三个出口等高时主次不分。
   const sizing = size === 'sm' ? (variant === 'primary' ? BUTTON_SIZES.smSoft : BUTTON_SIZES.sm) : BUTTON_SIZES.md
+  const variantClass = `rk-btn rk-btn--${BUTTON_VARIANTS[variant] ? variant : 'soft'}`
   return h('button', {
     type,
     onClick,
     disabled,
     title,
-    className: 'rk-btn',
+    className: className ? `${variantClass} ${className}` : variantClass,
     ...rest,
     style: {
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
       cursor: disabled ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
       fontWeight: 600, ...FONT, ...sizing, ...base, ...style,
     },
-  }, [icon ? h(Icon, { key: 'i', name: icon, size: 13 }) : null, children])
+  }, [icon ? h('span', {
+    key: `i-${icon}`,
+    className: iconChanged ? (icon === 'check' ? 'rk-check-pop' : 'rk-icon-swap') : undefined,
+    style: { display: 'inline-flex' },
+  }, h(Icon, { name: icon, size: 13 })) : null, children])
 }
 
 export function IconButton({ name, iconKey, size = 15, onClick, label, active = false, disabled = false, style, ...rest }) {
@@ -94,10 +123,113 @@ export function StarButton({ active, onClick, label }) {
   }, h(Icon, { name: 'star', size: 14, style: active ? { fill: 'currentColor' } : undefined }))
 }
 
-export function Card({ as = 'div', interactive = false, style, children, ...rest }) {
+// 统一两段式危险操作按钮：首次点亮确认态，附带明确「取消」并在 4 秒无操作后自动复位，
+// 避免不同页面各写一套删除确认（有的缺问号、有的不复位、有的无取消）。
+export function ConfirmDangerButton({
+  label = '删除',
+  confirmLabel = '确认删除？',
+  cancelLabel = '取消',
+  title,
+  confirmTitle,
+  variant = 'danger',
+  size = 'sm',
+  icon = 'trash',
+  disabled = false,
+  resetMs = 4000,
+  onConfirm,
+  style,
+}) {
+  const [armed, setArmed] = React.useState(false)
+  React.useEffect(() => {
+    if (!armed || !resetMs) return undefined
+    const timer = window.setTimeout(() => setArmed(false), resetMs)
+    return () => window.clearTimeout(timer)
+  }, [armed, resetMs])
+  if (!armed) {
+    return h(Button, {
+      size, variant, icon, disabled, title, style,
+      onClick: () => setArmed(true),
+    }, label)
+  }
+  return h('span', {
+    className: 'rk-reveal',
+    style: { display: 'inline-flex', alignItems: 'center', gap: 5, ...style },
+  }, [
+    h(Button, {
+      key: 'go', size, variant: 'danger', icon, disabled, title: confirmTitle || title,
+      onClick: () => { setArmed(false); onConfirm?.() },
+    }, confirmLabel),
+    h(Button, {
+      key: 'cancel', size, variant: 'ghost', disabled,
+      onClick: () => setArmed(false),
+    }, cancelLabel),
+  ])
+}
+
+// 统一带即时勾选反馈的复制按钮：复制成功后切为 ✓ +「已复制」保持 2 秒。
+export function CopyButton({
+  getText,
+  label = '复制',
+  copiedLabel = '已复制',
+  size = 'sm',
+  variant = 'ghost',
+  disabled = false,
+  onCopied,
+  onError,
+  style,
+}) {
+  const [copied, setCopied] = React.useState(false)
+  const timerRef = React.useRef(null)
+  React.useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  const handleCopy = async () => {
+    try {
+      const text = typeof getText === 'function' ? await getText() : String(getText ?? '')
+      if (!String(text).trim()) return
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = window.setTimeout(() => setCopied(false), 2000)
+      onCopied?.()
+    } catch (error) {
+      onError?.(error)
+    }
+  }
+  return h(Button, {
+    size, variant: copied ? 'soft' : variant, icon: copied ? 'check' : 'copy', disabled, style,
+    onClick: handleCopy,
+  }, copied ? copiedLabel : label)
+}
+
+// 统一弹层/展开区的 Esc 与外点收起钩子。
+export function useDismissable(open, onClose, containerRef, { disabled = false } = {}) {
+  const onCloseRef = React.useRef(onClose)
+  onCloseRef.current = onClose
+  React.useEffect(() => {
+    if (!open || disabled || typeof window === 'undefined') return undefined
+    const onKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        onCloseRef.current?.()
+      }
+    }
+    const onPointerDown = event => {
+      if (!containerRef?.current) return
+      if (containerRef.current.contains(event.target)) return
+      onCloseRef.current?.()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('pointerdown', onPointerDown)
+    }
+  }, [open, disabled, containerRef])
+}
+
+export function Card({ as = 'div', interactive = false, className, style, children, ...rest }) {
   return h(as, {
     ...rest,
-    className: interactive ? 'rk-card' : undefined,
+    className: [interactive && 'rk-card', className].filter(Boolean).join(' ') || undefined,
     style: { padding: 16, border: `1px solid ${C.line}`, borderRadius: 12, background: C.surface, boxShadow: C.shadowCard, ...FONT, ...style },
   }, children)
 }
@@ -244,6 +376,7 @@ export function Chip({ children, color = C.teal, onRemove, removeLabel }) {
       display: 'inline-flex', alignItems: 'center', gap: 5,
       padding: '3px 6px 3px 9px', border: `1px solid ${color}33`, borderRadius: 999,
       background: `${color}15`, color, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+      fontVariantNumeric: 'tabular-nums',
     },
   }, [
     children,
@@ -252,6 +385,7 @@ export function Chip({ children, color = C.teal, onRemove, removeLabel }) {
       type: 'button',
       onClick: onRemove,
       'aria-label': removeLabel,
+      className: 'rk-chip-x',
       style: { border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 13, lineHeight: 1, padding: '0 3px', opacity: .7 },
     }, '×') : null,
   ])
@@ -262,6 +396,7 @@ export function Badge({ children, color = C.muted }) {
     style: {
       display: 'inline-block', padding: '2px 7px', borderRadius: 999,
       background: `${color}15`, color, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+      fontVariantNumeric: 'tabular-nums',
     },
   }, children)
 }
@@ -282,6 +417,7 @@ export function ListRow({ active = false, onClick, trailing, children, style, ..
   return h('div', {
     ...rest,
     className: 'rk-row',
+    'data-clickable': onClick ? 'true' : undefined,
     style: {
       display: 'flex', alignItems: 'stretch', gap: 4,
       borderBottom: `1px solid ${C.divide}`,
@@ -305,6 +441,7 @@ export function GroupLabel({ children, count }) {
 
 export function EmptyState({ icon = 'search', text, hint, action, style }) {
   return h('div', {
+    className: 'rk-fade',
     style: {
       display: 'grid', gap: 8, justifyItems: 'center', textAlign: 'center',
       padding: '30px 18px', background: C.surfaceAlt, color: C.muted,
@@ -338,27 +475,66 @@ export function Notice({ tone = 'info', icon, children, style }) {
 }
 
 export function Modal({ title, subtitle, onClose, footer, children, width = 660, labelledBy }) {
+  const [leaving, setLeaving] = React.useState(false)
+  const dialogRef = React.useRef(null)
+  const closeTimerRef = React.useRef(null)
+  const onCloseRef = React.useRef(onClose)
+  onCloseRef.current = onClose
+  const requestClose = React.useCallback(() => {
+    if (closeTimerRef.current !== null) return
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    if (reduce || typeof window === 'undefined') {
+      onCloseRef.current?.()
+      return
+    }
+    setLeaving(true)
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null
+      onCloseRef.current?.()
+    }, 145)
+  }, [])
+  React.useEffect(() => {
+    const prev = typeof document !== 'undefined' ? document.activeElement : null
+    dialogRef.current?.focus?.({ preventScroll: true })
+    const onKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        requestClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
+      if (prev && typeof prev.focus === 'function' && prev.isConnected) prev.focus({ preventScroll: true })
+    }
+  }, [requestClose])
   // 弹层是 position: fixed 的全屏遮罩：必须 portal 到 body。DSH 0.2.2-rc.1 起 composer seat
   // 有 will-change: transform，会成为 fixed 后代的 containing block；composer 槽里的选择器弹窗
   // 若留在原位会被裁成输入卡片大小（见 src/lib/overlay-anchor.js 的 bodyPortal）。
   return bodyPortal(h('div', {
     role: 'presentation',
-    className: 'rk-backdrop rk-modal-backdrop',
-    onMouseDown: onClose,
+    className: leaving ? 'rk-backdrop-leave rk-modal-backdrop' : 'rk-backdrop rk-modal-backdrop',
+    onMouseDown: requestClose,
     style: {
       position: 'fixed', inset: 0, zIndex: 20020, display: 'grid', placeItems: 'center',
       padding: 20, background: 'rgba(15, 23, 42, .42)',
     },
   }, h('section', {
+    ref: dialogRef,
+    tabIndex: -1,
     role: 'dialog',
     'aria-modal': true,
     'aria-label': labelledBy ? undefined : title,
     'aria-labelledby': labelledBy,
-    className: 'rk-pop',
+    className: leaving ? 'rk-pop-leave' : 'rk-pop',
     onMouseDown: event => event.stopPropagation(),
     style: {
       width: `min(${width}px, 100%)`, maxHeight: 'min(760px, calc(100vh - 40px))',
-      overflow: 'auto', padding: 24, borderRadius: 16,
+      overflow: 'auto', padding: 24, borderRadius: 16, outline: 'none',
       background: C.surface, color: C.ink, boxShadow: C.shadowLg, ...FONT,
     },
   }, [
@@ -367,7 +543,7 @@ export function Modal({ title, subtitle, onClose, footer, children, width = 660,
         h('h2', { key: 't', style: { margin: 0, fontSize: 23, letterSpacing: '-.02em', fontWeight: 700 } }, title),
         subtitle ? h('p', { key: 's', style: { margin: '6px 0 0', color: C.muted, fontSize: 13, lineHeight: 1.55 } }, subtitle) : null,
       ]),
-      h(IconButton, { key: 'x', name: 'close', size: 18, label: '关闭', onClick: onClose }),
+      h(IconButton, { key: 'x', name: 'close', size: 18, label: '关闭', disabled: leaving, onClick: requestClose }),
     ]),
     h('div', { key: 'body', style: { display: 'grid', gap: 15, marginTop: 20 } }, children),
     footer ? h('div', {

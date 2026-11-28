@@ -1,6 +1,6 @@
 {
   "name": "dsh-research-kit",
-  "version": "0.3.13",
+  "version": "0.3.15",
   "description": "面向 DeepSeek Harness 的科研 Agent 工作台：351 条工作流、109 个技能条目、129 个科学数据源，支持公开 API 直查与 DSH Agent/MCP 查询回退。",
   "type": "module",
   "main": "index.js",
@@ -75,6 +75,7 @@
     "test": "npm run build && node --test \"test/*.test.js\" \"test/*.test.mjs\"",
     "test:dsh-web": "npm run build && node scripts/dsh-web-smoke.mjs",
     "test:browser": "npm run build && node scripts/browser-regression.cjs",
+    "test:motion": "npm run build && node scripts/check-motion-performance.cjs",
     "prepublishOnly": "npm run check && npm test && npm run check:dsh-app && npm run check:test-count",
     "check:performance": "node scripts/check-product-performance.mjs"
   },

@@ -9,7 +9,7 @@ import { ensureResearchProviders, ResearchPromptStudioHost, researchMethodProvid
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
 import { ResearchProjectHome } from './research-project-home.js'
 import { ResearchWorkbench } from './research-workbench.js'
-import { ResearchVaultHost } from './research-vault.js'
+import { RESEARCH_LIBRARY_TABS, ResearchVaultHost } from './research-vault.js'
 import { ResearchEvidenceGraphHost } from './research-evidence-graph.js'
 import { ResearchTransferPanel } from './research-transfer-panel.js'
 
@@ -19,7 +19,7 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
   home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
-  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, initialType: props.catalogType, launchSession: props.launchSession, embedded: true }),
+  catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, initialType: props.catalogType, launchSession: props.launchSession, drafts: props.workflowDrafts, embedded: true }),
   methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
@@ -44,11 +44,10 @@ const RESEARCH_MAIN_TABS = [
   { value: 'home', label: '本次研究' },
   { value: 'catalog', label: '科研工具' },
   { value: 'vault', label: '资料库' },
-  { value: 'evidence', label: '证据星图' },
 ]
 const RESEARCH_TOOL_TABS = [
   { value: 'workflow', label: '选流程' }, { value: 'methods', label: '用方法' },
-  { value: 'database', label: '查来源' }, { value: 'mine', label: '我的' },
+  { value: 'database', label: '查来源' },
 ]
 
 const RESEARCH_TEMPLATE_HISTORY_KEY = 'dsh-research-kit.template-history.v1'
@@ -183,7 +182,7 @@ function ResearchPersonalTemplates({ inputActions }) {
         h(Button, { key: 'from', variant: 'ghost', 'aria-expanded': copyOpen, onClick: openCopy }, '从目录复制'),
       ]),
     ]),
-    copyOpen ? h(Card, { key: 'catalog-copy' }, h('div', { className: 'rk-template-form' }, [
+    copyOpen ? h(Card, { key: 'catalog-copy', className: 'rk-reveal' }, h('div', { className: 'rk-template-form' }, [
       h(Input, { key: 'q', value: sourceQuery, onChange: setSourceQuery, ariaLabel: '搜索可复制的模板', placeholder: '搜索内置流程或方法' }),
       ...sourceWorkflows.map(item => h(Button, {
         key: `workflow-${item.id}`, size: 'sm', variant: 'ghost',
@@ -195,7 +194,7 @@ function ResearchPersonalTemplates({ inputActions }) {
       }, `复制方法 · ${item.title}`)),
       query && !sourceWorkflows.length && !sourceMethods.length ? h('small', { key: 'empty', style: { color: C.muted } }, '未找到匹配的流程或方法。') : null,
     ])) : null,
-    draft ? h(Card, { key: 'form' }, h('form', { onSubmit: save, className: 'rk-template-form' }, [
+    draft ? h(Card, { key: 'form', className: 'rk-reveal' }, h('form', { onSubmit: save, className: 'rk-template-form' }, [
       h(Input, { key: 'title', value: draft.title, ariaLabel: '模板名称', placeholder: '模板名称', required: true, onChange: title => { invalidatePendingCopy(); setDraft({ ...draft, title }) } }),
       h(Textarea, { key: 'body', value: draft.prompt, ariaLabel: '模板内容', placeholder: '填写要交给 Agent 的提示词或研究步骤', rows: 8, required: true, onChange: prompt => { invalidatePendingCopy(); setDraft({ ...draft, prompt }) } }),
       h('div', { key: 'actions', className: 'rk-compose-actions' }, [
@@ -204,7 +203,7 @@ function ResearchPersonalTemplates({ inputActions }) {
       ]),
     ])) : null,
     notice ? h(Notice, { key: 'notice' }, notice) : null,
-    ...items.map(item => h(Card, { key: item.id }, [
+    ...items.map(item => h(Card, { key: item.id, interactive: true }, [
       h('div', { key: 'head', className: 'rk-personal-head' }, [
         h('div', { key: 'label' }, [
           h('strong', { key: 'title' }, item.title),
@@ -218,7 +217,7 @@ function ResearchPersonalTemplates({ inputActions }) {
           h(Button, { key: 'use', size: 'sm', variant: 'primary', onClick: () => use(item) }, '插入对话'),
         ]),
       ]),
-      selectedHistory === item.id ? h('div', { key: 'versions', className: 'rk-template-form' }, [
+      selectedHistory === item.id ? h('div', { key: 'versions', className: 'rk-template-form rk-reveal' }, [
         h('small', { key: 'note', style: { color: C.muted } }, '最多保留 10 条本地历史。载入后可在编辑区查看，保存后成为新版本。'),
         ...readResearchTemplateHistory(item.id).map((version, index) => h(Button, {
           key: `${version.at}-${index}`, variant: 'ghost', size: 'sm',
@@ -245,6 +244,7 @@ class ResearchSectionBoundary extends React.Component {
 }
 
 export function ResearchConsole(props) {
+  const workflowDrafts = React.useRef(new Map())
   const [section, setSection] = React.useState(readStoredSection)
   const [catalogLoaded, setCatalogLoaded] = React.useState(catalogReady)
   const [promptKitLoaded, setPromptKitLoaded] = React.useState(promptKitReady)
@@ -303,7 +303,7 @@ export function ResearchConsole(props) {
   const select = (id, options = {}) => {
     if (id === 'catalog') {
       setCatalogType(options.type || 'workflow')
-      if (options.workflowId) setInitialWorkflowId(options.workflowId)
+      setInitialWorkflowId(options.workflowId || '')
     }
     if (id === 'methods') setMine(Boolean(options.mine))
     if (options.tab) setVaultTab(options.tab)
@@ -311,8 +311,9 @@ export function ResearchConsole(props) {
     const evidenceId = String(options.evidenceId || evidenceIds[0] || '')
     const nodeId = String(options.nodeId || (id === 'evidence' && evidenceId ? `evidence:${evidenceId}` : ''))
     const claimId = String(options.claimId || '')
-    if (claimId || evidenceId || nodeId) {
-      setRecordFocus({ claimId, evidenceId, evidenceIds: evidenceIds.length ? evidenceIds : (evidenceId ? [evidenceId] : []), nodeId })
+    const assetId = String(options.assetId || '')
+    if (claimId || evidenceId || nodeId || assetId) {
+      setRecordFocus({ claimId, evidenceId, evidenceIds: evidenceIds.length ? evidenceIds : (evidenceId ? [evidenceId] : []), nodeId, assetId })
     } else if (id === 'vault' || id === 'evidence' || id === 'home' || id === 'catalog' || id === 'methods') {
       setRecordFocus(null)
     }
@@ -341,16 +342,25 @@ export function ResearchConsole(props) {
       h('div', { key: 'main', className: 'rk-console-main' }, [
         h(Segmented, {
           key: 'tabs',
-          value: inTools ? 'catalog' : current.id,
+          value: inTools ? 'catalog' : current.id === 'evidence' ? 'vault' : current.id,
           options: RESEARCH_MAIN_TABS,
           onChange: id => id === 'vault' ? select('vault', { tab: vaultTab || 'assets' }) : select(id),
           ariaLabel: '科研工作台分区',
         }),
-        inTools ? h(Segmented, { key: 'tools', value: current.id === 'methods' ? (mine ? 'mine' : 'methods') : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' }) : h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
+        inTools ? h('div', { key: 'tools', className: 'rk-fade' }, h(Segmented, { value: current.id === 'methods' ? 'methods' : catalogType, options: RESEARCH_TOOL_TABS, onChange: goTool, ariaLabel: '科研工具分类' })) : null,
+        h('div', { key: 'research-actions', className: 'rk-compose-actions' }, [
           h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '时空囊'),
         ]),
       ]),
     ]),
+    current.id === 'evidence' ? h('div', { key: 'library-nav', className: 'rk-fade', style: { margin: '12px var(--rk-gutter) 0' } },
+      h(Segmented, { value: 'graph', options: RESEARCH_LIBRARY_TABS, ariaLabel: '沉淀层子模块', onChange: tab => {
+        if (tab !== 'graph') select('vault', { tab })
+      } })) : null,
+    current.id === 'methods' ? h('div', { key: 'method-nav', className: 'rk-fade', style: { margin: '12px var(--rk-gutter) 0' } },
+      h(Segmented, { value: mine ? 'mine' : 'library', ariaLabel: '方法与模板', options: [
+        { value: 'library', label: '方法库' }, { value: 'mine', label: '个人模板' },
+      ], onChange: value => select('methods', { mine: value === 'mine' }) })) : null,
     transferOpen ? promptKitLoaded
       ? h(ResearchTransferPanel, { key: 'transfer-panel', assetProvider: researchAssetProvider, onClose: () => setTransferOpen(false) })
       : h(Card, { key: 'transfer-loading', style: { margin: '12px var(--rk-gutter)', display: 'grid', gap: 8 } }, [
@@ -361,7 +371,7 @@ export function ResearchConsole(props) {
     h(ToastHost, { key: 'toast-host' }),
     h('div', { key: `section:${current.id}`, className: 'rk-section-enter', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
-        view?.({ ...props, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))
+        view?.({ ...props, workflowDrafts: workflowDrafts.current, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),

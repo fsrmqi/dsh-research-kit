@@ -236,7 +236,7 @@ test('预设配置区只在表单就绪时渲染；只读或写入被拒时按�
   const markup = renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, { view: 'page', form: ready }))
   assert.match(markup, /直连研究/)
   assert.match(markup, /Agent 辅助/)
-  assert.match(markup, /预设会原子覆盖全部 Research Kit 运行字段/)
+  assert.match(markup, /一键应用推荐配置，下方各项仍可单独微调/)
   assert.doesNotMatch(markup, /disabled/, '可写时按钮不应禁用')
   // 只读（memory 模式 / 宿主文档不接受写入）时必须禁用，而不是让用户点一个注定失败的按钮。
   const readonly = renderToStaticMarkup(React.createElement(ResearchKitPresetConfig, {

@@ -1,6 +1,6 @@
 import React from 'react'
 import { h, C } from './theme.js'
-import { GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT } from './lib/evidence-graph-core.js'
+import { GRAPH_NODE_WIDTH, GRAPH_NODE_HEIGHT, clampGraphScale } from './lib/evidence-graph-core.js'
 import { graphKindColor, nodeStrokeColor, nodeStrokeDash, graphLabel } from './evidence-graph-export.js'
 
 const GRAPH_FRAME_HEIGHT = 520
@@ -12,6 +12,8 @@ export function EvidenceGraphCanvas({
   const frameRef = React.useRef(null)
   const minimapViewportRef = React.useRef(null)
   const dragRef = React.useRef(null)
+  const minimapDragRef = React.useRef(null)
+  const directCameraRef = React.useRef(false)
   const cameraAnimRef = React.useRef(0)
   const viewWidth = layout.width / scale
   const viewHeight = layout.height / scale
@@ -37,8 +39,9 @@ export function EvidenceGraphCanvas({
     const from = renderedBoxRef.current
     const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
     const delta = Math.abs(target.x - from.x) + Math.abs(target.y - from.y) + Math.abs(target.w - from.w) + Math.abs(target.h - from.h)
-    if (dragRef.current) return undefined
-    if (reduce || typeof requestAnimationFrame !== 'function' || delta < 0.5) {
+    if (dragRef.current || minimapDragRef.current) return undefined
+    if (directCameraRef.current || reduce || typeof requestAnimationFrame !== 'function' || delta < 0.5) {
+      directCameraRef.current = false
       paintBox(target)
       return undefined
     }
@@ -116,14 +119,71 @@ export function EvidenceGraphCanvas({
   const onWheel = event => {
     if (!(event.ctrlKey || event.metaKey)) return
     event.preventDefault()
-    zoomBy(event.deltaY < 0 ? 1.15 : 1 / 1.15)
+    if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(cameraAnimRef.current)
+      cameraAnimRef.current = 0
+    }
+    // 触控板双指捏合/滚轮缩放直接 1:1 跟手，以指针位置为中心推拉，不叠加 220ms 滞后补间。
+    const factor = Math.exp(-Math.max(-60, Math.min(60, event.deltaY)) * 0.0045)
+    const currentBox = renderedBoxRef.current
+    const currentScale = layout.width / Math.max(1, currentBox.w)
+    const nextScale = clampGraphScale(currentScale * factor)
+    if (Math.abs(nextScale - currentScale) < 1e-4) return
+    const rect = frameRef.current?.getBoundingClientRect()
+    const rx = rect && rect.width ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) : 0.5
+    const ry = rect && rect.height ? Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)) : 0.5
+    const nextW = layout.width / nextScale
+    const nextH = layout.height / nextScale
+    const anchorX = currentBox.x + currentBox.w * rx
+    const anchorY = currentBox.y + currentBox.h * ry
+    const nextPan = clampPanFor({ x: anchorX - nextW * rx, y: anchorY - nextH * ry }, nextScale)
+    const nextBox = { x: nextPan.x, y: nextPan.y, w: nextW, h: nextH }
+    directCameraRef.current = true
+    paintBox(nextBox)
+    onDragEnd(nextPan, nextScale)
   }
-  const onMinimapClick = event => {
+  const panFromMinimap = (clientX, clientY, rect, immediate) => {
+    if (!rect.width || !rect.height) return null
+    const x = ((clientX - rect.left) / rect.width) * layout.width
+    const y = ((clientY - rect.top) / rect.height) * layout.height
+    const currentBox = renderedBoxRef.current
+    const curScale = layout.width / Math.max(1, currentBox.w)
+    const next = clampPanFor({ x: x - currentBox.w / 2, y: y - currentBox.h / 2 }, curScale)
+    if (immediate) paintBox({ ...currentBox, ...next })
+    return { next, curScale }
+  }
+  const onMinimapPointerDown = event => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    if (cameraAnimRef.current && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(cameraAnimRef.current)
+      cameraAnimRef.current = 0
+    }
     const rect = event.currentTarget.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-    const x = ((event.clientX - rect.left) / rect.width) * layout.width
-    const y = ((event.clientY - rect.top) / rect.height) * layout.height
-    setPan(clampPanFor({ x: x - viewWidth / 2, y: y - viewHeight / 2 }, scale))
+    minimapDragRef.current = { pointerId: event.pointerId, rect, moved: false, startX: event.clientX, startY: event.clientY, last: null }
+    if (event.currentTarget.setPointerCapture) event.currentTarget.setPointerCapture(event.pointerId)
+  }
+  const onMinimapPointerMove = event => {
+    const drag = minimapDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 2) drag.moved = true
+    if (!drag.moved) return
+    drag.last = panFromMinimap(event.clientX, event.clientY, drag.rect, true)
+  }
+  const onMinimapPointerUp = event => {
+    const drag = minimapDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    minimapDragRef.current = null
+    if (event.currentTarget.releasePointerCapture && event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    if (drag.moved && drag.last) {
+      directCameraRef.current = true
+      onDragEnd(drag.last.next, drag.last.curScale)
+    } else {
+      const picked = panFromMinimap(event.clientX, event.clientY, drag.rect, false)
+      if (picked) setPan(picked.next)
+    }
   }
 
   const minimapWidth = 148
@@ -218,8 +278,11 @@ export function EvidenceGraphCanvas({
     height: minimapHeight,
     role: 'img',
     'aria-label': '图谱迷你地图',
-    onClick: onMinimapClick,
-    style: { display: 'block', cursor: 'crosshair' }
+    onPointerDown: onMinimapPointerDown,
+    onPointerMove: onMinimapPointerMove,
+    onPointerUp: onMinimapPointerUp,
+    onPointerCancel: onMinimapPointerUp,
+    style: { display: 'block', cursor: 'crosshair', touchAction: 'none' }
   }, [
     h('rect', { key: 'bg', width: layout.width, height: layout.height, fill: C.surfaceAlt, rx: 6 }),
     ...(useDensityMode && densityCells

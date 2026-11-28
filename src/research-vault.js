@@ -2,7 +2,7 @@ import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
 import {
-  Page, PageHead, Toolbar, Card, Button, StarButton, Badge, Chip,
+  Page, PageHead, Toolbar, Card, Button, ConfirmDangerButton, CopyButton, StarButton, Badge, Chip,
   Field, Input, Textarea, Select, Notice, Segmented, EmptyState, Spinner,
 } from './ui.js'
 import { assertManageableBody, filterAssets } from './lib/vault-core.js'
@@ -37,10 +37,11 @@ const VAULT_TYPE_LABELS = { prompt: '提示词', snippet: '片段', insight: '�
 
 // 沉淀层的三个子模块：灵感资产回答「想过什么」，证据库回答「依据什么」，
 // Claim 审阅回答「研究者如何判断这条结论」。
-const VAULT_TABS = [
+export const RESEARCH_LIBRARY_TABS = [
   { value: 'assets', label: '灵感资产' },
   { value: 'evidence', label: '证据库' },
   { value: 'claims', label: '论断审阅' },
+  { value: 'graph', label: '证据星图' },
 ]
 
 function formatAssetTime(at) {
@@ -88,13 +89,20 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
   }, [])
   const [tab, setTab] = React.useState(initialTab)
   const [moreCardId, setMoreCardId] = React.useState('')
-  // 删除是不可逆的：与「清空课题」「清空临时记录」同款两段式确认（首次点变「确认删除？」）；4 秒无操作自动复位。
-  const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
+  const [focusedAssetId, setFocusedAssetId] = React.useState('')
   React.useEffect(() => {
-    if (!confirmDeleteId) return undefined
-    const timer = setTimeout(() => setConfirmDeleteId(''), 4000)
-    return () => clearTimeout(timer)
-  }, [confirmDeleteId])
+    if (initialTab && initialTab !== tab) setTab(initialTab)
+  }, [initialTab])
+  React.useEffect(() => {
+    const id = focus?.assetId
+    if (!id) return
+    setTab('assets')
+    setFocusedAssetId(id)
+    const timer = window.setTimeout(() => {
+      document.querySelector(`[data-asset-id="${CSS?.escape ? CSS.escape(id) : id}"]`)?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [focus?.assetId])
   const setError = message => setNotice(`⚠️ ${message}`)
   // ── 资产-证据互链（入口 A，ROADMAP §11 P5）────────────────────────────────
   // 候选只推导、用户勾选确认后建立（绝不自动建边）；展开态与勾选集都是纯视图状态。
@@ -151,7 +159,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     : filtered, [filtered, groupByTopic])
   const projects = React.useMemo(() => [...new Set(assets.map(item => item.project).filter(Boolean))].sort(), [assets])
 
-  const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setFormMoreOpen(false); setCompareId(''); setConfirmDeleteId('') }
+  const openCreate = () => { setForm({ ...EMPTY_FORM }); setFormOpen(true); setFormMoreOpen(false); setCompareId('') }
   const openEdit = item => {
     setForm({
       id: item.id, title: item.title || '', body: item.body || '', tags: visibleDepositionTags(item).join(', '),
@@ -164,7 +172,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
   }
   const derive = item => {
     setForm({ ...EMPTY_FORM, title: `${item.title} · 变体`, body: item.body, tags: visibleDepositionTags(item).join(', '), type: item.type || 'insight', project: item.project || '', parentId: item.id, thinkingKind: item.thinkingKind || 'question', epistemicStatus: item.epistemicStatus || 'inferred', rationale: item.rationale || '', nextAction: item.nextAction || '' })
-    setFormOpen(true); setCompareId(item.id); setConfirmDeleteId('')
+    setFormOpen(true); setCompareId(item.id)
     setNotice(`已载入「${item.title}」作为派生版本；保存后保留来源关系，可做版本对比。`)
   }
   const save = async () => {
@@ -193,16 +201,24 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
   }
   const remove = async item => {
     if (!assetProvider?.remove) return
+    const previousLinks = linksForAsset(item.id)
     try {
       await assetProvider.remove(item.id)
-      // 本视图能钩到的资产删除：联动解除以其为一端的 link。
-      // vendored 面板（增强器知识区等）的删除钩不到——图谱与列表对悬空端点优雅兜底。
       await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
-      setNotice(`已删除「${item.title}」，其证据关联已一并解除。`)
-    } catch (error) { setError(error?.message || error) } finally { setConfirmDeleteId('') }
+      setNotice(`已删除「${item.title}」。`, {
+        actionLabel: '撤销',
+        onAction: async () => {
+          try {
+            await assetProvider.save(item)
+            for (const link of previousLinks) {
+              await linkAssetToEvidence({ assetId: item.id, evidenceId: link.evidenceId, project: link.project || item.project || '' })
+            }
+            pushToast({ message: `已恢复「${item.title}」。` })
+          } catch (error) { pushToast({ message: `恢复失败：${error?.message || error}`, tone: 'warn' }) }
+        },
+      })
+    } catch (error) { setError(error?.message || error) }
   }
-  // 两段式的第一步：只点亮确认态，不删任何东西；第二步由按钮渲染层接 remove(item)。
-  const requestRemove = item => setConfirmDeleteId(current => current === item.id ? '' : item.id)
 
   // ── 关联证据（入口 A）─────────────────────────────────────────────────────
   const linksForAsset = React.useCallback(
@@ -234,13 +250,21 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
         if (result?.created) created++
       }
       setCheckedCandidates(current => ({ ...current, [item.id]: new Set() }))
-      setNotice(created ? `已建立 ${created} 条关联；可在证据条目与图谱中看到。` : '所选关联均已存在。')
+      setNotice(created ? `已建立 ${created} 条关联。` : '所选关联均已存在。')
     } catch (error) { setError(error?.message || error) } finally { setLinkBusy(false) }
   }
   const unlink = async link => {
     try {
       await removeAssetEvidenceLinkEntry(link.id)
-      setNotice('已解除关联。')
+      setNotice('已解除关联。', {
+        actionLabel: '撤销',
+        onAction: async () => {
+          try {
+            await linkAssetToEvidence({ assetId: link.assetId, evidenceId: link.evidenceId, project: link.project || '' })
+            pushToast({ message: '已恢复关联。' })
+          } catch (error) { pushToast({ message: `恢复失败：${error?.message || error}`, tone: 'warn' }) }
+        },
+      })
     } catch (error) { setError(error?.message || error) }
   }
   const toggleFavorite = async item => {
@@ -316,9 +340,12 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       actions: [],
     }),
     h('div', { key: 'subnav', style: { marginTop: 14 } }, [
-      h(Segmented, { key: 'tabs', value: tab, options: VAULT_TABS, onChange: value => { setTab(value); onTabChange?.(value) }, ariaLabel: '沉淀层子模块' }),
+      h(Segmented, { key: 'tabs', value: tab, options: onNavigate ? RESEARCH_LIBRARY_TABS : RESEARCH_LIBRARY_TABS.slice(0, -1), onChange: value => {
+        if (value === 'graph') onNavigate?.('evidence')
+        else { setTab(value); onTabChange?.(value) }
+      }, ariaLabel: '沉淀层子模块' }),
     ]),
-    tab === 'assets' && backupOpen ? h(Card, { key: 'backup', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
+    tab === 'assets' && backupOpen ? h(Card, { key: 'backup', className: 'rk-reveal', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '恢复灵感资产备份（增量合并，不覆盖现有资产）'),
       h('input', { key: 'file', type: 'file', accept: '.json,application/json', 'aria-label': '选择灵感资产备份文件', onChange: importJsonFile, style: { fontSize: 12 } }),
       h('details', { key: 'paste-box' }, [
@@ -388,11 +415,15 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
     tab === 'assets' ? h(MemoizedAssetList, {
       key: 'list',
       items: displayedAssets,
-      dependencies: [compareId, compareItem, linkAssetId, moreCardId, assetLinks, evidenceById, checkedCandidates, linkBusy, confirmDeleteId, inputActions, assetProvider, linksForAsset, candidatesForAsset],
+      dependencies: [compareId, compareItem, linkAssetId, moreCardId, focusedAssetId, assetLinks, evidenceById, checkedCandidates, linkBusy, inputActions, assetProvider, linksForAsset, candidatesForAsset],
       renderItem: item => item.__groupTopic ? h('div', { key: item.id, role: 'heading', 'aria-level': 3, style: { fontSize: 14, fontWeight: 700, color: C.teal, marginTop: 8 } }, `${item.__groupTopic} · ${item.__count}`) : h(Card, {
       key: item.__displayKey || item.id,
+      'data-asset-id': item.id,
       interactive: true,
-      style: { contentVisibility: 'auto', containIntrinsicSize: '0 280px' },
+      style: {
+        contentVisibility: 'auto', containIntrinsicSize: '0 280px',
+        ...(focusedAssetId === item.id ? { borderColor: C.teal, boxShadow: `0 0 0 2px ${C.tealTintDeep}` } : {}),
+      },
     }, [
       h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
@@ -418,17 +449,22 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       item.rationale || item.nextAction || visibleDepositionTags(item).length || item.project ? h('div', { key: 'meta', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
         item.rationale ? h('p', { key: 'rationale', style: { margin: 0 } }, `为什么重要：${item.rationale}`) : null,
         item.nextAction ? h('p', { key: 'next', style: { margin: 0 } }, `下一步：${item.nextAction}`) : null,
-        item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
+        item.project ? h('p', { key: 'project', style: { margin: 0 } }, `课题：${item.project}`) : null,
         visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } }, visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
       ]) : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: C.muted } }, [
         h('span', { key: 'time' }, `更新于 ${formatAssetTime(item.updatedAt)}${item.useCount ? ` · 使用 ${item.useCount} 次` : ''}`),
+        item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
         h(Button, { key: 'edit', size: 'sm', variant: 'ghost', icon: 'edit', onClick: () => openEdit(item) }, '编辑'),
         h(Button, {
           key: 'links', size: 'sm', variant: linkAssetId === item.id ? 'soft' : 'ghost', icon: 'link',
           onClick: () => setLinkAssetId(current => current === item.id ? '' : item.id),
         }, `关联证据（${linksForAsset(item.id).length}）`),
-        h(Button, { key: 'copy', size: 'sm', variant: 'ghost', icon: 'copy', onClick: () => copyBody(item) }, '复制'),
+        h(CopyButton, {
+          key: 'copy', label: '复制', getText: () => item.body,
+          onCopied: () => { assetProvider?.markUsed?.(item.id) },
+          onError: () => setError('复制失败，请手动选择内容复制。'),
+        }),
         h(Button, {
           key: 'more', size: 'sm', variant: moreCardId === item.id ? 'soft' : 'quiet',
           'aria-expanded': moreCardId === item.id,
@@ -436,13 +472,13 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
         }, moreCardId === item.id ? '收起 ▴' : '更多 ⋯'),
       ]),
       moreCardId === item.id ? h('div', { key: 'more-actions', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
-        item.verification?.status === 'pending' || item.epistemicStatus === 'to_verify' ? h(Button, { key: 'verify', size: 'sm', variant: 'soft', icon: 'check', onClick: () => markVerified(item) }, '标记已证实') : null,
         h(Button, { key: 'derive', size: 'sm', variant: 'ghost', icon: 'branch', onClick: () => derive(item) }, '派生变体'),
         item.parentId ? h(Button, { key: 'compare', size: 'sm', variant: 'soft', icon: 'layers', onClick: () => setCompareId(current => current === item.id ? '' : item.id) }, compareId === item.id ? '收起对比' : '与来源对比') : null,
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        confirmDeleteId === item.id
-          ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；同时解除该资产的全部证据关联', onClick: () => remove(item) }, '确认删除？')
-          : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复；将同时解除该资产的全部证据关联', onClick: () => requestRemove(item) }, '删除'),
+        h(ConfirmDangerButton, {
+          key: 'delete', label: '删除', confirmLabel: '确认删除？', title: '删除后可在提示条中撤销',
+          onConfirm: () => remove(item),
+        }),
       ]) : null,
       compareId === item.id && compareItem ? h('div', { key: 'diff', className: 'rk-diff rk-reveal', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 } }, [
         h('div', { key: 'old' }, [
@@ -477,7 +513,7 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
             h('strong', { key: 'ct', style: { fontSize: 12, color: C.muted } }, `候选证据（${candidates.length}）`),
             ...candidates.map(candidate => {
               const entry = evidenceById.get(candidate.evidenceId)
-              return h('label', { key: candidate.evidenceId, style: { display: 'grid', gridTemplateColumns: '18px 1fr', gap: 8, alignItems: 'start', cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: `1px solid ${picked.has(candidate.evidenceId) ? C.tealLineStrong : C.line}`, background: picked.has(candidate.evidenceId) ? C.tealTint : C.surface } }, [
+              return h('label', { key: candidate.evidenceId, className: 'rk-check-card', style: { display: 'grid', gridTemplateColumns: '18px 1fr', gap: 8, alignItems: 'start', cursor: 'pointer', padding: '8px 10px', borderRadius: 8, border: `1px solid ${picked.has(candidate.evidenceId) ? C.tealLineStrong : C.line}`, background: picked.has(candidate.evidenceId) ? C.tealTint : C.surface } }, [
                 h('input', {
                   key: 'box', type: 'checkbox', checked: picked.has(candidate.evidenceId),
                   onChange: () => toggleCandidate(item.id, candidate.evidenceId),

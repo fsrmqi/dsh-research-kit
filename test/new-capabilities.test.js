@@ -105,5 +105,5 @@ test('DSH 产物注册插件详情状态区，不把状态探测当成能力升�
   const client = readFileSync(new URL('../ui/client.js', import.meta.url), 'utf8')
   assert.match(client, /plugins\.detail\.section/)
   assert.match(client, /dsh-research-kit-status/)
-  assert.match(client, /部署事实 · 不改变目录标注/)
+  assert.match(client, /正在探测宿主能力/)
 })

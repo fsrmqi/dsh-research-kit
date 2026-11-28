@@ -39,13 +39,13 @@ export function EvidenceVaultTopCards({
       h('div', { key: 'row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
         h('strong', { key: 'label', style: { fontSize: 13 } }, '当前课题'),
         h(Select, { key: 'select', value: project, options: projectOptions, onChange: switchProject, ariaLabel: '切换课题', style: { width: 'auto', minWidth: 140 } }),
-        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => setNewProjectOpen(value => !value), 'aria-expanded': newProjectOpen }, '新建课题'),
+        h(Button, { key: 'new', size: 'sm', variant: 'ghost', icon: 'plus', onClick: () => { setNewProjectOpen(value => !value); setIoOpen(false); setManageOpen(false); setCitationOpen(false) }, 'aria-expanded': newProjectOpen }, '新建课题'),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        h(Button, { key: 'citations', size: 'sm', variant: 'soft', onClick: () => setCitationOpen(value => !value), 'aria-expanded': citationOpen }, '导入引用'),
-        h(Button, { key: 'io', size: 'sm', variant: ioOpen ? 'soft' : 'ghost', 'aria-expanded': ioOpen, onClick: () => { setIoOpen(value => !value); setManageOpen(false) } }, ioOpen ? '收起导入导出' : '导入导出 ▾'),
-        h(Button, { key: 'manage', size: 'sm', variant: manageOpen ? 'soft' : 'ghost', 'aria-expanded': manageOpen, onClick: () => { setManageOpen(value => !value); setIoOpen(false) } }, manageOpen ? '收起课题管理' : '课题管理 ▾'),
+        h(Button, { key: 'citations', size: 'sm', variant: 'soft', onClick: () => { setCitationOpen(value => !value); setIoOpen(false); setManageOpen(false); setNewProjectOpen(false) }, 'aria-expanded': citationOpen }, '导入引用'),
+        h(Button, { key: 'io', size: 'sm', variant: ioOpen ? 'soft' : 'ghost', 'aria-expanded': ioOpen, onClick: () => { setIoOpen(value => !value); setManageOpen(false); setNewProjectOpen(false); setCitationOpen(false) } }, ioOpen ? '收起导入导出' : '导入导出 ▾'),
+        h(Button, { key: 'manage', size: 'sm', variant: manageOpen ? 'soft' : 'ghost', 'aria-expanded': manageOpen, onClick: () => { setManageOpen(value => !value); setIoOpen(false); setNewProjectOpen(false); setCitationOpen(false) } }, manageOpen ? '收起课题管理' : '课题管理 ▾'),
       ]),
-      newProjectOpen ? h('div', { key: 'new-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+      newProjectOpen ? h('div', { key: 'new-row', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
         h(Input, { key: 'i', value: newProject, onChange: setNewProject, placeholder: '课题名称，例：大麦雄性不育', ariaLabel: '新课题名称', style: { flex: '1 1 200px' } }),
         h(Button, { key: 'go', size: 'sm', variant: 'primary', disabled: !newProject.trim(), onClick: createProject }, '创建并切换'),
       ]) : null,
@@ -59,13 +59,13 @@ export function EvidenceVaultTopCards({
         h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
           project ? h(Button, { key: 'rename', size: 'sm', variant: 'ghost', onClick: () => { setWorkspaceNameDraft(activeWorkspace?.name || project); setWorkspaceRenameOpen(value => !value) } }, '改显示名') : null,
           project ? h(Button, { key: 'archive', size: 'sm', variant: 'ghost', onClick: () => activeWorkspace?.archived ? toggleProjectArchive() : setConfirmArchiveWorkspace(value => !value) }, activeWorkspace?.archived ? '恢复课题' : '归档课题') : null,
-          confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认：只归档，不删除数据') : null,
+          confirmArchiveWorkspace ? h(Button, { key: 'archive-confirm', size: 'sm', variant: 'soft', onClick: toggleProjectArchive }, '确认归档（资料会保留）') : null,
           h(Button, { key: 'archived-toggle', size: 'sm', variant: 'ghost', onClick: () => setShowArchivedWorkspaces(value => !value) }, showArchivedWorkspaces ? '隐藏已归档' : '显示已归档'),
           h(Button, { key: 'preview', size: 'sm', variant: 'soft', disabled: organizerBusy || loading || hasUndoableOrganizer, onClick: previewOrganizer }, '一键整理课题'),
           hasUndoableOrganizer ? h(Button, { key: 'undo', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: undoOrganizer }, '撤销上次整理') : null,
           organizerJournal?.status === 'applied' ? h(Button, { key: 'finalize', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: finalizeOrganizer }, '保留结果并继续') : null,
         ]),
-        workspaceRenameOpen ? h('div', { key: 'rename-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
+        workspaceRenameOpen ? h('div', { key: 'rename-row', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [
           h(Input, { key: 'input', value: workspaceNameDraft, onChange: setWorkspaceNameDraft, placeholder: '新的课题显示名', ariaLabel: '课题显示名', style: { flex: '1 1 200px' } }),
           h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !workspaceNameDraft.trim(), onClick: renameProject }, '保存显示名'),
         ]) : null,
@@ -78,7 +78,7 @@ export function EvidenceVaultTopCards({
               onClick: () => setConfirmClear(true),
             }, project ? '清空本课题证据' : '清空全部课题证据') : null,
           ]),
-          confirmClear ? h('div', { key: 'confirm-row', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
+          confirmClear ? h('div', { key: 'confirm-row', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
             h(Input, {
               key: 'input', value: clearConfirmText, onChange: setClearConfirmText,
               placeholder: `输入「${clearExpected}」以解锁删除`,
@@ -104,7 +104,7 @@ export function EvidenceVaultTopCards({
       ]) : null,
       organizerLog.length ? h('div', { key: 'organizer-log', role: 'status', style: { maxHeight: 100, overflowY: 'auto', fontSize: 11, color: C.muted, display: 'grid', gap: 3 } },
         organizerLog.slice(-10).map((line, index) => h('span', { key: `${index}:${line}` }, line))) : null,
-      organizerPlan ? h('div', { key: 'organizer-preview', style: { display: 'grid', gap: 8, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 8 } }, [
+      organizerPlan ? h('div', { key: 'organizer-preview', className: 'rk-reveal', style: { display: 'grid', gap: 8, padding: 10, border: `1px solid ${C.tealLine}`, borderRadius: 8 } }, [
         h('strong', { key: 'title', style: { fontSize: 13 } }, '课题归类预览 · 确认前不会修改数据'),
         ...organizerPlan.map((item, index) => h('label', { key: item.from, style: { display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 } }, [
           h('input', { key: 'check', type: 'checkbox', checked: item.selected, disabled: organizerBusy, onChange: event => setOrganizerPlan(rows => rows.map((row, i) => i === index ? { ...row, selected: event.target.checked } : row)) }),
@@ -115,7 +115,7 @@ export function EvidenceVaultTopCards({
           h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', disabled: organizerBusy, onClick: () => setOrganizerPlan(null) }, '取消'),
         ]),
       ]) : null,
-      backupOpen ? h('div', { key: 'backup', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+      backupOpen ? h('div', { key: 'backup', className: 'rk-reveal', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 9, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
         h('strong', { key: 't', style: { fontSize: 12, color: C.ink } }, '从备份文件恢复（增量合并，不覆盖现有笔记）'),
         h('input', {
           key: 'file', type: 'file', accept: '.json,application/json', 'aria-label': '选择证据 JSON 备份文件',
@@ -154,12 +154,12 @@ export function EvidenceVaultTopCards({
         quality.duplicateGroups.length ? h('span', { key: 'duplicates' }, `同源候选：${quality.duplicateGroups.slice(0, 2).map(item => item.projects.join('／')).join('；')}${quality.duplicateGroups.length > 2 ? '…' : ''}`) : null,
       ])
     })() : null,
-    citationOpen ? h(Card, { key: 'citation-import', style: { display: 'grid', gap: 8 } }, [
+    citationOpen ? h(Card, { key: 'citation-import', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
       h('strong', { key: 'title' }, '导入 BibTeX／RIS · 预览并选择后保存'),
       h('input', { key: 'file', type: 'file', accept: '.bib,.ris,.txt', 'aria-label': '选择引用文件', disabled: citationBusy,
-        onChange: async event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2000000) return setNotice('⚠️ 文件超过 2 MB，请拆分。'); try { setCitationText(await file.text()); setCitationPreviewRows([]); setCitationPicked([]) } catch (error) { setNotice(`⚠️ 文件读取失败：${error.message}`) } } }),
+        onChange: async event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2000000) return setNotice('⚠️ 文件超过 2 MB，请拆分。'); try { const text = await file.text(); setCitationText(text); previewCitations(text) } catch (error) { setNotice(`⚠️ 文件读取失败：${error.message}`) } } }),
       h(Textarea, { key: 'text', value: citationText, onChange: value => { setCitationText(value); setCitationPreviewRows([]); setCitationPicked([]) }, rows: 4, ariaLabel: 'BibTeX 或 RIS 引用内容', disabled: citationBusy }),
-      h(Button, { key: 'preview', size: 'sm', disabled: !citationText.trim() || citationBusy, onClick: previewCitations }, '预览引用'),
+      h(Button, { key: 'preview', size: 'sm', disabled: !citationText.trim() || citationBusy, onClick: () => previewCitations() }, '预览引用'),
       ...citationWarnings.slice(0, 10).map((warning, index) => h('small', { key: `warn:${index}`, style: { color: C.muted } }, warning)),
       citationPreviewRows.length ? h('div', { key: 'rows', style: { maxHeight: 260, overflowY: 'auto', display: 'grid', gap: 5 } }, [
         h(Button, { key: 'all', size: 'sm', disabled: citationBusy, onClick: () => setCitationPicked(citationPicked.length === citationPreviewRows.length ? [] : citationPreviewRows.map((_, index) => index)) }, citationPicked.length === citationPreviewRows.length ? '取消全选' : '选择全部预览引用'),
@@ -185,34 +185,43 @@ export function EvidenceVaultActionPanels({
   artifactParameters, setArtifactParameters, artifactEnvironment, setArtifactEnvironment,
   artifactOutput, setArtifactOutput, artifactExecution, setArtifactExecution, saveArtifact,
 }) {
+  const [claimDetailsOpen, setClaimDetailsOpen] = React.useState(false)
+  const needsLocator = claimStance === 'supports' || claimStance === 'refutes'
   return h(React.Fragment, null, [
-    screeningOpen ? h(Card, { key: 'screening-form', style: { display: 'grid', gap: 8 } }, [
+    screeningOpen ? h(Card, { key: 'screening-form', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
       h('strong', { key: 'title', style: { fontSize: 13 } }, `筛选已选 ${selectedEntries.length} 条证据`),
       h(Select, { key: 'decision', value: screeningDecision, onChange: setScreeningDecision, ariaLabel: '筛选决定', options: [
         { value: 'include', label: '纳入' }, { value: 'exclude', label: '排除' }, { value: 'pending', label: '待定' },
       ] }),
-      h(Textarea, { key: 'reason', value: screeningReason, onChange: setScreeningReason, rows: 2, placeholder: '筛选理由；排除时必填', ariaLabel: '筛选理由' }),
+      h(Textarea, { key: 'reason', value: screeningReason, onChange: setScreeningReason, rows: 2, placeholder: '筛选理由（排除时必填）', ariaLabel: '筛选理由' }),
       h('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
         h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !selectedEntries.length || (screeningDecision === 'exclude' && !screeningReason.trim()), onClick: saveScreening }, '记录筛选决定'),
         h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => setScreeningOpen(false) }, '取消'),
       ]),
-      h('span', { key: 'hint', style: { color: C.muted, fontSize: 12 } }, '每次决定都会留痕；账本按每条证据的最新决定统计。'),
     ]) : null,
-    claimFormOpen ? h(Card, { key: 'claim-form', style: { display: 'grid', gap: 8 } }, [
+    claimFormOpen ? h(Card, { key: 'claim-form', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
       h('strong', { key: 'title', style: { fontSize: 13 } }, `建立研究论断 · 关联已选 ${selectedEntries.length} 条证据`),
-      h(Input, { key: 'question', value: claimQuestion, onChange: setClaimQuestion, placeholder: '研究问题（可选）', ariaLabel: '研究问题' }),
-      h(Textarea, { key: 'statement', value: claimStatement, onChange: setClaimStatement, rows: 2, placeholder: '可检验的具体论断', ariaLabel: '具体论断' }),
+      h(Textarea, { key: 'statement', value: claimStatement, onChange: setClaimStatement, rows: 2, placeholder: '写一句可检验的具体论断', ariaLabel: '具体论断' }),
       h(Select, { key: 'stance', value: claimStance, onChange: setClaimStance, ariaLabel: '所选证据与论断的关系', options: RESEARCH_EVIDENCE_STANCES.map(value => ({ value, label: ({ unassessed: '尚未评估', supports: '支持', refutes: '反驳', insufficient: '证据不足' })[value] })) }),
-      h(Input, { key: 'locator', value: claimLocator, onChange: setClaimLocator, placeholder: '原文位置：页码／图表／段落；支持或反驳时必填', ariaLabel: '来源定位' }),
-      h(Input, { key: 'design', value: claimStudyDesign, onChange: setClaimStudyDesign, placeholder: '研究设计（可选）', ariaLabel: '研究设计' }),
-      h(Input, { key: 'sample', value: claimSample, onChange: setClaimSample, placeholder: '样本／研究对象（可选）', ariaLabel: '样本与研究对象' }),
-      h(Input, { key: 'result', value: claimResult, onChange: setClaimResult, placeholder: '关键结果（可选）', ariaLabel: '关键结果' }),
-      h(Input, { key: 'limitations', value: claimLimitations, onChange: setClaimLimitations, placeholder: '局限性（可选）', ariaLabel: '局限性' }),
+      needsLocator ? h(Input, { key: 'locator', className: 'rk-reveal', value: claimLocator, onChange: setClaimLocator, placeholder: '原文位置：页码／图表／段落（必填）', ariaLabel: '来源定位' }) : null,
+      h('div', { key: 'more-toggle' }, [
+        h(Button, {
+          key: 'toggle', size: 'sm', variant: 'quiet', 'aria-expanded': claimDetailsOpen,
+          onClick: () => setClaimDetailsOpen(open => !open),
+        }, claimDetailsOpen ? '收起研究细节 ▴' : '补充研究细节（问题、样本、局限等） ▾'),
+      ]),
+      claimDetailsOpen ? h('div', { key: 'details', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
+        h(Input, { key: 'question', value: claimQuestion, onChange: setClaimQuestion, placeholder: '研究问题（可选）', ariaLabel: '研究问题' }),
+        !needsLocator ? h(Input, { key: 'locator-opt', value: claimLocator, onChange: setClaimLocator, placeholder: '原文位置（可选）', ariaLabel: '来源定位' }) : null,
+        h(Input, { key: 'design', value: claimStudyDesign, onChange: setClaimStudyDesign, placeholder: '研究设计（可选）', ariaLabel: '研究设计' }),
+        h(Input, { key: 'sample', value: claimSample, onChange: setClaimSample, placeholder: '样本／研究对象（可选）', ariaLabel: '样本与研究对象' }),
+        h(Input, { key: 'result', value: claimResult, onChange: setClaimResult, placeholder: '关键结果（可选）', ariaLabel: '关键结果' }),
+        h(Input, { key: 'limitations', value: claimLimitations, onChange: setClaimLimitations, placeholder: '局限性（可选）', ariaLabel: '局限性' }),
+      ]) : null,
       h('div', { key: 'actions', style: { display: 'flex', gap: 8 } }, [
-        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !claimStatement.trim() || !selectedEntries.length, onClick: saveClaim }, '保存论断与证据关系'),
+        h(Button, { key: 'save', size: 'sm', variant: 'primary', disabled: !claimStatement.trim() || !selectedEntries.length, onClick: saveClaim }, '保存论断'),
         h(Button, { key: 'cancel', size: 'sm', variant: 'ghost', onClick: () => setClaimFormOpen(false) }, '取消'),
       ]),
-      h('span', { key: 'note', style: { fontSize: 12, color: C.muted } }, '这一判断仅记录所选证据与当前论断的关系，不会改变来源核验状态；支持／反驳须填写可定位的原文位置。'),
     ]) : null,
     h('details', { key: 'research-ledger', style: { padding: '8px 12px', borderRadius: 10, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
       h('summary', { key: 'sum', style: { cursor: 'pointer', fontSize: 12, color: C.muted, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
@@ -226,7 +235,7 @@ export function EvidenceVaultActionPanels({
           h(Button, { key: 'export', size: 'sm', variant: 'ghost', disabled: !ledger.length && !claims.length, onClick: exportResearchRecord }, '导出筛选与引用清单'),
           h(Button, { key: 'artifact', size: 'sm', variant: 'ghost', onClick: () => setArtifactOpen(value => !value) }, '记录研究产出'),
         ]),
-        artifactOpen ? h('div', { key: 'artifact-form', style: { display: 'grid', gap: 6 } }, [
+        artifactOpen ? h('div', { key: 'artifact-form', className: 'rk-reveal', style: { display: 'grid', gap: 6 } }, [
           h(Input, { key: 'title', value: artifactTitle, onChange: setArtifactTitle, placeholder: '图表、报告或分析产出名称', ariaLabel: '研究产出名称' }),
           h(Input, { key: 'dataset', value: artifactDataset, onChange: setArtifactDataset, placeholder: '数据集编号／版本（可选）', ariaLabel: '数据集编号' }),
           h(Input, { key: 'code', value: artifactCode, onChange: setArtifactCode, placeholder: '代码 commit／版本（可选）', ariaLabel: '代码版本' }),

@@ -45,14 +45,14 @@ function buttonMarkup(html, label) {
 test('工作台：宿主未提供 inputActions 时给出降级提示，插入与发送按钮均禁用', () => {
   const html = render(ResearchWorkbench, { sessionId: 'r2', embedded: true })
   assert.match(html, /当前 DSH 会话未提供输入框操作/, '降级提示缺失')
-  assert.match(buttonMarkup(html, '插入对话') || '', /disabled/, '插入按钮应为禁用态')
+  assert.match(buttonMarkup(html, '填入草稿') || '', /disabled/, '插入按钮应为禁用态')
   assert.match(buttonMarkup(html, '发送到对话') || '', /disabled/, '发送按钮应为禁用态')
 })
 
 test('工作台对照组：宿主提供 inputActions 后两个按钮恢复可用', () => {
   const html = render(ResearchWorkbench, { sessionId: 'r2', inputActions: hostActionsStub, embedded: true })
   assert.doesNotMatch(html, /当前 DSH 会话未提供输入框操作/, '提供宿主动作后不应再出现降级提示')
-  assert.doesNotMatch(buttonMarkup(html, '插入对话') || '', /disabled/, '插入按钮应恢复可用')
+  assert.doesNotMatch(buttonMarkup(html, '填入草稿') || '', /disabled/, '插入按钮应恢复可用')
   assert.doesNotMatch(buttonMarkup(html, '发送到对话') || '', /disabled/, '发送按钮应恢复可用')
 })
 
@@ -108,8 +108,8 @@ test('源码接线：四处宿主动作守卫必须存在', async () => {
   assert.match(workbench, /disabled: !hasDraftAction/, '工作台写入按钮未接守卫')
   assert.match(workbench, /disabled: !hasSubmitAction/, '工作台发送按钮未接守卫')
   assert.match(vault, /!canWriteDraft\(inputActions\)/, '灵感库缺少草稿写入守卫')
-  assert.match(panel, /const canWrite = canWriteDraft\(inputActions\)/, '数据库面板缺少草稿写入守卫')
-  assert.match(panel, /if \(!prompt \|\| !canWrite\) return/, '数据库面板缺少写入前的提前返回')
+  assert.match(panel, /const canInsert = supportsSafeInsert\(inputActions\)/, '数据库面板只可安全插入草稿')
+  assert.doesNotMatch(panel, /inputActions\.(submit|setDraft)\(/, '检索动作不得发送或覆盖草稿')
   assert.match(vaultPane, /const canWrite = canWriteDraft\(inputActions\)/, '证据库缺少草稿写入守卫')
   assert.match(vaultPane, /disabled: !selectedEntries\.length \|\| !canWrite/, '证据库写入按钮未接守卫')
   const overlay = await read('../src/composer-overlay.js')

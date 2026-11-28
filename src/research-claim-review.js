@@ -1,4 +1,4 @@
-import { readLatestResearchAnswer } from './knowledge-deposition.js'
+import { ResearchMessageDepositAction } from './message-deposit-action.js'
 import React from 'react'
 import { h, C } from './theme.js'
 import { Button, Card, Field, Input, Textarea, Badge, EmptyState, Notice, Spinner } from './ui.js'
@@ -165,15 +165,6 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     } catch (error) { setNotice(`候选提取失败：${error.message}`) }
     finally { setBusy(false) }
   }
-  const extractFromLatestAnswer = () => {
-    const found = readLatestResearchAnswer(sessionId)
-    if (!found) return setNotice('当前会话没有可读取的助手回答；可展开「添加论断」手动粘贴段落。')
-    const text = found.text.slice(0, 12000)
-    setSourceText(text); setCandidates([]); setPickedCandidates([])
-    setAddOpen(true)
-    void extract(text)
-  }
-
   const saveCandidates = async () => {
     if (!pickedCandidates.length || busy) return
     setBusy(true)
@@ -243,6 +234,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     appliedClaimFocus.current = focusClaimId
     setClaimPage(Math.floor(index / 50))
     openReview(claims[index])
+    setRelationId(focusClaimId)
   }, [focusClaimId, loading, claims])
 
   const saveReview = async claim => {
@@ -291,7 +283,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
   return h('section', { 'aria-label': '论断审阅', style: { display: 'grid', gap: 12, marginTop: 16 } }, [
     h(Card, { key: 'toolbar', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
       h(Button, { key: 'add', size: 'sm', variant: addOpen ? 'soft' : 'primary', icon: 'plus', 'aria-expanded': addOpen, onClick: () => setAddOpen(open => !open) }, addOpen ? '收起添加' : '添加论断'),
-      h(Button, { key: 'latest-answer', size: 'sm', variant: 'soft', disabled: busy, onClick: extractFromLatestAnswer }, '从最近回答提取'),
+      sessionId ? h(ResearchMessageDepositAction, { key: 'latest-answer', sessionId, triggerLabel: '保存最近回答', onSaved: refresh }) : null,
       pendingForAgent.length ? h(Button, { key: 'agent', size: 'sm', variant: 'ghost', disabled: busy || !sessionId, title: !sessionId ? '当前无活跃会话，暂不可调用 Agent' : undefined,
         onClick: () => agentReview(pendingForAgent.map(item => item.id)) }, `Agent 审阅待核验 ${pendingForAgent.length} 条`) : null,
       h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
@@ -314,7 +306,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
           maxLength: 12000, ariaLabel: '待提取的研究段落', placeholder: '粘贴含 DOI、PMID 或 arXiv 引用的段落……' }),
         h(Button, { key: 'extract-button', size: 'sm', variant: 'soft', disabled: busy || !sourceText.trim(), onClick: extract, style: { justifySelf: 'start' } }, '提取候选'),
         candidates.length ? h('div', { key: 'candidates', role: 'group', 'aria-label': '论断候选列表', style: { display: 'grid', gap: 8 } }, [
-          ...candidates.map((candidate, index) => h('label', { key: index, style: { display: 'flex', gap: 8, padding: 9, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 12, lineHeight: 1.5, cursor: 'pointer' } }, [
+          ...candidates.map((candidate, index) => h('label', { key: index, className: 'rk-check-card', style: { display: 'flex', gap: 8, padding: 9, border: `1px solid ${pickedCandidates.includes(index) ? C.tealLineStrong : C.line}`, background: pickedCandidates.includes(index) ? C.tealTint : C.surface, borderRadius: 8, fontSize: 12, lineHeight: 1.5, cursor: 'pointer' } }, [
             h('input', { key: 'checkbox', type: 'checkbox', checked: pickedCandidates.includes(index),
               onChange: () => setPickedCandidates(current => current.includes(index) ? current.filter(item => item !== index) : [...current, index]),
               'aria-label': `登记候选 ${index + 1}` }),
@@ -336,7 +328,6 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       key: 'empty',
       text: '当前课题还没有论断。',
       hint: '可直接从最近一条助手回答中提取候选，或点上方「添加论断」手动登记。',
-      action: h(Button, { size: 'sm', variant: 'primary', disabled: busy, onClick: extractFromLatestAnswer }, '从最近回答提取'),
     }) : null,
     claims.length > 50 ? h('div', { key: 'claim-pagination', style: { display: 'flex', gap: 8, alignItems: 'center' } }, [
       h(Button, { key: 'prev', size: 'sm', disabled: !claimPage || busy, onClick: () => setClaimPage(page => page - 1) }, '上一页论断'),
@@ -383,7 +374,10 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
             h(Button, { key: 'change', size: 'sm', variant: 'quiet', onClick: () => setEditingReviewer(true) }, '修改'),
           ])
           : h(Field, { key: 'reviewer', label: '评估人', required: true },
-            h(Input, { value: reviewer, onChange: setReviewer, maxLength: 120, ariaLabel: '论断评估人', placeholder: '姓名或研究角色（填一次会自动记住）' })),
+            h('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } }, [
+              h(Input, { key: 'input', value: reviewer, onChange: setReviewer, maxLength: 120, ariaLabel: '论断评估人', placeholder: '姓名或研究角色（填一次会自动记住）', style: { flex: 1 } }),
+              !reviewer.trim() ? h(Button, { key: 'quick', size: 'sm', variant: 'quiet', onClick: () => setReviewer('研究者') }, '用「研究者」') : null,
+            ])),
         h(Field, { key: 'reason', label: '评估理由', required: true },
           h(Textarea, { value: draft.reason, onChange: reason => setDraft(current => ({ ...current, reason })),
             maxLength: 500, rows: 3, ariaLabel: '论断评估理由', placeholder: '写明来源位置、研究条件和判断依据。' })),

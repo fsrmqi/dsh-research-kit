@@ -23,7 +23,7 @@ const GLOBAL_CSS = `
   --rk-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --rk-ease-spring: cubic-bezier(0.32, 1.28, 0.52, 1);
   --rk-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --rk-dur-instant: 90ms;
+  --rk-dur-instant: 80ms;
   --rk-dur-fast: 140ms;
   --rk-dur-base: 210ms;
   --rk-dur-slow: 280ms;
@@ -124,6 +124,7 @@ body[data-ds-dark-theme] {
   color: var(--rk-ink);
   box-shadow: var(--rk-shadow-lg);
   font: 13px/1.4 var(--rk-font);
+  font-variant-numeric: tabular-nums;
 }
 .rk-picker-header { position: sticky; top: 0; z-index: 1; background: var(--rk-surface); border-bottom: 1px solid var(--rk-line) }
 .rk-composer-picker[data-short] .rk-picker-header { position: relative }
@@ -275,11 +276,17 @@ body[data-ds-dark-theme] {
 /* 统一交互反馈语言：一套减速曲线、四档克制节奏、仅动合成层属性。 */
 .rk-page { font-variant-numeric: tabular-nums }
 .rk-btn {
+  font-variant-numeric: tabular-nums;
   transition: transform var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
     border-color var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out),
     color var(--rk-dur-fast) var(--rk-ease-out), opacity var(--rk-dur-fast) var(--rk-ease-out);
 }
 .rk-btn:hover:not(:disabled) { transform: translateY(-0.5px) }
+.rk-btn--primary:hover:not(:disabled) { filter: brightness(1.06); box-shadow: 0 2px 8px color-mix(in srgb, var(--rk-teal) 26%, transparent) }
+.rk-btn--soft:hover:not(:disabled) { background: var(--rk-teal-tint-deep) !important; border-color: var(--rk-teal-line-active) !important }
+.rk-btn--ghost:hover:not(:disabled) { background: var(--rk-surface-alt) !important; border-color: var(--rk-line-strong) !important }
+.rk-btn--quiet:hover:not(:disabled) { background: var(--rk-teal-tint) !important; color: var(--rk-teal) !important }
+.rk-btn--danger:hover:not(:disabled) { background: var(--rk-red-tint) !important; border-color: var(--rk-red) !important }
 .rk-btn:active:not(:disabled) { transform: scale(.97); transition-duration: var(--rk-dur-instant) }
 .rk-btn:disabled { opacity: .48; cursor: not-allowed }
 .rk-fab-btn {
@@ -289,23 +296,41 @@ body[data-ds-dark-theme] {
 .rk-fab-btn:hover { transform: scale(1.06); box-shadow: var(--rk-shadow-fab) }
 .rk-fab-btn:active { transform: scale(.95); transition-duration: var(--rk-dur-instant) }
 .rk-fab-btn[data-busy="true"] svg { animation: rk-spin 900ms linear infinite }
+.rk-deposit-fab {
+  will-change: transform;
+  transition: transform var(--rk-dur-base) var(--rk-ease-out), scale var(--rk-dur-fast) var(--rk-ease-out),
+    box-shadow var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out),
+    border-color var(--rk-dur-fast) var(--rk-ease-out);
+}
+.rk-deposit-fab:hover { scale: 1.06; box-shadow: var(--rk-shadow-fab) }
+.rk-deposit-fab:active { scale: .95; transition-duration: var(--rk-dur-instant) }
+.rk-deposit-fab[data-instant] { transition: scale var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-control {
   transition: border-color var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out),
     background var(--rk-dur-fast) var(--rk-ease-out);
 }
 .rk-control:focus { border-color: var(--rk-teal-line-active) !important; box-shadow: 0 0 0 3px var(--rk-teal-tint-deep) }
-/* 分段控件滑动胶囊：以实测位移平滑滑向目标选项，首次挂载无飞行。 */
+/* 分段控件滑动胶囊：以实测位移平滑滑向目标选项，首次挂载无飞行；标签本身不上浮以免脱离胶囊。 */
 .rk-seg { position: relative; font-variant-numeric: tabular-nums }
 .rk-seg-indicator {
   position: absolute; top: 0; left: 0; pointer-events: none; border-radius: 8px;
   background: var(--rk-teal-tint-deep);
+  box-shadow: 0 1px 2px rgba(17, 38, 60, .06);
+  will-change: transform, width;
   transition: transform var(--rk-dur-base) var(--rk-ease-out), width var(--rk-dur-base) var(--rk-ease-out), height var(--rk-dur-base) var(--rk-ease-out);
 }
 .rk-seg-indicator[data-instant] { transition: none }
 .rk-seg > button { position: relative; z-index: 1 }
+.rk-seg > button:hover:not(:disabled) { transform: none }
+.rk-seg > button:active:not(:disabled) { transform: scale(.98); transition-duration: var(--rk-dur-instant) }
 .rk-seg > button:hover:not([aria-selected="true"]) { color: var(--rk-ink) !important }
-.rk-star-active svg { animation: rk-star-pop 240ms var(--rk-ease-spring) both }
-.rk-spin-once svg { animation: rk-spin 420ms var(--rk-ease-out) both }
+.rk-star-active svg { animation: rk-star-pop var(--rk-dur-base) var(--rk-ease-spring) both }
+.rk-spin-once svg { animation: rk-spin calc(var(--rk-dur-slow) * 1.4) var(--rk-ease-out) both }
+.rk-spinner-ring { animation: rk-spin 750ms linear infinite }
+.rk-pulse-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; animation: rk-pulse 1.3s ease-in-out infinite;
+}
 /* 宿主的通用 select 样式可能会把控件拉满整行；分类下拉必须按分类栏的紧凑节奏布局。 */
 .rk-workflow-category-select {
   width: clamp(88px, 10vw, 116px) !important;
@@ -325,38 +350,60 @@ body[data-ds-dark-theme] {
 }
 .rk-card { transition: transform var(--rk-dur-base) var(--rk-ease-out), box-shadow var(--rk-dur-base) var(--rk-ease-out), border-color var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-card:hover { transform: translateY(-1px); box-shadow: var(--rk-shadow-card) }
+.rk-check-card {
+  transition: border-color var(--rk-dur-fast) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out),
+    transform var(--rk-dur-instant) var(--rk-ease-out);
+}
+.rk-check-card:hover { border-color: var(--rk-teal-line-strong) !important }
+.rk-check-card:active { transform: scale(.994) }
+.rk-stage-row { transition: opacity var(--rk-dur-fast) var(--rk-ease-out), color var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-row { transition: background var(--rk-dur-fast) var(--rk-ease-out), box-shadow var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-row:hover { background: var(--rk-surface-alt) }
+.rk-row[data-clickable="true"]:active { background: var(--rk-teal-tint) }
+.rk-chip-x { transition: opacity var(--rk-dur-fast) var(--rk-ease-out), transform var(--rk-dur-instant) var(--rk-ease-out) }
+.rk-chip-x:hover { opacity: 1 !important }
+.rk-chip-x:active { transform: scale(.88) }
+.rk-tool-card { transition: border-left-color var(--rk-dur-base) var(--rk-ease-out), background var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-progress-fill { will-change: transform; transform-origin: left center; transition: transform var(--rk-dur-base) var(--rk-ease-out) }
 .rk-tabular { font-variant-numeric: tabular-nums }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--rk-teal-line-active); outline-offset: 2px }
 details[open] > :not(summary) { animation: rk-reveal var(--rk-dur-base) var(--rk-ease-out) both }
 @keyframes rk-spin { to { transform: rotate(360deg) } }
+@keyframes rk-pulse { 0%, 100% { opacity: 1; transform: scale(1) } 50% { opacity: .35; transform: scale(.82) } }
 @keyframes rk-pop { from { opacity: 0; transform: translateY(8px) scale(.975) } to { opacity: 1; transform: none } }
+@keyframes rk-pop-leave { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(6px) scale(.98) } }
 @keyframes rk-toast-leave { from { opacity: 1; transform: none } to { opacity: 0; transform: translateY(6px) scale(.97) } }
 @keyframes rk-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rk-fade-leave { from { opacity: 1 } to { opacity: 0 } }
 @keyframes rk-reveal { from { opacity: 0; transform: translateY(-4px) scale(.995) } to { opacity: 1; transform: none } }
-@keyframes rk-content-swap { from { opacity: .35; transform: translateY(3px) } to { opacity: 1; transform: none } }
-@keyframes rk-section-enter { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+@keyframes rk-content-swap { from { opacity: .45; transform: translateY(3px) } to { opacity: 1; transform: none } }
+@keyframes rk-section-enter { from { opacity: 0; transform: translateY(3px) } to { opacity: 1; transform: none } }
+@keyframes rk-icon-swap { from { opacity: .35; transform: scale(.82) } to { opacity: 1; transform: none } }
+@keyframes rk-num-tick { from { opacity: .55; transform: translateY(3px) } to { opacity: 1; transform: none } }
 @keyframes rk-star-pop { 0% { transform: scale(.86) } 55% { transform: scale(1.16) } 100% { transform: scale(1) } }
 @keyframes rk-check-pop { 0% { opacity: 0; transform: scale(.72) } 65% { opacity: 1; transform: scale(1.08) } 100% { opacity: 1; transform: scale(1) } }
 @keyframes rk-shake { 0%, 100% { transform: translateX(0) } 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }
 @keyframes rk-graph-flow { to { stroke-dashoffset: -36 } }
 .rk-graph-edge { stroke-linecap: round; opacity: .72; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
 .rk-graph-edge-flow { stroke: var(--rk-teal) !important; stroke-dasharray: 7 11; animation: rk-graph-flow 1.25s linear infinite }
-.rk-graph-node { filter: drop-shadow(0 2px 5px rgba(15, 23, 42, .09)); cursor: pointer; transition: opacity var(--rk-dur-fast) var(--rk-ease-out), filter var(--rk-dur-fast) var(--rk-ease-out) }
-.rk-graph-node:hover { filter: drop-shadow(0 4px 10px rgba(15, 23, 42, .16)) }
-.rk-graph-node rect { transition: stroke var(--rk-dur-fast) var(--rk-ease-out), stroke-width var(--rk-dur-fast) var(--rk-ease-out) }
-.rk-graph-node:hover rect { stroke-width: 2.2px }
-.rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rk-teal) 42%, transparent)) }
+/* 证据图谱节点：仅过渡 opacity 与描边，不对 drop-shadow 做逐帧滤镜过渡，保证大图缩放与悬停满帧。 */
+.rk-graph-node { cursor: pointer; transition: opacity var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-graph-node rect { transition: stroke var(--rk-dur-fast) var(--rk-ease-out), stroke-width var(--rk-dur-fast) var(--rk-ease-out), fill var(--rk-dur-fast) var(--rk-ease-out) }
+.rk-graph-node:hover rect { stroke-width: 2.2px; fill: var(--rk-surface-alt) }
+.rk-graph-node-focus rect { stroke: var(--rk-teal) !important; stroke-width: 3px }
 .rk-pop { animation: rk-pop var(--rk-dur-slow) var(--rk-ease-out) both }
+.rk-pop-leave { animation: rk-pop-leave var(--rk-dur-fast) var(--rk-ease-in) both; pointer-events: none }
 .rk-backdrop { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-backdrop-leave { animation: rk-fade-leave var(--rk-dur-fast) var(--rk-ease-in) both; pointer-events: none }
 .rk-modal-backdrop { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px) }
-.rk-fade { animation: rk-fade var(--rk-dur-base) var(--rk-ease-out) both }
+.rk-fade { animation: rk-fade var(--rk-dur-fast) var(--rk-ease-out) both }
 .rk-reveal { animation: rk-reveal var(--rk-dur-base) var(--rk-ease-out) both }
-.rk-content-swap { animation: rk-content-swap 160ms var(--rk-ease-out) both }
-.rk-section-enter { animation: rk-section-enter var(--rk-dur-base) var(--rk-ease-out) both }
-.rk-check-pop { animation: rk-check-pop 220ms var(--rk-ease-spring) both }
-.rk-shake { animation: rk-shake 220ms var(--rk-ease-out) both }
+.rk-content-swap { animation: rk-content-swap var(--rk-dur-fast) var(--rk-ease-out) both }
+.rk-section-enter { animation: rk-section-enter var(--rk-dur-fast) var(--rk-ease-out) both }
+.rk-icon-swap { display: inline-flex; animation: rk-icon-swap var(--rk-dur-fast) var(--rk-ease-out) both }
+.rk-num-tick { display: inline-block; font-variant-numeric: tabular-nums; animation: rk-num-tick var(--rk-dur-fast) var(--rk-ease-out) both }
+.rk-check-pop { animation: rk-check-pop var(--rk-dur-base) var(--rk-ease-spring) both }
+.rk-shake { animation: rk-shake var(--rk-dur-base) var(--rk-ease-out) both }
 .rk-toast-stack {
   position: fixed; left: 50%; bottom: 112px; transform: translateX(-50%);
   z-index: 20030; display: grid; gap: 8px; width: min(520px, calc(100vw - 24px));
@@ -377,18 +424,33 @@ details[open] > :not(summary) { animation: rk-reveal var(--rk-dur-base) var(--rk
   display: grid; gap: 8px; padding: 12px; border: 1px solid var(--rk-red);
   border-radius: 9px; background: var(--rk-red-tint);
 }
+.rk-graph-canvas-wrap { position: relative }
+.rk-graph-floating-controls {
+  position: absolute; right: 16px; bottom: 16px; z-index: 6;
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 6px;
+  border: 1px solid var(--rk-line); border-radius: 10px;
+  background: color-mix(in srgb, var(--rk-surface) 92%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--rk-shadow-card); font-variant-numeric: tabular-nums;
+}
+.rk-popover-anchor { position: relative; display: inline-flex }
+.rk-popover-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  min-width: 196px; padding: 8px; border: 1px solid var(--rk-line); border-radius: 10px;
+  background: var(--rk-surface); box-shadow: var(--rk-shadow-lg);
+  display: grid; gap: 6px;
+}
 .rk-scroll::-webkit-scrollbar { width: 8px; height: 8px }
 .rk-scroll::-webkit-scrollbar-thumb { background: #cdd8df; border-radius: 999px }
 .rk-scroll::-webkit-scrollbar-track { background: transparent }
 @media (prefers-reduced-motion: reduce) {
-  .rk-btn, .rk-fab-btn, .rk-fab-btn svg, .rk-control, .rk-card, .rk-row, .rk-home-launch-card,
-  .rk-home-launch-head > svg, .rk-home-launch-icon, .rk-seg-indicator, .rk-picker-row,
-  .rk-picker-tabs button, .rk-picker-text-action, .rk-picker-switch-track, .rk-picker-switch-track::before,
-  .rk-graph-node, .rk-graph-node rect, .rk-graph-edge, .rk-compose-suggestion > section,
-  details[open] > :not(summary),
-  .rk-pop, .rk-backdrop, .rk-fade, .rk-reveal, .rk-content-swap, .rk-section-enter,
-  .rk-toast-leave, .rk-check-pop, .rk-spin-once svg, .rk-shake, .rk-star-active svg, .rk-graph-edge-flow {
-    transition: none !important; animation: none !important;
+  [class*="rk-"], [class*="rk-"]::before, [class*="rk-"]::after,
+  .rk-page *, .rk-page *::before, .rk-page *::after,
+  details[open] > :not(summary) {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 /* 窄屏单列：两栏布局与表单网格统一塌陷，避免并排挤压。 */

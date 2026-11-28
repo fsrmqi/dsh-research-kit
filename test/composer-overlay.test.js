@@ -89,7 +89,7 @@ test('弹层与工作台同口径记录工作流使用：写入与复制都经�
   assert.match(source, /await navigator\.clipboard\.writeText\(finalPrompt\)\n {6}recordUse\(\)/, '「复制 Prompt」出口未记录')
   // 会话轨迹按当前会话隔离：store 取自 sessionId，且弹窗确实接到了它。
   assert.match(source, /createEvidenceStore\(sessionId\)/)
-  assert.match(source, /catalogStorage: storage, sessionId, onClose/, '弹窗未接收 sessionId')
+  assert.match(source, /catalogStorage: storage, sessionId, onBack:/, '弹窗未接收 sessionId')
 })
 
 test('bodyPortal：fixed 浮层在真实 body 上走 portal，SSR / 无 body 时原样返回', () => {

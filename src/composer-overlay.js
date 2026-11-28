@@ -2,7 +2,7 @@ import React from 'react'
 import { readSessionEvents } from './lib/session-events.js'
 import {
   catalog, catalogIndexMode, itemById, itemDetailReady, loadCatalogItemDetail,
-  searchCatalog, searchCatalogRemote, composeWorkflow, recommendedWorkflowsForResources, loadBrowserCatalog, subscribeCatalog,
+  searchCatalog, searchCatalogRemote, composeWorkflow, recommendedWorkflowsForWorkbench, loadBrowserCatalog, subscribeCatalog,
 } from './catalog.js'
 import { createCatalogStorage } from './catalog-storage.js'
 import { createEvidenceStore } from './evidence-store.js'
@@ -33,7 +33,7 @@ function SearchInput({ value, onChange, placeholder, ariaLabel }) {
   ])
 }
 
-function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, originalDraft, originalRevision, onClose }) {
+function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStorage, sessionId, originalDraft, originalRevision, onBack, onClose }) {
   const [values, setValues] = React.useState({})
   const [editedPrompt, setEditedPrompt] = React.useState(null)
   const [promptOpen, setPromptOpen] = React.useState(false)
@@ -123,9 +123,10 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
     subtitle: activeWorkflow.description,
     onClose,
     footer: [
-      h(Button, { key: 'copy', variant: 'quiet', icon: 'copy', disabled: !detailReady, onClick: copyPrompt, style: { marginRight: 'auto' } }, '复制 Prompt'),
+      onBack ? h(Button, { key: 'back', variant: 'quiet', onClick: onBack, style: { marginRight: 'auto' } }, '← 返回列表') : null,
+      h(Button, { key: 'copy', variant: 'quiet', icon: 'copy', disabled: !detailReady, onClick: copyPrompt, style: onBack ? undefined : { marginRight: 'auto' } }, '复制提示词'),
       h(Button, { key: 'cancel', variant: 'ghost', onClick: onClose }, '取消'),
-      h(Button, { key: 'use', variant: 'primary', icon: 'check', disabled: !hasDraftAction || !detailReady, onClick: validateThenUse }, '使用工作流程'),
+      h(Button, { key: 'use', variant: 'primary', icon: 'check', disabled: !hasDraftAction || !detailReady, onClick: validateThenUse }, '填入草稿'),
     ],
   }, !detailReady ? [
     detailError
@@ -162,8 +163,8 @@ function WorkflowLaunchDialog({ workflow, resourceIds, inputActions, catalogStor
       }, promptOpen ? '收起提示词预览 ▴' : '展开提示词预览 ▾'),
       !promptOpen && editedPrompt === null ? h('span', { key: 'ready', style: { fontSize: 12, color: C.muted } }, '已按参数自动组装') : null,
     ]),
-    (promptOpen || editedPrompt !== null) ? h(Field, { key: 'prompt', label: '提示词预览（可编辑）' },
-      h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 9, mono: true, ariaLabel: '提示词预览' })) : null,
+    (promptOpen || editedPrompt !== null) ? h('div', { key: 'prompt', className: 'rk-reveal' }, h(Field, { label: '提示词预览（可编辑）' },
+      h(Textarea, { value: finalPrompt, onChange: setEditedPrompt, rows: 9, mono: true, ariaLabel: '提示词预览' }))) : null,
     attachedResources.length ? h('details', {
       key: 'resources',
       style: { padding: '9px 11px', border: `1px solid ${C.tealLine}`, borderRadius: 9, color: C.muted, fontSize: 13, lineHeight: 1.55 },
@@ -495,7 +496,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
   const close = () => setMode(null)
   const selectWorkflow = workflow => { setLaunchWorkflow({ workflow, draft, revision, sessionId }); setMode(null) }
   const recommendedWorkflows = React.useMemo(
-    () => selectedOnly && !deferredQuery.trim() ? recommendedWorkflowsForResources(selectedOnly).slice(0, 4) : [],
+    () => selectedOnly && !deferredQuery.trim() ? recommendedWorkflowsForWorkbench({ resourceIds: selectedOnly, limit: 4 }) : [],
     [selectedOnly, deferredQuery, catalogVersion],
   )
   const workflowCategories = React.useMemo(
@@ -519,7 +520,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           h('div', { key: 'why', className: 'rk-compose-reason' }, currentSuggestion.reason),
         ]),
         h('div', { key: 'actions', className: 'rk-compose-actions' }, [
-          h(Button, { key: 'adopt', variant: 'primary', size: 'sm', onClick: adoptSuggestion, title: '在光标处插入科研步骤，保留原文与引用' }, '采用'),
+          h(Button, { key: 'adopt', variant: 'primary', size: 'sm', onClick: adoptSuggestion, title: '在光标处插入科研步骤，保留原文与引用' }, '填入草稿'),
           h(Button, { key: 'preview', variant: 'ghost', size: 'sm', 'aria-expanded': preview, onClick: () => setPreview(open => !open) }, preview ? '收起预览' : '预览改动'),
           h(Button, { key: 'skip', variant: 'ghost', size: 'sm', onClick: dismissSuggestion }, '略过'),
         ]),
@@ -530,7 +531,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           h('p', { key: 'description', style: { margin: 0, color: C.muted, fontSize: 12 } }, '确认后会在光标处插入以下步骤，保留原提问、附件和引用。'),
           h(Textarea, { key: 'text', value: suggestedText, readOnly: true, ariaLabel: '将插入的科研步骤', rows: 6 }),
           h('div', { key: 'preview-actions', style: { display: 'flex', gap: 8 } }, [
-            h(Button, { key: 'apply', size: 'sm', variant: 'primary', onClick: adoptSuggestion }, '采用并插入'),
+            h(Button, { key: 'apply', size: 'sm', variant: 'primary', onClick: adoptSuggestion }, '填入草稿'),
             h(Button, { key: 'close', size: 'sm', variant: 'ghost', onClick: () => setPreview(false) }, '收起'),
           ]),
           assistNotice ? h(Notice, { key: 'notice', tone: 'warn' }, assistNotice) : null,
@@ -603,7 +604,7 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           }, `完成 · ${resourceIds.length}`) : null,
         ]),
       ]),
-      h('div', { key: 'rows', className: 'rk-picker-results', 'aria-label': '科研选择结果' }, [
+      h('div', { key: `rows-${mode}`, className: 'rk-picker-results rk-content-swap', 'aria-label': '科研选择结果' }, [
         mode === 'workflows' && !deferredQuery.trim() && workflowCategory === 'all' ? (() => {
           const quickIds = unique([...(storage.getFavorites?.() || []), ...(storage.getHistory?.() || []).map(row => row.id)])
           const quickWorkflows = quickIds.map(itemById).filter(item => item?.type === 'workflow').slice(0, 3)
@@ -642,12 +643,12 @@ export function ResearchComposerOverlay({ sessionId, input, useInput, inputActio
           : catalog.length ? '没有匹配结果，试试其他关键词或分类。' : '正在读取科研目录…'),
         recommendedWorkflows.length ? h('div', { key: 'recommended', className: 'rk-picker-selected' }, [
           h('span', { key: 'label' }, '推荐流程'),
-          ...recommendedWorkflows.map(workflow => h('button', {
-            key: workflow.id, type: 'button', className: 'rk-picker-text-action', onClick: () => selectWorkflow(workflow),
-          }, workflow.name)),
+          ...recommendedWorkflows.map(({ item, reason }) => h('button', {
+            key: item.id, type: 'button', className: 'rk-picker-text-action', title: reason, onClick: () => selectWorkflow(item),
+          }, item.name)),
         ]) : null,
       ]),
     ]) : null,
-    launchWorkflow && launchWorkflow.sessionId === sessionId ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow.workflow, originalDraft: launchWorkflow.draft, originalRevision: launchWorkflow.revision, resourceIds, inputActions, catalogStorage: storage, sessionId, onClose: () => setLaunchWorkflow(null) }) : null,
+    launchWorkflow && launchWorkflow.sessionId === sessionId ? h(WorkflowLaunchDialog, { key: 'dialog', workflow: launchWorkflow.workflow, originalDraft: launchWorkflow.draft, originalRevision: launchWorkflow.revision, resourceIds, inputActions, catalogStorage: storage, sessionId, onBack: () => { setLaunchWorkflow(null); setMode('workflows') }, onClose: () => setLaunchWorkflow(null) }) : null,
   ])
 }

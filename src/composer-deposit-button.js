@@ -1,7 +1,7 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import { Icon } from './lib/icons.js'
-import { depositLatestAssistantMessage } from './knowledge-deposition.js'
+import { ResearchMessageDepositAction } from './message-deposit-action.js'
 import { bodyPortal } from './lib/overlay-anchor.js'
 
 // 手动沉淀伴生钮：贴着对话增强器的浮动按钮停靠（用户要求「往对话增强器按钮上放一个」）。
@@ -42,22 +42,18 @@ export function companionDepositPosition(stored, viewport, size = DEPOSIT_BUTTON
   return { x, y: Math.min(below, Math.max(CLAMP_MIN_Y, height - size - 16)) }
 }
 
-const STATUS_TONE_STYLE = {
-  ok: { color: C.teal, borderColor: C.tealLine },
-  warn: { color: C.amber, borderColor: C.amber },
-  busy: { color: C.muted, borderColor: C.line },
-}
-
 export function ResearchDepositButton() {
   const [position, setPosition] = React.useState(null)
-  const [status, setStatus] = React.useState(null)
-  const statusTimer = React.useRef(null)
-
+  const mountedRef = React.useRef(false)
+  const [instant, setInstant] = React.useState(true)
   const measure = React.useCallback(() => {
     if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') return
     let stored = null
     try { stored = JSON.parse(window.localStorage.getItem(QUICK_ENHANCER_POSITION_KEY) || 'null') } catch { stored = null }
-    setPosition(companionDepositPosition(stored, { width: window.innerWidth, height: window.innerHeight }))
+    const next = companionDepositPosition(stored, { width: window.innerWidth, height: window.innerHeight })
+    if (mountedRef.current) setInstant(false)
+    else mountedRef.current = true
+    setPosition(next)
   }, [])
 
   React.useEffect(() => {
@@ -68,70 +64,23 @@ export function ResearchDepositButton() {
     return () => {
       window.removeEventListener('resize', measure)
       window.removeEventListener('pointerup', measure)
-      if (statusTimer.current) window.clearTimeout(statusTimer.current)
     }
   }, [measure])
 
-  const deposit = async () => {
-    if (status?.tone === 'busy') return
-    if (statusTimer.current) { window.clearTimeout(statusTimer.current); statusTimer.current = null }
-    setStatus({ tone: 'busy', text: '正在沉淀…' })
-    let next = null
-    try {
-      const result = await depositLatestAssistantMessage()
-      if (result?.error === 'no-sessions') next = { tone: 'warn', text: '当前环境未提供会话服务' }
-      else if (result?.error === 'no-session') next = { tone: 'warn', text: '没有可读取的当前会话' }
-      else if (result?.error === 'empty') next = { tone: 'warn', text: '会话里没有可沉淀的回答' }
-      else if (!result?.summary?.extracted) next = { tone: 'warn', text: '最近一条回答没有研究内容' }
-      else {
-        next = {
-          tone: 'ok',
-          text: `已沉淀：+${result.summary.addedNodes} 节点 · 证据 ${result.summary.savedEvidence} · 资产 ${result.summary.savedAssets}`,
-          detail: `消息 #${result.seq ?? '?'}${result.interrupted ? '（曾被中断，内容可能不完整）' : ''}；全部以待核验状态入库，可在「证据星图」分区查看。`,
-        }
-      }
-    } catch (error) {
-      next = { tone: 'warn', text: `沉淀失败：${error?.message || error}` }
-    }
-    setStatus(next)
-    statusTimer.current = window.setTimeout(() => setStatus(null), 6000)
-  }
-
   if (!position) return null
-  // 悬浮钮与状态条都是 position: fixed：必须 portal 到 body，否则 0.2.2-rc.1 起会被
-  // composer seat 的 transform containing block 带偏（见 src/lib/overlay-anchor.js 的 bodyPortal）。
-  return bodyPortal(h(React.Fragment, null, [
-    status ? h('div', {
-      key: 'status',
-      role: 'status',
-      className: 'rk-reveal',
-      title: status.detail || status.text,
-      style: {
-        position: 'fixed', left: Math.max(8, position.x - 40), bottom: 'auto',
-        top: Math.max(8, position.y - 34), zIndex: 20012,
-        maxWidth: 'min(340px, calc(100vw - 24px))',
-        padding: '5px 9px', border: `1px solid ${STATUS_TONE_STYLE[status.tone].borderColor}`,
-        borderRadius: 8, background: C.surface, boxShadow: C.shadowCard,
-        fontSize: 11, lineHeight: 1.45, color: STATUS_TONE_STYLE[status.tone].color,
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', pointerEvents: 'none',
-      },
-    }, status.text) : null,
-    h('button', {
-      key: 'deposit',
-      type: 'button',
-      className: 'rk-fab-btn',
-      'data-busy': status?.tone === 'busy' ? 'true' : undefined,
-      'aria-label': '沉淀当前会话最近一条助手回答',
-      title: '把当前会话最近一条助手回答提取入库（本地完成，待核验起步；不开自动沉淀也可用）',
-      onClick: deposit,
-      style: {
-        position: 'fixed', left: position.x, top: position.y, zIndex: 20011,
-        width: DEPOSIT_BUTTON_SIZE, height: DEPOSIT_BUTTON_SIZE, padding: 0,
-        border: `1px solid ${C.tealLineStrong}`, borderRadius: '50%',
-        background: C.tealTint, color: C.teal, cursor: status?.tone === 'busy' ? 'wait' : 'pointer',
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 6px 16px var(--pk-shadow-faint, rgba(15,40,60,.14))',
-      },
-    }, h(Icon, { name: 'sparkles', size: 18 })),
-  ]))
+  return bodyPortal(h(ResearchMessageDepositAction, {
+    triggerLabel: '保存最近回答',
+    triggerContent: h(Icon, { name: 'sparkles', size: 18 }),
+    triggerClassName: 'rk-fab-btn rk-deposit-fab',
+    triggerDataInstant: instant,
+    triggerStyle: {
+      position: 'fixed', left: 0, top: 0, zIndex: 20011,
+      transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+      width: DEPOSIT_BUTTON_SIZE, height: DEPOSIT_BUTTON_SIZE, padding: 0,
+      border: `1px solid ${C.tealLineStrong}`, borderRadius: '50%',
+      background: C.tealTint, color: C.teal, cursor: 'pointer',
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: '0 6px 16px var(--pk-shadow-faint, rgba(15,40,60,.14))',
+    },
+  }))
 }

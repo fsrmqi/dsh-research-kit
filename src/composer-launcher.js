@@ -1,6 +1,6 @@
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
-import { Button } from './ui.js'
+import { Button, CountValue } from './ui.js'
 
 export const RESEARCH_COMPOSER_EVENT = 'dsh-research-kit:composer-open'
 export const RESEARCH_RESOURCE_SELECTION_EVENT = 'dsh-research-kit:resource-selection-changed'
@@ -37,6 +37,6 @@ export function ResearchComposerLauncher({ sessionId }) {
       'aria-label': '科研辅助',
       title: enabled ? '自动建议已开启' : '打开科研辅助',
       style: { color: enabled ? C.teal : C.ink, background: enabled ? C.tealTint : C.surface },
-    }, ['科研辅助', count ? ` · ${count}` : '', enabled ? ' · 自动' : ''].join('')),
+    }, ['科研辅助', count ? h(CountValue, { key: 'count', prefix: ' · ', value: count }) : '', enabled ? ' · 自动' : '']),
   ])
 }

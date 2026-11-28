@@ -24,14 +24,16 @@ export function WorkbenchWorkflowForm({
     workflow.requiresFiles ? h(Notice, { key: 'files-note', tone: 'warn', icon: 'file' }, '此流程需要研究材料：请先在 DSH 输入框中使用原生 @文件 引用相关文件。') : null,
     taskPlan ? h(Card, { key: 'task-plan', style: { padding: 14, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
       h('strong', { key: 'title', style: { fontSize: 14 } }, '研究与交付计划'),
-      h('div', { key: 'stages', style: { margin: '8px 0', display: 'grid', gap: 5, fontSize: 13 } }, taskPlan.stages.map((stage, index) => {
-        const done = Boolean(activePlan?.stages?.[index]?.done)
-        return h('label', { key: stage, style: { display: 'flex', gap: 8, alignItems: 'center', opacity: done ? .72 : 1 } }, [
-          h('input', { key: 'check', type: 'checkbox', checked: done, disabled: !activePlan, onChange: () => togglePlanStage(index), style: { accentColor: C.teal } }),
-          h('span', { key: 'label', style: { textDecoration: done ? 'line-through' : 'none' } }, `${index + 1}. ${stage}`),
-        ])
-      })),
-      h('div', { key: 'deliverables', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, `预期交付：${taskPlan.deliverables.join('、')}。所有阶段均需人工确认，不代表已执行。`),
+      activePlan
+        ? h('div', { key: 'stages', style: { margin: '8px 0', display: 'grid', gap: 5, fontSize: 13 } }, taskPlan.stages.map((stage, index) => {
+          const done = Boolean(activePlan?.stages?.[index]?.done)
+          return h('label', { key: stage, className: 'rk-stage-row', style: { display: 'flex', gap: 8, alignItems: 'center', opacity: done ? .72 : 1, cursor: 'pointer' } }, [
+            h('input', { key: 'check', type: 'checkbox', checked: done, onChange: () => togglePlanStage(index), style: { accentColor: C.teal } }),
+            h('span', { key: 'label', style: { textDecoration: done ? 'line-through' : 'none' } }, `${index + 1}. ${stage}`),
+          ])
+        }))
+        : h('ol', { key: 'stages-preview', style: { margin: '8px 0', paddingLeft: 18, display: 'grid', gap: 4, fontSize: 13, color: C.ink } }, taskPlan.stages.map(stage => h('li', { key: stage }, stage))),
+      h('div', { key: 'deliverables', style: { color: C.muted, fontSize: 12, lineHeight: 1.5 } }, `预期产出：${taskPlan.deliverables.join('、')}。`),
       h(Button, { key: 'plan', size: 'sm', variant: 'soft', icon: 'layers', disabled: !hasDraftAction, onClick: writeTaskPlan, style: { marginTop: 10 } }, activePlan ? '研究计划已写入' : '写入研究与交付计划'),
     ]) : null,
     sessionResources.length ? h(Notice, { key: 'session', tone: 'info', icon: 'layers' }, `本会话已附加资源（${sessionResources.length}）：${sessionResources.map(item => item.name).join('、')}。可在输入框的「科研辅助 → 加资源」中调整。`) : null,
@@ -47,6 +49,7 @@ export function WorkbenchWorkflowForm({
       h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 10 } }, '附加技能指导（勾选后追加到提示词）'),
       h('div', { key: 'list', style: { display: 'grid', gap: 8 } }, suggestedSkills.map(skill => h('label', {
         key: skill.id,
+        className: 'rk-check-card',
         style: {
           display: 'grid', gridTemplateColumns: '18px 1fr', gap: 10, alignItems: 'start', cursor: 'pointer',
           padding: '9px 11px', borderRadius: 9,

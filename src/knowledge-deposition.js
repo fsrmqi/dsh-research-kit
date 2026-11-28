@@ -403,6 +403,7 @@ export function readLatestResearchAnswer(sessionId = '') {
     const sid = String(sessionId || depositionSessions?.list?.getSnapshot()?.current || '')
     if (!sid || !depositionSessions) return null
     const snapshot = depositionSessions.binding(sid)?.eventSource?.getSnapshot?.()
-    return latestDepositableMessage(snapshot?.entries)
+    const answer = latestDepositableMessage(snapshot?.entries?.map(entry => entry?.event ?? entry))
+    return answer ? { ...answer, sessionId: sid } : null
   } catch { return null }
 }

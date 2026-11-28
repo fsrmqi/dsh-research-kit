@@ -132,7 +132,7 @@ function highlightCatalogText(value, term) {
   return [...parts, text.slice(offset)]
 }
 
-export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, initialType = 'all', launchSession, embedded = false }) {
+export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, initialWorkflowId, initialType = 'all', launchSession, drafts, embedded = false }) {
   const storage = React.useMemo(() => catalogStorage || createCatalogStorage(), [catalogStorage])
   const selection = React.useMemo(() => createResearchSelectionStore(sessionId), [sessionId])
   const evidence = React.useMemo(() => createEvidenceStore(sessionId), [sessionId])
@@ -142,12 +142,14 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const [workflowCategory, setWorkflowCategory] = React.useState('all')
   const [skillCategory, setSkillCategory] = React.useState('all')
   const [databaseCategory, setDatabaseCategory] = React.useState('all')
-  const [selectedId, setSelectedId] = React.useState(initialWorkflowId || 'review-paper')
+  const selectionKey = JSON.stringify([sessionId, 'selected-workflow'])
+  const initialSelection = initialWorkflowId || drafts?.get(selectionKey) || 'review-paper'
+  const [selectedId, setSelectedId] = React.useState(initialSelection)
   React.useEffect(() => {
     setType(initialType)
     setQuery('')
-    if (initialType === 'workflow') setSelectedId(initialWorkflowId || 'review-paper')
-  }, [initialType, initialWorkflowId])
+    if (initialType === 'workflow') setSelectedId(initialWorkflowId || drafts?.get(selectionKey) || 'review-paper')
+  }, [initialType, initialWorkflowId, drafts, selectionKey])
   const [values, setValues] = React.useState({})
   const [replayOpen, setReplayOpen] = React.useState(false)
   // null 表示仍使用自动组装结果；空字符串则是用户明确清空了 Prompt。
@@ -162,7 +164,8 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   }, [])
   const [attachedSkills, setAttachedSkills] = React.useState([])
   // 科研模式：null 关闭；值为当前研究任务预设 key。
-  const [scienceMode, setScienceMode] = React.useState(null)
+  const scienceModeKey = JSON.stringify([sessionId, 'science-mode'])
+  const [scienceMode, setScienceMode] = React.useState(() => drafts?.get(scienceModeKey) || null)
   const [favorites, setFavorites] = React.useState(() => storage.getFavorites())
   const [history, setHistory] = React.useState(() => storage.getHistory())
   const [sessionResourceIds, setSessionResourceIds] = React.useState(() => selection.get())
@@ -278,14 +281,18 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   }, [selectedKey, detailReady, detailRetryNonce])
 
   React.useEffect(() => {
-    // 切换资源后清空编辑态与勾选，避免把上一个工作流的内容或技能组合带过去。
-    setValues({}); setEditedPrompt(null); setNotice(''); setAttachedSkills([])
-  }, [selectedKey])
+    const cached = drafts?.get(JSON.stringify([sessionId, selectedKey]))
+    setValues(cached?.values || {}); setEditedPrompt(cached?.editedPrompt ?? null); setNotice('')
+  }, [selectedKey, sessionId, drafts])
+  React.useEffect(() => {
+    if (type === 'workflow' && selectedKey) drafts?.set(selectionKey, selectedKey)
+  }, [drafts, selectionKey, type, selectedKey])
+  const skillDraftKey = JSON.stringify([sessionId, selectedKey, scienceMode, 'skills'])
   React.useEffect(() => {
     // 进入工作流时默认勾选其建议技能；用户可取消或补充。
     // 科研模式下按领域预设附加技能；关闭时回到建议集合。
-    setAttachedSkills(sciencePreset ? uniqueIds(sciencePreset.skills) : suggestedSkills.map(item => item.id))
-  }, [selectedKey, workflow ? workflow.id : '', scienceMode])
+    setAttachedSkills(drafts?.get(skillDraftKey) ?? (sciencePreset ? uniqueIds(sciencePreset.skills) : suggestedSkills.map(item => item.id)))
+  }, [skillDraftKey, workflow ? workflow.id : '', drafts])
   React.useEffect(() => {
     // 收藏或历史在其他视图（如输入框弹窗）变更时同步刷新本视图。
     return storage.onHistoryChange?.(() => { setHistory(storage.getHistory()); setFavorites(storage.getFavorites()) }) || (() => {})
@@ -303,25 +310,31 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   const warnManualOverride = () => {
     if (editedPrompt !== null) setNotice('提示词已手动编辑；参数或技能变更不会自动合并。请手动修改正文，或点击“恢复自动生成”。')
   }
+  const rememberDraft = (nextValues, nextPrompt) => {
+    drafts?.set(JSON.stringify([sessionId, selectedKey]), { values: nextValues, editedPrompt: nextPrompt })
+    setValues(nextValues); setEditedPrompt(nextPrompt)
+  }
   const update = (key, value) => {
     warnManualOverride()
-    setValues(current => ({ ...current, [key]: value }))
+    rememberDraft({ ...values, [key]: value }, editedPrompt)
   }
   const toggleSkill = id => {
     warnManualOverride()
-    setAttachedSkills(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])
+    const nextSkills = attachedSkills.includes(id) ? attachedSkills.filter(item => item !== id) : [...attachedSkills, id]
+    drafts?.set(skillDraftKey, nextSkills)
+    setAttachedSkills(nextSkills)
   }
   const restoreGeneratedPrompt = () => {
-    setEditedPrompt(null)
+    rememberDraft(values, null)
     setNotice('已恢复由当前参数和勾选技能自动生成的提示词。')
   }
   const clearForm = () => {
     const clearedKey = selectedKey
     const previousValues = values
     const previousEditedPrompt = editedPrompt
-    setValues({}); setEditedPrompt(null)
+    rememberDraft({}, null)
     const msg = '已清空表单，恢复到模板初始状态。'
-    setNotice(msg)
+    setNotice('', { silent: true })
     pushToast({
       message: msg,
       actionLabel: '撤销',
@@ -330,8 +343,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
           pushToast({ message: '已切换工作流，未恢复原表单。', tone: 'warn' })
           return
         }
-        setValues(previousValues)
-        setEditedPrompt(previousEditedPrompt)
+        rememberDraft(previousValues, previousEditedPrompt)
         setNotice('已恢复清空前的表单内容。')
       },
     })
@@ -381,13 +393,13 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
   // 自 0.2.1-rc.3 起被识别；更早的宿主（0.1.7 / 0.2.0 线）没有该通道，入口不渲染，避免点了没反应。
   const startNewSession = () => {
     if (!workflow) return setNotice('当前资源仅供参考，请选择一个工作流程。')
-    if (typeof launchSession !== 'function') return setNotice('当前宿主版本不支持开新会话并预填草稿；请改用“写入输入框”或“复制 Prompt”。')
+    if (typeof launchSession !== 'function') return setNotice('当前宿主版本不支持开新会话并预填草稿；请改用“填入草稿”或“复制 Prompt”。')
     if (!String(finalPrompt).trim()) return setNotice('提示词为空，无法开始新会话。')
     try {
       composeWorkflow(workflow, values, { extraSkillIds: activeSkillIds, extraDatabaseIds: sessionDatabaseIds })
       const run = recordUse('draft', { runSessionId: '' })
       if (!launchSession({ prompt: runPrompt(run, finalPrompt) })) {
-        return setNotice(`宿主未接受开新会话请求；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建，可改用“写入输入框”。`)
+        return setNotice(`宿主未接受开新会话请求；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建，可改用“填入草稿”。`)
       }
       // 0.2.1-rc.3+ 才识别 whenDraftExists：更早宿主遇到已有草稿会整段保留（此时提示词不会写入），
       // 所以提示语只说「已请求预填」，不承诺输入框里一定出现正文。
@@ -403,7 +415,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
       const run = recordUse('draft')
       const written = writeDraftText(inputActions, runPrompt(run, finalPrompt))
       setNotice(written.ok
-        ? `${written.inserted ? '已插入' : '已写入'}当前会话输入框，可继续编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`
+        ? `已填入输入框，可编辑后发送。已创建研究运行${run ? `「${run.workflowName}」` : ''}。`
         : `草稿已变化，未自动写入提示词；研究运行${run ? `「${run.workflowName}」` : ''}仍已创建。`)
     }
     catch (error) { setNotice(error.message) }
@@ -479,6 +491,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
           value: scienceMode || '',
           onChange: next => {
             const value = next || null
+            drafts?.set(scienceModeKey, value)
             setScienceMode(value)
             setNotice(editedPrompt !== null
               ? '科研模式已切换；已保留手动编辑的提示词。点击“恢复自动生成”可应用新预设。'
@@ -510,6 +523,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
     workbenchRecommendations.length ? h('section', {
       key: 'recommended-workflows',
       'aria-label': '推荐工作流',
+      className: 'rk-reveal',
       style: {
         marginBottom: 14, padding: '12px 14px', borderRadius: 12,
         border: `1px solid ${C.tealLine}`, background: C.tealTint,
@@ -638,13 +652,13 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
               composed,
               finalPrompt,
               editedPrompt,
-              onEditPrompt: setEditedPrompt,
+              onEditPrompt: value => rememberDraft(values, value),
               onRestoreGeneratedPrompt: restoreGeneratedPrompt,
               missingNow,
             }),
             !hasDraftAction ? h(Notice, { key: 'host', tone: 'warn', icon: 'shield' }, '当前 DSH 会话未提供输入框操作；可使用“复制 Prompt”粘贴到任意会话。') : null,
             h('div', { key: 'actions', style: { display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' } }, [
-              h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '插入对话'),
+              h(Button, { key: 'write', variant: 'soft', icon: 'edit', disabled: !hasDraftAction, onClick: write }, '填入草稿'),
               h(Button, { key: 'send', variant: 'primary', icon: 'send', disabled: !hasSubmitAction, onClick: send }, '发送到对话'),
               typeof launchSession === 'function'
                 ? h(Button, { key: 'new-session', variant: 'ghost', icon: 'layers', onClick: startNewSession }, '在新会话开始')
@@ -673,7 +687,7 @@ export function ResearchWorkbench({ sessionId, inputActions, catalogStorage, ini
               h('strong', { key: 't', style: { display: 'block', fontSize: 13, marginBottom: 6 } }, '使用前提与安全核验'),
               h('ul', { key: 'l', style: { margin: 0, paddingLeft: 20, display: 'grid', gap: 6, fontSize: 13, lineHeight: 1.5 } }, selected.checklist.map((entry, index) => h('li', { key: index }, entry))),
             ]) : null,
-            h(Notice, { key: 'availability', tone: 'warn', icon: 'shield' }, '该技能依赖宿主执行能力（Bash/Python、工具链、MCP 或平台凭据），本插件只提供能力说明与前提核验：不会注入提示词，也不代为执行。确认会话具备所需能力后，可直接让会话 Agent 参照上述清单执行，结果需人工核验。'),
+            h(Notice, { key: 'availability', tone: 'warn', icon: 'shield' }, '需在支持代码或工具的会话中运行。此页仅提供操作清单，请交由对话中的 Agent 执行并人工核对。'),
           ]) : null,
           selected.type === 'database' ? h('div', { key: 'database', style: { display: 'grid', gap: 12 } }, [
             h('p', { key: 'note', style: { color: C.muted, margin: 0, fontSize: 13, lineHeight: 1.6 } }, selected.description),

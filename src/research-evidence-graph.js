@@ -1,8 +1,9 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import {
-  Page, PageHead, Toolbar, Button, Card, EmptyState, Notice, Segmented, Badge, Select,
+  Page, PageHead, Toolbar, Button, Card, ConfirmDangerButton, EmptyState, Notice, Segmented, Badge, Select, CountValue, useDismissable,
 } from './ui.js'
+import { subscribeResearchContext } from './research-context-store.js'
 import { EvidenceGraphDetailPanels } from './evidence-graph-panels.js'
 import { EvidenceGraphCanvas } from './evidence-graph-canvas.js'
 import {
@@ -75,11 +76,14 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
   const [selectedKnowledgeId, setSelectedKnowledgeId] = React.useState('')
   const [selectedEvidenceNodeId, setSelectedEvidenceNodeId] = React.useState('')
   const [confirmDeleteEvidence, setConfirmDeleteEvidence] = React.useState(false)
-  const [confirmClear, setConfirmClear] = React.useState(false)
   const [projectFilter, setProjectFilter] = React.useState(() => { try { return getActiveProject() || '' } catch { return '' } })
   const [questionFilter, setQuestionFilter] = React.useState('')
   const [directionFilter, setDirectionFilter] = React.useState('all')
   const [scope, setScope] = React.useState('all')
+  const [filterMenuOpen, setFilterMenuOpen] = React.useState(false)
+  const filterMenuRef = React.useRef(null)
+  useDismissable(filterMenuOpen, () => setFilterMenuOpen(false), filterMenuRef)
+  React.useEffect(() => subscribeResearchContext(next => { setProjectFilter(next?.project || ''); setQuestionFilter('') }), [])
   const [knowledgeDegraded, setKnowledgeDegraded] = React.useState(false)
   const [lastDeposition, setLastDeposition] = React.useState(() => lastDepositionSummary())
   const [assetEvidenceLinks, setAssetEvidenceLinks] = React.useState([])
@@ -98,11 +102,6 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     setNoticeRaw(text)
     if (text) pushToast({ message: text.replace(/^⚠️\s*/, ''), tone: text.startsWith('⚠️') ? 'warn' : 'info' })
   }, [])
-  React.useEffect(() => {
-    if (!confirmClear) return undefined
-    const timer = window.setTimeout(() => setConfirmClear(false), 4000)
-    return () => window.clearTimeout(timer)
-  }, [confirmClear])
   const [exportOpen, setExportOpen] = React.useState(false)
   const evidenceRefreshVersion = React.useRef(0)
   const assetRefreshVersion = React.useRef(0)
@@ -467,6 +466,7 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
     }
   }
 
+  const activeFilterCount = (scope !== 'all' ? 1 : 0) + (questionFilter ? 1 : 0) + (directionFilter !== 'all' ? 1 : 0)
   const content = [
     h(PageHead, {
       key: 'head',
@@ -477,63 +477,67 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         hasCanvas ? h(Button, { key: 'motion', size: 'sm', variant: 'soft', onClick: () => setFlowing(value => !value) }, flowing ? '暂停流动' : '播放流动') : null,
         hasCanvas ? h(Button, { key: 'export', size: 'sm', variant: 'soft', onClick: () => setExportOpen(true) }, '导出快照') : null,
         hasCanvas ? h(Button, { key: 'link', size: 'sm', variant: 'ghost', onClick: copyViewLink }, '复制视图链接') : null,
-        confirmClear
-          ? h(React.Fragment, { key: 'clear-confirm-group' }, [
-            h(Button, {
-              key: 'clear-confirm', size: 'sm', variant: 'danger', icon: 'trash',
-              onClick: () => { evidence.clear(); setConfirmClear(false); setNotice('已清空本会话临时记录；已保存的证据、灵感与知识不受影响。') },
-            }, '确认清空？'),
-            h(Button, { key: 'clear-cancel', size: 'sm', variant: 'ghost', onClick: () => setConfirmClear(false) }, '取消'),
-          ])
-          : h(Button, { key: 'clear', size: 'sm', variant: 'ghost', onClick: () => setConfirmClear(true), title: '只清除本会话的查询、工作流与计划记录，不影响持久化数据' }, '清空临时记录'),
+        h(ConfirmDangerButton, {
+          key: 'clear', label: '清空临时记录', confirmLabel: '确认清空？', variant: 'quiet',
+          title: '只清除本会话的查询、工作流与计划记录，不影响已保存资料',
+          onConfirm: () => { evidence.clear(); setNotice('已清空本会话临时记录，已保存的证据、灵感与知识不受影响。') },
+        }),
       ].filter(Boolean) : [],
     }),
     // 筛选生效时即使图为空也要保留工具栏，否则用户会被困在筛选状态里出不来。
     (graph.nodes.length || scope !== 'all' || projectFilter) ? h(Toolbar, { key: 'summary', sticky: true }, [
       h(Segmented, { key: 'modes', value: view.mode, options: GRAPH_VIEW_MODES, onChange: mode => applyView({ mode }), ariaLabel: '图谱范围模式' }),
-      h(Segmented, { key: 'scope', value: scope, options: GRAPH_SCOPE_MODES, onChange: setScope, ariaLabel: '节点生命周期范围' }),
       projectOptions.length ? h(Select, {
         key: 'project',
         value: projectFilter,
-        options: [{ value: '', label: '全部项目' }, ...projectOptions.map(name => ({ value: name, label: name }))],
+        options: [{ value: '', label: '全部课题' }, ...projectOptions.map(name => ({ value: name, label: name }))],
         onChange: value => { setProjectFilter(value); setQuestionFilter('') },
-        ariaLabel: '按项目筛选持久数据',
+        ariaLabel: '按课题筛选持久数据',
         style: { width: 'auto', minWidth: 108 },
       }) : null,
-      questionOptions.length ? h(Select, { key: 'question', value: questionFilter, onChange: value => { setQuestionFilter(value); if (value) setScope('persistent') },
-        options: [{ value: '', label: '全部研究问题' }, ...questionOptions.map(question => ({ value: question, label: question.slice(0, 60) }))],
-        ariaLabel: '按研究问题筛选图谱', style: { width: 'auto', minWidth: 120 } }) : null,
-      h(Select, { key: 'direction', value: directionFilter, onChange: value => { setDirectionFilter(value); if (value !== 'all') setScope('persistent') },
-        options: [{ value: 'all', label: '全部证据方向' }, { value: 'supports', label: '支持' }, { value: 'refutes', label: '反驳' }, { value: 'insufficient', label: '证据不足' }, { value: 'unassessed', label: '待评估' }],
-        ariaLabel: '按证据方向筛选图谱', style: { width: 'auto', minWidth: 110 } }),
-      h('span', { key: 'nodes', style: { color: C.muted, fontSize: 13 } }, `${graph.nodes.length} 个节点`),
-      h('span', { key: 'edges', style: { color: C.muted, fontSize: 13 } }, `${graph.edges.length} 条关系`),
+      h('div', { key: 'filter-menu', ref: filterMenuRef, className: 'rk-popover-anchor' }, [
+        h(Button, {
+          key: 'toggle', size: 'sm', variant: activeFilterCount || filterMenuOpen ? 'soft' : 'ghost',
+          'aria-expanded': filterMenuOpen,
+          onClick: () => setFilterMenuOpen(open => !open),
+        }, activeFilterCount ? `筛选 · ${activeFilterCount}` : '筛选 ▾'),
+        filterMenuOpen ? h('div', { key: 'pop', className: 'rk-popover-menu rk-pop', role: 'region', 'aria-label': '图谱高级筛选' }, [
+          h('span', { key: 'sl', style: { fontSize: 11, fontWeight: 700, color: C.muted } }, '节点范围'),
+          h(Segmented, { key: 'scope', value: scope, options: GRAPH_SCOPE_MODES, onChange: setScope, ariaLabel: '节点生命周期范围' }),
+          questionOptions.length ? h(Select, { key: 'question', value: questionFilter, onChange: value => { setQuestionFilter(value); if (value) setScope('persistent') },
+            options: [{ value: '', label: '全部研究问题' }, ...questionOptions.map(question => ({ value: question, label: question.slice(0, 60) }))],
+            ariaLabel: '按研究问题筛选图谱' }) : null,
+          h(Select, { key: 'direction', value: directionFilter, onChange: value => { setDirectionFilter(value); if (value !== 'all') setScope('persistent') },
+            options: [{ value: 'all', label: '全部证据方向' }, { value: 'supports', label: '支持' }, { value: 'refutes', label: '反驳' }, { value: 'insufficient', label: '证据不足' }, { value: 'unassessed', label: '待评估' }],
+            ariaLabel: '按证据方向筛选图谱' }),
+          activeFilterCount ? h(Button, {
+            key: 'reset-filters', size: 'sm', variant: 'quiet',
+            onClick: () => { setScope('all'); setQuestionFilter(''); setDirectionFilter('all') },
+          }, '重置筛选') : null,
+        ]) : null,
+      ]),
+      h('span', { key: 'nodes', style: { color: C.muted, fontSize: 13 } }, [h(CountValue, { key: 'n', value: graph.nodes.length }), ' 个节点']),
+      h('span', { key: 'edges', style: { color: C.muted, fontSize: 13 } }, [h(CountValue, { key: 'e', value: graph.edges.length }), ' 条关系']),
       connectivity.isolated.length ? h(Button, {
         key: 'isolated', size: 'sm', variant: showIsolated ? 'soft' : 'ghost', 'aria-pressed': showIsolated,
-        title: showIsolated
-          ? '隐藏没有关系的节点，回到只显示关系的汇总视图'
-          : '显示没有关系的节点；它们之间没有连线，只是按类型排列的卡片网格',
+        title: showIsolated ? '隐藏独立节点，只看有关联的星图' : '临时展开尚未建立关联的独立资料',
         onClick: () => setShowIsolated(value => !value),
       }, showIsolated ? `隐藏未关联节点（${connectivity.isolated.length}）` : `显示未关联节点（${connectivity.isolated.length}）`) : null,
-      hasCanvas ? h('span', { key: 'scale', style: { color: C.muted, fontSize: 13 } }, `${Math.round(scale * 100)}%`) : null,
-      hasCanvas ? h(Button, { key: 'out', size: 'sm', variant: 'soft', disabled: scale <= GRAPH_SCALE_RANGE.min, title: '缩小', onClick: () => zoomBy(1 / 1.2) }, '缩小') : null,
-      hasCanvas ? h(Button, { key: 'in', size: 'sm', variant: 'soft', disabled: scale >= GRAPH_SCALE_RANGE.max, title: '放大', onClick: () => zoomBy(1.2) }, '放大') : null,
-      hasCanvas ? h(Button, { key: 'reset', size: 'sm', variant: 'ghost', onClick: resetView }, '复位') : null,
-      hasCanvas ? h('span', { key: 'hint', style: { marginLeft: 'auto', color: C.muted, fontSize: 12 } }, '按住 Ctrl / ⌘ 滚轮缩放；拖拽平移') : null
+      hasCanvas ? h('span', { key: 'hint', style: { marginLeft: 'auto', color: C.muted, fontSize: 12 } }, '按住 Ctrl / ⌘ 滚轮缩放 · 拖拽平移') : null,
     ]) : null,
     knowledgeDegraded ? h(Notice, { key: 'knowledge-degraded', tone: 'warn', icon: 'shield', style: { margin: '10px var(--rk-gutter) 0' } },
-      '当前环境未提供可用的 IndexedDB，自动沉淀知识只存在内存中，刷新页面后会丢失；建议先导出知识备份。') : null,
+      '当前浏览器不支持本地保存，刷新后记录会清空。建议随时通过右上角「时空囊」导出备份。') : null,
     renderLimitedCount ? h(Notice, { key: 'graph-render-limit', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
-      `当前有关联的节点共 ${displayGraph.nodes.length} 个；为保持交互流畅，画布只布局前 ${GRAPH_RENDER_NODE_LIMIT} 个（另有 ${renderLimitedCount} 个未绘制）。导出仍包含全部有关系节点，请使用项目或生命周期筛选缩小范围。`) : null,
+      `当前关联节点较多（共 ${displayGraph.nodes.length} 个），画布优先展示前 ${GRAPH_RENDER_NODE_LIMIT} 个以保持流畅；导出仍包含完整图谱，可用上方筛选收窄范围。`) : null,
     hiddenIsolatedCount && graph.edges.length
       ? h('div', { key: 'graph-isolated-hidden', style: { display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap', margin: '10px var(--rk-gutter) 0' } }, [
           h(Notice, { key: 'n', tone: 'info', icon: 'filter', style: { margin: 0, flex: '1 1 320px' } },
-            `默认只绘制有关系的节点；另有 ${hiddenIsolatedCount} 个未关联节点已隐藏${isolatedKindSummary ? `（${isolatedKindSummary}）` : ''}。`),
+            `另有 ${hiddenIsolatedCount} 条独立资料尚未关联${isolatedKindSummary ? `（${isolatedKindSummary}）` : ''}，默认已收起。`),
           h(Button, { key: 'show', size: 'sm', variant: 'ghost', onClick: () => setShowIsolated(true) }, `显示未关联节点（${hiddenIsolatedCount}）`),
         ]) : null,
     showIsolated && graph.edges.length === 0 && graph.nodes.length
       ? h(Notice, { key: 'graph-isolated-only', tone: 'warn', icon: 'filter', style: { margin: '10px var(--rk-gutter) 0' } },
-        `正在显示 ${graph.nodes.length} 个未关联节点。它们之间没有记录到的关系，下面的卡片只是按类型排列的网格，不代表图谱结构。`) : null,
+        `正在浏览 ${graph.nodes.length} 条独立资料；将它们关联到论断或灵感后，这里会自动连成星图。`) : null,
     graph.nodes.length ? h('div', { key: 'legend', style: { display: 'flex', flexWrap: 'wrap', gap: '4px 14px', margin: '10px var(--rk-gutter) 0', fontSize: 12, color: C.muted } },
       [
         ...GRAPH_LEGEND_ORDER.filter(kind => graph.nodes.some(node => node.kind === kind)).map(kind => h('span', { key: kind, style: { display: 'inline-flex', alignItems: 'center', gap: 5 } }, [
@@ -543,28 +547,35 @@ export function ResearchEvidenceGraph({ sessionId, assetProvider, embedded = fal
         lastDeposition && lastDeposition.sessionId === String(sessionId) ? h('span', {
           key: 'last-deposition',
           title: `会话 ${lastDeposition.sessionId || '本地'} 消息 #${lastDeposition.seq ?? '?'}`,
-        }, `最近沉淀：+${lastDeposition.addedNodes} 节点 · +${lastDeposition.addedClaims} 关系 · 证据 ${lastDeposition.savedEvidence} · 资产 ${lastDeposition.savedAssets}（消息 #${lastDeposition.seq ?? '?'}）`) : null,
+        }, `最近保存：+${lastDeposition.addedNodes} 节点 · +${lastDeposition.addedClaims} 关系 · 证据 ${lastDeposition.savedEvidence} · 灵感 ${lastDeposition.savedAssets}`) : null,
       ]) : null,
     notice ? h(Notice, { key: 'notice', tone: 'info', style: { margin: '0 var(--rk-gutter) 12px' } }, notice) : null,
     graph.nodes.length
       ? (hasCanvas
-        ? h(Card, { key: 'canvas', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } },
+        ? h(Card, { key: 'canvas', className: 'rk-graph-canvas-wrap', style: { margin: '18px var(--rk-gutter) 14px', padding: 12, background: C.surfaceAlt } }, [
             h(EvidenceGraphCanvas, {
+              key: 'svg',
               layout, routes, view, pan, setPan, scale, clampPanFor, zoomBy,
               onDragEnd: (position, nextScale) => {
                 setPan(position)
                 if (nextScale !== scale) applyView({ scale: nextScale })
               },
               flowing, highlighted, onSelectNode, onDoubleClickNode,
-            }))
+            }),
+            h('div', { key: 'floating-zoom', className: 'rk-graph-floating-controls', role: 'group', 'aria-label': '画布缩放控制' }, [
+              h(Button, { key: 'out', size: 'sm', variant: 'quiet', disabled: scale <= GRAPH_SCALE_RANGE.min, title: '缩小', onClick: () => zoomBy(1 / 1.2) }, '缩小'),
+              h('span', { key: 'scale', style: { color: C.muted, fontSize: 12, minWidth: 40, textAlign: 'center' } }, h(CountValue, { value: Math.round(scale * 100), suffix: '%' })),
+              h(Button, { key: 'in', size: 'sm', variant: 'quiet', disabled: scale >= GRAPH_SCALE_RANGE.max, title: '放大', onClick: () => zoomBy(1.2) }, '放大'),
+              h(Button, { key: 'reset', size: 'sm', variant: 'quiet', onClick: resetView }, '复位'),
+            ]),
+          ])
         : h(Card, { key: 'no-relations', style: { margin: '18px var(--rk-gutter) 14px', padding: 18, display: 'grid', gap: 12 } }, [
             h(EmptyState, {
               key: 'summary',
               icon: 'search',
-              text: `当前范围有 ${graph.nodes.length} 个节点，但没有记录到的关系。`,
-              hint: `图谱只绘制存在关系的节点，不会把 ${graph.nodes.length} 张互不相连的卡片铺成网格。已保存证据不会仅因同属一个项目就互连：把它关联到研究论断、自动沉淀知识或本次会话的查询来源（并在保存时标注来源库）后才会出现连线。`
-                + (isolatedKindSummary ? `当前未关联：${isolatedKindSummary}。` : '')
-                + '可以先按上方项目筛选收窄范围；需要看全部卡片时可临时打开「显示未关联节点」。',
+              text: `当前有 ${graph.nodes.length} 条独立资料，尚未建立关联。`,
+              hint: '把证据关联到论断或灵感后，这里会自动连成星图。'
+                + (isolatedKindSummary ? `（当前独立资料：${isolatedKindSummary}）` : ''),
             }),
             projectOverview.length ? h('div', {
               key: 'projects',

@@ -1,6 +1,6 @@
 import React from 'react'
 import { h, C } from './theme.js'
-import { Badge, Button, Card, Notice, Segmented, Spinner } from './ui.js'
+import { Badge, Button, Card, CountValue, Notice, Segmented, Spinner } from './ui.js'
 import {
   DREAM_MODES,
   buildDreamSnapshot,
@@ -89,6 +89,7 @@ export function ResearchDreamPanel({
   }, [])
   const [memory, setMemory] = React.useState(() => ({ schemaVersion: 1, project, cards: [], themes: [] }))
   const [running, setRunning] = React.useState(false)
+  const [autoRunning, setAutoRunning] = React.useState(false)
   const dreamLock = React.useRef(false)
   const [feedback, setFeedback] = React.useState('')
   const [revision, setRevision] = React.useState(0)
@@ -178,7 +179,8 @@ export function ResearchDreamPanel({
     if (running || dreamLock.current) return
     dreamLock.current = true
     setRunning(true)
-    setFeedback('')
+    setAutoRunning(Boolean(auto))
+    if (!auto) setFeedback('')
     try {
       const now = Date.now()
       let activeMemory = memory
@@ -306,6 +308,7 @@ export function ResearchDreamPanel({
     } finally {
       dreamLock.current = false
       setRunning(false)
+      setAutoRunning(false)
     }
   }
 
@@ -478,7 +481,8 @@ export function ResearchDreamPanel({
         h('div', { key: 'row', style: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' } }, [
           h('strong', { key: 't', style: { fontSize: 15 } }, '科研梦境'),
           h(Badge, { key: 'b', color: C.teal }, '重点提炼 · Top 5'),
-          pendingProposals.length ? h(Badge, { key: 'pending', color: C.amber }, `待审 ${pendingProposals.length}`) : null,
+          pendingProposals.length ? h(Badge, { key: 'pending', color: C.amber }, ['待审 ', h(CountValue, { key: 'n', value: pendingProposals.length })]) : null,
+          running && autoRunning ? h(Badge, { key: 'auto-run', color: C.muted }, '后台整理中…') : null,
         ]),
         h('small', { key: 'hint', style: { color: C.muted, lineHeight: 1.5 } },
           `${currentModeMeta.label} · ${currentModeMeta.hint}`),
@@ -490,7 +494,7 @@ export function ResearchDreamPanel({
           size: 'sm',
           disabled: running,
           onClick: () => runDream({ force: true }),
-        }, running ? '正在整理…' : '开始一次梦境'),
+        }, running ? '正在整理…' : '整理当前课题'),
         h(Button, {
           key: 'batch',
           variant: batchOpen ? 'soft' : 'ghost',
@@ -536,13 +540,13 @@ export function ResearchDreamPanel({
           '包含人工处理过的',
         ]),
       ]),
-      batchBusy && batchStats ? h('div', { key: 'progress', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 10px', background: C.canvas, borderRadius: 8, fontSize: 12, color: C.muted } }, [
+      batchBusy && batchStats ? h('div', { key: 'progress', className: 'rk-reveal', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 10px', background: C.canvas, borderRadius: 8, fontSize: 12, color: C.muted } }, [
         h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
           h('strong', { key: 'phase', style: { color: C.ink } }, batchStats.phase),
           h('span', { key: 'count' }, `已完成 ${batchStats.completed} / ${batchStats.total} · 跳过 ${batchStats.skipped} · 失败 ${batchStats.failed}`),
         ]),
         h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
-          h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (batchStats.completed + batchStats.skipped + batchStats.failed) / Math.max(1, batchStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
+          h('div', { className: 'rk-progress-fill', style: { width: '100%', height: '100%', background: C.teal, transform: `scaleX(${Math.min(1, (batchStats.completed + batchStats.skipped + batchStats.failed) / Math.max(1, batchStats.total))})` } })),
         batchStats.last ? h('span', { key: 'last' }, `最近：${batchStats.last}`) : null,
       ]) : null,
       h('small', { key: 'note', style: { color: C.muted, lineHeight: 1.5 } }, '逐条写入元数据初判（与人工评估分开保存，不改变核验状态）；选中单条也可在证据库内局部初判。'),
@@ -578,7 +582,7 @@ export function ResearchDreamPanel({
         '有新材料时自动整理（至少间隔 6 小时）',
       ]),
     ]) : null,
-    running ? h(Spinner, { key: 'spin', text: '正在扫描当前课题的证据、论断与知识节点并压缩高信号提案……' }) : null,
+    running && !autoRunning ? h(Spinner, { key: 'spin', text: '正在整理当前课题的高信号提案……' }) : null,
     feedback ? h(Notice, { key: 'feedback', tone: 'info' }, feedback) : null,
     ...(memory.pending || []).map(item => h('div', { key: item.id, className: 'rk-compose-actions' }, [
       h('span', { key: 'text' }, `待审记忆：${item.gist}`),
@@ -586,7 +590,7 @@ export function ResearchDreamPanel({
       h(Button, { key: 'confirm', size: 'sm', onClick: () => reviewMemory(item, 'confirm') }, '确认记忆'),
       h(Button, { key: 'dismiss', size: 'sm', variant: 'quiet', onClick: () => reviewMemory(item, 'dismiss') }, '忽略草稿'),
     ])),
-    latest ? h('div', { key: 'report', style: { display: 'grid', gap: 10 } }, [
+    latest ? h('div', { key: 'report', className: 'rk-content-swap', style: { display: 'grid', gap: 10 } }, [
       h('div', {
         key: 'digest',
         style: {
@@ -626,7 +630,8 @@ export function ResearchDreamPanel({
       pendingProposals.length
         ? h('div', { key: 'list', role: 'list', 'aria-label': '待处理梦境提案', style: { display: 'grid', gap: 8 } },
           pendingProposals.map(proposal => h('article', {
-            key: proposal.id,
+            key: proposal.id, id: `rk-dream-${proposal.id}`, tabIndex: -1,
+            className: 'rk-card',
             role: 'listitem',
             style: {
               display: 'grid', gap: 6, padding: 12, borderRadius: 10,
@@ -687,6 +692,6 @@ export function ResearchDreamPanel({
         ]),
       ]) : null,
     ]) : h('p', { key: 'placeholder', style: { margin: 0, fontSize: 13, color: C.muted } },
-      '积累了多篇文献、证据或论断后，点「开始一次梦境」即可压缩出最值得立即看的 Top 5 整理与联想提案。'),
+      '积累了多篇文献、证据或论断后，点「整理当前课题」即可压缩出最值得立即看的 Top 5 整理与联想提案。'),
   ])
 }

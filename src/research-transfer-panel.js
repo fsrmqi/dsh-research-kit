@@ -266,7 +266,7 @@ export function ResearchTransferPanel({ assetProvider, onClose }) {
     ]),
     h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 12 } }, '一键封存全部课题、证据、论断、灵感与知识星图；恢复时自动识别整包或单库 JSON 文件，增量合并、不覆盖现有记录。'),
     h('div', { key: 'actions', style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } }, [
-      h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: busy, onClick: exportCurrent }, '封存完整备份'),
+      h(Button, { key: 'export', size: 'sm', variant: 'soft', disabled: busy, onClick: exportCurrent }, '导出备份'),
       snapshotAvailable ? h(Button, { key: 'snapshot', size: 'sm', variant: 'ghost', disabled: busy, onClick: exportSnapshot }, '下载最近恢复前快照') : null,
       h('label', { key: 'file', style: { display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 12, color: C.ink } }, [
         '从备份恢复', h('input', { key: 'input', type: 'file', accept: '.json,application/json', disabled: busy, onChange: selectFile, 'aria-label': '选择 Research Kit 备份文件' }),

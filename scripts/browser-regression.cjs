@@ -26,7 +26,7 @@ const conversation = {input:{for(){return {
 }},requestDraftInitialization(){}}};
 const uiWorkspace = {startSession(_workspace,payload){window.launchDraft=payload}};
 plugin.apply({sessions:window.testSessions,get(name){return native ? {conversation,uiWorkspace}[name] : undefined},slots:{inject(n,fn){fn();return ()=>{}},register(o,c){if(o.name==='tool.call.toolview') window.toolViews[o.key]=c; else if(o.name==='plugins.row.config') window.rowConfigs[o.key]=c; else if(o.name==='main') window.mainPanels[o.key]=c; else if(o.name==='sidebar.panellist') window.sidebarPanels[o.id]=c; else registered[o.id]=c;return ()=>{}}}});
-const actions={setDraft(s){window.draft=s},submit(){}};
+const actions={setDraft(s){window.draft=s},submit(){window.submitCount=(window.submitCount||0)+1}};
 function ComposerHarness(){
  const [sessionId,setSessionId]=React.useState('qa');
  window.changeComposerSession=setSessionId;
@@ -45,7 +45,7 @@ function ComposerHarness(){
 }
 ReactDOM.createRoot(document.getElementById('composer')).render(React.createElement(ComposerHarness));
 window.draft=''; window.root=ReactDOM.createRoot(document.getElementById('root'));
-const consoleActions = {...actions,captureInsertion:()=>({start:0,end:0,draftRev:0}),insertText(text){window.draft=text;return true}};
+const consoleActions = {...actions,captureInsertion:()=>({start:0,end:window.draft.length,draftRev:0}),insertText(text,span){window.draft=window.draft.slice(0,span.start)+text+window.draft.slice(span.end);return true}};
 root.render(React.createElement(registered['dsh-research-kit-console'],{sessionId:'qa',inputActions:consoleActions}));
 if (native) ReactDOM.createRoot(document.getElementById('plugin-status')).render(React.createElement(registered['dsh-research-kit-project'],{sessionId:'qa'}));
 </script>`;
@@ -139,6 +139,41 @@ const server = http.createServer((req,res)=>{
  res.end(files[req.url]?fs.readFileSync(repo+'/'+files[req.url]):html);
 });
 
+async function verifyQueryProjectSnapshot(browser, baseUrl) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(baseUrl);
+    await page.getByRole('tab',{name:'科研工具',exact:true}).click();
+    await page.getByRole('tab',{name:'查来源',exact:true}).click();
+    await page.getByLabel('资源列表').getByText('PubMed',{exact:true}).click();
+    await page.getByLabel('检索词').fill('rice');
+    await page.evaluate(() => {
+      const key = 'dsh-research-kit.research-context.v1';
+      localStorage.setItem(key, JSON.stringify({project:'发起检索课题',activeRunId:''}));
+    });
+    let releaseDatabaseQuery;
+    const databaseQueryGate = new Promise(resolve=>{releaseDatabaseQuery=resolve});
+    await page.route('**/dsh-research-kit/query?**', async route=>{
+      await databaseQueryGate;
+      await route.fulfill({json:{mode:'direct',query:'rice',sources:[{id:'test',title:'测试候选记录',url:'https://example.org/test'}]}});
+    });
+    await page.getByRole('button',{name:'查询',exact:true}).click();
+    await page.evaluate(()=>localStorage.setItem('dsh-research-kit.research-context.v1',JSON.stringify({project:'后来切换的课题',activeRunId:''})));
+    releaseDatabaseQuery();
+    await page.getByText('测试候选记录',{exact:true}).waitFor();
+    await page.waitForFunction(async()=>{
+      const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});
+      const entries=await new Promise(resolve=>{const request=db.transaction('researchLedger').objectStore('researchLedger').getAll();request.onsuccess=()=>resolve(request.result)});
+      db.close();
+      return entries.some(entry=>entry.query==='rice' && entry.project==='发起检索课题') &&
+        !entries.some(entry=>entry.query==='rice' && entry.project==='后来切换的课题');
+    });
+  } finally {
+    await page.close();
+  }
+  console.log('慢查询完成后仍归入发起时的课题：通过');
+}
+
 async function verifyColdCatalogSearch(browser, baseUrl) {
   const page = await browser.newPage()
   let releaseIndex
@@ -189,16 +224,21 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const dreamPanel=page.getByRole('region',{name:'科研梦境',exact:true});
   await dreamPanel.getByRole('button',{name:'偏好 ▾',exact:true}).click();
   await dreamPanel.getByRole('tab',{name:'巩固梦',exact:true}).click();
-  await dreamPanel.getByRole('button',{name:'开始一次梦境',exact:true}).click();
+  await dreamPanel.getByRole('button',{name:'整理当前课题',exact:true}).click();
   await dreamPanel.getByText(/已扫描 .*提炼出 .*条高信号提案/).waitFor();
   assert.equal(promptKitRequests,0,'触发科研梦境不得提前加载 PromptKit');
+  await page.getByText('研究任务',{exact:true}).click();
+  await page.getByRole('button',{name:'验证研究结论',exact:true}).click();
   await page.getByRole('tab',{name:'证据星图',exact:true}).click();
   await page.getByRole('heading',{name:'证据星图',exact:true}).waitFor();
   assert.equal(promptKitRequests,0,'独立图谱不得等待 PromptKit');
   await page.getByRole('tab',{name:'本次研究',exact:true}).click();
+  await page.getByText('研究任务',{exact:true}).click();
   await page.getByRole('button',{name:'验证研究结论',exact:true}).click();
-  await page.getByRole('button',{name:'从最近回答提取'}).first().click();
-  assert.ok((await page.getByLabel('待提取的研究段落').inputValue()).includes('Ghd7'));
+  await page.getByRole('button',{name:'保存最近回答',exact:true}).click();
+  const latestPreview=page.getByRole('group',{name:'研究回答沉淀预览'});
+  await latestPreview.getByRole('link',{name:'10.1038/review',exact:true}).first().waitFor();
+  await latestPreview.getByRole('button',{name:'取消',exact:true}).click();
   await page.screenshot({path:path.join(artifacts,'claim-onboarding.png'),fullPage:false});
   assert.equal(promptKitRequests,0,'独立 Claim 入口不得等待 PromptKit');
   await page.getByRole('tab',{name:'资料库',exact:true}).click();
@@ -300,10 +340,10 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
       evidence_ids:['answer-evidence'],links:[{evidenceId:'answer-evidence',stance:'supports',locator:'结果段',assessedBy:'样板用户'}]},
     {id:'wrong-project',project:'另一课题',statement:'Ghd7 促进水稻耐盐性',state:'verified'},
   ],evidence:[{id:'answer-evidence',title:'已关联的测试来源',identifier_type:'doi',identifier:'10.1038/review'}]}}));
-  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('button',{name:'保存到资料库'}).click();
   const answerPanel=page.getByRole('group',{name:'研究回答沉淀预览'});
   await answerPanel.getByRole('region',{name:'回答引用'}).getByRole('link',{name:'10.1038/review',exact:true}).waitFor();
-  assert.equal(await answerPanel.getByRole('checkbox').count(),0,'查看引用时无需经过自动抽取候选');
+  await answerPanel.getByRole('button',{name:'保存所选'}).waitFor();
   const popover=await page.evaluate(()=>{
     const el=document.querySelector('[aria-label="研究回答沉淀预览"]'),r=el.getBoundingClientRect();
     return {portaled:el.parentElement===document.body,visible:r.top>=0&&r.bottom<=innerHeight,above:r.bottom<720,hit:el.contains(document.elementFromPoint(r.left+12,r.top+12))};
@@ -329,20 +369,19 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   if(process.env.RK_QA_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.RK_QA_MOBILE_SCREENSHOT});
   await page.setViewportSize({width:1280,height:900});
   await page.getByRole('button',{name:'取消',exact:true}).click();
-  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('button',{name:'保存到资料库'}).click();
   await supportedClaim.getByRole('link',{name:'已关联的测试来源'}).waitFor();
   await page.getByRole('button',{name:'取消关联',exact:true}).click();
   assert.equal(await supportedClaim.count(),0);
   await page.unroute(answerClaimRoute);
-  await answerPanel.getByText('沉淀所选',{exact:true}).click();
   await answerPanel.getByLabel(/引用：10\.1038\/review/).uncheck();
   const nodeCandidate=answerPanel.getByRole('checkbox',{name:/^(?!引用：)/}).first();
   assert.equal(await nodeCandidate.isChecked(),false);
   await nodeCandidate.check();
-  await page.getByRole('button',{name:'确认沉淀所选'}).click();
-  await page.getByRole('status').getByText(/已沉淀：知识 .*证据 0/).waitFor();
+  await page.getByRole('button',{name:'保存所选'}).click();
+  await page.getByRole('status').getByText(/已保存到资料库：知识 .*证据 0/).waitFor();
   await page.evaluate(()=>window.messageActionRoot.render(React.createElement(registered['dsh-research-kit-review-deposit'],{messageId:'missing',sessionId:'qa',useChat:select=>select({nodes:{values:()=>[]}})})));
-  await page.getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await page.getByRole('button',{name:'保存到资料库'}).click();
   await page.getByRole('status').getByText('当前会话窗口中找不到这条回答。').waitFor();
   const noticePlacement=await page.evaluate(()=>{
     const el=[...document.querySelectorAll('[role="status"]')].find(item=>item.textContent.includes('当前会话窗口中找不到这条回答。')),r=el.getBoundingClientRect();
@@ -455,15 +494,14 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
     window.testEvents.push({type:'assistant/message',seq:15,data:{message:{id:'trace-qa',content:[{type:'text',text}]}}});
     ReactDOM.createRoot(target).render(React.createElement(registered['dsh-research-kit-review-deposit'],{sessionId:'qa',messageId:'trace-qa'}));
   });
-  await tracePage.locator('#trace-answer').getByRole('button',{name:'审阅并沉淀这条研究回答'}).click();
+  await tracePage.locator('#trace-answer').getByRole('button',{name:'保存到资料库'}).click();
   const tracePreview=tracePage.getByRole('group',{name:'研究回答沉淀预览'});
   await tracePreview.getByRole('region',{name:'逐条核对结论'}).getByText(/证据缺口.*S4 未提供/).waitFor();
   assert.equal(await tracePreview.getByRole('link',{name:'Schwaab 2021'}).getAttribute('href'),'https://doi.org/10.1038/s41467-021-26768-w');
   assert.equal(await tracePreview.getByRole('link',{name:'Ziter 2019'}).getAttribute('href'),'https://doi.org/10.1073/pnas.1817561116');
-  await tracePreview.getByText('沉淀所选',{exact:true}).click();
   await tracePreview.getByLabel(/引用：10\.1073\/pnas/).uncheck();
   await tracePreview.getByRole('checkbox',{name:/中欧城市的卫星地表温差/}).check();
-  await tracePreview.getByRole('button',{name:'确认沉淀所选'}).click();
+  await tracePreview.getByRole('button',{name:'保存所选'}).click();
   await tracePage.getByRole('status').getByText(/知识 1、证据 1/).waitFor();
   await tracePage.reload();
   const persistedTrace=await tracePage.evaluate(async()=>{
@@ -483,6 +521,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(persistedTrace.length,1);
   assert.equal(persistedTrace[0].evidenceIds.length,1);
   assert.match(persistedTrace[0].sources[0].excerpt,/Schwaab 2021 · 结果；图 1；图 2c/);
+  await tracePage.getByRole('tab',{name:'资料库',exact:true}).click();
   await tracePage.getByRole('tab',{name:'证据星图',exact:true}).click();
   await tracePage.getByRole('heading',{name:'证据星图',exact:true}).waitFor();
   await tracePage.emulateMedia({reducedMotion:'reduce'});
@@ -530,7 +569,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.equal(dragZoom.during,dragZoom.intermediate,'拖拽首帧必须保留中间缩放');
   assert.ok(Math.abs(dragZoom.final-dragZoom.intermediate)<0.01);
   assert.ok(Math.abs(dragZoom.minimap-dragZoom.final)<0.01);
-  await tracePage.locator('svg a[aria-label^="聚焦 中欧城市的卫星地表温差"]').click();
+  await tracePage.locator('svg a[aria-label^="聚焦 中欧城市的卫星地表温差"]').filter({ hasText: 'finding' }).click();
   await tracePage.getByText(/原文位置（待核验）：Schwaab 2021 · 结果；图 1；图 2c/).waitFor();
   const originalDoi='https://doi.org/10.1038/s41467-021-26768-w';
   await tracePage.context().route(originalDoi,route=>route.fulfill({body:'论文目标地址已打开'}));
@@ -562,8 +601,17 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await page.route('**/dsh-research-kit/query?**', route=>route.fulfill({json:{mode:'direct',query:'rice',sources:[{id:'test',title:'测试候选记录',url:'https://example.org/test'}]}}));
   await page.getByRole('button',{name:'查询',exact:true}).click();
   await page.getByText('测试候选记录',{exact:true}).waitFor();
-  await page.getByRole('button',{name:'让 Agent 核验并继续查询',exact:true}).click();
-  assert.match(await page.evaluate(()=>window.draft),/rice/);
+  await page.evaluate(()=>{window.draft='保留这段聊天草稿';window.submitCount=0});
+  await page.getByRole('button',{name:'填入核验任务',exact:true}).click();
+  assert.match(await page.evaluate(()=>window.draft),/^保留这段聊天草稿[\s\S]*rice/);
+  assert.equal(await page.evaluate(()=>window.submitCount),0);
+  const nonDirect = page.getByLabel('资源列表').getByText('arXiv',{exact:true});
+  await nonDirect.click();
+  await page.getByLabel('检索词').fill('maize');
+  await page.getByLabel('检索词').press('Enter');
+  await page.getByText('已填入输入框，可检查后发送。',{exact:true}).waitFor();
+  assert.match(await page.evaluate(()=>window.draft),/^保留这段聊天草稿[\s\S]*maize/);
+  assert.equal(await page.evaluate(()=>window.submitCount),0);
   await page.getByLabel('资源列表').getByText('Crossref',{exact:true}).click();
   assert.equal(await page.getByText('测试候选记录',{exact:true}).count(),0);
   assert.equal(await page.getByLabel('检索词').inputValue(),'');
@@ -641,11 +689,11 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const autoAnswer=page.locator('#qa-auto-answer');
   await autoAnswer.getByRole('button',{name:'可保存 1 条结论、1 条来源'}).waitFor();
   assert.equal(await autoAnswer.getByRole('button',{name:/可保存/}).count(),1);
-  assert.equal(await autoAnswer.getByRole('button',{name:'审阅并沉淀这条研究回答'}).count(),2);
+  assert.equal(await autoAnswer.getByRole('button',{name:'保存到资料库'}).count(),2);
   await autoAnswer.getByRole('button',{name:'可保存 1 条结论、1 条来源'}).click();
   const autoPreview=page.getByRole('group',{name:'研究回答沉淀预览'});
   await autoPreview.getByRole('link',{name:'10.1038/review',exact:true}).waitFor();
-  assert.equal(await autoPreview.getByRole('button',{name:'确认沉淀所选'}).count(),0);
+  assert.equal(await autoPreview.getByRole('button',{name:'保存所选'}).count(),1);
   await autoPreview.getByRole('button',{name:'取消',exact:true}).click();
   await page.evaluate(()=>{window.autoAnswerRoot.unmount();document.getElementById('qa-auto-answer').remove()});
 
@@ -672,11 +720,11 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.match(shortPrompt,/DOI｜原文章节或图表/);
   assert.doesNotMatch(shortPrompt,/@文件|附加技能指导/);
   await page.evaluate(()=>{window.staleInsertion=true});
-  await preview.getByRole('button',{name:'采用并插入'}).click();
+  await preview.getByRole('button',{name:'填入草稿'}).click();
   await preview.getByText('草稿暂时无法写入，请检查当前输入后重试。').waitFor();
   assert.equal(await page.evaluate(()=>window.composerInput.draft),original);
   await page.evaluate(()=>{window.staleInsertion=false});
-  await preview.getByRole('button',{name:'采用并插入'}).click();
+  await preview.getByRole('button',{name:'填入草稿'}).click();
   const adopted=await page.evaluate(()=>window.composerInput);
   assert.ok(adopted.draft.startsWith(original));
   assert.match(adopted.draft,/科研执行步骤/);
@@ -739,7 +787,8 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await dialog.getByRole('button',{name:'关闭',exact:true}).click();
   await page.evaluate(()=>window.changeComposerSession('qa'));
   console.log('统一入口、资源选择、手动整理及自动建议确认与过期保护：通过');
-  await page.getByRole('tab',{name:'我的',exact:true}).click();
+  await page.getByRole('tab',{name:'用方法',exact:true}).click();
+  await page.getByRole('tab',{name:'个人模板',exact:true}).click();
   await page.getByRole('button',{name:'从目录复制'}).click();
   await page.getByLabel('搜索可复制的模板').fill('审阅论文');
   await page.getByRole('button',{name:'复制流程 · 审阅论文',exact:true}).click();
@@ -881,7 +930,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   const transfer=page.locator('strong').filter({hasText:/^时空囊 · 备份与恢复$/});
   await transfer.waitFor();
   const exportWait=page.waitForEvent('download');
-  await page.getByRole('button',{name:'封存完整备份'}).click();
+  await page.getByRole('button',{name:'导出备份'}).click();
   const migration=await exportWait;
   assert.match(migration.suggestedFilename(),/^research-kit-backup-/);
   const migrationText=fs.readFileSync(await migration.path(),'utf8');
@@ -986,6 +1035,25 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await largePage.getByText('第 1 页 · 本页 1 条 · 完整范围 10001 条',{exact:true}).waitFor();
   const imported=await largePage.evaluate(async()=>{const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});return new Promise(resolve=>{const request=db.transaction('evidence').objectStore('evidence').getAll();request.onsuccess=()=>{db.close();resolve(request.result.find(row=>row.title==='浏览器引用往返'))}})});
   assert.equal(imported.status,'unverified');assert.deepEqual(imported.bibliography.authors,['Li','Wang']);
+  await largePage.evaluate(async id=>{
+    const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});
+    const tx=db.transaction('assetEvidenceLinks','readwrite');
+    tx.objectStore('assetEvidenceLinks').put({id:'qa-undo-link',assetId:'qa-asset',evidenceId:id,project:'',createdAt:123});
+    await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=reject});
+    db.close();
+  },imported.id);
+  await largePage.getByRole('button',{name:'删除',exact:true}).click();
+  await largePage.getByRole('button',{name:'确认删除？',exact:true}).click();
+  await largePage.getByLabel('操作反馈').getByRole('status').filter({hasText:'已删除「浏览器引用往返」'}).getByRole('button',{name:'撤销',exact:true}).click();
+  await largePage.getByText(/已.*恢复「浏览器引用往返」及其关联/).waitFor();
+  const restoredLink=await largePage.evaluate(async()=>{
+    const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});
+    const entry=await new Promise(resolve=>{const request=db.transaction('assetEvidenceLinks').objectStore('assetEvidenceLinks').get('qa-undo-link');request.onsuccess=()=>resolve(request.result)});
+    db.close();
+    return entry;
+  });
+  assert.equal(restoredLink.evidenceId,imported.id);
+  assert.equal(restoredLink.createdAt,123);
   await largePage.setViewportSize({width:390,height:844});
   assert.ok(await largePage.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await largeContext.close();
@@ -1047,6 +1115,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await runPage.getByLabel('研究运行 ID').fill('run-mcp-existing');
   await runPage.getByRole('button',{name:'载入运行',exact:true}).click();
   await runPage.getByText('当前运行：run-mcp-existing',{exact:true}).waitFor();
+  await runPage.getByText('研究运行历史',{exact:true}).click();
   await runPage.getByLabel('恢复指定运行').selectOption('run-review-original');
   await runPage.getByText('上次综述产出',{exact:true}).waitFor();
   await runPage.getByText(/待核验论断 1/).waitFor();
@@ -1055,12 +1124,16 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await approve.waitFor({state:'hidden'});
   assert.ok(stageApproved);
   console.log('按需切换课题、载入同课题运行及收件箱阶段确认：通过');
-  await runPage.getByRole('button',{name:'写入继续研究草稿'}).click();
+  await runPage.getByRole('button',{name:'继续上次研究'}).click();
   assert.match(await runPage.evaluate(()=>window.draft), /run-review-original/);
   await runPage.getByLabel('工作区文件路径').fill('文献/第 一篇.pdf');
   await runPage.getByRole('button',{name:'添加材料引用'}).click();
   assert.equal(await runPage.evaluate(()=>window.materialReference.ref), '@"文献/第 一篇.pdf"');
-  await runPage.getByRole('button',{name:'打开证据与筛选队列'}).click();
+  await runPage.getByRole('region',{name:'待处理',exact:true}).getByRole('button',{name:/审阅论断 · 需要核对的综述结论/}).click();
+  await runPage.getByLabel('论断评估理由').waitFor();
+  await runPage.getByRole('region',{name:'当前论断的证据关系'}).waitFor();
+  await runPage.getByRole('tab',{name:'资料库',exact:true}).click();
+  await runPage.getByRole('tab',{name:'证据库',exact:true}).click();
   await runPage.getByText('科研账本与综述导出').click();
   await runPage.getByRole('button',{name:'导出当前课题综述与审核记录'}).waitFor();
   await runPage.evaluate(async()=>{
@@ -1099,8 +1172,12 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   await runPage.unroute('**/dsh-research-kit/evidence-sync?**');
   console.log('论断卡片按立场追溯原文、收起后保留审阅草稿：通过');
   await runPage.getByRole('tab',{name:'本次研究',exact:true}).click();
+  await runPage.getByText('研究任务',{exact:true}).click();
   await runPage.getByRole('button',{name:'做文献综述'}).click();
   await runPage.getByLabel('综述问题',{exact:true}).fill('图书馆开放时段与读者体验');
+  await runPage.getByRole('tab',{name:'资料库',exact:true}).click();
+  await runPage.getByRole('tab',{name:'科研工具',exact:true}).click();
+  assert.equal(await runPage.getByLabel('综述问题',{exact:true}).inputValue(),'图书馆开放时段与读者体验');
   await runPage.getByRole('button',{name:'在新会话开始',exact:true}).click();
   const launch = await runPage.evaluate(()=>window.launchDraft);
   assert.equal(launch.whenDraftExists, 'append');
@@ -1124,6 +1201,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   console.log('390px 窄屏无页面横向溢出：通过');
   assert.deepEqual(errors,[]);
   console.log('浏览器运行错误：0');
+  await verifyQueryProjectSnapshot(browser, 'http://127.0.0.1:'+server.address().port);
   await verifyColdCatalogSearch(browser, 'http://127.0.0.1:'+server.address().port);
  } catch(error) {
   if(page) await page.screenshot({path:path.join(artifacts,'failure.png'),fullPage:true}).catch(()=>{});

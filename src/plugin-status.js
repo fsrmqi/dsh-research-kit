@@ -86,12 +86,12 @@ export function ResearchPluginStatusSection({ subject }) {
   }, [
     h('div', { key: 'head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } }, [
       h('strong', { key: 'title', style: { fontSize: 14 } }, '运行状态'),
-      h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '部署事实 · 不改变目录标注'),
+      h('span', { key: 'scope', style: { color: C.muted, fontSize: 12 } }, '当前环境已连接的能力'),
     ]),
     h(EntryModeSetting, { key: 'entry-mode' }),
     state.status === 'loading' ? h('p', { key: 'loading', style: { margin: 0, color: C.muted, fontSize: 13 } }, '正在探测宿主能力……') : null,
     state.status === 'error' ? h('p', { key: 'error', style: { margin: 0, color: C.amber, fontSize: 13 } }, `探测失败：${state.error}`) : null,
-    capabilities ? h('div', { key: 'services', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, SERVICES.map(([key, label]) => {
+    capabilities ? h('div', { key: 'services', className: 'rk-reveal', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, SERVICES.map(([key, label]) => {
       const available = capabilities.services?.[key] === true
       return h('span', {
         key,
@@ -101,7 +101,7 @@ export function ResearchPluginStatusSection({ subject }) {
         },
       }, `${label} ${available ? '可用' : '未知'}`)
     })) : null,
-    capabilities ? h('div', { key: 'rows', style: { display: 'grid', gap: 5, fontSize: 13, lineHeight: 1.5, color: C.muted } }, [
+    capabilities ? h('div', { key: 'rows', className: 'rk-reveal', style: { display: 'grid', gap: 5, fontSize: 13, lineHeight: 1.5, color: C.muted } }, [
       h('div', { key: 'direct' }, `插件直查适配器：${directQueryCount()} 个`),
       h('div', { key: 'mcp' }, `已连接 MCP 服务器：${mcpServers.length ? mcpServers.map(item => item.toolLoading === 'on-demand' ? `${item.server}（按需加载，当前可见 ${item.tools.length} 项）` : `${item.server}（当前可见 ${item.tools.length} 项）`).join('、') : capabilities.toolProbeAvailable ? '无可见记录' : '未知'}`),
       h('div', { key: 'tools' }, `工具注册表：${capabilities.toolProbeAvailable ? `${capabilities.toolCount} 个工具` : '不可读'}`),
@@ -231,7 +231,7 @@ export function ResearchKitPresetConfig({ view, form }) {
     }
   }
   return h('section', { style: { display: 'grid', gap: 10, marginTop: 12 } }, [
-    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, '预设会原子覆盖全部 Research Kit 运行字段；手动字段仍可在下方调整。'),
+    h('p', { key: 'hint', style: { margin: 0, color: C.muted, fontSize: 13, lineHeight: 1.5 } }, '一键应用推荐配置，下方各项仍可单独微调。'),
     ...RESEARCH_KIT_CONFIG_PRESETS.map(preset => h('div', { key: preset.id, style: { display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', border: `1px solid ${C.line}`, borderRadius: 10 } }, [
       h('div', { key: 'text' }, [h('strong', { key: 'label', style: { fontSize: 13 } }, preset.label), h('div', { key: 'description', style: { color: C.muted, fontSize: 12, marginTop: 3 } }, preset.description)]),
       h(Button, { key: 'apply', size: 'sm', variant: 'ghost', disabled: !form.state.writable || state === 'busy', onClick: () => { void apply(preset) } }, state === preset.id ? '已应用' : '应用'),

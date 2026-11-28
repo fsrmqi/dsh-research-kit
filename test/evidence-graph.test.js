@@ -217,7 +217,7 @@ test('零关系图默认不画网格：组件在布局前拆分连通性，孤�
     'splitEvidenceGraphByConnectivity(graph)',
     'const hasCanvas = graph.nodes.length > 0 && displayGraph.nodes.length > 0 && (graph.edges.length > 0 || showIsolated || hasExplicitFocus)',
     '仍要显示未关联节点',
-    '它们之间没有记录到的关系，下面的卡片只是按类型排列的网格',
+    '把证据关联到论断或灵感后，这里会自动连成星图',
     '显示未关联节点（',
   ]
   for (const needle of needles) assert.ok(source.includes(needle), `缺少零关系图的接线守卫：${needle}`)

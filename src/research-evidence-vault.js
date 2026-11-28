@@ -2,7 +2,7 @@ import { buildLiteratureReviewExport } from './lib/literature-review-export.js'
 // 证据库面板界面层（EvidenceVaultPane：列表/筛选/导入导出/Agent 批量初判/互链反查/项目整理）。
 // 独立保存表单已拆至 src/evidence-save-form.js；子面板拆至 src/evidence-vault-sections.js；持久化在 src/lib/evidence-vault-sync.js。
 import {
-  Badge, Button, Card, Chip, EmptyState, Field, Input, Notice, Segmented, Select, Spinner, Toolbar,
+  Badge, Button, Card, Chip, ConfirmDangerButton, CountValue, EmptyState, Field, Input, Notice, Segmented, Select, Spinner, Toolbar,
 } from './ui.js'
 import { C, h } from './theme.js'
 import { EvidenceVaultActionPanels, EvidenceVaultTopCards } from './evidence-vault-sections.js'
@@ -129,13 +129,9 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   const [links, setLinks] = React.useState([])
   // 清空是不可逆的，用两段式确认代替 window.confirm（宿主可能屏蔽原生弹窗）。
   const [confirmClear, setConfirmClear] = React.useState(false)
-  // 单条删除同样不可逆（且会联动解除以其为端点的 link），与清空共用两段式模式；4 秒无操作自动复位。
-  const [confirmDeleteId, setConfirmDeleteId] = React.useState('')
-  React.useEffect(() => {
-    if (!confirmDeleteId) return undefined
-    const timer = setTimeout(() => setConfirmDeleteId(''), 4000)
-    return () => clearTimeout(timer)
-  }, [confirmDeleteId])
+  const [citationPreviewOpen, setCitationPreviewOpen] = React.useState(false)
+  const entriesCountRef = React.useRef(0)
+  entriesCountRef.current = entries.length
   const refreshVersion = React.useRef(0)
   React.useEffect(() => {
     let current = true
@@ -148,7 +144,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
 
   const refresh = React.useCallback(async () => {
     const version = ++refreshVersion.current
-    setLoading(true)
+    if (!entriesCountRef.current) setLoading(true)
     const readLocal = async () => {
       const ledger = await store.listResearchLedger({ project: project || undefined })
       const screenedIds = pendingOnly ? [...latestResearchScreening(ledger).values()].filter(row => row.decision !== 'pending').map(row => row.evidenceId).sort() : null
@@ -192,13 +188,17 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
     : filtered, [filtered, groupByTopic])
   const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
-  // 「被引用于」反查索引：evidenceId → 资产标题列表（标题缺失时如实标注，不断链）。
+  // 「被引用于」反查索引：evidenceId → [{ assetId, title, known }]（支持直接点击跳去对应灵感资产）。
   const citedByIndex = React.useMemo(() => {
     const index = new Map()
     for (const link of links) {
       if (!index.has(link.evidenceId)) index.set(link.evidenceId, [])
       const title = assetTitlesById?.[link.assetId]
-      index.get(link.evidenceId).push(title || `（资产 ${String(link.assetId).slice(0, 12)}… 不在当前列表）`)
+      index.get(link.evidenceId).push({
+        assetId: link.assetId,
+        title: title || `（资产 ${String(link.assetId).slice(0, 12)}… 不在当前列表）`,
+        known: Boolean(title),
+      })
     }
     return index
   }, [links, assetTitlesById])
@@ -221,7 +221,6 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     setProject(value)
     setActiveProject(value)
     setConfirmClear(false)
-    setConfirmDeleteId('')
     setSelectedIds([])
     setRetryIds([])
     setWorkspaceRenameOpen(false)
@@ -488,9 +487,10 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     } catch (error) { setNotice(`导出失败：${error.message}`) }
   }
 
-  const previewCitations = () => {
+  const previewCitations = overrideText => {
+    const raw = typeof overrideText === 'string' ? overrideText : citationText
     try {
-      const result = parseBibliography(citationText)
+      const result = parseBibliography(raw)
       setCitationPreviewRows(result.entries); setCitationWarnings(result.warnings)
       setCitationPicked(result.entries.map((_, index) => index))
     } catch (error) { setNotice(`⚠️ ${error.message}`) }
@@ -574,11 +574,26 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
 
   const removeEntry = async item => {
     try {
-      await removeEvidenceEntryFromFile(item)
-      await store.remove(item.id)
+      const [entry] = await store.getMany([item.id])
+      if (!entry) return
+      const links = await store.listAssetEvidenceLinks({ evidenceId: entry.id })
+      await removeEvidenceEntryFromFile(entry)
+      await store.remove(entry.id)
       publishEvidenceVault()
-      setNotice(`已删除「${item.title}」。`)
-    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) } finally { setConfirmDeleteId('') }
+      setNotice(`已删除「${item.title}」。`, {
+        actionLabel: '撤销',
+        onAction: async () => {
+          try {
+            const restored = await store.restoreDeletedEvidence(entry, links)
+            const synced = await persistEvidenceEntryToFile(restored)
+            publishEvidenceVault()
+            pushToast({ message: synced ? `已恢复「${item.title}」及其关联。` : `已在本地恢复「${item.title}」及其关联。` })
+          } catch (error) {
+            pushToast({ message: `恢复失败：${error?.message || error}`, tone: 'warn' })
+          }
+        },
+      })
+    } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
 
   const changeStatus = async (item, status) => {
@@ -657,11 +672,15 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
   ]
   const activeWorkspace = workspaces.find(item => item.projectKey === project)
 
+  const syncHasIssue = /待重试|无法导入|失败/.test(syncStatus)
   return h('div', { key: 'evidence-vault', style: { display: 'grid', gap: 12 } }, [
-    h('div', { key: 'sync-status', role: 'status', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 8, alignItems: 'center' } }, [syncStatus, h(Button, { key: 'retry', size: 'sm', variant: 'ghost', onClick: () => { invalidateEvidenceSync(project); refresh() } }, '重试同步')]),
+    h('div', { key: 'sync-status', role: 'status', style: { fontSize: 12, color: syncHasIssue ? C.amber : C.muted, display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' } }, [
+      syncHasIssue ? h('span', { key: 'msg', style: { marginRight: 'auto' } }, syncStatus) : null,
+      h(Button, { key: 'retry', size: 'sm', variant: syncHasIssue ? 'soft' : 'quiet', icon: 'refresh', onClick: () => { invalidateEvidenceSync(project); refresh() } }, '重试同步'),
+    ]),
     retryIds.length ? h(Button, { key: 'retry-agent', size: 'sm', disabled: agentBusy, onClick: async () => { try { await runAgentAssessment(await store.getMany(retryIds)) } catch (error) { setNotice(`⚠️ ${error.message}`) } } }, `继续未完成判断（${retryIds.length}）`) : null,
     degraded && !loading ? h(Notice, { key: 'degraded', tone: 'warn', icon: 'shield' },
-      '当前环境未提供可用的 IndexedDB，证据暂存在内存中，刷新页面后会丢失。') : null,
+      '当前浏览器不支持本地保存，刷新页面后记录会清空。建议随时通过右上角「时空囊」导出备份。') : null,
     notice && notice.startsWith('⚠️') ? h(Notice, { key: 'notice', tone: 'warn', icon: 'shield' },
       notice.replace(/^⚠️\s*/, '')) : null,
 
@@ -693,20 +712,21 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       h(Button, { key: 'pending', size: 'sm', variant: pendingOnly ? 'soft' : 'ghost', 'aria-pressed': pendingOnly, onClick: () => { resetPages(); setPendingOnly(value => !value) } }, '待筛选队列'),
       h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
     ]),
-    selectedEntries.length ? h('div', { key: 'selection-bar', className: 'rk-selection-bar rk-fade', role: 'region', 'aria-label': '已选证据批量操作' }, [
-      h('strong', { key: 'count', style: { fontSize: 12, color: C.teal } }, `已选 ${selectedEntries.length} 条`),
+    selectedEntries.length ? h('div', { key: 'selection-bar', className: 'rk-selection-bar rk-reveal', role: 'region', 'aria-label': '已选证据批量操作' }, [
+      h('strong', { key: 'count', style: { fontSize: 12, color: C.teal } }, ['已选 ', h(CountValue, { key: 'n', value: selectedEntries.length }), ' 条']),
       h(Button, {
         key: 'assess-selected', size: 'sm', variant: 'soft',
         disabled: agentBusy || loading || !selectedAgentEligible || !sessionId,
         title: !sessionId ? '当前无活跃会话，暂不可调用 Agent 模型' : !selectedAgentEligible ? '所选条目均已人工处理；如需重判请到「科研梦境 → 批量初判」勾选包含人工处理过的' : undefined,
         onClick: () => runAgentAssessment(selectedEntries),
-      }, agentBusy ? (agentProgress || '初判中…') : `AI 初判（${selectedAgentEligible}/${selectedEntries.length}）`),
+      }, agentBusy ? (agentProgress || '初判中…') : `初判所选（${selectedAgentEligible}/${selectedEntries.length}）`),
       agentBusy ? h(Button, { key: 'cancel-agent', size: 'sm', variant: 'ghost', onClick: () => agentAbort.current?.abort() }, '取消') : null,
       h(Button, { key: 'check-source', size: 'sm', variant: 'ghost', disabled: sourceCheckBusy || loading || !selectedEntries.length, onClick: checkSelectedSources }, sourceCheckBusy ? sourceCheckProgress : `核对来源（${selectedEntries.length}）`),
       h(Button, { key: 'screen', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setScreeningOpen(value => !value) }, `筛选（${selectedEntries.length}）`),
       h(Button, { key: 'claim', size: 'sm', variant: 'ghost', disabled: !selectedEntries.length, onClick: () => setClaimFormOpen(value => !value) }, `建立论断（${selectedEntries.length}）`),
       h(Button, { key: 'write', size: 'sm', variant: 'primary', icon: 'edit', disabled: !selectedEntries.length || !canWrite, onClick: writeSelected }, `插入对话（${selectedEntries.length}）`),
-      h(Button, { key: 'clear-sel', size: 'sm', variant: 'quiet', onClick: () => setSelectedIds([]), style: { marginLeft: 'auto' } }, '取消选择'),
+      h(Button, { key: 'preview-toggle', size: 'sm', variant: citationPreviewOpen ? 'soft' : 'quiet', 'aria-expanded': citationPreviewOpen, onClick: () => setCitationPreviewOpen(open => !open) }, citationPreviewOpen ? '收起引用预览' : '预览引用块'),
+      h(Button, { key: 'clear-sel', size: 'sm', variant: 'quiet', onClick: () => { setSelectedIds([]); setCitationPreviewOpen(false) }, style: { marginLeft: 'auto' } }, '取消选择'),
     ]) : null,
     agentBusy && agentStats ? h('div', { key: 'agent-progress', className: 'rk-reveal', role: 'status', style: { display: 'grid', gap: 6, padding: '8px 12px', background: C.surfaceAlt, border: `1px solid ${C.line}`, borderRadius: 9, fontSize: 12, color: C.muted } }, [
       h('div', { key: 'line', style: { display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' } }, [
@@ -714,7 +734,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         h('span', { key: 'count' }, `已完成 ${agentStats.completed} / ${agentStats.total} · 跳过 ${agentStats.skipped} · 失败 ${agentStats.failed}`),
       ]),
       h('div', { key: 'bar', style: { height: 6, borderRadius: 99, background: C.line, overflow: 'hidden' } },
-        h('div', { style: { width: '100%', height: '100%', background: C.teal, transformOrigin: 'left center', transform: `scaleX(${Math.min(1, (agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total))})`, transition: 'transform var(--rk-dur-base) var(--rk-ease-out)' } })),
+        h('div', { className: 'rk-progress-fill', style: { width: '100%', height: '100%', background: C.teal, transform: `scaleX(${Math.min(1, (agentStats.completed + agentStats.skipped + agentStats.failed) / Math.max(1, agentStats.total))})` } })),
     ]) : null,
     h(EvidenceVaultActionPanels, {
       key: 'action-panels',
@@ -729,7 +749,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       artifactParameters, setArtifactParameters, artifactEnvironment, setArtifactEnvironment,
       artifactOutput, setArtifactOutput, artifactExecution, setArtifactExecution, saveArtifact,
     }),
-    selectedEntries.length ? h(Card, { key: 'preview', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
+    selectedEntries.length && citationPreviewOpen ? h(Card, { key: 'preview', className: 'rk-reveal', style: { padding: 12, background: C.tealTint, border: `1px solid ${C.tealLine}` } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, `引用块预览（${selectedEntries.length} 条）`),
       h('pre', { key: 'p', style: { margin: '8px 0 0', whiteSpace: 'pre-wrap', fontFamily: C.fontMono, fontSize: 12, lineHeight: 1.55 } }, citationPreview),
     ]) : null,
@@ -768,7 +788,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
         ? h('div', { key: 'body', style: { display: 'grid', gap: 4, fontSize: 12, color: C.muted } }, [
           item.reason ? h('p', { key: 'reason', style: { margin: 0 } }, `保存原因：${item.reason}`) : null,
           item.note ? h('p', { key: 'note', style: { margin: 0 } }, `笔记：${item.note}`) : null,
-          item.project ? h('p', { key: 'project', style: { margin: 0 } }, `项目：${item.project}`) : null,
+          item.project ? h('p', { key: 'project', style: { margin: 0 } }, `课题：${item.project}`) : null,
           visibleDepositionTags(item).length ? h('div', { key: 'tags', style: { display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 2 } },
             visibleDepositionTags(item).map(tag => h(Chip, { key: tag, color: C.slate }, tag))) : null,
           item.classification?.facets ? h('p', { key: 'facets', style: { margin: 0 } }, `检索维度：${[...(item.classification.facets.organism || []), ...(item.classification.facets.method || [])].join('、') || '待归类'} · ${item.classification.reviewed ? '人工确认' : '本地规则建议'}`) : null,
@@ -786,7 +806,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
             if (next.has(key)) next.delete(key); else next.add(key)
             setClassificationDraft([...next].join('；'))
           }
-          return h('div', { key: 'form', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
+          return h('div', { key: 'form', className: 'rk-reveal', style: { display: 'grid', gap: 8, padding: 10, borderRadius: 8, background: C.surfaceAlt, border: `1px solid ${C.line}` } }, [
             h('div', { key: 'chips', style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, RESEARCH_TOPIC_OPTIONS.map(topic => {
               const key = `${topic.primary}/${topic.secondary}`
               const active = picked.has(key)
@@ -802,11 +822,17 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
           ])
         })() : null,
       ]),
-      // 入口 B（只读反查）：这条证据被哪些灵感资产引用。链接可从资产卡（入口 A）建立。
+      // 入口 B（反查跳转）：这条证据被哪些灵感资产引用，点击可直接跳到对应资产。
       citedByIndex.get(item.id)?.length
         ? h('div', { key: 'cited-by', style: { fontSize: 12, color: C.muted, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' } }, [
           h('span', { key: 'l', style: { color: C.teal, fontWeight: 650 } }, '被引用于：'),
-          ...citedByIndex.get(item.id).map((title, index) => h('span', { key: `${title}:${index}` }, index === 0 ? title : `、${title}`)),
+          ...citedByIndex.get(item.id).map((ref, index) => ref.known && typeof onNavigate === 'function'
+            ? h(Button, {
+              key: `${ref.assetId}:${index}`, size: 'sm', variant: 'quiet',
+              onClick: () => onNavigate('vault', { tab: 'assets', assetId: ref.assetId }),
+              style: { padding: '2px 7px', fontSize: 12, color: C.teal },
+            }, ref.title)
+            : h('span', { key: `${ref.assetId}:${index}` }, index === 0 ? ref.title : `、${ref.title}`)),
         ])
         : null,
       h('div', { key: 'foot', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 2 } }, [
@@ -826,11 +852,12 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
           onClick: () => setExpandedAssessId(current => current === item.id ? '' : item.id),
         }, expandedAssessId === item.id ? '收起细评 ▴' : `细评 · ${EVIDENCE_DIMENSION_LABELS.strength[item.strength || 'ungraded']} ▾`),
         h('span', { key: 'spacer', style: { flex: '1 1 auto' } }),
-        confirmDeleteId === item.id
-          ? h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '再次点击确认；不可恢复', onClick: () => removeEntry(item) }, '确认删除？')
-          : h(Button, { key: 'delete', size: 'sm', variant: 'danger', icon: 'trash', title: '删除不可恢复', onClick: () => setConfirmDeleteId(current => current === item.id ? '' : item.id) }, '删除'),
+        h(ConfirmDangerButton, {
+          key: 'delete', label: '删除', confirmLabel: '确认删除？', title: '删除后可在提示条中撤销',
+          onConfirm: () => removeEntry(item),
+        }),
       ]),
-      expandedAssessId === item.id ? h('div', { key: 'assessment', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
+      expandedAssessId === item.id ? h('div', { key: 'assessment', className: 'rk-reveal', style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(135px, 1fr))', gap: 8, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}` } }, [
         h(Field, { key: 'traceability', label: '来源可追溯性' }, h(Select, {
           value: item.traceability || 'identified', options: EVIDENCE_TRACEABILITY.map(value => ({ value, label: EVIDENCE_DIMENSION_LABELS.traceability[value] })),
           onChange: value => changeAssessment(item, 'traceability', value), ariaLabel: `设置「${item.title}」的来源可追溯性`,

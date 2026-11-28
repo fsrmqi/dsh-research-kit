@@ -368,6 +368,43 @@ export function createEvidenceVaultStore() {
       return { entry: finalEntry, duplicate: duplicate || null, updated: Boolean(duplicate) && onDuplicate === 'update' }
     },
 
+    async updateNotes(id, { note, reason, tags }) {
+      const apply = current => {
+        if (!current) throw new Error('证据已删除，请重新打开来源后再保存。')
+        const normalized = normalizeEvidenceEntry({ ...current, note, reason, tags })
+        return { ...current, note: normalized.note, reason: normalized.reason, tags: normalized.tags, updatedAt: Date.now() }
+      }
+      const stored = await withStore('readwrite', async store => {
+        const entry = apply(await requestToPromise(store.get(id)))
+        await requestToPromise(store.put(entry))
+        return entry
+      })
+      if (stored) return stored
+      const entry = apply(memory.find(row => row.id === id))
+      memory = memory.map(row => row.id === id ? entry : row)
+      return entry
+    },
+
+    async restoreDeletedEvidence(entry, links) {
+      const db = await connect()
+      if (db) {
+        await withTransaction(db, [STORE, LINKS_STORE], 'readwrite', async transaction => {
+          const evidence = transaction.objectStore(STORE)
+          if (await requestToPromise(evidence.get(entry.id))) throw new Error('该证据已恢复或已被更新。')
+          await requestToPromise(evidence.add(entry))
+          const relationships = transaction.objectStore(LINKS_STORE)
+          for (const link of links) {
+            if (!await requestToPromise(relationships.get(link.id))) await requestToPromise(relationships.add(link))
+          }
+        })
+      } else {
+        if (memory.some(row => row.id === entry.id)) throw new Error('该证据已恢复或已被更新。')
+        memory = [entry, ...memory]
+        memoryLinks = [...memoryLinks, ...links.filter(link => !memoryLinks.some(row => row.id === link.id))]
+      }
+      return entry
+    },
+
     async remove(id) {
       const key = String(id)
       const touched = await withStore('readwrite', async store => {
