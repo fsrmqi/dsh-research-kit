@@ -87,6 +87,10 @@ Research Kit 把这四点做成可复用的资产。
 
 「时空囊」始终可打开，用于本地备份与恢复。回答下方的「保存到资料库」可以先预览，再选择要保存的内容。
 
+- 「本次研究」默认推荐一项待办，点「查看全部」浏览其余记录。处理后点「下一项」继续，点「返回本次研究」回到原课题待办。
+- 单条删除后可立即撤销，也可在「资料库 → 最近删除」于 30 天内恢复证据、灵感和原有关联。
+- 直查检索结果自动记入发起时的课题。暂时写入失败会在本机补记，仍失败时可到「证据库 → 科研账本与综述导出」手动重试。
+
 ![科研闭环的四个分区：发现 → 构造 → 沉淀 → 证据](https://raw.githubusercontent.com/fsrmqi/dsh-research-kit/main/docs/assets/research-loop.svg)
 
 性能、搜索、证据分页、文献互操作与统一 Claim 台账之外，综述审核记录导出（`links[].evidenceId` 对应候选表 `id`）和论断的按立场证据回查也在 [优化与功能说明](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/PRODUCT-IMPROVEMENTS.md) 中逐步说明。
@@ -270,7 +274,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 
 当前版本 `0.3.3`（尚未发布到 npm）。开发状态与下一步计划见 [ROADMAP.md](ROADMAP.md)。
 
-已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、652 项回归测试（82 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
+已通过的验证：目录契约校验（589 项、589 唯一 ID，分片与聚合入口逐条一致）、654 项回归测试（82 个测试文件，含 7 项宿主动作缺失的渲染级降级断言、14 个基线 tag 的宿主契约矩阵与「客户端/Desktop App 共用同一份产物」的形态守卫）；既有 Web 功能曾在真实 DSH Web profile 完成两轮启动烟测。完整备份的导出和预览已在真实 Desktop profile 验收，增量恢复仍待隔离 Desktop profile 验收。
 
 > 真实 profile 验收无法被单元测试替代——`test/dsh-slots.test.js` 虽然执行真实构建产物，但 slots 服务是模拟的。因此升级 DSH 后必须重跑[手工验收清单](https://github.com/fsrmqi/dsh-research-kit/blob/main/docs/MANUAL-QA.md)。
 
@@ -279,7 +283,7 @@ npm pack && dsh plugin --profile web add ./dsh-research-kit-0.3.3.tgz
 ```bash
 npm run build   # 生成 ui/client.js、catalog-data.json 与 promptkit.js（提交产物，勿手改）
 npm run check   # 目录契约校验 + 语法检查
-npm test        # 纯逻辑、契约与渲染级回归测试（652 项 / 82 个测试文件）
+npm test        # 纯逻辑、契约与渲染级回归测试（654 项 / 82 个测试文件）
 npm run test:browser  # 真实 Chromium 交互回归（首次需 npx playwright install chromium）
 ```
 

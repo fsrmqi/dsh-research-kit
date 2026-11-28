@@ -19,12 +19,15 @@ const DB_NAME = 'dsh-research-kit-evidence'
 // v2：新增 assetEvidenceLinks store（ROADMAP §11 P5 资产-证据互链）。
 // 升级回调按 objectStoreNames.contains 守卫创建，v1 老库平滑升级、既有数据不动。
 // v3：项目整理快照；中断后仍可恢复，而不是只保存在 React 状态里。
-const DB_VERSION = 7
+// v8：最近删除的短期恢复记录。
+const DB_VERSION = 8
 const STORE = 'evidence'
 const LINKS_STORE = 'assetEvidenceLinks'
 const ORGANIZER_STORE = 'projectOrganizer'
 const CLAIMS_STORE = 'researchClaims'
 const LEDGER_STORE = 'researchLedger'
+const DELETED_STORE = 'recentlyDeleted'
+const DELETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 const WORKSPACES_STORE = 'researchWorkspaces'
 // link 总量保险丝：超出时拒绝新建并提示（正常使用远达不到）。
 const MAX_LINKS = 500
@@ -65,6 +68,7 @@ export function createEvidenceVaultStore() {
   let memoryResearchClaims = []
   let memoryResearchLedger = []
   let memoryWorkspaces = []
+  const memoryDeleted = new Map()
 
   const connect = () => {
     if (degraded) return Promise.resolve(null)
@@ -92,6 +96,7 @@ export function createEvidenceVaultStore() {
           links.createIndex('evidenceId', 'evidenceId')
           links.createIndex('project', 'project')
         }
+        if (!db.objectStoreNames.contains(DELETED_STORE)) db.createObjectStore(DELETED_STORE, { keyPath: 'id' })
         if (!db.objectStoreNames.contains(ORGANIZER_STORE)) db.createObjectStore(ORGANIZER_STORE, { keyPath: 'id' })
         if (!db.objectStoreNames.contains(CLAIMS_STORE)) {
           const claims = db.createObjectStore(CLAIMS_STORE, { keyPath: 'id' })
@@ -383,6 +388,32 @@ export function createEvidenceVaultStore() {
       const entry = apply(memory.find(row => row.id === id))
       memory = memory.map(row => row.id === id ? entry : row)
       return entry
+    },
+
+    async archiveForRestore(kind, entry, links) {
+      const row = { id: `${kind}:${entry.id}`, kind, entry, links, deletedAt: Date.now() }
+      const stored = await withStore('readwrite', store => requestToPromise(store.put(row)), DELETED_STORE)
+      if (stored === undefined) memoryDeleted.set(row.id, row)
+      return row
+    },
+
+    async listRecentlyDeleted() {
+      const cutoff = Date.now() - DELETED_RETENTION_MS
+      const stored = await withStore('readwrite', async store => {
+        const rows = await requestToPromise(store.getAll())
+        for (const row of rows) {
+          if (row.deletedAt <= cutoff) await requestToPromise(store.delete(row.id))
+        }
+        return rows.filter(row => row.deletedAt > cutoff)
+      }, DELETED_STORE)
+      if (stored) return stored.sort((a, b) => b.deletedAt - a.deletedAt)
+      for (const [id, row] of memoryDeleted) if (row.deletedAt <= cutoff) memoryDeleted.delete(id)
+      return [...memoryDeleted.values()].sort((a, b) => b.deletedAt - a.deletedAt)
+    },
+
+    async forgetRecentlyDeleted(id) {
+      await withStore('readwrite', store => requestToPromise(store.delete(id)), DELETED_STORE)
+      memoryDeleted.delete(id)
     },
 
     async restoreDeletedEvidence(entry, links) {

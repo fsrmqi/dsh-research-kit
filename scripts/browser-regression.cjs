@@ -174,6 +174,82 @@ async function verifyQueryProjectSnapshot(browser, baseUrl) {
   console.log('慢查询完成后仍归入发起时的课题：通过');
 }
 
+async function verifyPendingFlowAndRecentlyDeleted(browser, baseUrl) {
+  const page = await browser.newPage();
+  try {
+    await page.route('**/dsh-research-kit/claim-review?**', route=>route.fulfill({json:{ok:true,claims:[],evidence:[]}}));
+    await page.goto(baseUrl);
+    await page.getByText('新课题已就绪，选一个常用入口开始：').waitFor();
+    const refresh = page.getByRole('button',{name:'刷新项目状态'});
+    await page.evaluate(async()=>{
+      const db = await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});
+      const tx = db.transaction(['evidence','assetEvidenceLinks'],'readwrite');
+      for (let index=1; index<=4; index++) tx.objectStore('evidence').put({
+        id:'qa-pending-'+index,title:'连续核验证据 '+index,project:'',status:'unverified',
+        sourceDatabase:'PubMed',url:'https://example.test/pending/'+index,savedAt:100-index,
+      });
+      tx.objectStore('assetEvidenceLinks').put({id:'qa-recent-link',assetId:'idea',evidenceId:'qa-pending-3',project:'',createdAt:123});
+      await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=reject});
+      db.close();
+    });
+    await refresh.click();
+    const inbox = page.getByRole('region',{name:'待处理',exact:true});
+    await inbox.getByText('待处理 4 项',{exact:true}).waitFor();
+    assert.equal(await inbox.getByRole('button',{name:/核对证据/}).count(),1);
+    await inbox.getByRole('button',{name:'查看全部',exact:true}).click();
+    await inbox.getByRole('button',{name:/核对证据 · 连续核验证据 4/}).waitFor();
+    await inbox.getByRole('button',{name:/核对证据 · 连续核验证据 1/}).click();
+    const flow = page.getByRole('navigation',{name:'连续处理待办'});
+    for (let index=1; index<=3; index++) {
+      const entry = page.locator(`[data-dream-focus="qa-pending-${index}"]`);
+      await entry.getByRole('button',{name:'标记已核验',exact:true}).click();
+      await flow.getByText(`待处理 ${4-index} 项 · 已处理当前项`,{exact:true}).waitFor();
+      if (index<3) await flow.getByRole('button',{name:'下一项',exact:true}).click();
+    }
+    await flow.getByRole('button',{name:'返回本次研究',exact:true}).click();
+    await inbox.getByText('待处理 1 项',{exact:true}).waitFor();
+    await page.getByRole('tab',{name:'资料库',exact:true}).click();
+    await page.getByRole('tab',{name:'证据库',exact:true}).click();
+    const evidence = page.locator('[data-dream-focus="qa-pending-3"]');
+    await evidence.getByRole('button',{name:'删除',exact:true}).click();
+    await evidence.getByRole('button',{name:'确认删除？',exact:true}).click();
+    await evidence.waitFor({state:'hidden'});
+    await page.reload();
+    await page.getByRole('tab',{name:'证据库',exact:true}).click();
+    await page.getByRole('button',{name:'最近删除',exact:true}).click();
+    const recent = page.getByRole('region',{name:'最近删除',exact:true});
+    await recent.getByRole('button',{name:'恢复「连续核验证据 3」',exact:true}).click();
+    await recent.getByText('暂无删除记录。',{exact:true}).waitFor();
+    await evidence.waitFor();
+    const link = await page.evaluate(async()=>{
+      const db=await new Promise(resolve=>{const request=indexedDB.open('dsh-research-kit-evidence');request.onsuccess=()=>resolve(request.result)});
+      const link=await new Promise(resolve=>{const request=db.transaction('assetEvidenceLinks').objectStore('assetEvidenceLinks').get('qa-recent-link');request.onsuccess=()=>resolve(request.result)});
+      db.close();
+      return link;
+    });
+    assert.equal(link.evidenceId,'qa-pending-3');
+    assert.equal(link.createdAt,123);
+    await page.getByRole('tab',{name:'灵感资产',exact:true}).click();
+    await page.getByRole('button',{name:'新建资产',exact:true}).waitFor();
+    await page.evaluate(async()=>{
+      const provider = new window.__DSH_RESEARCH_PROMPTKIT__.StaticAssetProvider({ storagePrefix: 'dsh-research-kit.promptkit.' });
+      await provider.save({id:'idea',title:'可恢复的灵感',body:'保留已有来源关联的研究灵感',type:'insight'});
+    });
+    const asset=page.locator('[data-asset-id="idea"]');
+    await asset.getByRole('button',{name:/更多/}).click();
+    await asset.getByRole('button',{name:'删除',exact:true}).click();
+    await asset.getByRole('button',{name:'确认删除？',exact:true}).click();
+    await asset.waitFor({state:'hidden'});
+    await page.reload();
+    await page.getByRole('button',{name:'最近删除',exact:true}).click();
+    await page.getByRole('button',{name:'恢复「可恢复的灵感」',exact:true}).click();
+    await asset.getByRole('button',{name:'关联证据（1）',exact:true}).waitFor();
+  } finally {
+    await page.close();
+  }
+  console.log('首页连续处理三项、刷新后恢复证据和灵感及原有关联：通过');
+}
+
 async function verifyColdCatalogSearch(browser, baseUrl) {
   const page = await browser.newPage()
   let releaseIndex
@@ -1202,6 +1278,7 @@ async function verifyColdCatalogSearch(browser, baseUrl) {
   assert.deepEqual(errors,[]);
   console.log('浏览器运行错误：0');
   await verifyQueryProjectSnapshot(browser, 'http://127.0.0.1:'+server.address().port);
+  await verifyPendingFlowAndRecentlyDeleted(browser, 'http://127.0.0.1:'+server.address().port);
   await verifyColdCatalogSearch(browser, 'http://127.0.0.1:'+server.address().port);
  } catch(error) {
   if(page) await page.screenshot({path:path.join(artifacts,'failure.png'),fullPage:true}).catch(()=>{});

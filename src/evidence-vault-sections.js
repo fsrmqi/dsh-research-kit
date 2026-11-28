@@ -1,3 +1,4 @@
+import { searchLedgerOutbox } from './lib/search-ledger-outbox.js'
 import React from 'react'
 import { Button, Card, Input, Select, Textarea } from './ui.js'
 import { C, h } from './theme.js'
@@ -179,7 +180,7 @@ export function EvidenceVaultActionPanels({
   claimFormOpen, setClaimFormOpen, claimQuestion, setClaimQuestion, claimStatement, setClaimStatement,
   claimStance, setClaimStance, claimLocator, setClaimLocator, claimStudyDesign, setClaimStudyDesign,
   claimSample, setClaimSample, claimResult, setClaimResult, claimLimitations, setClaimLimitations, saveClaim,
-  claims, ledger, counts, entries,
+  claims, ledger, counts, entries, project,
   exportLiteratureReview, exportScreeningReport, artifactOpen, setArtifactOpen, exportResearchRecord,
   artifactTitle, setArtifactTitle, artifactDataset, setArtifactDataset, artifactCode, setArtifactCode,
   artifactParameters, setArtifactParameters, artifactEnvironment, setArtifactEnvironment,
@@ -228,6 +229,7 @@ export function EvidenceVaultActionPanels({
         h('strong', { key: 't', style: { color: C.ink } }, '科研账本与综述导出'),
         h('span', { key: 's' }, (() => { const s = researchLedgerSummary(ledger); return `检索 ${s.searches} · 纳入 ${s.included} · 排除 ${s.excluded} · 待定 ${s.pending} · 产出 ${s.artifacts}` })()),
       ]),
+      h(SearchLedgerRetry, { key: 'retry-search-ledger', project: project || undefined }),
       h('div', { key: 'body', style: { display: 'grid', gap: 8, marginTop: 10 } }, [
         h('div', { key: 'actions', style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } }, [
           h(Button, { key: 'review-export', size: 'sm', variant: 'soft', onClick: exportLiteratureReview }, '导出当前课题综述与审核记录'),
@@ -252,5 +254,28 @@ export function EvidenceVaultActionPanels({
         ledger.length > 12 ? h('span', { key: 'more', style: { color: C.muted, fontSize: 12 } }, `显示最近 12 条；完整 ${ledger.length} 条可导出。`) : null,
       ]),
     ]),
+  ])
+}
+
+
+function SearchLedgerRetry({ project }) {
+  const [failed, setFailed] = React.useState(() => searchLedgerOutbox.failed(project))
+  const [busy, setBusy] = React.useState(false)
+  const [feedback, setFeedback] = React.useState('')
+  React.useEffect(() => {
+    const refresh = () => setFailed(searchLedgerOutbox.failed(project))
+    refresh()
+    return searchLedgerOutbox.subscribe(refresh)
+  }, [project])
+  if (!failed.length && !feedback) return null
+  return h('div', { className: 'rk-reveal', style: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' } }, [
+    h('span', { key: 'status', role: 'status' }, feedback || `${failed.length} 条检索待补记。`),
+    failed.length ? h(Button, { key: 'retry', size: 'sm', disabled: busy, onClick: async () => {
+      setBusy(true); setFeedback('')
+      try {
+        const results = await searchLedgerOutbox.retry(project)
+        setFeedback(results.every(Boolean) ? '已补记检索。' : '仍有检索待补记，可稍后重试。')
+      } finally { setBusy(false) }
+    } }, busy ? '正在补记…' : '重试检索记账') : null,
   ])
 }

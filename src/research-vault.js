@@ -1,3 +1,4 @@
+import { ResearchRecentlyDeleted, restoreRecentlyDeleted } from './research-recently-deleted.js'
 import React from 'react'
 import { h, C, GlobalStyle } from './theme.js'
 import { Icon } from './lib/icons.js'
@@ -11,7 +12,7 @@ import { deriveAssetEvidenceCandidates } from './lib/asset-evidence-links.js'
 import { canWriteDraft, writeDraftText } from './lib/input-actions.js'
 import { EvidenceVaultPane } from './research-evidence-vault.js'
 import {
-  evidenceVaultStore, subscribeEvidenceVault, linkAssetToEvidence, removeAssetEvidenceLinkEntry,
+  evidenceVaultStore, publishEvidenceVault, subscribeEvidenceVault, linkAssetToEvidence, removeAssetEvidenceLinkEntry,
 } from './lib/evidence-vault-sync.js'
 import { knowledgeStore } from './knowledge-store.js'
 import { ResearchClaimReview } from './research-claim-review.js'
@@ -60,7 +61,8 @@ const MemoizedAssetList = React.memo(function MemoizedAssetList({ items, renderI
   && previous.dependencies.length === next.dependencies.length
   && previous.dependencies.every((value, index) => Object.is(value, next.dependencies[index])))
 
-export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, onNavigate, embedded = false, focus = null }) {
+export function ResearchVault({ assetProvider, inputActions, sessionId, initialTab = 'assets', onTabChange, onNavigate, embedded = false, focus = null, onPendingChanged, pendingKey }) {
+  const [recentlyDeletedOpen, setRecentlyDeletedOpen] = React.useState(false)
   const [assets, setAssets] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const [query, setQuery] = React.useState('')
@@ -201,21 +203,16 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
   }
   const remove = async item => {
     if (!assetProvider?.remove) return
-    const previousLinks = linksForAsset(item.id)
+    const store = evidenceVaultStore()
     try {
-      await assetProvider.remove(item.id)
-      await evidenceVaultStore().removeAssetEvidenceLinks({ assetId: item.id })
+      const links = await store.listAssetEvidenceLinks({ assetId: item.id })
+      const archived = await store.archiveForRestore('asset', item, links)
+      try {
+        await assetProvider.remove(item.id)
+        await store.removeAssetEvidenceLinks({ assetId: item.id })
+      } finally { publishEvidenceVault() }
       setNotice(`已删除「${item.title}」。`, {
-        actionLabel: '撤销',
-        onAction: async () => {
-          try {
-            await assetProvider.save(item)
-            for (const link of previousLinks) {
-              await linkAssetToEvidence({ assetId: item.id, evidenceId: link.evidenceId, project: link.project || item.project || '' })
-            }
-            pushToast({ message: `已恢复「${item.title}」。` })
-          } catch (error) { pushToast({ message: `恢复失败：${error?.message || error}`, tone: 'warn' }) }
-        },
+        actionLabel: '撤销', onAction: () => restoreRecentlyDeleted(archived.id, assetProvider),
       })
     } catch (error) { setError(error?.message || error) }
   }
@@ -339,12 +336,16 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
           : '灵感资产沉淀研究问题与假设；证据库存放公开来源；论断审阅记录结论的人工判断。',
       actions: [],
     }),
-    h('div', { key: 'subnav', style: { marginTop: 14 } }, [
+    h('div', { key: 'subnav', style: { marginTop: 14, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 } }, [
       h(Segmented, { key: 'tabs', value: tab, options: onNavigate ? RESEARCH_LIBRARY_TABS : RESEARCH_LIBRARY_TABS.slice(0, -1), onChange: value => {
         if (value === 'graph') onNavigate?.('evidence')
         else { setTab(value); onTabChange?.(value) }
       }, ariaLabel: '沉淀层子模块' }),
+      h(Button, { key: 'recently-deleted', size: 'sm', variant: 'quiet', 'aria-expanded': recentlyDeletedOpen,
+        onClick: () => setRecentlyDeletedOpen(value => !value), style: { marginLeft: 'auto' } }, '最近删除'),
+
     ]),
+    recentlyDeletedOpen ? h(ResearchRecentlyDeleted, { key: 'recently-deleted-panel', assetProvider, onClose: () => setRecentlyDeletedOpen(false) }) : null,
     tab === 'assets' && backupOpen ? h(Card, { key: 'backup', className: 'rk-reveal', style: { marginTop: 16, display: 'grid', gap: 10 } }, [
       h('strong', { key: 't', style: { fontSize: 13 } }, '恢复灵感资产备份（增量合并，不覆盖现有资产）'),
       h('input', { key: 'file', type: 'file', accept: '.json,application/json', 'aria-label': '选择灵感资产备份文件', onChange: importJsonFile, style: { fontSize: 12 } }),
@@ -402,8 +403,8 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
       h(Button, { key: 'group', size: 'sm', variant: groupByTopic ? 'soft' : 'ghost', onClick: () => setGroupByTopic(value => !value), 'aria-pressed': groupByTopic }, groupByTopic ? '按主题分组 ✓' : '按主题分组'),
       h(Button, { key: 'new', variant: 'primary', icon: 'plus', onClick: openCreate, style: { flexShrink: 0 } }, '新建资产'),
     ]) : null,
-    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, onNavigate, focusEvidenceIds: focus?.evidenceIds || [] }) : null,
-    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId, focusClaimId: focus?.claimId || '' }) : null,
+    tab === 'evidence' ? h(EvidenceVaultPane, { key: 'evidence-pane', inputActions, sessionId, assetTitlesById: assetsById, assetProvider, onNavigate, focusEvidenceIds: focus?.evidenceIds || [], inboxFocusId: pendingKey?.startsWith('evidence:') ? focus?.evidenceId : '', onPendingChanged }) : null,
+    tab === 'claims' ? h(ResearchClaimReview, { key: 'claim-review', sessionId, focusClaimId: focus?.claimId || '', onPendingChanged }) : null,
     tab === 'assets' && loading ? h(Spinner, { key: 'loading', text: '正在加载灵感资产……' }) : null,
     tab === 'assets' && !loading && !filtered.length ? h(EmptyState, {
       key: 'empty',
@@ -556,6 +557,6 @@ export function ResearchVault({ assetProvider, inputActions, sessionId, initialT
 }
 
 // 灵感资产管理视图宿主：由统一容器按 embedded 模式挂载；独立注册时保留 Page 外壳。
-export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus = null }) {
-  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus })
+export function ResearchVaultHost({ embedded = false, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus = null, onPendingChanged, pendingKey }) {
+  return h(ResearchVault, { assetProvider: researchAssetProvider, embedded, inputActions, sessionId, initialTab, onTabChange, onNavigate, focus, onPendingChanged, pendingKey })
 }

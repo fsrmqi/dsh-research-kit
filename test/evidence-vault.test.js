@@ -1,3 +1,4 @@
+import { createSearchLedgerOutbox } from '../src/lib/search-ledger-outbox.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -451,4 +452,61 @@ test('4d 窄屏守卫：PageHead 操作行必须允许收缩换行（flexShrink:
   const head = ui.slice(ui.indexOf('export function PageHead'), ui.indexOf('export function Toolbar'))
   assert.doesNotMatch(head, /flexShrink:\s*0/, 'actions 容器不得禁止收缩')
   assert.match(head, /maxWidth:\s*'100%'/, 'actions 容器必须允许收缩到视口宽')
+})
+
+
+test('最近删除记录保留原 ID 和关联，重连数据库后可读取并清理', async () => {
+  const installed = installFakeIndexedDB()
+  try {
+    const vault = createEvidenceVaultStore()
+    const { entry } = await vault.save({ title: '来源', identifier: '10.1111/trash', project: '课题' })
+    const { link } = await vault.linkAssetEvidence({ assetId: 'idea', evidenceId: entry.id, createdAt: 1 })
+    const archived = await vault.archiveForRestore('evidence', entry, [link])
+    await vault.remove(entry.id)
+    const reopened = createEvidenceVaultStore()
+    assert.deepEqual(await reopened.listRecentlyDeleted(), [archived])
+    await reopened.forgetRecentlyDeleted(archived.id)
+    assert.deepEqual(await vault.listRecentlyDeleted(), [])
+  } finally { installed.restore() }
+})
+
+test('检索补记跨重启重试并保留原课题、运行和稳定 ID', async () => {
+  const data = new Map()
+  const storage = {
+    get length() { return data.size },
+    key: index => [...data.keys()][index],
+    getItem: key => data.get(key), setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key),
+  }
+  let clock = 100
+  let wake
+  let writes = []
+  let available = false
+  const configuration = {
+    storage, now: () => clock,
+    schedule(fn, delay) { wake = { fn, at: clock + delay }; return wake },
+    cancel() { wake = null },
+    async write(event) {
+      writes.push(event)
+      if (!available) throw new Error('暂不可用')
+    },
+  }
+  const initial = createSearchLedgerOutbox(configuration)
+  assert.deepEqual(await initial.add({ kind: 'search', project: '课题甲', runId: 'run-1', database: 'PubMed', query: 'rice', at: 100 }),
+    { saved: false, durable: true })
+  const reopened = createSearchLedgerOutbox(configuration)
+  reopened.flush()
+  for (let i = 0; i < 3; i++) {
+    const task = wake
+    clock = task.at
+    task.fn()
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  assert.equal(writes.length, 4)
+  assert.equal(reopened.failed('课题乙').length, 0)
+  assert.equal(reopened.failed('课题甲').length, 1)
+  available = true
+  assert.deepEqual(await reopened.retry('课题甲'), [true])
+  assert.equal(data.size, 0)
+  assert.deepEqual(writes.map(event => [event.id, event.project, event.runId]),
+    Array(5).fill([writes[0].id, '课题甲', 'run-1']))
 })

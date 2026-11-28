@@ -75,7 +75,7 @@ export function ClaimEvidenceRelations({ claim, evidenceById }) {
   ])
 }
 
-export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
+export function ResearchClaimReview({ sessionId = '', focusClaimId = '', onPendingChanged }) {
   const [context, setContext] = React.useState(currentResearchContext)
   const project = context.project || 'default'
   const [claims, setClaims] = React.useState([])
@@ -227,6 +227,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     setNoticeRaw('')
   }
   const appliedClaimFocus = React.useRef('')
+  const claimFocusRef = React.useRef(null)
   React.useEffect(() => {
     if (!focusClaimId || loading || appliedClaimFocus.current === focusClaimId) return
     const index = claims.findIndex(claim => claim.id === focusClaimId)
@@ -236,6 +237,9 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
     openReview(claims[index])
     setRelationId(focusClaimId)
   }, [focusClaimId, loading, claims])
+  React.useEffect(() => {
+    if (focusClaimId && editingId === focusClaimId) claimFocusRef.current?.focus()
+  }, [focusClaimId, editingId])
 
   const saveReview = async claim => {
     if (busy) return
@@ -253,6 +257,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       })
       setEditingId('')
       setEditingReviewer(false)
+      onPendingChanged?.('claim', claim.id, ['verified', 'rejected'].includes(draft.state))
       const nextRev = saved?.claim?.revision ?? ((claim.revision || 0) + 1)
       setNotice(`论断已更新为「${CLAIM_REVIEW_LABELS[draft.state]}」。`, {
         actionLabel: '撤销',
@@ -263,6 +268,7 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
               expected_revision: nextRev, evidence_ids: previous.evidenceIds, links: previous.links,
               assessed_by: previous.assessedBy, assessment_reason: previous.reason,
             })
+            onPendingChanged?.('claim', claim.id, ['verified', 'rejected'].includes(previous.state))
             setNotice('已撤销上次审阅。')
             await refresh()
           } catch (error) { pushToast({ message: `撤销失败：${error.message}`, tone: 'warn' }) }
@@ -335,7 +341,9 @@ export function ResearchClaimReview({ sessionId = '', focusClaimId = '' }) {
       h(Button, { key: 'next', size: 'sm', disabled: (claimPage + 1) * 50 >= claims.length || busy, onClick: () => setClaimPage(page => page + 1) }, '下一页论断'),
     ]) : null,
     ...claims.slice(claimPage * 50, (claimPage + 1) * 50).map(claim => h(Card, { key: claim.id, 'data-dream-focus': claim.id, style: { display: 'grid', gap: 10 } }, [
-      h('div', { key: 'summary', style: { display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
+      h('div', { key: 'summary', ref: claim.id === focusClaimId ? claimFocusRef : null,
+        tabIndex: claim.id === focusClaimId ? -1 : undefined,
+        style: { scrollMarginTop: 'calc(var(--rk-console-nav-h, 0px) + 12px)', display: 'flex', alignItems: 'start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' } }, [
         h('div', { key: 'claim', style: { minWidth: 0, flex: '1 1 280px' } }, [
           h('div', { key: 'labels', style: { display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' } }, [
             h(Badge, { key: 'state', color: claim.state === 'verified' ? C.statusVerified : claim.state === 'rejected' ? C.statusRefuted : C.statusToVerify }, CLAIM_REVIEW_LABELS[claim.state] || claim.state),

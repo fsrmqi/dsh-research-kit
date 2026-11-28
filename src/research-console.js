@@ -7,6 +7,9 @@ import { loadPromptKit, promptKitReady } from './promptkit-loader.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
 import { ensureResearchProviders, ResearchPromptStudioHost, researchMethodProvider, researchAssetProvider } from '../dsh/prompt-studio-glue.js'
 import { RESEARCH_CONSOLE_SECTIONS, normalizeConsoleSection, findConsoleSection } from './lib/console-sections.js'
+import { currentResearchContext, subscribeResearchContext } from './research-context-store.js'
+import { listDreamReports, pendingDreamInbox, subscribeDreamStore } from './dream-store.js'
+import { searchLedgerOutbox } from './lib/search-ledger-outbox.js'
 import { ResearchProjectHome } from './research-project-home.js'
 import { ResearchWorkbench } from './research-workbench.js'
 import { RESEARCH_LIBRARY_TABS, ResearchVaultHost } from './research-vault.js'
@@ -18,12 +21,12 @@ const SECTION_STORAGE_KEY = 'dsh-research-kit.console.section'
 // 分区 → 组件映射。key 与 console-sections.js 的 section.id 一一对应；
 // 新增分区时必须同时在这里挂载组件，避免出现「有导航无内容」的空分区。
 const SECTION_VIEWS = {
-  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference }),
+  home: props => h(ResearchProjectHome, { sessionId: props.sessionId, onNavigate: props.onNavigate, inputActions: props.inputActions, insertMaterialReference: props.insertMaterialReference, onPendingStart: props.onPendingStart, pendingExpanded: props.pendingExpanded, onPendingExpand: props.onPendingExpand, pendingReturn: props.pendingReturn, dreamFocus: props.recordFocus?.dreamId }),
   catalog: props => h(ResearchWorkbench, { sessionId: props.sessionId, inputActions: props.inputActions, initialWorkflowId: props.initialWorkflowId, initialType: props.catalogType, launchSession: props.launchSession, drafts: props.workflowDrafts, embedded: true }),
   methods: props => props.mine ? h(ResearchPersonalTemplates, props) : h(ResearchPromptStudioHost, props),
   // embedded 必须显式传入：容器已渲染 Page + GlobalStyle，
   // 分区若再渲染一次会出现嵌套 main.rk-page，min-height:100vh 叠加后内容被挤出可视区。
-  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, onNavigate: props.onNavigate, focus: props.recordFocus, embedded: true }),
+  vault: props => h(ResearchVaultHost, { inputActions: props.inputActions, sessionId: props.sessionId, initialTab: props.vaultTab, onTabChange: props.onVaultTabChange, onNavigate: props.onNavigate, focus: props.recordFocus, onPendingChanged: props.onPendingChanged, pendingKey: props.pendingKey, embedded: true }),
   evidence: props => h(ResearchEvidenceGraphHost, { sessionId: props.sessionId, embedded: true, onNavigate: props.onNavigate, focusNodeId: props.recordFocus?.nodeId || '' }),
 }
 
@@ -252,6 +255,28 @@ export function ResearchConsole(props) {
   const [promptKitError, setPromptKitError] = React.useState('')
   const [vaultTab, setVaultTab] = React.useState('assets')
   const [recordFocus, setRecordFocus] = React.useState(null)
+  const [pendingQueue, setPendingQueue] = React.useState(null)
+  const [pendingExpanded, setPendingExpanded] = React.useState(false)
+  const [pendingReturn, setPendingReturn] = React.useState(null)
+  React.useEffect(() => {
+    setPendingQueue(null); setPendingExpanded(false); setPendingReturn(null)
+    let project = currentResearchContext().project
+    return subscribeResearchContext(next => {
+      if (next.project === project) return
+      project = next.project
+      setPendingQueue(null); setPendingExpanded(false); setPendingReturn(null)
+    })
+  }, [props.sessionId])
+  React.useEffect(() => {
+    searchLedgerOutbox.flush()
+    window.addEventListener('online', searchLedgerOutbox.flush)
+    return () => window.removeEventListener('online', searchLedgerOutbox.flush)
+  }, [])
+  React.useEffect(() => subscribeDreamStore(() => setPendingQueue(queue => {
+    if (!queue) return queue
+    const open = new Set(pendingDreamInbox(listDreamReports(queue.project)).map(row => row.id))
+    return { ...queue, items: queue.items.map(item => item.kind === 'dream' ? { ...item, done: !open.has(item.id) } : item) }
+  })), [])
   const [initialWorkflowId, setInitialWorkflowId] = React.useState('')
   const [catalogType, setCatalogType] = React.useState('workflow')
   const [mine, setMine] = React.useState(false)
@@ -310,15 +335,41 @@ export function ResearchConsole(props) {
     const evidenceIds = Array.isArray(options.evidenceIds) ? options.evidenceIds.map(String).filter(Boolean) : []
     const evidenceId = String(options.evidenceId || evidenceIds[0] || '')
     const nodeId = String(options.nodeId || (id === 'evidence' && evidenceId ? `evidence:${evidenceId}` : ''))
+    const dreamId = String(options.dreamId || '')
     const claimId = String(options.claimId || '')
     const assetId = String(options.assetId || '')
-    if (claimId || evidenceId || nodeId || assetId) {
-      setRecordFocus({ claimId, evidenceId, evidenceIds: evidenceIds.length ? evidenceIds : (evidenceId ? [evidenceId] : []), nodeId, assetId })
+    if (claimId || evidenceId || nodeId || assetId || dreamId) {
+      setRecordFocus({ claimId, evidenceId, evidenceIds: evidenceIds.length ? evidenceIds : (evidenceId ? [evidenceId] : []), nodeId, assetId, dreamId })
     } else if (id === 'vault' || id === 'evidence' || id === 'home' || id === 'catalog' || id === 'methods') {
       setRecordFocus(null)
     }
     setSection(normalizeConsoleSection(id))
     persistSection(id)
+  }
+  const openPending = item => {
+    if (item.kind === 'claim') select('vault', { tab: 'claims', claimId: item.id })
+    else if (item.kind === 'evidence') select('vault', { tab: 'evidence', evidenceId: item.id })
+    else select('home', { dreamId: item.id })
+  }
+  const startPending = (project, items, item) => {
+    setPendingReturn(null)
+    setPendingQueue({ project, items, key: item.key })
+    openPending(item)
+  }
+  const changePending = (kind, id, done) => setPendingQueue(queue => queue ? {
+    ...queue, items: queue.items.map(item => item.key === `${kind}:${id}` ? { ...item, done } : item),
+  } : queue)
+  const pendingItem = pendingQueue?.items.find(item => item.key === pendingQueue.key)
+  const pendingVisible = pendingItem && (recordFocus?.claimId === pendingItem.id && pendingItem.kind === 'claim'
+    || recordFocus?.evidenceId === pendingItem.id && pendingItem.kind === 'evidence'
+    || recordFocus?.dreamId === pendingItem.id && pendingItem.kind === 'dream')
+  const remainingPending = pendingQueue?.items.filter(item => !item.done) || []
+  const currentPendingIndex = pendingQueue?.items.indexOf(pendingItem) ?? -1
+  const nextPending = pendingQueue && [...pendingQueue.items.slice(currentPendingIndex + 1), ...pendingQueue.items.slice(0, currentPendingIndex)]
+    .find(item => !item.done)
+  const returnToPending = () => {
+    setPendingReturn({ key: pendingQueue.key })
+    select('home')
   }
   const inTools = current.id === 'catalog' || current.id === 'methods'
   const goTool = value => {
@@ -352,6 +403,16 @@ export function ResearchConsole(props) {
           h(Button, { key: 'transfer', size: 'sm', variant: transferOpen ? 'soft' : 'ghost', onClick: () => setTransferOpen(value => !value), 'aria-expanded': transferOpen, title: '封存或恢复全部研究资料（自动识别备份格式）' }, '时空囊'),
         ]),
       ]),
+      pendingVisible ? h(Card, { key: 'pending-run', as: 'nav', 'aria-label': '连续处理待办', style: {
+        marginTop: 8, padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+      } }, [
+        h('strong', { key: 'count', role: 'status', style: { marginRight: 'auto' } }, `待处理 ${remainingPending.length} 项${pendingItem.done ? ' · 已处理当前项' : ''}`),
+        nextPending ? h(Button, { key: 'next', size: 'sm', variant: 'primary', onClick: () => {
+          setPendingQueue(queue => ({ ...queue, key: nextPending.key }))
+          openPending(nextPending)
+        } }, '下一项') : null,
+        h(Button, { key: 'home', size: 'sm', variant: 'quiet', onClick: returnToPending }, '返回本次研究'),
+      ]) : null,
     ]),
     current.id === 'evidence' ? h('div', { key: 'library-nav', className: 'rk-fade', style: { margin: '12px var(--rk-gutter) 0' } },
       h(Segmented, { value: 'graph', options: RESEARCH_LIBRARY_TABS, ariaLabel: '沉淀层子模块', onChange: tab => {
@@ -371,7 +432,7 @@ export function ResearchConsole(props) {
     h(ToastHost, { key: 'toast-host' }),
     h('div', { key: `section:${current.id}`, className: 'rk-section-enter', 'data-section': current.id }, (current.id === 'home' || catalogLoaded) && (!needsPromptKit || promptKitLoaded)
       ? h(ResearchSectionBoundary, { key: current.id },
-        view?.({ ...props, workflowDrafts: workflowDrafts.current, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select }))
+        view?.({ ...props, workflowDrafts: workflowDrafts.current, initialWorkflowId, catalogType, mine, vaultTab, recordFocus, onVaultTabChange: setVaultTab, onNavigate: select, onPendingStart: startPending, pendingExpanded, onPendingExpand: setPendingExpanded, pendingReturn, pendingKey: pendingVisible ? pendingItem.key : '', onPendingChanged: changePending }))
       : resourceError
         ? h(Notice, { tone: 'error', style: { margin: 20 } }, resourceError)
         : h(Spinner, { text: '正在加载科研工作台……' })),

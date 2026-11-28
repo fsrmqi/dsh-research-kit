@@ -1,3 +1,4 @@
+import { deleteEvidenceToRecentlyDeleted, restoreRecentlyDeleted } from './research-recently-deleted.js'
 import { buildLiteratureReviewExport } from './lib/literature-review-export.js'
 // 证据库面板界面层（EvidenceVaultPane：列表/筛选/导入导出/Agent 批量初判/互链反查/项目整理）。
 // 独立保存表单已拆至 src/evidence-save-form.js；子面板拆至 src/evidence-vault-sections.js；持久化在 src/lib/evidence-vault-sync.js。
@@ -27,13 +28,13 @@ import { groupDepositedItems, visibleDepositionTags } from './lib/deposition-tax
 import { latestResearchScreening, researchLedgerSummary } from './lib/research-ledger.js'
 import { pushToast } from './lib/toast.js'
 import {
-  STATUS_COLORS, clearEvidenceEntriesFromFile, evidenceVaultStore, formatEvidenceTime, getActiveProject, invalidateEvidenceSync, listAssetEvidenceLinks, persistEvidenceEntryToFile, publishEvidenceVault, removeEvidenceEntryFromFile, saveEvidenceEntry, setActiveProject, stamp, subscribeEvidenceVault, syncEvidenceVaultWithFiles,
+  STATUS_COLORS, clearEvidenceEntriesFromFile, evidenceVaultStore, formatEvidenceTime, getActiveProject, invalidateEvidenceSync, listAssetEvidenceLinks, persistEvidenceEntryToFile, publishEvidenceVault, saveEvidenceEntry, setActiveProject, stamp, subscribeEvidenceVault, syncEvidenceVaultWithFiles,
 } from './lib/evidence-vault-sync.js'
 
 // 证据库面板：由沉淀层分区内嵌，不自带 PageHead（外壳与标题由分区提供）。
 // assetTitlesById：灵感资产 id → 标题（由分区③传入），供「被引用于」反查显示；
 // 缺失时优雅回落为「（资产不在当前列表）」，不阻塞渲染。
-export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null, focusEvidenceIds = [], onNavigate = null }) {
+export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = null, assetProvider = null, focusEvidenceIds = [], onNavigate = null, inboxFocusId = '', onPendingChanged }) {
   const store = evidenceVaultStore()
   const [entries, setEntries] = React.useState([])
   const [counts, setCounts] = React.useState({ all: 0 })
@@ -184,9 +185,21 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     assetIds: assetTitlesById ? Object.keys(assetTitlesById) : null,
   }), [entries, links, project, assetTitlesById])
   const filtered = React.useMemo(() => filterEvidence(entries, { query, filter }), [entries, query, filter])
-  const displayedEntries = React.useMemo(() => groupByTopic
-    ? groupDepositedItems(filtered).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length }, ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
-    : filtered, [filtered, groupByTopic])
+  const focusedEntry = inboxFocusId ? [...entries, ...selectedRows]
+    .find(row => row.id === inboxFocusId && (row.project || '') === project) : null
+  const displayedEntries = React.useMemo(() => {
+    const list = focusedEntry ? filtered.filter(row => row.id !== focusedEntry.id) : filtered
+    const grouped = groupByTopic
+      ? groupDepositedItems(list).flatMap(group => [{ id: `topic:${group.topic}`, __groupTopic: group.topic, __count: group.rows.length },
+        ...group.rows.map(row => ({ ...row, __displayKey: `${row.id}:${group.topic}` }))])
+      : list
+    return focusedEntry ? [focusedEntry, ...grouped] : grouped
+  }, [filtered, groupByTopic, focusedEntry])
+  const inboxEntryRef = React.useRef(null)
+  React.useEffect(() => {
+    if (focusedEntry) inboxEntryRef.current?.focus({ preventScroll: false })
+  }, [focusedEntry?.id])
+
   const selectedIdSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   // 「被引用于」反查索引：evidenceId → [{ assetId, title, known }]（支持直接点击跳去对应灵感资产）。
   const citedByIndex = React.useMemo(() => {
@@ -574,23 +587,14 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
 
   const removeEntry = async item => {
     try {
-      const [entry] = await store.getMany([item.id])
-      if (!entry) return
-      const links = await store.listAssetEvidenceLinks({ evidenceId: entry.id })
-      await removeEvidenceEntryFromFile(entry)
-      await store.remove(entry.id)
-      publishEvidenceVault()
+      const archived = await deleteEvidenceToRecentlyDeleted(item.id)
+      if (!archived) return
+      const { entry } = archived
+      onPendingChanged?.('evidence', entry.id, true)
       setNotice(`已删除「${item.title}」。`, {
         actionLabel: '撤销',
         onAction: async () => {
-          try {
-            const restored = await store.restoreDeletedEvidence(entry, links)
-            const synced = await persistEvidenceEntryToFile(restored)
-            publishEvidenceVault()
-            pushToast({ message: synced ? `已恢复「${item.title}」及其关联。` : `已在本地恢复「${item.title}」及其关联。` })
-          } catch (error) {
-            pushToast({ message: `恢复失败：${error?.message || error}`, tone: 'warn' })
-          }
+          if (await restoreRecentlyDeleted(archived.id)) onPendingChanged?.('evidence', entry.id, entry.status !== 'unverified')
         },
       })
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
@@ -600,6 +604,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
     if (status === item.status) return
     try {
       const result = await saveEvidenceEntry({ ...item, status, sourceVerification: status }, { onDuplicate: 'update' })
+      onPendingChanged?.('evidence', item.id, status !== 'unverified')
       setNotice(`${result.fileSynced ? '' : '⚠️ 已保存在本地，文件同步待重试。'}「${item.title}」已标记为${EVIDENCE_STATUS_LABELS[status]}。`)
     } catch (error) { setNotice(`⚠️ ${error?.message || error}`) }
   }
@@ -743,7 +748,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       claimFormOpen, setClaimFormOpen, claimQuestion, setClaimQuestion, claimStatement, setClaimStatement,
       claimStance, setClaimStance, claimLocator, setClaimLocator, claimStudyDesign, setClaimStudyDesign,
       claimSample, setClaimSample, claimResult, setClaimResult, claimLimitations, setClaimLimitations, saveClaim,
-      claims, ledger, counts, entries,
+      claims, ledger, counts, entries, project,
       exportLiteratureReview, exportScreeningReport, artifactOpen, setArtifactOpen, exportResearchRecord,
       artifactTitle, setArtifactTitle, artifactDataset, setArtifactDataset, artifactCode, setArtifactCode,
       artifactParameters, setArtifactParameters, artifactEnvironment, setArtifactEnvironment,
@@ -754,7 +759,7 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       h('pre', { key: 'p', style: { margin: '8px 0 0', whiteSpace: 'pre-wrap', fontFamily: C.fontMono, fontSize: 12, lineHeight: 1.55 } }, citationPreview),
     ]) : null,
     loading ? h(Spinner, { key: 'loading', text: '正在加载证据条目……' }) : null,
-    !loading && !filtered.length ? h(EmptyState, {
+    !loading && !filtered.length && !focusedEntry ? h(EmptyState, {
       key: 'empty',
       icon: 'database',
       text: entries.length ? '没有匹配的证据条目。' : (project ? `课题「${project}」还没有证据。` : '证据库还是空的。'),
@@ -772,7 +777,9 @@ export function EvidenceVaultPane({ inputActions, sessionId, assetTitlesById = n
       interactive: true,
       style: { contentVisibility: 'auto', containIntrinsicSize: '0 300px' },
     }, [
-      h('div', { key: 'head', style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' } }, [
+      h('div', { key: 'head', ref: item.id === inboxFocusId ? inboxEntryRef : null,
+        tabIndex: item.id === inboxFocusId ? -1 : undefined,
+        style: { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start', scrollMarginTop: 'calc(var(--rk-console-nav-h, 0px) + 12px)' } }, [
         h('div', { key: 'meta', style: { display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', minWidth: 0 } }, [
           h('input', { key: 'select', type: 'checkbox', checked: selectedIdSet.has(item.id), onChange: () => setSelectedIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]), 'aria-label': `选择「${item.title}」用于批量处理或插入对话`, style: { accentColor: C.teal } }),
           item.url

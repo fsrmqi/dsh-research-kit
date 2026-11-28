@@ -1,7 +1,8 @@
 import React from 'react'
 import { h, C } from './theme.js'
 import { Badge, Button, Card, ConfirmDangerButton, Modal, Notice, Select, Textarea } from './ui.js'
-import { removeEvidenceEntryFromFile } from './lib/evidence-vault-sync.js'
+import { deleteEvidenceToRecentlyDeleted, restoreRecentlyDeleted } from './research-recently-deleted.js'
+import { pushToast } from './lib/toast.js'
 import {
   CLAIM_RELATION_LABELS,
   KNOWLEDGE_ENTITY_LABELS,
@@ -16,7 +17,7 @@ const GRAPH_KNOWLEDGE_STATUS_OPTIONS = KNOWLEDGE_STATUSES.map(status => ({ value
 
 export function EvidenceGraphDetailPanels({
   selectedEvidenceEntry, nodeStrokeColor, setSelectedEvidenceNodeId,
-  confirmDeleteEvidence, setConfirmDeleteEvidence, vault, setNotice,
+  confirmDeleteEvidence, setConfirmDeleteEvidence, setNotice,
   selectedKnowledge, graphKindColor, updateKnowledgeStatus, setSelectedKnowledgeId,
   relatedClaims, knowledgeLabelOf, knowledgeConflictCount, visibleSavedEvidence, visibleAssets,
   knowledgeBackupOpen, setKnowledgeBackupOpen, knowledgeBackupText, setKnowledgeBackupText, importKnowledgeBackup,
@@ -67,14 +68,17 @@ export function EvidenceGraphDetailPanels({
         h('span', { key: 'delete-spacer', style: { flex: 1 } }),
         h(ConfirmDangerButton, {
           key: 'delete', label: '删除', confirmLabel: '确认删除？', variant: 'ghost',
-          title: '从证据库和文件存储中彻底删除此条目',
+          title: '删除后可从资料库的最近删除恢复',
           onConfirm: async () => {
             setConfirmDeleteEvidence(false)
             try {
-              await removeEvidenceEntryFromFile(selectedEvidenceEntry)
-              await vault.remove(selectedEvidenceEntry.id)
+              const archived = await deleteEvidenceToRecentlyDeleted(selectedEvidenceEntry.id)
+              if (!archived) return
               setSelectedEvidenceNodeId('')
-              setNotice(`已删除「${selectedEvidenceEntry.title}」。`)
+              pushToast({
+                message: `已删除「${selectedEvidenceEntry.title}」。`,
+                actionLabel: '撤销', onAction: () => restoreRecentlyDeleted(archived.id),
+              })
             } catch (error) { setNotice(`删除失败：${error?.message || error}`) }
           },
         }),

@@ -12,8 +12,14 @@ import { pushToast } from './lib/toast.js'
 
 const HOME_RUN_LABELS = { draft: '提示词草稿', active: '已发送到会话', waiting_review: '待人工审核', completed: '已完成', failed: '失败' }
 
-export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterialReference, inputActions }) {
+export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterialReference, inputActions, onPendingStart, pendingExpanded, onPendingExpand, pendingReturn, dreamFocus }) {
   const [context, setContext] = React.useState(currentResearchContext)
+  const [allPending, setAllPending] = React.useState(null)
+  const [pendingPageSize, setPendingPageSize] = React.useState(20)
+  const [pendingError, setPendingError] = React.useState('')
+  const [openingPending, setOpeningPending] = React.useState(false)
+  const pendingTitleRef = React.useRef(null)
+  const appliedPendingReturn = React.useRef(null)
   const [loaded, setData] = React.useState(null)
   const [error, setError] = React.useState('')
   const [draftFeedback, setDraftFeedback] = React.useState('')
@@ -40,7 +46,7 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
         store.listResearchLedger({ project: context.project }),
         synchronizeResearchClaims(store, context.project).then(result => result.claims)
           .catch(failure => { syncError += ` Claim 台账暂不可达：${failure.message}`; return store.listResearchClaims({ project: context.project }) }),
-        store.listPage({ project: context.project, filter: 'unverified', limit: 2 }).then(page => page.rows || []),
+        store.listPage({ project: context.project, filter: 'unverified', limit: 1 }).then(page => page.rows || []),
         store.listWorkspaces ? store.listWorkspaces({ includeArchived: false }).catch(() => []) : Promise.resolve([]),
       ])
       const runClaims = activeRunId ? claims.filter(claim => claim.run_id === activeRunId) : claims
@@ -68,16 +74,68 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
   const data = loaded?.project === context.project && loaded?.runId === activeRunId ? loaded : null
   const projectRuns = listResearchRuns({ project: context.project }).sort((a, b) => b.createdAt - a.createdAt)
   const recentRun = projectRuns.find(item => ['draft', 'active', 'waiting_review'].includes(item.status))
-  const dreamItems = React.useMemo(() => pendingDreamInbox(listDreamReports(context.project)).slice(0, 2), [context.project, dreamRevision])
-  const claimItems = (data?.claims || []).filter(claim => !['verified', 'rejected'].includes(claim.state)).slice(0, 2)
-  const pendingItems = [
-    ...claimItems.map(row => ({ key: `claim:${row.id}`, action: '审阅论断', text: row.statement,
-      open: () => onNavigate('vault', { tab: 'claims', claimId: row.id }) })),
-    ...(data?.pendingEvidence || []).map(row => ({ key: `evidence:${row.id}`, action: '核对证据', text: row.title,
-      open: () => onNavigate('vault', { tab: 'evidence', evidenceId: row.id }) })),
-    ...dreamItems.map(row => ({ key: `dream:${row.id}`, action: '查看梦境提案', text: row.title,
-      open: () => document.getElementById(`rk-dream-${row.id}`)?.focus() })),
-  ]
+  const dreamItems = React.useMemo(() => pendingDreamInbox(listDreamReports(context.project)), [context.project, dreamRevision])
+  const claimItems = React.useMemo(() => (data?.claims || [])
+    .filter(claim => !['verified', 'rejected'].includes(claim.state))
+    .map(row => ({ key: `claim:${row.id}`, kind: 'claim', id: row.id, action: '审阅论断', text: row.statement })), [data?.claims])
+  const dreamTasks = React.useMemo(() => dreamItems.map(row => ({
+    key: `dream:${row.id}`, kind: 'dream', id: row.id, action: '查看梦境提案', text: row.title,
+  })), [dreamItems])
+  const evidenceTasks = rows => rows.map(row => ({
+    key: `evidence:${row.id}`, kind: 'evidence', id: row.id, action: '核对证据', text: row.title,
+  }))
+  const recommended = claimItems[0] || evidenceTasks(data?.pendingEvidence || [])[0] || dreamTasks[0]
+  const pendingCount = claimItems.length + (data?.counts.unverified || 0) + dreamTasks.length
+  const loadPendingEvidence = async () => {
+    if ((data?.counts.unverified || 0) <= 1) return evidenceTasks(data?.pendingEvidence || [])
+    const records = await evidenceVaultStore().list({ project: context.project })
+    return evidenceTasks(records.filter(row => row.status === 'unverified'))
+  }
+  React.useEffect(() => {
+    if (!pendingExpanded || !data) return undefined
+    let active = true
+    loadPendingEvidence().then(rows => {
+      if (active) setAllPending({ project: context.project, rows })
+    }).catch(() => {
+      if (active) setPendingError('暂时无法展开待核验证据。')
+    })
+    return () => { active = false }
+  }, [pendingExpanded, data, context.project])
+  React.useEffect(() => {
+    if (dreamFocus) document.getElementById(`rk-dream-${dreamFocus}`)?.focus()
+  }, [dreamFocus, dreamRevision])
+  const pendingList = pendingExpanded
+    ? [...claimItems, ...(allPending?.project === context.project ? allPending.rows : evidenceTasks(data?.pendingEvidence || [])), ...dreamTasks]
+    : recommended ? [recommended] : []
+  const returnIndex = pendingReturn ? pendingList.findIndex(item => item.key === pendingReturn.key) : -1
+  const visiblePending = pendingList.slice(0, Math.max(pendingPageSize, returnIndex + 1))
+  React.useEffect(() => {
+    if (!pendingReturn || !data || appliedPendingReturn.current === pendingReturn) return
+    if (pendingExpanded && !allPending && (data.counts.unverified || 0) > 1 && !pendingError) return
+    const title = pendingTitleRef.current
+    const items = title?.closest('section')?.querySelectorAll('[data-pending-key]') || []
+    const previous = [...items].find(item => item.dataset.pendingKey === pendingReturn.key)
+    const target = previous || title
+    if (target) {
+      target.focus()
+      appliedPendingReturn.current = pendingReturn
+    }
+  }, [pendingReturn, data, pendingExpanded, allPending, pendingError])
+  const openPending = async item => {
+    if (openingPending) return
+    setOpeningPending(true); setPendingError('')
+    try {
+      const rows = await loadPendingEvidence()
+      if (currentResearchContext().project !== context.project) return
+      const queue = [...claimItems, ...rows, ...dreamTasks]
+      if (onPendingStart) onPendingStart(context.project, queue, item)
+      else if (item.kind === 'dream') document.getElementById(`rk-dream-${item.id}`)?.focus()
+      else if (item.kind === 'claim') onNavigate('vault', { tab: 'claims', claimId: item.id })
+      else onNavigate('vault', { tab: 'evidence', evidenceId: item.id })
+    } catch {
+      setPendingError('暂时无法读取待处理记录，请重试。')
+    } finally { setOpeningPending(false) }
+  }
   const scopedClaims = activeRunId ? (data?.claims || []).filter(claim => claim.run_id === activeRunId) : data?.claims || []
   const pending = scopedClaims.filter(claim => !['verified', 'rejected'].includes(claim.state)).length
   const question = scopedClaims.find(claim => claim.question)?.question || data?.claims.find(claim => claim.question)?.question
@@ -252,10 +310,21 @@ export function ResearchProjectHome({ sessionId = '', onNavigate, insertMaterial
       ]),
     ]) : null,
     insertMaterialReference && hasActivity ? h(ResearchMaterialReferenceForm, { key: 'materials', insert: insertMaterialReference }) : null,
-    (pendingItems.length || pendingStages.length) ? h(Card, { key: 'pending', as: 'section', 'aria-label': '待处理', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
-      h('strong', { key: 'title' }, '待处理'),
-      ...pendingItems.map(item => h(Button, { key: item.key, size: 'sm', variant: 'ghost', onClick: item.open,
+    (pendingCount || pendingStages.length) ? h(Card, { key: 'pending', as: 'section', 'aria-label': '待处理', className: 'rk-reveal', style: { display: 'grid', gap: 8 } }, [
+      h('div', { key: 'pending-header', style: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' } }, [
+        h('strong', { key: 'title', ref: pendingTitleRef, tabIndex: -1, style: { scrollMarginTop: 'calc(var(--rk-console-nav-h, 0px) + 12px)' } }, `待处理 ${pendingCount + pendingStages.length} 项`),
+        pendingCount > 1 ? h(Button, {
+          key: 'more', size: 'sm', variant: 'quiet', 'aria-expanded': pendingExpanded,
+          onClick: () => { setPendingError(''); onPendingExpand?.(!pendingExpanded) },
+        }, pendingExpanded ? '收起待处理' : '查看全部') : null,
+      ]),
+      ...visiblePending.map(item => h(Button, { key: item.key, size: 'sm', variant: 'ghost', 'data-pending-key': item.key,
+        disabled: openingPending, onClick: () => openPending(item),
         style: { justifyContent: 'start', textAlign: 'left', whiteSpace: 'normal' } }, `${item.action} · ${item.text}`)),
+      pendingExpanded && pendingCount > pendingPageSize ? h(Button, {
+        key: 'more-items', size: 'sm', variant: 'quiet', onClick: () => setPendingPageSize(size => size + 20),
+      }, '显示更多待处理') : null,
+      pendingError ? h(Notice, { key: 'pending-error', tone: 'warn' }, pendingError) : null,
       ...pendingStages.map(stage => h('div', { key: stage, className: 'rk-compose-actions' }, [
         h('span', { key: 'label', style: { fontSize: 12 } }, `待确认阶段 · ${stage}`),
         h(Button, { key: 'approve', size: 'sm', variant: 'primary', disabled: runAction, onClick: () => approveStage(stage), 'aria-label': `确认阶段 ${stage}` }, '确认'),

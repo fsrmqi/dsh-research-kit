@@ -6,6 +6,7 @@ import { EvidenceSaveForm } from './evidence-save-form.js'
 import { evidenceVaultStore, getActiveProject, publishEvidenceVault, removeEvidenceEntryFromFile, saveEvidenceEntry } from './lib/evidence-vault-sync.js'
 import { detectIdentifier } from './lib/evidence-vault-core.js'
 import { activeResearchRun } from './research-context-store.js'
+import { searchLedgerOutbox } from './lib/search-ledger-outbox.js'
 import { summarizeSearchSnapshot } from './lib/research-ledger.js'
 import { supportsSafeInsert } from './lib/input-actions.js'
 import { pushToast } from './lib/toast.js'
@@ -71,14 +72,15 @@ export function DatabaseQueryPanel({ database, sessionId, inputActions, evidence
       if (body.mode !== 'agent-fallback') {
         const sources = Array.isArray(body.sources) ? body.sources : []
         const snapshot = summarizeSearchSnapshot({ databaseId: database.id, query: body.query || text, sources })
-        const store = evidenceVaultStore()
-        store.saveResearchLedgerEvent({
+        searchLedgerOutbox.add({
           kind: 'search', project, runId,
           question: query, database: database.name, query: body.query || text,
           mode: body.mode || 'direct', at: queriedAt,
           ...snapshot,
+        }).then(({ saved, durable }) => {
+          if (!saved && !durable && !request.signal.aborted) setFeedback('本机暂不能保留待补记记录，请在关闭页面前到科研账本重试。')
         }).catch(() => {
-          if (!request.signal.aborted) setFeedback('检索结果已返回，课题账本保存失败。')
+          if (!request.signal.aborted) setFeedback('这条检索记录暂无法记入科研账本。')
         })
       }
       setState({ status: body.mode === 'agent-fallback' ? 'fallback' : 'ready', result: { ...body, queriedAt }, message: body.reason || '' })
